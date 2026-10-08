@@ -213,17 +213,10 @@ impl Graph {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::time::Duration;
 
-    use arora_types::data::{Key, StateChange};
     use uuid::Uuid;
-    use vizij_api_core::value::{as_float, as_vector, Value};
-    use vizij_arora_hal::RigHal;
-    use vizij_arora_host::compose_sources;
-    use vizij_arora_store::BlackboardStore;
 
     use super::*;
-    use crate::face::{builder_for, declare_keys};
     use crate::view::meta::{Binding, FeatureKind};
 
     /// A Studio-exported face's bindings: `translation.x` on an animatable
@@ -308,101 +301,5 @@ mod tests {
             outputs.iter().all(|path| path.starts_with(&x.to_string())),
             "{outputs:?}"
         );
-    }
-
-    fn read(arora: &arora::Arora, path: &str) -> Option<Value> {
-        arora
-            .store()
-            .read(&[Key::from(path)])
-            .into_iter()
-            .next()
-            .flatten()
-    }
-
-    /// Run on a device, the profile holds the face at rest until Studio
-    /// writes, then lands each target under the key the view indexes — a
-    /// compound one joined — reports it back as Studio's feedback, and opens
-    /// Studio's keys to remote writers in the feature's own units.
-    #[test]
-    fn a_device_lands_studio_s_writes_where_the_view_reads_them() {
-        let (meta, x, color) = studio_face();
-        let spec = compose_sources(&[studio_source(&meta, &HashSet::new())])
-            .expect("compose the profile")
-            .to_string();
-        let store = BlackboardStore::new();
-        declare_keys(&store, &spec, &[], &[]);
-        let rig = RigHal::new();
-        let mut arora = builder_for(&spec, rig.clone(), store, &[], None)
-            .expect("a device over the profile")
-            .build()
-            .expect("build arora");
-        let step = |arora: &mut arora::Arora| arora.step(Duration::from_millis(16)).expect("step");
-        let number = |arora: &arora::Arora, path: &str| {
-            read(arora, path)
-                .and_then(|v| as_float(&v))
-                .unwrap_or_else(|| panic!("{path} holds no number"))
-        };
-        let vector = |arora: &arora::Arora, path: &str| {
-            read(arora, path)
-                .and_then(|v| as_vector(&v).map(<[f32]>::to_vec))
-                .unwrap_or_else(|| panic!("{path} holds no vector"))
-        };
-
-        step(&mut arora);
-        assert_eq!(number(&arora, &x.to_string()), 0.5);
-        assert_eq!(vector(&arora, &color.to_string()), [0.1, 0.2, 0.3]);
-
-        // Studio's update for the entity: every key it sends, at once.
-        let mut change = StateChange::new();
-        for (key, value) in [
-            (format!("{x}.{TARGET_POSITION}"), 0.25),
-            (format!("{x}.{STUDIO_VALUE}"), 0.25),
-            (format!("{x}.{TARGET_VELOCITY}"), 1.0),
-            (format!("{color}.r.{TARGET_POSITION}"), 1.0),
-            (format!("{color}.g.{TARGET_POSITION}"), 0.0),
-            (format!("{color}.b.{TARGET_POSITION}"), 0.5),
-        ] {
-            change.set.insert(Key::from(key), Some(Value::F64(value)));
-        }
-        arora.store().write(change).expect("Studio's update");
-        step(&mut arora);
-        assert_eq!(number(&arora, &x.to_string()), 0.25);
-        assert_eq!(number(&arora, &format!("{x}.{POSITION}")), 0.25);
-        assert_eq!(vector(&arora, &color.to_string()), [1.0, 0.0, 0.5]);
-        assert_eq!(number(&arora, &format!("{color}.b.{POSITION}")), 0.5);
-
-        // What the view reads: the rig's pose, by bare animatable id.
-        let pose: HashMap<String, Value> = rig
-            .pose()
-            .into_iter()
-            .map(|(path, value)| (path.to_string(), value))
-            .collect();
-        assert_eq!(pose.get(&x.to_string()).and_then(as_float), Some(0.25));
-        assert_eq!(
-            pose.get(&color.to_string()).and_then(as_vector),
-            Some(&[1.0, 0.0, 0.5][..])
-        );
-
-        let keys: Vec<Key> = [
-            format!("{x}.{TARGET_POSITION}"),
-            format!("{x}.{TARGET_VELOCITY}"),
-            format!("{color}.g.{TARGET_POSITION}"),
-        ]
-        .map(Key::from)
-        .to_vec();
-        let metas = arora.store().meta(&keys);
-        for (key, meta) in keys.iter().zip(metas) {
-            let meta = meta.unwrap_or_else(|| panic!("{} is declared", key.path));
-            assert!(meta.editable, "{}", key.path);
-            assert_eq!((meta.min, meta.max), (None, None), "{}", key.path);
-        }
-        let rest = |key: &Key| {
-            arora.store().meta(std::slice::from_ref(key))[0]
-                .as_ref()
-                .and_then(|meta| meta.default.as_ref())
-                .and_then(as_float)
-        };
-        assert_eq!(rest(&keys[0]), Some(0.5));
-        assert_eq!(rest(&keys[2]), Some(0.2));
     }
 }

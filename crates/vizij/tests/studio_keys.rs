@@ -124,6 +124,8 @@ async fn studio_s_update_drives_a_studio_exported_face() {
     }
     let mut socket = socket.expect("the local bridge listens within 10 s");
 
+    let number = |value: &Json| value.get("f64").or_else(|| value.get("f32"))?.as_f64();
+
     // Studio's keys are open, numbers in the units of the feature they
     // drive: no `[0, 1]` range on a translation.
     let keys = request(&mut socket, json!({"type": "list_keys"}), "list_keys_resp").await;
@@ -139,6 +141,24 @@ async fn studio_s_update_drives_a_studio_exported_face() {
         target.get("min").is_none() && target.get("max").is_none(),
         "{target}"
     );
+    assert_eq!(number(&target["default"]), Some(0.0), "{target}");
+
+    // Until Studio writes, the face holds its RobotData defaults: the
+    // colour rests at the components' defaults, joined.
+    let mut rested = None;
+    for _ in 0..100 {
+        let current = device
+            .rig
+            .pose()
+            .into_iter()
+            .find(|(path, _)| path.to_string() == color.to_string());
+        if let Some((_, value)) = current {
+            rested = as_vector(&value).map(<[f32]>::to_vec);
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(rested, Some(vec![0.0, 0.0, 0.0]));
 
     let written = request(&mut socket, studio_update(x, y, color), "write_values_resp").await;
     assert_eq!(written["success"], true, "{written}");
@@ -185,7 +205,6 @@ async fn studio_s_update_drives_a_studio_exported_face() {
         "read_values_resp",
     )
     .await;
-    let number = |value: &Json| value.get("f64").or_else(|| value.get("f32"))?.as_f64();
     assert_eq!(number(&read["values"][&feedback[0]]), Some(0.25), "{read}");
     assert_eq!(number(&read["values"][&feedback[1]]), Some(0.5), "{read}");
     assert_eq!(number(&read["values"][&feedback[2]]), None, "{read}");
