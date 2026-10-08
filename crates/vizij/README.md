@@ -192,16 +192,18 @@ local bridge:
 | `--studio` | `studio` | attach the Semio Studio bridge: the device registers under the identity kept in the app's data directory (`studio-identity.json`), else as the operator answers on the terminal (then kept), else from the environment (`DEVICE_OWNERS`, …) |
 
 Under `--studio` the face serves **Studio's keys** (`vizij::studio`, the
-Studio-key profile), so a Studio user who claims the device drives it as
-Studio drives any device. For each animatable the face's own graphs leave
-free, Studio's update — `<id>.target_position`, with `<id>.studio_value`
-and, while Studio's timeline plays, `<id>.target_velocity` beside it — is
-accepted, the target lands under the animatable id the view indexes, and
+Studio-key profile), so a Studio user who claims the device drives the
+animatables its view draws. Studio's update for an entity —
+`<id>.target_position`, with `<id>.studio_value` and, while Studio's
+timeline plays, `<id>.target_velocity` beside it, for each animatable — is
+accepted; each target lands under the animatable id the view indexes and
 `<id>.position` reports it back. `<id>` is the animatable's id for a number;
 a vector, euler or colour is written per component, `<uuid>.<axis>`, and
 lands joined under `<uuid>`. Each target rests at the animatable's RobotData
-default. An animatable a rig graph writes stays the rig's: Studio's keys for
-it are closed, so an update naming them is refused.
+default. Studio's keys for an animatable a rig graph writes, or one the view
+binds to nothing (a joint's value, a stroke), are accepted too, so the rest
+of the update lands, and move nothing: the rig keeps its animatable, and
+neither reports feedback.
 
 The device does not serve its face's GLB to Studio: nothing on the device
 answers the Studio client's `retrieveGlb` (`GET_MODEL_GLB`).

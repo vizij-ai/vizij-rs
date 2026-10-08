@@ -261,6 +261,10 @@ pub struct FaceMeta {
     /// bounding box of its scene in the XY plane ([`scene_bounds`]) — what
     /// the web's import derives for it.
     pub root_bounds: Option<(f32, f32, f32, f32)>,
+    /// The RobotData animatables bound to nothing the view draws (a joint's
+    /// value, a stroke), by the keys Studio writes them under: a number's
+    /// id, and each component of a vector, euler or colour, `<id>.<axis>`.
+    pub unbound: Vec<String>,
     /// The face's `VIZIJ_bundle` — its graphs, programs, and neutral pose. The
     /// device composition and neutral staging are its methods
     /// ([`Bundle::compose`], [`Bundle::neutral_stage_writes`]).
@@ -295,6 +299,22 @@ impl RawFeature {
         } else {
             Some(value)
         }
+    }
+
+    /// The keys Studio writes the animatable `id` of this feature under:
+    /// the id of a number, one key per component of a vector, euler or
+    /// colour, which Studio splits by the animatable's type on load.
+    fn studio_keys(&self, id: &str) -> Vec<String> {
+        let ty = self.value.as_ref().and_then(|v| v.get("type")?.as_str());
+        let components: &[&str] = match ty {
+            Some("vector2") => &["x", "y"],
+            Some("vector3") => &["x", "y", "z"],
+            Some("euler") => &["r", "p", "y"],
+            Some("rgb") => &["r", "g", "b"],
+            Some("hsl") => &["h", "s", "l"],
+            _ => return vec![id.to_string()],
+        };
+        components.iter().map(|c| format!("{id}.{c}")).collect()
     }
 
     fn number(&self) -> Option<f32> {
@@ -387,6 +407,7 @@ impl FaceMeta {
 
         let mut elements = Vec::new();
         let mut animatables = HashMap::new();
+        let mut unbound = Vec::new();
         let mut root_bounds = None;
 
         for (index, node) in nodes.iter().enumerate() {
@@ -409,6 +430,7 @@ impl FaceMeta {
 
             let shape = PrimitiveShape::of(&rd.kind);
             for (feature_name, feature) in &rd.features {
+                let animated = feature.animatable();
                 let parsed = match shape.and_then(|_| primitive_feature(feature_name)) {
                     Some(Some(converted)) => Some(converted),
                     Some(None) => {
@@ -417,15 +439,21 @@ impl FaceMeta {
                              an ellipse or rectangle draws as a shape, which has no stroke",
                             rd.kind
                         );
+                        unbound.extend(
+                            animated
+                                .map(|id| feature.studio_keys(id))
+                                .unwrap_or_default(),
+                        );
                         continue;
                     }
                     None => FeatureKind::parse(feature_name, &rd.morph_targets),
                 };
-                let Some(id) = feature.animatable() else {
+                let Some(id) = animated else {
                     continue;
                 };
                 let Some((kind, axis)) = parsed else {
                     log::debug!("{node_name}: unmapped feature {feature_name:?} — skipped");
+                    unbound.extend(feature.studio_keys(id));
                     continue;
                 };
                 let named_axis = axis;
@@ -433,6 +461,7 @@ impl FaceMeta {
                     log::debug!(
                         "{node_name}: {feature_name:?} names no animatable ({id:?}) — skipped"
                     );
+                    unbound.extend(feature.studio_keys(id));
                     continue;
                 };
                 // A component `<id>.<axis>` of a compound animatable states
@@ -499,9 +528,12 @@ impl FaceMeta {
         // portable host glue, read (and composed/staged) by the shared crate.
         let bundle = Bundle::from_gltf_json(gltf).unwrap_or_default();
 
+        unbound.sort();
+        unbound.dedup();
         Ok(Self {
             elements,
             animatables,
+            unbound,
             root_bounds,
             bundle,
         })
@@ -797,6 +829,17 @@ mod tests {
         );
         assert_eq!(bound(&compound), (FeatureKind::Color, None, "color".into()));
         assert_eq!(meta.animatables.len(), 3);
+        // What Studio writes but nothing draws: the joint's value, and the
+        // component that is not its feature's own axis.
+        let mut unbound = vec![format!("{compound}.x")];
+        let joint = gltf["nodes"][1]["extensions"]["RobotData"]["features"]["jointValue"]["value"]
+            ["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        unbound.push(joint);
+        unbound.sort();
+        assert_eq!(meta.unbound, unbound);
     }
 
     /// Each animatable rests where its RobotData default says, in the shape
@@ -806,7 +849,7 @@ mod tests {
     /// pitch and yaw), zero where nothing states one.
     #[test]
     fn rests_follow_the_robotdata_defaults() {
-        let ids: Vec<Uuid> = (0..6).map(|_| Uuid::new_v4()).collect();
+        let ids: Vec<Uuid> = (0..7).map(|_| Uuid::new_v4()).collect();
         let animated = |id: String, ty: &str, default: Option<serde_json::Value>| {
             let mut value = serde_json::json!({ "id": id, "type": ty });
             if let Some(default) = default {
@@ -831,6 +874,8 @@ mod tests {
                             Some(serde_json::json!({ "x": 0.1, "y": 0.2, "z": 0.3 }))),
                         "scale": animated(ids[3].to_string(), "number", n(2.0)),
                         "emissive": animated(ids[4].to_string(), "rgb", None),
+                        "specular": animated(ids[6].to_string(), "rgb",
+                            Some(serde_json::json!({ "r": 0.4, "g": 0.5, "b": 0.6 }))),
                         "smile": animated(ids[5].to_string(), "number", n(0.25)),
                     }
                 } }
@@ -844,6 +889,7 @@ mod tests {
         assert_eq!(rest(3), Rest::Scalar(2.0));
         assert_eq!(rest(4), Rest::Components([0.0; 3]));
         assert_eq!(rest(5), Rest::Scalar(0.25));
+        assert_eq!(rest(6), Rest::Components([0.4, 0.5, 0.6]));
     }
 
     /// A whole feature name wins over a split one, so a morph target named

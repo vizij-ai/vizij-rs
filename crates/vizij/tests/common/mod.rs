@@ -7,10 +7,17 @@ use uuid::Uuid;
 /// metallic factor of 0.5, and RobotData features per axis — `translation.x`
 /// and `translation.y` and `rotation.y` (yaw) each on an animatable of its
 /// own, `color.r/g/b` on the components of the compound animatable `color`.
-pub fn studio_face_glb(x: Uuid, y: Uuid, yaw: Uuid, color: Uuid) -> Vec<u8> {
+/// `bundle`, when given, is the face's `VIZIJ_bundle`.
+pub fn studio_face_glb(
+    x: Uuid,
+    y: Uuid,
+    yaw: Uuid,
+    color: Uuid,
+    bundle: Option<serde_json::Value>,
+) -> Vec<u8> {
     let axis = |id: String| serde_json::json!({ "animated": true, "value": { "id": id, "type": "number", "default": 0 } });
     let fixed = |value: f32| serde_json::json!({ "animated": false, "value": value });
-    let json = serde_json::json!({
+    let mut json = serde_json::json!({
         "asset": { "version": "2.0" },
         "extensionsUsed": ["RobotData"],
         "scene": 0,
@@ -49,6 +56,9 @@ pub fn studio_face_glb(x: Uuid, y: Uuid, yaw: Uuid, color: Uuid) -> Vec<u8> {
         ],
         "buffers": [{ "byteLength": 60 }],
     });
+    if let Some(bundle) = bundle {
+        json["extensions"] = serde_json::json!({ "VIZIJ_bundle": bundle });
+    }
     let mut bin = Vec::new();
     for p in [
         [-0.5f32, -0.5, 0.0],

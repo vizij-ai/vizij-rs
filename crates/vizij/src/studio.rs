@@ -27,10 +27,14 @@
 //! Every target rests at its animatable's RobotData default, so the face
 //! holds its authored pose until Studio writes.
 //!
-//! An animatable the face's own graphs write (a rig driving it from the
-//! standard controls) is left to them: two sources writing one key would
-//! take turns. Studio's keys for it stay closed, so an update naming them is
-//! refused.
+//! Studio's update for an entity carries every animatable it knows of the
+//! face, and a device refuses a whole update that names any key it never
+//! opened, so the profile accepts Studio's keys for every RobotData
+//! animatable. Two kinds are accepted and move nothing, and report no
+//! feedback: an animatable the face's own graphs write (a rig driving it
+//! from the standard controls) stays theirs, since two sources writing one
+//! key would take turns; and an animatable bound to nothing the view draws
+//! (a joint's value, a stroke) has nowhere to land.
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -51,9 +55,11 @@ pub(crate) const STUDIO_VALUE: &str = "studio_value";
 /// The key Studio writes an animatable's velocity to while its timeline plays.
 pub(crate) const TARGET_VELOCITY: &str = "target_velocity";
 
-/// The Studio-key profile of a face, as a composable graph source: every
-/// animatable `meta` binds but those whose key is in `written` — the output
-/// paths of the face's own composed graphs.
+/// The Studio-key profile of a face, as a composable graph source. It maps
+/// every animatable `meta` binds but those whose key is in `written` — the
+/// output paths of the face's own composed graphs — and accepts Studio's
+/// keys for those and for the animatables bound to nothing the view draws
+/// ([`FaceMeta::unbound`]) without mapping them.
 pub(crate) fn studio_source(meta: &FaceMeta, written: &HashSet<String>) -> (String, Json) {
     let mut graph = Graph::default();
     // Sorted, so the source is the same graph on every load.
@@ -64,38 +70,48 @@ pub(crate) fn studio_source(meta: &FaceMeta, written: &HashSet<String>) -> (Stri
         .collect();
     let mut left = 0;
     for (id, binding) in &animatables {
+        // The keys Studio writes the animatable under, each with its rest.
+        let keys: Vec<(String, f32)> = match (binding.rest, binding.feature.axes()) {
+            (Rest::Components(rests), Some(axes)) => axes
+                .iter()
+                .zip(rests)
+                .map(|(axis, rest)| (format!("{id}.{axis}"), rest))
+                .collect(),
+            (Rest::Scalar(rest), _) | (Rest::Components([rest, ..]), None) => {
+                vec![(id.clone(), rest)]
+            }
+        };
         if written.contains(id) {
             left += 1;
+            for (key, rest) in &keys {
+                graph.accepted(key, *rest);
+            }
             continue;
         }
-        match binding.rest {
-            Rest::Scalar(rest) => {
-                let target = graph.studio_key(id, rest);
-                graph.output(id, &target);
+        let targets: Vec<String> = keys
+            .iter()
+            .map(|(key, rest)| graph.studio_key(key, *rest))
+            .collect();
+        if let [target] = targets.as_slice() {
+            graph.output(id, target);
+        } else {
+            let joined = format!("join/{id}");
+            graph.node(&joined, "join", json!({}));
+            for (port, target) in targets.iter().enumerate() {
+                graph.edge(target, &joined, &format!("operand_{port}"));
             }
-            Rest::Components(rests) => {
-                // Only a compound feature's animatable rests in components.
-                let Some(axes) = binding.feature.axes() else {
-                    continue;
-                };
-                let components: Vec<String> = axes
-                    .iter()
-                    .zip(rests)
-                    .map(|(axis, rest)| graph.studio_key(&format!("{id}.{axis}"), rest))
-                    .collect();
-                let joined = format!("join/{id}");
-                graph.node(&joined, "join", json!({}));
-                for (port, component) in components.iter().enumerate() {
-                    graph.edge(component, &joined, &format!("operand_{port}"));
-                }
-                graph.output(id, &joined);
-            }
+            graph.output(id, &joined);
         }
     }
-    if left > 0 {
+    for key in &meta.unbound {
+        graph.accepted(key, 0.0);
+    }
+    if left > 0 || !meta.unbound.is_empty() {
         log::info!(
-            "studio: {left} animatables are driven by the face's own graphs and take no \
-             Studio writes"
+            "studio: Studio's writes to {left} animatables the face's own graphs drive, and \
+             to {} keys of animatables bound to nothing the view draws, are accepted and \
+             move nothing",
+            meta.unbound.len()
         );
     }
     (
@@ -183,6 +199,15 @@ impl Graph {
         self.input(&format!("{key}.{TARGET_VELOCITY}"), 0.0);
         target
     }
+
+    /// The keys Studio writes for the animatable (or component) `key`, read
+    /// and going nowhere: Studio's update naming them is accepted, and no
+    /// feedback claims they moved anything.
+    fn accepted(&mut self, key: &str, rest: f32) {
+        self.input(&format!("{key}.{TARGET_POSITION}"), rest);
+        self.input(&format!("{key}.{STUDIO_VALUE}"), rest);
+        self.input(&format!("{key}.{TARGET_VELOCITY}"), 0.0);
+    }
 }
 
 #[cfg(test)]
@@ -260,18 +285,29 @@ mod tests {
         assert_eq!(paths(&spec, "output"), outputs);
     }
 
-    /// An animatable the face's own graphs write is theirs: the profile
-    /// neither reads nor writes any key of it.
+    /// An animatable the face's own graphs write stays theirs, and one bound
+    /// to nothing the view draws has nowhere to land: Studio's keys for both
+    /// are accepted, and the profile writes nothing of theirs.
     #[test]
-    fn an_animatable_the_face_writes_is_left_to_it() {
-        let (meta, x, color) = studio_face();
+    fn studio_s_keys_of_a_rig_driven_or_unbound_animatable_go_nowhere() {
+        let (mut meta, x, color) = studio_face();
+        let joint = Uuid::new_v4().to_string();
+        meta.unbound = vec![joint.clone()];
         let (_, spec) = studio_source(&meta, &HashSet::from([color.to_string()]));
-        let color = color.to_string();
-        assert!(paths(&spec, "input")
-            .iter()
-            .chain(&paths(&spec, "output"))
-            .all(|path| !path.starts_with(&color)));
-        assert!(paths(&spec, "output").contains(&x.to_string()));
+        let inputs = paths(&spec, "input");
+        for key in [format!("{color}.g"), joint] {
+            for k in [TARGET_POSITION, STUDIO_VALUE, TARGET_VELOCITY] {
+                assert!(
+                    inputs.contains(&format!("{key}.{k}")),
+                    "{key}.{k} is accepted"
+                );
+            }
+        }
+        let outputs = paths(&spec, "output");
+        assert!(
+            outputs.iter().all(|path| path.starts_with(&x.to_string())),
+            "{outputs:?}"
+        );
     }
 
     fn read(arora: &arora::Arora, path: &str) -> Option<Value> {
