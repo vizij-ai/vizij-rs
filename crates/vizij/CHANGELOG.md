@@ -17,9 +17,11 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   `<uuid>.<axis>`, lands joined under `<uuid>` — and `<id>.position`
   reports it back; `<id>.studio_value` and `<id>.target_velocity` are
   accepted and ignored, so Studio's whole update for an entity lands. Each
-  target rests at the animatable's RobotData default; an animatable the
-  face's own graphs write is left to them. `FaceConfig::studio` turns it on
-  (feature `studio`), and `view::meta::Binding::rest` carries the default.
+  target rests at the animatable's RobotData default. Studio's keys for an
+  animatable the face's own graphs write, or one bound to nothing the view
+  draws (`view::meta::FaceMeta::unbound`), are accepted and move nothing.
+  `FaceConfig::studio` turns it on (feature `studio`), and
+  `view::meta::Binding::rest` carries the default.
 
 - The face reports what it is saying: while a `say` run's audio plays, the
   utterance is the face's speech state, `standard/vizij/speech`, empty before

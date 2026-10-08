@@ -2,7 +2,8 @@
 //! device serving Studio's keys (`studio`) takes Studio's update for an
 //! entity — every key it sends at once — and lands each target under the
 //! animatable id the view indexes, a compound animatable's components joined,
-//! with Studio's feedback keys reporting back. The update goes through the
+//! with Studio's feedback keys reporting back; an animatable the face's rig
+//! drives takes Studio's keys and stays the rig's. The update goes through the
 //! open local bridge, the same inbound path as the Studio bridge's: one
 //! that names a key the device never opened is refused whole.
 
@@ -57,13 +58,15 @@ async fn request(socket: &mut Socket, message: Json, response_type: &str) -> Jso
 }
 
 /// Studio's update for one entity: a number's target with the two keys it
-/// sends beside it, and a colour's targets per component.
-fn studio_update(x: Uuid, color: Uuid) -> Json {
+/// sends beside it, another number's, and a colour's targets per component.
+fn studio_update(x: Uuid, y: Uuid, color: Uuid) -> Json {
     let mut values = serde_json::Map::new();
     for (key, value) in [
         (format!("{x}.target_position"), 0.25),
         (format!("{x}.studio_value"), 0.25),
         (format!("{x}.target_velocity"), 0.0),
+        (format!("{y}.target_position"), -0.5),
+        (format!("{y}.studio_value"), -0.5),
         (format!("{color}.r.target_position"), 1.0),
         (format!("{color}.g.target_position"), 0.0),
         (format!("{color}.b.target_position"), 0.5),
@@ -81,7 +84,16 @@ async fn studio_s_update_drives_a_studio_exported_face() {
         Uuid::new_v4(),
         Uuid::new_v4(),
     );
-    let glb = studio_face_glb(x, y, yaw, color);
+    // The face's rig drives `y`: Studio's keys for it are accepted and the
+    // rig's value holds.
+    let rig = json!({ "graphs": [{ "id": "rig", "kind": "rig", "spec": {
+        "nodes": [
+            { "id": "c", "type": "constant", "params": { "value": 0.75 } },
+            { "id": "o", "type": "output", "params": { "path": y.to_string() } },
+        ],
+        "edges": [{ "from": { "node_id": "c" }, "to": { "node_id": "o", "input": "in" } }],
+    } }] });
+    let glb = studio_face_glb(x, y, yaw, color, Some(rig));
     let port = free_port();
     let config = FaceConfig {
         wanted: ["rig", "pose-driver", "pose", "standard-adaptation"]
@@ -128,7 +140,7 @@ async fn studio_s_update_drives_a_studio_exported_face() {
         "{target}"
     );
 
-    let written = request(&mut socket, studio_update(x, color), "write_values_resp").await;
+    let written = request(&mut socket, studio_update(x, y, color), "write_values_resp").await;
     assert_eq!(written["success"], true, "{written}");
 
     // The view's keys: the bare animatable ids, read off the rig the view
@@ -142,6 +154,7 @@ async fn studio_s_update_drives_a_studio_exported_face() {
             .map(|(path, value)| (path.to_string(), value))
             .collect();
         let landed = current.get(&x.to_string()).and_then(as_float) == Some(0.25)
+            && current.get(&y.to_string()).and_then(as_float) == Some(0.75)
             && current.get(&color.to_string()).and_then(as_vector) == Some(&[1.0, 0.0, 0.5][..]);
         if landed {
             pose = Some(current);
@@ -150,9 +163,22 @@ async fn studio_s_update_drives_a_studio_exported_face() {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     assert!(pose.is_some(), "Studio's targets never reached the rig");
+    // The rig keeps `y` past the update, and no feedback claims Studio moved it.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let held = device
+        .rig
+        .pose()
+        .into_iter()
+        .find(|(path, _)| path.to_string() == y.to_string())
+        .and_then(|(_, value)| as_float(&value));
+    assert_eq!(held, Some(0.75));
 
     // Studio's feedback reads back on the wire.
-    let feedback = [format!("{x}.position"), format!("{color}.b.position")];
+    let feedback = [
+        format!("{x}.position"),
+        format!("{color}.b.position"),
+        format!("{y}.position"),
+    ];
     let read = request(
         &mut socket,
         json!({"type": "read_values", "keys": feedback}),
@@ -162,10 +188,11 @@ async fn studio_s_update_drives_a_studio_exported_face() {
     let number = |value: &Json| value.get("f64").or_else(|| value.get("f32"))?.as_f64();
     assert_eq!(number(&read["values"][&feedback[0]]), Some(0.25), "{read}");
     assert_eq!(number(&read["values"][&feedback[1]]), Some(0.5), "{read}");
+    assert_eq!(number(&read["values"][&feedback[2]]), None, "{read}");
 
     // An update naming a key the device never opened is refused whole, by
     // name: a target for an animatable the face does not have.
-    let mut stray = studio_update(x, color);
+    let mut stray = studio_update(x, y, color);
     stray["values"][format!("{}.target_position", Uuid::new_v4())] = json!({ "f64": 1.0 });
     let refused = request(&mut socket, stray, "write_values_resp").await;
     assert_eq!(refused["success"], false, "{refused}");

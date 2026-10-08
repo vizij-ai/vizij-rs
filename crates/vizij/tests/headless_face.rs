@@ -147,7 +147,7 @@ fn a_studio_exported_face_renders_its_per_axis_pose() {
         Uuid::new_v4(),
         Uuid::new_v4(),
     );
-    let glb = studio_face_glb(x, y, yaw, color);
+    let glb = studio_face_glb(x, y, yaw, color, None);
     let meta = vizij::view::meta::FaceMeta::from_glb_bytes(&glb).expect("reads");
     assert_eq!(meta.root_bounds, Some((0.0, 0.0, 1.0, 1.0)));
 
