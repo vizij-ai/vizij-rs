@@ -31,7 +31,10 @@
 //! - per tick — `step(dt_ns, time_ns?)`, returning **per-track outputs keyed
 //!   by track identity**, each carrying the track's **default authored key**
 //!   plus its sampled value; the consumer (a runner, or a graph node) decides
-//!   the final store key — default = the authored key, overridable;
+//!   the final store key — default = the authored key, overridable. Or
+//!   `step_values(dt_ns, time_ns?)`, the same step returning the values
+//!   alone, by position in the table `output_keys()` returns: the keys
+//!   travel when a structural edit changes them, not every step;
 //! - transport — `play` / `play_at(time_ns)` / `pause` / `stop` /
 //!   `seek(time_ns)` / `set_speed` (negative plays backwards) / `set_loop` /
 //!   `set_window`, and per instance `set_weight` / `set_start_offset` /
@@ -130,6 +133,41 @@ pub struct TrackOutput {
     pub default_key: String,
     #[arora(id = "76697a69-6a00-0000-0110-000000000003", keyvalue)]
     pub value: Value,
+}
+
+/// What `step_values` returns: every output's value by its position in the
+/// table `output_keys` returns, and the revision of that table.
+#[derive(Debug, Clone, PartialEq, AroraType)]
+#[arora(id = "76697a69-6a00-0000-0000-000000000113")]
+pub struct StepValues {
+    /// The revision of the output table these values are laid out by: when
+    /// it differs from the one a consumer read `output_keys` at, a
+    /// structural edit changed the table, and the consumer reads it again.
+    #[arora(id = "76697a69-6a00-0000-0113-000000000001")]
+    pub revision: u32,
+    /// A `Value::ArrayValue` as long as the output table: at each position,
+    /// the value written to that output's key this step (encoded as
+    /// [`TrackOutput::value`] is), or `Value::Unit` when no instance weighs on
+    /// it this step. A record field cannot declare an array of dynamic
+    /// values, so the array travels as one dynamic value.
+    #[arora(id = "76697a69-6a00-0000-0113-000000000002", keyvalue)]
+    pub values: Value,
+}
+
+/// What `output_keys` returns: the key each position of `step_values`'
+/// values is written to, and the revision of that table.
+#[derive(Debug, Clone, PartialEq, AroraType)]
+#[arora(id = "76697a69-6a00-0000-0000-000000000114")]
+pub struct OutputKeys {
+    /// The table's revision, as `step_values` reports it.
+    #[arora(id = "76697a69-6a00-0000-0114-000000000001")]
+    pub revision: u32,
+    /// The key of each output (a track's `animatable_id`), in position
+    /// order: per player, in creation order, each key its instances write,
+    /// in the order they first write it. A key two players write has a
+    /// position per player.
+    #[arora(id = "76697a69-6a00-0000-0114-000000000002")]
+    pub keys: Vec<String>,
 }
 
 /// One player's state: its name (as `create_player` gave it, empty when it
@@ -260,6 +298,12 @@ pub struct AnimationModule {
     /// so `step` can report per-track identity alongside the default key. A
     /// key two animations write maps to the track of the later-loaded one.
     key_to_track: HashMap<String, String>,
+    /// Each engine output's key and track id, in output order, as of
+    /// `outputs_revision`: what `step` labels its values with.
+    outputs: Vec<(String, String)>,
+    /// The engine's output revision `outputs` was read at; none once
+    /// `key_to_track` changed since.
+    outputs_revision: Option<u32>,
     /// Player commands and instance updates issued since the previous step,
     /// drained (in issue order) into the next `step`'s engine update.
     pending: Inputs,
@@ -283,6 +327,8 @@ impl AnimationModule {
             engine: Engine::new(Config::default()),
             tracks: Vec::new(),
             key_to_track: HashMap::new(),
+            outputs: Vec::new(),
+            outputs_revision: None,
             pending: Inputs::default(),
             anchors: Vec::new(),
             clock_ns: 0,
@@ -320,8 +366,10 @@ impl AnimationModule {
         true
     }
 
-    /// Rebuild `key_to_track` from the loaded animations' tracks.
+    /// Rebuild `key_to_track` from the loaded animations' tracks, and have
+    /// the next `step` label its outputs from it.
     fn index_tracks(&mut self) {
+        self.outputs_revision = None;
         self.key_to_track = self
             .tracks
             .iter()
@@ -677,8 +725,79 @@ impl AnimationModule {
     /// the time since the module's first step). The transport commands
     /// buffered since the previous step apply first, in issue order. Each
     /// output carries the track's authored key as `default_key` and its stable
-    /// id as `track_id`; the value uses the vizij-arora `Value` encoding.
+    /// id as `track_id`; the value uses the vizij-arora `Value` encoding. The
+    /// outputs come in the order of [`output_keys`](Self::output_keys), those
+    /// no instance weighs on this step left out.
     pub fn step(&mut self, dt_ns: u64, time_ns: Option<u64>) -> Vec<TrackOutput> {
+        let revision = self.engine.output_revision();
+        if self.outputs_revision != Some(revision) {
+            let key_to_track = &self.key_to_track;
+            self.outputs = self
+                .engine
+                .output_targets()
+                .iter()
+                .map(|target| {
+                    let track = key_to_track.get(&target.key).unwrap_or(&target.key);
+                    (target.key.clone(), track.clone())
+                })
+                .collect();
+            self.outputs_revision = Some(revision);
+        }
+        let (dt, inputs) = self.step_inputs(dt_ns, time_ns);
+        let values = self.engine.update_by_target(dt, inputs);
+        values
+            .iter()
+            .zip(&self.outputs)
+            .filter_map(|(value, (key, track))| {
+                Some(TrackOutput {
+                    track_id: track.clone(),
+                    default_key: key.clone(),
+                    value: value.clone()?,
+                })
+            })
+            .collect()
+    }
+
+    /// [`step`](Self::step), returning the values alone, by their position
+    /// in the table [`output_keys`](Self::output_keys) returns: no key or
+    /// track id is built, copied or sent. A position no instance weighs on
+    /// this step holds `Value::Unit`.
+    pub fn step_values(&mut self, dt_ns: u64, time_ns: Option<u64>) -> StepValues {
+        let revision = self.engine.output_revision();
+        let (dt, inputs) = self.step_inputs(dt_ns, time_ns);
+        let values = self.engine.update_by_target(dt, inputs);
+        StepValues {
+            revision,
+            values: Value::ArrayValue(
+                values
+                    .iter()
+                    .map(|value| value.clone().unwrap_or(Value::Unit))
+                    .collect(),
+            ),
+        }
+    }
+
+    /// The key each position of [`step_values`](Self::step_values)' values
+    /// is written to, and the table's revision. Only a structural edit
+    /// changes the table: `add_instance`, `add_instance_with_weight`,
+    /// `remove_instance`, `remove_player`, `unload_animation`,
+    /// `reload_animation`; each that does gives a new revision.
+    pub fn output_keys(&self) -> OutputKeys {
+        OutputKeys {
+            revision: self.engine.output_revision(),
+            keys: self
+                .engine
+                .output_targets()
+                .iter()
+                .map(|target| target.key.clone())
+                .collect(),
+        }
+    }
+
+    /// The engine update a step of `dt_ns` ending at `time_ns` makes: its
+    /// `dt` in seconds and the buffered transport, each `play_at` delay
+    /// counted from the step's start.
+    fn step_inputs(&mut self, dt_ns: u64, time_ns: Option<u64>) -> (f32, Inputs) {
         let now = time_ns.unwrap_or(self.clock_ns.saturating_add(dt_ns));
         let start = i128::from(now) - i128::from(dt_ns);
         let mut inputs = std::mem::take(&mut self.pending);
@@ -688,20 +807,7 @@ impl AnimationModule {
             }
         }
         self.clock_ns = now;
-        let outputs = self.engine.update(ns_to_seconds(dt_ns), inputs);
-        outputs
-            .changes
-            .iter()
-            .map(|change| TrackOutput {
-                track_id: self
-                    .key_to_track
-                    .get(&change.key)
-                    .cloned()
-                    .unwrap_or_else(|| change.key.clone()),
-                default_key: change.key.clone(),
-                value: vizij_arora::to_arora(&change.value),
-            })
-            .collect()
+        (ns_to_seconds(dt_ns), inputs)
     }
 }
 
@@ -739,7 +845,9 @@ fn guest<T>(f: impl FnOnce(&mut AnimationModule) -> T) -> T {
     executable_mime = "application/wasm"
 )]
 pub mod animation {
-    use super::{guest, AnimationClip, BakedAnimation, PlayerState, TrackOutput};
+    use super::{
+        guest, AnimationClip, BakedAnimation, OutputKeys, PlayerState, StepValues, TrackOutput,
+    };
 
     /// [`AnimationModule::load_animation`](super::AnimationModule::load_animation).
     #[export(id = "76697a69-6a00-0000-0f00-000000000001")]
@@ -940,6 +1048,23 @@ pub mod animation {
         #[param(id = "76697a69-6a00-0000-0f17-000000000003")] time_scale: f32,
     ) -> u32 {
         guest(|a| a.set_time_scale(player, instance, time_scale))
+    }
+
+    /// [`AnimationModule::step_values`](super::AnimationModule::step_values).
+    /// `dt_ns` is the runtime's `arora/dt` built-in key and `time_ns` its
+    /// `arora/time`.
+    #[export(id = "76697a69-6a00-0000-0f00-000000000018")]
+    pub fn step_values(
+        #[param(id = "76697a69-6a00-0000-0f18-000000000001")] dt_ns: u64,
+        #[param(id = "76697a69-6a00-0000-0f18-000000000002")] time_ns: Option<u64>,
+    ) -> StepValues {
+        guest(|a| a.step_values(dt_ns, time_ns))
+    }
+
+    /// [`AnimationModule::output_keys`](super::AnimationModule::output_keys).
+    #[export(id = "76697a69-6a00-0000-0f00-000000000019")]
+    pub fn output_keys() -> OutputKeys {
+        guest(|a| a.output_keys())
     }
 }
 
@@ -1784,6 +1909,118 @@ mod tests {
             (100_000_000, 1_000_000_000)
         );
         assert!(a.bake(u32::MAX, None, None, None).is_none());
+    }
+
+    /// `step_values` reports each output's value at its position in
+    /// `output_keys`, `Unit` where no instance weighs on it; the table and
+    /// its revision change with structural edits alone, and `step` reports
+    /// the same values in the same order, keyed.
+    #[test]
+    fn step_values_are_laid_out_by_the_output_keys() {
+        let mut a = AnimationModule::new();
+        let first = a.load_animation(constant_clip("one", "k/one", 0.25));
+        let second = a.load_animation(constant_clip("two", "k/two", 0.75));
+        let player = a.create_player(None);
+        let empty = a.output_keys();
+        assert!(empty.keys.is_empty());
+        a.add_instance(player, first);
+        let quiet = a.add_instance_with_weight(player, second, 0.0);
+        let keys = a.output_keys();
+        assert_ne!(keys.revision, empty.revision);
+        assert_eq!(keys.keys, ["k/one", "k/two"]);
+
+        let step = a.step_values(100_000_000, None);
+        assert_eq!(step.revision, keys.revision);
+        assert_eq!(
+            step.values,
+            Value::ArrayValue(vec![Value::F32(0.25), Value::Unit])
+        );
+        a.set_weight(player, quiet, 1.0);
+        a.pause(player);
+        let step = a.step_values(0, None);
+        assert_eq!(
+            step.revision, keys.revision,
+            "transport is no structural edit"
+        );
+        assert_eq!(
+            step.values,
+            Value::ArrayValue(vec![Value::F32(0.25), Value::F32(0.75)])
+        );
+        let records = a.step(0, None);
+        let keyed: Vec<(&str, &str)> = records
+            .iter()
+            .map(|o| (o.default_key.as_str(), o.track_id.as_str()))
+            .collect();
+        assert_eq!(keyed, [("k/one", "one-t0"), ("k/two", "two-t0")]);
+
+        a.remove_instance(player, quiet);
+        let after = a.output_keys();
+        assert_ne!(after.revision, keys.revision);
+        assert_eq!(after.keys, ["k/one"]);
+        let other = a.create_player(None);
+        a.add_instance(other, first);
+        assert_eq!(
+            a.output_keys().keys,
+            ["k/one", "k/one"],
+            "a position per player"
+        );
+        assert_eq!(a.step(0, None).len(), 2);
+
+        // An edit that leaves the table keeps its revision.
+        let revision = a.output_keys().revision;
+        a.add_instance(u32::MAX, first);
+        assert_eq!(a.output_keys().revision, revision, "no player, no output");
+    }
+
+    /// A reload that changes an animation's keys lays the table out again,
+    /// under a new revision, and `step` names the new tracks; a reload with
+    /// the same keys keeps the revision.
+    #[test]
+    fn a_reload_lays_out_the_keys_it_changes() {
+        let mut a = AnimationModule::new();
+        let anim = a.load_animation(constant_clip("one", "k/x", 0.25));
+        let player = a.create_player(None);
+        a.add_instance(player, anim);
+        let before = a.output_keys();
+        assert_eq!(before.keys, ["k/x"]);
+
+        let mut wider = constant_clip("two", "k/x", 0.5);
+        wider
+            .tracks
+            .push(constant_clip("three", "k/y", 0.75).tracks.remove(0));
+        assert!(a.reload_animation(anim, wider));
+        let after = a.output_keys();
+        assert_eq!(after.keys, ["k/x", "k/y"]);
+        assert_ne!(after.revision, before.revision);
+        let named: Vec<String> = a.step(0, None).into_iter().map(|o| o.track_id).collect();
+        assert_eq!(named, ["two-t0", "three-t0"]);
+
+        let mut same = constant_clip("four", "k/x", 0.5);
+        same.tracks
+            .push(constant_clip("five", "k/y", 0.75).tracks.remove(0));
+        assert!(a.reload_animation(anim, same));
+        assert_eq!(a.output_keys().revision, after.revision, "the same keys");
+        let named: Vec<String> = a.step(0, None).into_iter().map(|o| o.track_id).collect();
+        assert_eq!(named, ["four-t0", "five-t0"]);
+    }
+
+    /// `step` names each output's track as the latest load of its key
+    /// says, even when that load changed no output.
+    #[test]
+    fn step_names_the_track_the_latest_load_gives_a_key() {
+        let mut a = AnimationModule::new();
+        let first = a.load_animation(constant_clip("one", "k/x", 0.25));
+        let player = a.create_player(None);
+        a.add_instance(player, first);
+        assert_eq!(a.step(0, None)[0].track_id, "one-t0");
+        let revision = a.output_keys().revision;
+        a.load_animation(constant_clip("two", "k/x", 0.75));
+        assert_eq!(
+            a.output_keys().revision,
+            revision,
+            "a load is no structural edit"
+        );
+        assert_eq!(a.step(0, None)[0].track_id, "two-t0");
     }
 
     /// A bake beyond the core's sample bound is refused with `None`, and a

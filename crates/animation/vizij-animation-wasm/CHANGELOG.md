@@ -4,6 +4,14 @@ All notable changes to `vizij-animation-wasm`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Built on `vizij-animation-core` 5: the changes of an update come in a
+  stable order, per player and then in the order its instances first write
+  each key.
+
 ## [3.0.0] - 2026-10-06
 
 ### Breaking

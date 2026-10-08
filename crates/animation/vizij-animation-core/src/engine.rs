@@ -19,8 +19,8 @@ use crate::outputs::{Change, ChangeWithDerivative, Outputs, OutputsWithDerivativ
 use crate::sampling::{sample_track, sample_track_with_derivative};
 use crate::scratch::Scratch;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use vizij_api_core::WriteBatch;
+use std::collections::{HashMap, HashSet};
+use vizij_api_core::{Value, WriteBatch};
 
 #[derive(Clone, Debug, Default)]
 pub struct PrebindReport {
@@ -136,6 +136,35 @@ pub struct Instance {
     pub start_offset: f32,
     pub enabled: bool,
     pub binding_set: BindingSet,
+    /// The output each channel of `binding_set` writes, an index into
+    /// [`Engine::output_targets`]; [`NO_TARGET`] for a channel that writes
+    /// none (another animation's, or a track without keypoints).
+    targets: Vec<u32>,
+}
+
+/// The output index of a channel that writes no output.
+const NO_TARGET: u32 = u32::MAX;
+
+/// One output of the engine: a key a player's instances write, blended
+/// across those instances. Two players writing one key are two outputs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OutputTarget {
+    /// The player whose instances write it.
+    pub player: PlayerId,
+    /// The key: the channel's bound handle when one is bound, otherwise its
+    /// track's canonical path.
+    pub key: String,
+}
+
+/// What an update reports.
+#[derive(Clone, Copy, PartialEq)]
+enum Report {
+    /// Each output's value by its index: [`Engine::update_by_target`].
+    ByTarget,
+    /// The outputs written, as keyed [`Change`]s.
+    Changes,
+    /// Keyed changes with their derivatives.
+    ChangesWithDerivatives,
 }
 
 /// Configuration for adding an instance.
@@ -215,9 +244,15 @@ pub struct Engine {
     interp: InterpRegistry,
     scratch: Scratch,
 
+    // Outputs, laid out by structural edits
+    targets: Vec<OutputTarget>,
+    revision: u32,
+    accum: AccumulatorWithDerivatives,
+
     // Per-tick outputs
     outputs: Outputs,
     outputs_with_derivatives: OutputsWithDerivatives,
+    target_values: Vec<Option<Value>>,
 }
 
 fn fmod(a: f32, b: f32) -> f32 {
@@ -337,8 +372,12 @@ impl Engine {
             instances: Vec::new(),
             binds: BindingTable::new(),
             interp: InterpRegistry::new(),
+            targets: Vec::new(),
+            revision: 0,
+            accum: AccumulatorWithDerivatives::new(),
             outputs: Outputs::default(),
             outputs_with_derivatives: OutputsWithDerivatives::default(),
+            target_values: Vec::new(),
         }
     }
 
@@ -376,6 +415,7 @@ impl Engine {
         for pid in player_ids {
             self.recalc_player_duration(pid);
         }
+        self.lay_out_targets();
         true
     }
 
@@ -448,6 +488,7 @@ impl Engine {
             start_offset: cfg.start_offset,
             enabled: cfg.enabled,
             binding_set,
+            targets: Vec::new(),
         };
         self.instances.push(instance);
 
@@ -457,6 +498,7 @@ impl Engine {
         }
         // Recompute player's effective total duration
         self.recalc_player_duration(player);
+        self.lay_out_targets();
         iid
     }
 
@@ -482,7 +524,79 @@ impl Engine {
                 }
             }
         }
+        self.lay_out_targets();
         report
+    }
+
+    /// Assign every channel of every player's instances its output: one per
+    /// key per player, in player creation order, then in the order the
+    /// player's instances and their channels first write each key. A
+    /// layout that differs from the previous one bumps
+    /// [`Engine::output_revision`].
+    fn lay_out_targets(&mut self) {
+        let mut targets = Vec::new();
+        let mut assigned: HashMap<InstId, Vec<u32>> = HashMap::new();
+        let instances: HashMap<InstId, &Instance> =
+            self.instances.iter().map(|inst| (inst.id, inst)).collect();
+        for p in &self.players {
+            let mut index: HashMap<&str, u32> = HashMap::new();
+            for iid in &p.instances {
+                let Some(inst) = instances.get(iid) else {
+                    continue;
+                };
+                let anim = self.anims.get(inst.anim);
+                let of_instance = inst
+                    .binding_set
+                    .channels
+                    .iter()
+                    .map(|ch| {
+                        let track = anim
+                            .filter(|_| ch.anim == inst.anim)
+                            .and_then(|a| a.tracks.get(ch.track_idx as usize))
+                            .filter(|track| !track.points.is_empty());
+                        let Some(track) = track else {
+                            return NO_TARGET;
+                        };
+                        let key = self
+                            .binds
+                            .get(*ch)
+                            .map_or(track.animatable_id.as_str(), |row| row.handle.as_str());
+                        *index.entry(key).or_insert_with(|| {
+                            targets.push(OutputTarget {
+                                player: p.id,
+                                key: key.to_string(),
+                            });
+                            (targets.len() - 1) as u32
+                        })
+                    })
+                    .collect();
+                assigned.insert(inst.id, of_instance);
+            }
+        }
+        for inst in &mut self.instances {
+            inst.targets = assigned.remove(&inst.id).unwrap_or_default();
+        }
+        if targets != self.targets {
+            self.targets = targets;
+            self.revision = self.revision.wrapping_add(1);
+        }
+    }
+
+    /// The engine's outputs, in the order [`Engine::update_by_target`]
+    /// reports their values: one per key a player's instances write. Only
+    /// structural edits change it — `add_instance`, `remove_instance`,
+    /// `remove_player`, `unload_animation`, `replace_animation` and
+    /// `prebind` — each that does bumping [`Engine::output_revision`].
+    pub fn output_targets(&self) -> &[OutputTarget] {
+        &self.targets
+    }
+
+    /// The layout [`Engine::output_targets`] is in: it changes whenever a
+    /// structural edit changes the targets, so a consumer holding them knows
+    /// to read them again when it differs. Wraps around after `u32::MAX`
+    /// changes.
+    pub fn output_revision(&self) -> u32 {
+        self.revision
     }
 
     /// Backwards compatible wrapper accepting resolvers that ignore the report.
@@ -632,7 +746,7 @@ impl Engine {
     }
 
     /// Compute instance-local time given a player and animation duration under the player's loop mode.
-    fn local_time_for_instance(&self, player: &Player, inst: &Instance, anim_duration: f32) -> f32 {
+    fn local_time_for_instance(player: &Player, inst: &Instance, anim_duration: f32) -> f32 {
         // Interpret start_offset as a player-time shift (when the instance starts).
         // Interpret time_scale as a duration multiplier (|ts| > 1 => longer, |ts| < 1 => shorter).
         // Mapping from the playhead to clip local time:
@@ -669,7 +783,8 @@ impl Engine {
         }
     }
 
-    fn step(&mut self, dt: f32, inputs: Inputs, with_derivatives: bool) {
+    fn step(&mut self, dt: f32, inputs: Inputs, report: Report) {
+        let with_derivatives = report == Report::ChangesWithDerivatives;
         self.scratch.begin_frame();
         self.outputs.clear();
         if with_derivatives {
@@ -679,75 +794,72 @@ impl Engine {
         self.apply_inputs(inputs);
         self.advance_player_times(dt);
 
+        self.accum.reset(self.targets.len());
         for p in &self.players {
-            let mut accum = AccumulatorWithDerivatives::new();
-
             for iid in &p.instances {
-                if let Some(inst) = self.instances.iter().find(|i| i.id == *iid) {
-                    if !inst.enabled {
+                let Some(inst) = self.instances.iter().find(|i| i.id == *iid) else {
+                    continue;
+                };
+                if !inst.enabled {
+                    continue;
+                }
+                let Some(anim_data) = self.anims.get(inst.anim) else {
+                    continue;
+                };
+                let anim_duration_s = anim_data.duration_ms as f32 / 1000.0;
+                let local_t = Self::local_time_for_instance(p, inst, anim_duration_s);
+                let u = if anim_duration_s > 0.0 {
+                    (local_t / anim_duration_s).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                for (ch, &target) in inst.binding_set.channels.iter().zip(&inst.targets) {
+                    if target == NO_TARGET {
                         continue;
                     }
-                    let anim_data = if let Some(a) = self.anims.get(inst.anim) {
-                        a
-                    } else {
+                    let Some(track) = anim_data.tracks.get(ch.track_idx as usize) else {
                         continue;
                     };
-                    let anim_duration_s = anim_data.duration_ms as f32 / 1000.0;
-                    let local_t = self.local_time_for_instance(p, inst, anim_duration_s);
-
-                    for ch in &inst.binding_set.channels {
-                        if ch.anim != inst.anim {
-                            continue;
-                        }
-                        let idx = ch.track_idx as usize;
-                        if let Some(track) = anim_data.tracks.get(idx) {
-                            if track.points.is_empty() {
-                                continue;
-                            }
-                            let u = if anim_duration_s > 0.0 {
-                                (local_t / anim_duration_s).clamp(0.0, 1.0)
-                            } else {
-                                0.0
-                            };
-                            let (value, derivative) = if with_derivatives {
-                                sample_track_with_derivative(track, u, anim_duration_s)
-                            } else {
-                                (sample_track(track, u), None)
-                            };
-                            let handle = if let Some(row) = self.binds.get(*ch) {
-                                row.handle.as_str()
-                            } else {
-                                track.animatable_id.as_str()
-                            };
-                            accum.add(handle, &value, derivative.as_ref(), inst.weight);
-                        }
-                    }
+                    let (value, derivative) = if with_derivatives {
+                        sample_track_with_derivative(track, u, anim_duration_s)
+                    } else {
+                        (sample_track(track, u), None)
+                    };
+                    self.accum
+                        .add(target as usize, &value, derivative.as_ref(), inst.weight);
                 }
             }
+        }
 
-            let blended = accum.finalize();
-            if with_derivatives {
-                for (key, (value, derivative)) in blended.into_iter() {
-                    self.outputs.push_change(Change {
-                        player: p.id,
-                        key: key.clone(),
-                        value: value.clone(),
-                    });
-                    self.outputs_with_derivatives
-                        .push_change(ChangeWithDerivative {
-                            player: p.id,
-                            key,
+        self.target_values.clear();
+        for (index, target) in self.targets.iter().enumerate() {
+            let blended = self.accum.take(index);
+            match report {
+                Report::ByTarget => self.target_values.push(blended.map(|(value, _)| value)),
+                Report::Changes => {
+                    if let Some((value, _)) = blended {
+                        self.outputs.push_change(Change {
+                            player: target.player,
+                            key: target.key.clone(),
                             value,
-                            derivative,
                         });
+                    }
                 }
-            } else {
-                for (key, (value, _)) in blended.into_iter() {
-                    self.outputs.push_change(Change {
-                        player: p.id,
-                        key,
-                        value,
-                    });
+                Report::ChangesWithDerivatives => {
+                    if let Some((value, derivative)) = blended {
+                        self.outputs.push_change(Change {
+                            player: target.player,
+                            key: target.key.clone(),
+                            value: value.clone(),
+                        });
+                        self.outputs_with_derivatives
+                            .push_change(ChangeWithDerivative {
+                                player: target.player,
+                                key: target.key.clone(),
+                                value,
+                                derivative,
+                            });
+                    }
                 }
             }
         }
@@ -757,12 +869,25 @@ impl Engine {
         }
     }
 
+    /// Step the simulation by `dt` seconds with the provided inputs, returning
+    /// each output's blended value by its index in [`Engine::output_targets`]:
+    /// `None` for an output no instance weighs on this step. No key is built
+    /// or copied, so a host that holds the targets reads the values by
+    /// position.
+    ///
+    /// The returned slice borrows the engine's buffer and is invalidated by
+    /// the next call that mutates outputs. It builds no keyed [`Change`].
+    pub fn update_by_target(&mut self, dt: f32, inputs: Inputs) -> &[Option<Value>] {
+        self.step(dt, inputs, Report::ByTarget);
+        &self.target_values
+    }
+
     /// Step the simulation by `dt` seconds with the provided inputs, returning value changes only.
     ///
     /// The returned reference borrows the engine's internal output buffer and is invalidated by
     /// the next call that mutates outputs (`update*`, `step`, or `update_writebatch`).
     pub fn update_values(&mut self, dt: f32, inputs: Inputs) -> &Outputs {
-        self.step(dt, inputs, false);
+        self.step(dt, inputs, Report::Changes);
         &self.outputs
     }
 
@@ -775,7 +900,7 @@ impl Engine {
         dt: f32,
         inputs: Inputs,
     ) -> &OutputsWithDerivatives {
-        self.step(dt, inputs, true);
+        self.step(dt, inputs, Report::ChangesWithDerivatives);
         &self.outputs_with_derivatives
     }
 
@@ -809,6 +934,7 @@ impl Engine {
                 self.instances.retain(|ii| ii.id != inst);
                 // Recompute duration
                 self.recalc_player_duration(player);
+                self.lay_out_targets();
                 return true;
             }
         }
@@ -827,6 +953,7 @@ impl Engine {
             }
             // Remove the player
             self.players.remove(idx);
+            self.lay_out_targets();
             true
         } else {
             false
@@ -867,7 +994,9 @@ impl Engine {
             }
         }
         // Remove animation from library
-        self.anims.remove(anim)
+        self.anims.remove(anim);
+        self.lay_out_targets();
+        true
     }
 
     /// List all loaded animations.
