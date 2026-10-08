@@ -51,6 +51,10 @@ pub enum ProgramSelect {
 pub struct Bundle {
     /// Graph entries, `(kind, spec)` — `rig`, `pose-driver`, `motiongraph`, ….
     pub graphs: Vec<(String, Json)>,
+    /// The `id` each of [`graphs`](Bundle::graphs)' entries carries, by
+    /// position: `graph_ids[i]` is `graphs[i]`'s, `None` for an entry
+    /// without one.
+    pub graph_ids: Vec<Option<String>>,
     /// Standard mappings embedded in the face, `(mapping id, spec)` — the
     /// [`STANDARD_MAPPING_KIND`](mappings::STANDARD_MAPPING_KIND) graph
     /// entries (ids `standard::<mapping>`, prefix stripped). An embedded copy
@@ -131,6 +135,7 @@ impl Bundle {
             .map(str::to_string);
 
         let mut graphs = Vec::new();
+        let mut graph_ids = Vec::new();
         let mut programs = Vec::new();
         let mut program_labels = HashMap::new();
         let mut standard_mappings = Vec::new();
@@ -177,6 +182,7 @@ impl Bundle {
                 continue;
             }
             graphs.push((kind, spec.clone()));
+            graph_ids.push(entry.get("id").and_then(Json::as_str).map(str::to_string));
         }
 
         // Profiles are declared data, not graphs — a malformed entry is
@@ -224,6 +230,7 @@ impl Bundle {
 
         Bundle {
             graphs,
+            graph_ids,
             standard_mappings,
             skills,
             programs,
@@ -697,6 +704,29 @@ mod tests {
         );
         assert!(b.program(&ProgramSelect::None).is_none());
         assert!(b.program(&ProgramSelect::Id("nope".into())).is_none());
+    }
+
+    #[test]
+    fn bundle_reads_each_graphs_id_by_position() {
+        let b = Bundle::from_bundle_json(&bundle_json());
+        let listed: Vec<(&str, Option<&str>)> = b
+            .graphs
+            .iter()
+            .zip(&b.graph_ids)
+            .map(|((kind, _), id)| (kind.as_str(), id.as_deref()))
+            .collect();
+        assert_eq!(
+            listed,
+            [
+                ("rig", Some("the_rig")),
+                ("motiongraph", Some("prog.speaks")),
+                ("motiongraph", Some("prog.live")),
+            ]
+        );
+        let unnamed = Bundle::from_bundle_json(&json!({
+            "graphs": [{ "kind": "rig", "spec": graph(json!([]), json!([])) }]
+        }));
+        assert_eq!(unnamed.graph_ids, [None]);
     }
 
     /// What an app reads beside the graphs: program labels, the pose

@@ -209,12 +209,16 @@ pub enum ViewEvent {
     },
     /// Take the face down: its scene, its camera, its GLB.
     UnloadFace { face_id: String },
-    /// Confine the face's camera to a rectangle of the target, in physical
-    /// pixels (`[x, y, width, height]`, origin top-left); `None` gives it the
-    /// whole target again. How several faces share one window or canvas.
+    /// Draw the face into a rectangle of the target, in physical pixels from
+    /// the target's top-left corner; `None` gives it the whole target again.
+    /// How several faces share one window or canvas. The rectangle is any
+    /// rectangle: the face is framed on all of it, and the part inside the
+    /// target is what draws, so a rectangle reaching past an edge shows its
+    /// face cut off there, and an empty one or one wholly outside the target
+    /// draws nothing.
     PlaceFace {
         face_id: String,
-        rect: Option<[u32; 4]>,
+        rect: Option<IRect>,
     },
     /// A new background color, as sRGB bytes.
     Background([u8; 3]),
@@ -279,7 +283,8 @@ struct FaceViews(HashMap<String, FaceView>);
 /// Where each face's safe area — the bounds its camera frames — lies on the
 /// target, in logical pixels from the target's top-left corner, as of the
 /// last frame; by face id. The rectangle can reach past the face's own
-/// rectangle when a zoom crops the bounds.
+/// rectangle when a zoom crops the bounds, and past the target with a
+/// rectangle that does. A face placed on an empty rectangle has none.
 #[derive(Resource, Default)]
 pub struct SafeAreas(pub HashMap<String, Rect>);
 
@@ -324,11 +329,12 @@ pub struct Picked {
 #[derive(Resource, Default)]
 pub struct Picks(pub Vec<Picked>);
 
-/// Where each face's camera draws, by face id ([`ViewEvent::PlaceFace`]);
-/// a face without an entry, or with `None`, draws over the whole target. Kept
+/// Where each face draws, by face id ([`ViewEvent::PlaceFace`]); a face
+/// without an entry, or with `None`, draws over the whole target — the
+/// single face of a window, a snapshot or a page that never places it. Kept
 /// apart from the faces so a placement survives the face's reload.
 #[derive(Resource, Default)]
-struct Placements(HashMap<String, Option<[u32; 4]>>);
+struct Placements(HashMap<String, Option<IRect>>);
 
 /// Static feature values waiting for their face to be indexed, by face id
 /// ([`ViewEvent::SetStaticFeature`]).
@@ -601,6 +607,7 @@ impl Plugin for ViewPlugin {
                 Update,
                 (
                     apply_view_events,
+                    clear_target,
                     place_cameras,
                     frame_cameras,
                     index_faces,
@@ -757,12 +764,53 @@ fn apply_view_events(
     }
 }
 
-/// Confine each face's camera to its placement, when it has one, and let
-/// the lowest camera clear the target with the background — whichever face
-/// that is as faces come and go — while the others draw over it.
+/// The camera that clears the target with the background, below every
+/// face's: a face's camera only draws its face over it, so the target shows
+/// the background wherever no face draws — all of it when no face is placed
+/// on it — whichever faces come, go or leave the target.
+#[derive(Component)]
+struct ClearCamera;
+
+/// Keep the target's [`ClearCamera`], on the page's background.
+fn clear_target(
+    options: Res<ViewOptions>,
+    offscreen: Option<Res<OffscreenTarget>>,
+    mut cameras: Query<&mut Camera, With<ClearCamera>>,
+    mut commands: Commands,
+) {
+    let wanted = ClearColorConfig::Custom(options.background);
+    let Ok(mut camera) = cameras.single_mut() else {
+        commands.spawn((
+            ClearCamera,
+            Camera3d::default(),
+            Camera {
+                clear_color: wanted,
+                order: -1,
+                ..default()
+            },
+            match offscreen.as_deref() {
+                Some(target) => RenderTarget::Image(target.0.clone().into()),
+                None => RenderTarget::default(),
+            },
+            // It draws nothing: no entity is on a layer it renders.
+            bevy::camera::visibility::RenderLayers::none(),
+            Tonemapping::None,
+            DebandDither::Disabled,
+            Msaa::Sample4,
+        ));
+        return;
+    };
+    if !matches!(camera.clear_color, ClearColorConfig::Custom(color) if color == options.background)
+    {
+        camera.clear_color = wanted;
+    }
+}
+
+/// Point each face's camera at its placement: the part of its rectangle
+/// inside the target, framed as the whole rectangle ([`placement`]); no
+/// placement, the whole target; nothing to draw, the camera off.
 fn place_cameras(
     placements: Res<Placements>,
-    options: Res<ViewOptions>,
     faces: Query<&Face>,
     mut cameras: Query<&mut Camera, With<FaceCamera>>,
 ) {
@@ -770,66 +818,88 @@ fn place_cameras(
         let Ok(mut camera) = cameras.get_mut(face.camera) else {
             continue;
         };
-        let wanted = placements
-            .0
-            .get(&face.id)
-            .copied()
-            .flatten()
-            .map(|[x, y, width, height]| Viewport {
-                physical_position: UVec2::new(x, y),
-                physical_size: UVec2::new(width.max(1), height.max(1)),
-                ..default()
-            });
-        let same = match (&camera.viewport, &wanted) {
+        let wanted = match placements.0.get(&face.id).copied().flatten() {
+            None => Some((None, None)),
+            // The target's size is known from the camera's first frame on;
+            // until then a placed camera draws nothing rather than the whole
+            // target.
+            Some(rect) => camera
+                .physical_target_size()
+                .and_then(|target| placement(rect, target))
+                .map(|(viewport, sub_view)| (Some(viewport), sub_view)),
+        };
+        let active = wanted.is_some();
+        if camera.is_active != active {
+            camera.is_active = active;
+        }
+        let Some((viewport, sub_view)) = wanted else {
+            continue;
+        };
+        let same = match (&camera.viewport, &viewport) {
             (None, None) => true,
             (Some(current), Some(wanted)) => {
-                current.physical_position == wanted.physical_position
-                    && current.physical_size == wanted.physical_size
+                current.physical_position == wanted.min && current.physical_size == wanted.size()
             }
             _ => false,
         };
         if !same {
-            camera.viewport = wanted;
+            camera.viewport = viewport.map(|rect| Viewport {
+                physical_position: rect.min,
+                physical_size: rect.size(),
+                ..default()
+            });
         }
-    }
-    let lowest = cameras.iter().map(|camera| camera.order).min();
-    for mut camera in &mut cameras {
-        let clears = Some(camera.order) == lowest;
-        let current = match camera.clear_color {
-            ClearColorConfig::Custom(color) => Some(color),
-            _ => None,
-        };
-        let wanted = clears.then_some(options.background);
-        if current != wanted {
-            camera.clear_color = match wanted {
-                Some(color) => ClearColorConfig::Custom(color),
-                None => ClearColorConfig::None,
-            };
+        if camera.sub_camera_view != sub_view {
+            camera.sub_camera_view = sub_view;
         }
     }
 }
 
+/// Where a face placed on `rect` draws on a target of size `target`
+/// (physical pixels): the part of `rect` inside the target as the camera's
+/// viewport, and — when that is not all of `rect` — the part of `rect`'s
+/// framing it shows, as a sub-camera view of the whole rectangle, so the
+/// face keeps the position and scale the whole rectangle gives it. `None`
+/// when no part of `rect` is inside the target.
+fn placement(rect: IRect, target: UVec2) -> Option<(URect, Option<SubCameraView>)> {
+    let visible = rect.intersect(IRect::from_corners(IVec2::ZERO, target.as_ivec2()));
+    if visible.is_empty() {
+        return None;
+    }
+    let viewport = URect::from_corners(visible.min.as_uvec2(), visible.max.as_uvec2());
+    let sub_view = (visible != rect).then(|| SubCameraView {
+        full_size: rect.size().as_uvec2(),
+        offset: (visible.min - rect.min).as_vec2(),
+        size: visible.size().as_uvec2(),
+    });
+    Some((viewport, sub_view))
+}
+
 /// Keep each face's camera on its framing: the projection and the position
-/// follow the face's view as it changes.
+/// follow the face's view as it changes, and the projection fits the face to
+/// its whole rectangle when the camera shows only part of it.
 fn frame_cameras(
     views: Res<FaceViews>,
     options: Res<ViewOptions>,
     faces: Query<&Face>,
-    mut cameras: Query<(&mut Projection, &mut Transform), With<FaceCamera>>,
+    mut cameras: Query<(&Camera, &mut Projection, &mut Transform), With<FaceCamera>>,
 ) {
     for face in &faces {
-        let Ok((mut projection, mut transform)) = cameras.get_mut(face.camera) else {
+        let Ok((camera, mut projection, mut transform)) = cameras.get_mut(face.camera) else {
             continue;
         };
         let framing = Framing::of(&face.meta, &options, views.0.get(&face.id));
+        let slot = camera
+            .sub_camera_view
+            .map(|sub_view| sub_view.full_size.as_vec2());
         let current = match &*projection {
             Projection::Custom(custom) => custom
                 .get::<FitProjection>()
-                .map(|fit| (fit.bounds, fit.fit, fit.zoom)),
+                .map(|fit| (fit.bounds, fit.fit, fit.zoom, fit.slot)),
             _ => None,
         };
-        if current != Some((framing.size, framing.fit, framing.zoom)) {
-            *projection = fit_projection(&framing);
+        if current != Some((framing.size, framing.fit, framing.zoom, slot)) {
+            *projection = fit_projection(&framing, slot);
         }
         let position = slot_origin(face.slot) + framing.center.extend(CAMERA_HEIGHT);
         if transform.translation != position {
@@ -866,36 +936,44 @@ fn tone_faces(
     }
 }
 
-/// Measure where each face's safe area lies ([`SafeAreas`]).
+/// Measure where each face's safe area lies ([`SafeAreas`]), on its whole
+/// rectangle — the part of it outside the target included.
 fn measure_safe_areas(
     views: Res<FaceViews>,
     options: Res<ViewOptions>,
+    placements: Res<Placements>,
     faces: Query<&Face, Without<Superseded>>,
     cameras: Query<&Camera, With<FaceCamera>>,
     mut areas: ResMut<SafeAreas>,
 ) {
     areas.0.clear();
     for face in &faces {
-        let Some(viewport) = cameras
-            .get(face.camera)
-            .ok()
-            .and_then(Camera::logical_viewport_rect)
-        else {
+        let Ok(camera) = cameras.get(face.camera) else {
+            continue;
+        };
+        let rect = match placements.0.get(&face.id).copied().flatten() {
+            None => camera
+                .logical_target_size()
+                .map(|size| Rect::from_corners(Vec2::ZERO, size)),
+            Some(rect) if rect.is_empty() => None,
+            Some(rect) => camera.target_scaling_factor().map(|scale| {
+                Rect::from_corners(rect.min.as_vec2() / scale, rect.max.as_vec2() / scale)
+            }),
+        };
+        let Some(rect) = rect else {
             continue;
         };
         let framing = Framing::of(&face.meta, &options, views.0.get(&face.id));
-        areas
-            .0
-            .insert(face.id.clone(), safe_area(&framing, viewport));
+        areas.0.insert(face.id.clone(), safe_area(&framing, rect));
     }
 }
 
-/// The part of `viewport` the framed bounds cover: centered, as the camera
-/// is on them, and scaled as the projection scales them.
-fn safe_area(framing: &Framing, viewport: Rect) -> Rect {
-    let size = viewport.size();
+/// The part of a face's rectangle `rect` the framed bounds cover: centered,
+/// as the camera is on them, and scaled as the projection scales them.
+fn safe_area(framing: &Framing, rect: Rect) -> Rect {
+    let size = rect.size();
     let extent = visible_extent(framing.size, framing.fit, framing.zoom, size.x, size.y);
-    Rect::from_center_size(viewport.center(), framing.size / extent * size)
+    Rect::from_center_size(rect.center(), framing.size / extent * size)
 }
 
 /// Take a face down: its scene, its camera, its GLB, its slot.
@@ -933,12 +1011,12 @@ fn retire_superseded(
     }
 }
 
-/// A face's camera: the fit over its framing, over its slot. Which camera
-/// clears the target is [`place_cameras`]'.
+/// A face's camera: the fit over its framing, over its slot, drawing over
+/// what the target holds ([`ClearCamera`] clears it).
 fn camera_for(framing: Framing, slot: usize, offscreen: Option<&OffscreenTarget>) -> impl Bundle {
     // Lighting is baked into the materials (see `ViewOptions::albedo_factor`);
     // no scene light is spawned.
-    let projection = fit_projection(&framing);
+    let projection = fit_projection(&framing, None);
     let transform =
         Transform::from_translation(slot_origin(slot) + framing.center.extend(CAMERA_HEIGHT))
             .looking_to(Vec3::NEG_Z, Vec3::Y);
@@ -965,11 +1043,12 @@ fn camera_for(framing: Framing, slot: usize, offscreen: Option<&OffscreenTarget>
 /// How far in front of the faces' plane a camera stands, looking down −Z.
 const CAMERA_HEIGHT: f32 = 100.0;
 
-fn fit_projection(framing: &Framing) -> Projection {
+fn fit_projection(framing: &Framing, slot: Option<Vec2>) -> Projection {
     Projection::custom(FitProjection {
         bounds: framing.size,
         fit: framing.fit,
         zoom: framing.zoom,
+        slot,
         ortho: OrthographicProjection::default_3d(),
     })
 }
@@ -988,6 +1067,12 @@ fn fit_projection(framing: &Framing) -> Projection {
 /// swap. The mesh pipeline files it as a nonstandard projection, which only
 /// routes its depth↔view-z shader helpers through the general matrix path —
 /// the same numbers for an orthographic matrix.
+///
+/// A camera showing part of its face's rectangle (a [`SubCameraView`], see
+/// [`placement`]) fits the bounds to the whole rectangle, `slot`, rather than
+/// to the viewport Bevy hands [`CameraProjection::update`], and its sub view
+/// is that part of the whole rectangle's extent — per axis, so a stretch or
+/// an anisotropic zoom crops as it frames.
 #[derive(Debug, Clone)]
 struct FitProjection {
     /// The authored rootBounds size (width, height), in world units.
@@ -995,6 +1080,10 @@ struct FitProjection {
     fit: Fit,
     /// Magnification per axis, applied after the fit.
     zoom: Vec2,
+    /// The size of the whole rectangle the face is framed on, when the
+    /// camera's viewport is only part of it; any unit, as only its aspect
+    /// counts.
+    slot: Option<Vec2>,
     /// Holds the extent as a `Fixed` scaling mode and does the matrix work.
     ortho: OrthographicProjection,
 }
@@ -1005,10 +1094,26 @@ impl CameraProjection for FitProjection {
     }
 
     fn get_clip_from_view_for_sub(&self, sub_view: &SubCameraView) -> Mat4 {
-        self.ortho.get_clip_from_view_for_sub(sub_view)
+        // `area` is the whole rectangle's extent, y up; the sub view is a
+        // part of the whole rectangle, y down.
+        let area = self.ortho.area;
+        let scale = area.size() / sub_view.full_size.as_vec2();
+        let left = area.min.x + sub_view.offset.x * scale.x;
+        let top = area.max.y - sub_view.offset.y * scale.y;
+        let size = sub_view.size.as_vec2() * scale;
+        Mat4::orthographic_rh(
+            left,
+            left + size.x,
+            top - size.y,
+            top,
+            // Swapped, as Bevy's orthographic projection has them: reversed Z.
+            self.ortho.far,
+            self.ortho.near,
+        )
     }
 
     fn update(&mut self, width: f32, height: f32) {
+        let (width, height) = self.slot.map_or((width, height), |slot| (slot.x, slot.y));
         let extent = visible_extent(self.bounds, self.fit, self.zoom, width, height);
         self.ortho.scaling_mode = ScalingMode::Fixed {
             width: extent.x,
@@ -2015,6 +2120,7 @@ mod tests {
                     bounds: BOUNDS,
                     fit,
                     zoom: NO_ZOOM,
+                    slot: None,
                     ortho: OrthographicProjection::default_3d(),
                 };
                 ours.update(width, height);
@@ -2024,6 +2130,104 @@ mod tests {
                     bevy.get_clip_from_view(),
                     "{fit:?} at {width}x{height}"
                 );
+            }
+        }
+    }
+
+    /// A rectangle inside the target is the viewport, whole; one reaching
+    /// past an edge is cut at the edge, the cut part a sub view of the whole
+    /// rectangle; an empty one, or one wholly outside, draws nothing.
+    #[test]
+    fn a_placement_is_the_part_of_its_rectangle_inside_the_target() {
+        let target = UVec2::new(800, 600);
+        let rect = |x0, y0, x1, y1| IRect::new(x0, y0, x1, y1);
+        let urect = |x0, y0, x1, y1| URect::new(x0, y0, x1, y1);
+
+        assert_eq!(
+            placement(rect(100, 50, 500, 350), target),
+            Some((urect(100, 50, 500, 350), None))
+        );
+        // Half past the left edge: the right half, offset by the cut.
+        assert_eq!(
+            placement(rect(-200, 50, 200, 350), target),
+            Some((
+                urect(0, 50, 200, 350),
+                Some(SubCameraView {
+                    full_size: UVec2::new(400, 300),
+                    offset: Vec2::new(200.0, 0.0),
+                    size: UVec2::new(200, 300),
+                })
+            ))
+        );
+        // Past the bottom-right corner: the top-left part, no offset.
+        assert_eq!(
+            placement(rect(700, 500, 1100, 800), target),
+            Some((
+                urect(700, 500, 800, 600),
+                Some(SubCameraView {
+                    full_size: UVec2::new(400, 300),
+                    offset: Vec2::ZERO,
+                    size: UVec2::new(100, 100),
+                })
+            ))
+        );
+        assert_eq!(placement(rect(100, 100, 100, 400), target), None);
+        assert_eq!(placement(rect(-400, 0, 0, 300), target), None);
+        assert_eq!(placement(rect(0, 600, 400, 900), target), None);
+        assert_eq!(placement(rect(900, 0, 1300, 300), target), None);
+    }
+
+    /// A camera showing part of its rectangle projects every point where the
+    /// whole rectangle's projection puts it: the sub view is a crop, not a
+    /// refit — under each fit and an anisotropic zoom.
+    #[test]
+    fn a_sub_view_crops_the_whole_rectangles_projection() {
+        let full = UVec2::new(400, 300);
+        let sub_view = SubCameraView {
+            full_size: full,
+            offset: Vec2::new(250.0, 40.0),
+            size: UVec2::new(150, 200),
+        };
+        for fit in [Fit::Contain, Fit::Cover, Fit::Stretch] {
+            for zoom in [NO_ZOOM, Vec2::new(2.0, 0.5)] {
+                let projection = |slot| {
+                    let mut projection = FitProjection {
+                        bounds: BOUNDS,
+                        fit,
+                        zoom,
+                        slot,
+                        ortho: OrthographicProjection::default_3d(),
+                    };
+                    // Bevy hands the projection the viewport's size: the
+                    // visible part's, for the cropped camera.
+                    let size = if slot.is_some() {
+                        sub_view.size.as_vec2()
+                    } else {
+                        full.as_vec2()
+                    };
+                    projection.update(size.x, size.y);
+                    projection
+                };
+                let whole = projection(None).get_clip_from_view();
+                let part = projection(Some(full.as_vec2())).get_clip_from_view_for_sub(&sub_view);
+                // A point of the view, in the whole rectangle's pixels (y
+                // down) and in the visible part's.
+                let pixel = |clip: Mat4, point: Vec3, size: Vec2| {
+                    let ndc = clip.project_point3(point);
+                    Vec2::new((ndc.x + 1.0) / 2.0 * size.x, (1.0 - ndc.y) / 2.0 * size.y)
+                };
+                for point in [
+                    Vec3::new(0.0, 0.0, -1.0),
+                    Vec3::new(1.5, -0.7, -10.0),
+                    Vec3::new(-2.0, 1.0, -50.0),
+                ] {
+                    let in_whole = pixel(whole, point, full.as_vec2());
+                    let in_part = pixel(part, point, sub_view.size.as_vec2()) + sub_view.offset;
+                    assert!(
+                        in_whole.distance(in_part) < 1e-3,
+                        "{fit:?} ×{zoom}: {point} at {in_whole} in the whole, {in_part} in the part"
+                    );
+                }
             }
         }
     }

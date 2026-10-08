@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import {
   startRuntime,
   behaviorValue,
+  outputKeys,
   runEdits,
   runStatus,
   BEHAVIOR_RUNS,
@@ -58,10 +59,6 @@ const runs = async () => {
     ])
     .sort();
 };
-/** The keys `graph`'s output nodes write: what a page returns to rest. */
-const outputs = (graph) =>
-  graph.nodes.filter((node) => node.type === "output").map((node) => node.params.path);
-
 /** A program writing `value` to `path`. */
 const writes = (path, value) => ({
   nodes: [
@@ -129,12 +126,29 @@ close(read("sensor/x"), 1, "a halted program's output holds");
 close(read("actuator/y"), 1, "and the graph reads it");
 
 // Returned to rest only when asked: its outputs go back to where they rest.
-assert.deepEqual(outputs(drive), ["sensor/x"]);
-await stepped(runtime.invoke("reset_keys", { keys: { strs: outputs(drive) } }));
+const driven = await outputKeys(drive);
+assert.deepEqual(driven, ["sensor/x"]);
+await stepped(runtime.invoke("reset_keys", { keys: { strs: driven } }));
 close(read("sensor/x"), 0, "the driven input is back at rest");
 runtime.step(100);
 close(read("actuator/y"), 0, "the graph carried it");
 close(read("unrelated/kept"), 0.375, "an unrelated key keeps its value");
+
+// outputKeys reads a graph as the device does — a type in any case, a path
+// object — and leaves out the outputs on the run's own keys.
+assert.deepEqual(
+  await outputKeys({
+    nodes: [
+      { id: "k", type: "constant", params: { value: { float: 1 } } },
+      { id: "b", type: "Output", params: { path: "rig/b" } },
+      { id: "a", type: "output", params: { path: { path: "rig/a.x" } } },
+      { id: "again", type: "output", params: { path: "rig/b" } },
+      { id: "seen", type: "output", params: { path: "task/feedback" } },
+    ],
+    edges: [],
+  }),
+  ["rig/a.x", "rig/b"],
+);
 assert.ok(number(read("program/moving")) > next, "the other program runs on");
 
 // Spawning again is a new run, from fresh node state.

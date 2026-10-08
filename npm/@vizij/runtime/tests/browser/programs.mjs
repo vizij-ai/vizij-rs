@@ -58,6 +58,18 @@ const edited = {
 const { page, logs, close } = await open(FIXTURES);
 try {
   await loadVizij(page, "face", "Quori_Current_Extended.glb", { ros4hri: false, audio: false });
+
+  // What a page reads to return a program's outputs to rest: outputKeys of
+  // the program's graph as describe lists it.
+  const described = await page.evaluate(async () => {
+    const vizij = await import("../../dist/runtime/src/index.js");
+    const bytes = new Uint8Array(await (await fetch("/fixtures/Quori_Current_Extended.glb")).arrayBuffer());
+    const { programs } = await vizij.describe(bytes);
+    return Object.fromEntries(
+      await Promise.all(programs.map(async (p) => [p.id, await vizij.outputKeys(p.graph)])),
+    );
+  });
+  assert.deepEqual(described, { [speaks.id]: speaksKeys, [live.id]: liveKeys });
   const result = await page.evaluate(
     async ({ speaksId, liveId, speaksKeys, liveKeys, edited, graphs }) => {
       const h = window.vizijHarness;

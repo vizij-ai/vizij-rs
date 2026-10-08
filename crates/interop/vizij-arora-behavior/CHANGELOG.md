@@ -4,6 +4,17 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [5.3.0] - 2026-10-10
+
+### Added
+
+- `run::outputs(spec)`: the store keys a `run_behavior` run of `spec` writes
+  and leaves holding when halted — each output node's path, once, sorted —
+  what a client returns to rest after the halt with the rest module's
+  `reset_keys`. The outputs on `task/…` paths, which write the run's own
+  keys, are not listed, nor are path-less outputs, whose keyed batch names
+  its keys as it runs.
+
 ## [5.2.0] - 2026-10-10
 
 ### Added
