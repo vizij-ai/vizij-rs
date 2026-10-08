@@ -75,6 +75,8 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
         program: ProgramSelect::None,
         stage_neutral: true,
         ros4hri: true,
+        #[cfg(feature = "studio")]
+        studio: false,
         speech: None,
     };
     // The other bridges are feature-gated fields; only the local one is set.

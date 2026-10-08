@@ -219,6 +219,8 @@ fn main() -> Result<()> {
         program,
         stage_neutral: !cli.no_stage_neutral,
         ros4hri: !cli.no_ros4hri,
+        #[cfg(feature = "studio")]
+        studio: cli.studio,
         speech: Some(speech_provider()),
     };
     let bridges = BridgeConfig {

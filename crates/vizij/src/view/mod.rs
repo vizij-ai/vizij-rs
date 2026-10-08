@@ -1252,6 +1252,7 @@ fn index_faces(
                 node_name,
                 feature,
                 axis,
+                ..
             },
         ) in &face.meta.animatables
         {

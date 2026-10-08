@@ -142,6 +142,23 @@ pub struct Binding {
     /// feature's triple: Studio's per-axis features (`translation.x`). `None`
     /// for an animatable that carries the whole feature.
     pub axis: Option<usize>,
+    /// The value the animatable takes and where it rests, as RobotData
+    /// states its default.
+    pub rest: Rest,
+}
+
+/// An animatable's value shape and resting value, from its RobotData
+/// default: one number, or the three components of a compound feature in
+/// the order of its axes ([`FeatureKind::axes`]). This is also how Studio
+/// writes it: a number under the animatable's id, a compound per component,
+/// under `<id>.<axis>`.
+///
+/// A default that states no number for a component rests it at 0, as Studio
+/// does when it splits a compound animatable.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Rest {
+    Scalar(f32),
+    Components([f32; 3]),
 }
 
 impl Binding {
@@ -284,6 +301,42 @@ impl RawFeature {
         self.stated()?.as_f64().map(|n| n as f32)
     }
 
+    /// Where the animatable this feature is driven through rests: a number,
+    /// or — for an animatable carrying a compound feature whole, `axes` its
+    /// components — the components its default names. The animatable's
+    /// `type` decides when the default is absent: Studio splits a `vector3`,
+    /// `euler` or `rgb` animatable per component. A whole rotation's default
+    /// may name its components `x`, `y`, `z` rather than roll, pitch, yaw.
+    fn rest(&self, axes: Option<[&str; 3]>) -> Rest {
+        let Some(axes) = axes else {
+            return Rest::Scalar(self.number().unwrap_or(0.0));
+        };
+        match self.stated() {
+            Some(Json::Object(components)) => {
+                let names = if components.contains_key(axes[0]) {
+                    axes
+                } else {
+                    ["x", "y", "z"]
+                };
+                let component = |i: usize| {
+                    components
+                        .get(names[i])
+                        .and_then(Json::as_f64)
+                        .map_or(0.0, |n| n as f32)
+                };
+                Rest::Components([component(0), component(1), component(2)])
+            }
+            None if matches!(
+                self.value.as_ref().and_then(|v| v.get("type")?.as_str()),
+                Some("vector3" | "euler" | "rgb")
+            ) =>
+            {
+                Rest::Components([0.0; 3])
+            }
+            _ => Rest::Scalar(self.number().unwrap_or(0.0)),
+        }
+    }
+
     /// An `{r, g, b}` color.
     fn rgb(&self) -> Option<[f32; 3]> {
         let value = self.stated()?;
@@ -375,11 +428,30 @@ impl FaceMeta {
                     log::debug!("{node_name}: unmapped feature {feature_name:?} — skipped");
                     continue;
                 };
+                let named_axis = axis;
                 let Some((animatable, axis)) = animatable_of(id, &kind, axis) else {
                     log::debug!(
                         "{node_name}: {feature_name:?} names no animatable ({id:?}) — skipped"
                     );
                     continue;
+                };
+                // A component `<id>.<axis>` of a compound animatable states
+                // that one component's rest; the binding its siblings made
+                // holds the others.
+                let rest = match (axis, named_axis) {
+                    (None, Some(component)) => {
+                        let mut components = match animatables.get(&animatable) {
+                            Some(Binding {
+                                rest: Rest::Components(components),
+                                ..
+                            }) => *components,
+                            _ => [0.0; 3],
+                        };
+                        components[component] = feature.number().unwrap_or(0.0);
+                        Rest::Components(components)
+                    }
+                    (None, None) => feature.rest(kind.axes()),
+                    (Some(_), _) => feature.rest(None),
                 };
                 animatables.insert(
                     animatable,
@@ -387,6 +459,7 @@ impl FaceMeta {
                         node_name: node_name.clone(),
                         feature: kind,
                         axis,
+                        rest,
                     },
                 );
             }
@@ -724,6 +797,53 @@ mod tests {
         );
         assert_eq!(bound(&compound), (FeatureKind::Color, None, "color".into()));
         assert_eq!(meta.animatables.len(), 3);
+    }
+
+    /// Each animatable rests where its RobotData default says, in the shape
+    /// Studio writes it: a number, or the components of a compound feature —
+    /// gathered from the per-axis features of a split compound, read by
+    /// axis name from a whole one's default (`x`/`y`/`z` standing for roll,
+    /// pitch and yaw), zero where nothing states one.
+    #[test]
+    fn rests_follow_the_robotdata_defaults() {
+        let ids: Vec<Uuid> = (0..6).map(|_| Uuid::new_v4()).collect();
+        let animated = |id: String, ty: &str, default: Option<serde_json::Value>| {
+            let mut value = serde_json::json!({ "id": id, "type": ty });
+            if let Some(default) = default {
+                value["default"] = default;
+            }
+            serde_json::json!({ "animated": true, "value": value })
+        };
+        let n = |x: f64| Some(serde_json::json!(x));
+        let gltf = serde_json::json!({
+            "nodes": [{
+                "name": "Plate",
+                "extensions": { "RobotData": {
+                    "id": Uuid::new_v4().to_string(),
+                    "type": "shape",
+                    "morphTargets": ["smile"],
+                    "features": {
+                        "translation.x": animated(ids[0].to_string(), "number", n(0.5)),
+                        "color.r": animated(format!("{}.r", ids[1]), "number", n(0.1)),
+                        "color.g": animated(format!("{}.g", ids[1]), "number", n(0.2)),
+                        "color.b": animated(format!("{}.b", ids[1]), "number", None),
+                        "rotation": animated(ids[2].to_string(), "euler",
+                            Some(serde_json::json!({ "x": 0.1, "y": 0.2, "z": 0.3 }))),
+                        "scale": animated(ids[3].to_string(), "number", n(2.0)),
+                        "emissive": animated(ids[4].to_string(), "rgb", None),
+                        "smile": animated(ids[5].to_string(), "number", n(0.25)),
+                    }
+                } }
+            }]
+        });
+        let meta = FaceMeta::from_gltf_json(&gltf).expect("parses");
+        let rest = |i: usize| meta.animatables[&ids[i]].rest;
+        assert_eq!(rest(0), Rest::Scalar(0.5));
+        assert_eq!(rest(1), Rest::Components([0.1, 0.2, 0.0]));
+        assert_eq!(rest(2), Rest::Components([0.1, 0.2, 0.3]));
+        assert_eq!(rest(3), Rest::Scalar(2.0));
+        assert_eq!(rest(4), Rest::Components([0.0; 3]));
+        assert_eq!(rest(5), Rest::Scalar(0.25));
     }
 
     /// A whole feature name wins over a split one, so a morph target named

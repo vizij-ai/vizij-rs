@@ -48,6 +48,12 @@ pub struct FaceConfig {
     /// leaves a plain ROS 2 device, its keys under `/{namespace}/keys/…` and
     /// nothing on the ROS4HRI names.
     pub ros4hri: bool,
+    /// Serve Semio Studio's keys: compose the Studio-key profile
+    /// ([`crate::studio`]), so Studio's `<id>.target_position` writes drive
+    /// the face's animatables and their `<id>.position` reports back. The
+    /// binary sets it with `--studio`.
+    #[cfg(feature = "studio")]
+    pub studio: bool,
     /// The speech provider, built per generation; `None` for a device that
     /// plays no speech.
     pub speech: Option<SpeechProvider>,
@@ -62,10 +68,10 @@ pub struct LoadedFace {
 }
 
 /// Load a face for the device from its GLB bytes: parse the metadata, compose
-/// its bundle graphs (the base kinds, the standard mappings, the animation
-/// source) into the one behavior graph, and validate it. No program is
-/// composed: a program runs beside that graph, as a task run
-/// ([`spawn_program`]).
+/// its bundle graphs (the base kinds, the standard mappings, the Studio-key
+/// profile, the animation source) into the one behavior graph, and validate
+/// it. No program is composed: a program runs beside that graph, as a task
+/// run ([`spawn_program`]).
 pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
     let meta = FaceMeta::from_glb_bytes(glb)?;
     let wanted: Vec<&str> = config.wanted.iter().map(String::as_str).collect();
@@ -76,6 +82,18 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
     if config.ros4hri {
         mappings.push(vizij_arora_host::ros4hri::ros4hri_source(
             &meta.bundle.rig_prefix(),
+        ));
+    }
+    // The Studio-key profile maps the animatables the face's own graphs
+    // leave free, so it is generated against the face composed without it.
+    #[cfg(feature = "studio")]
+    if config.studio {
+        let face = meta
+            .bundle
+            .compose(&wanted, &ProgramSelect::None, true, &mappings)?;
+        mappings.push(crate::studio::studio_source(
+            &meta,
+            &crate::studio::written_paths(&face),
         ));
     }
     // `with_animations`: the device always loads the animation module (see
@@ -116,12 +134,13 @@ pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
 /// `(id, spec)`) over it — a program runs beside the graph whenever a client
 /// spawns it, so the inputs it reads are the face's too. An input a program
 /// writes stays declared: the program runs only while it runs. Each is open
-/// to remote writers, of its type — a number in `[0, 1]` — and rests at its
-/// authored default. `neutral` (the bundle's neutral pose,
-/// [`Bundle::neutral_stage_writes`]) moves the rest of the keys it names, and
-/// gives a rig key that is no free input its rest alone: the standard inputs
-/// feed the rig through the adaptation, so a reset that left the rig out
-/// would be undone on the next tick.
+/// to remote writers, of its type — a number in `[0, 1]`, unless it is one
+/// of Studio's keys (the `studio` module's), in the units of the feature it
+/// drives — and rests at its authored default. `neutral` (the bundle's
+/// neutral pose, [`Bundle::neutral_stage_writes`]) moves the rest of the
+/// keys it names, and gives a rig key that is no free input its rest alone:
+/// the standard inputs feed the rig through the adaptation, so a reset that
+/// left the rig out would be undone on the next tick.
 ///
 /// [`Bundle::neutral_stage_writes`]: vizij_arora_host::Bundle::neutral_stage_writes
 pub fn declare_keys(
@@ -153,11 +172,17 @@ pub fn declare_keys(
         }
         Err(_) => {}
     }
+    #[cfg(feature = "studio")]
+    let unranged = serde_json::from_str(spec)
+        .map(|spec| crate::studio::studio_inputs(&spec))
+        .unwrap_or_default();
+    #[cfg(not(feature = "studio"))]
+    let unranged = std::collections::HashSet::<String>::new();
     let mut meta: std::collections::HashMap<Key, KeyMeta> = inputs
         .into_iter()
         .map(|(path, ty, rest)| {
             let mut input = KeyMeta::new().editable().of_type(ty.clone());
-            if ty == Type::F64 {
+            if ty == Type::F64 && !unranged.contains(&path) {
                 input = input.range(0.0, 1.0);
             }
             if let Some(rest) = rest {
@@ -1487,6 +1512,8 @@ mod tests {
             program: ProgramSelect::None,
             stage_neutral: true,
             ros4hri: true,
+            #[cfg(feature = "studio")]
+            studio: false,
             speech: None,
         };
         let LoadedFace { meta, spec } =
@@ -1750,6 +1777,8 @@ mod animation_tests {
             program: ProgramSelect::None,
             stage_neutral: true,
             ros4hri: true,
+            #[cfg(feature = "studio")]
+            studio: false,
             speech: None,
         };
         let LoadedFace { meta, spec } = load_face(&glb, &config).expect("load Quori");
