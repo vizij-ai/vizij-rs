@@ -267,7 +267,11 @@ impl Pulse {
 
     /// Record a tick.
     pub fn beat(&self) {
-        let now = now_ms();
+        self.beat_at(now_ms());
+    }
+
+    /// Record a tick at `now`, in [`now_ms`]'s milliseconds.
+    fn beat_at(&self, now: f64) {
         let Ok(mut last) = self.last.lock() else {
             return;
         };
@@ -284,9 +288,14 @@ impl Pulse {
 
     /// Time since the last tick.
     pub fn since(&self) -> Duration {
+        self.since_at(now_ms())
+    }
+
+    /// Time from the last tick to `now`, in [`now_ms`]'s milliseconds.
+    fn since_at(&self, now: f64) -> Duration {
         self.last
             .lock()
-            .map(|last| Duration::from_secs_f64(((now_ms() - *last) / 1000.0).max(0.0)))
+            .map(|last| Duration::from_secs_f64(((now - *last) / 1000.0).max(0.0)))
             .unwrap_or(Duration::MAX)
     }
 
@@ -789,43 +798,71 @@ mod tests {
         assert_eq!(cues(&marks), vec![cue(0, "PP"), cue(10, "sil")]);
     }
 
-    /// A run nobody ticks any more is a halted run: the producer stops within
-    /// `IDLE_STOP` of the last tick and leaves the lips at rest, however long
-    /// the audio still had to play.
+    /// A run nobody ticks any more is a halted run: the producer stops once
+    /// `IDLE_STOP` has passed since the last tick, never before, and leaves
+    /// the lips at rest, however long the audio still had to play. A loaded
+    /// host can only make the halt later, so the ceiling is there to turn a
+    /// producer that never halts into a failure rather than a hang.
     #[test]
-    fn a_run_without_ticks_goes_silent_within_the_idle_bound() {
+    fn a_run_without_ticks_goes_silent_once_the_idle_bound_passes() {
         let cues = vec![cue(0, "aa")];
         let viseme = Mutex::new(SILENCE_VISEME);
-        let last_tick = Instant::now();
         let pulse = Pulse::new();
-        let started = Instant::now();
+        let last_tick = Instant::now();
         // An endless playhead: the audio never runs out on its own.
-        let outcome = follow(&cues, &viseme, &pulse, || Some(started.elapsed()));
+        let outcome = follow(&cues, &viseme, &pulse, || Some(last_tick.elapsed()));
         assert_eq!(outcome, Playback::Halted);
-        assert!(last_tick.elapsed() < IDLE_STOP + Duration::from_millis(100));
+        let elapsed = last_tick.elapsed();
+        assert!(elapsed >= IDLE_STOP, "halted early, after {elapsed:?}");
+        assert!(elapsed < 10 * IDLE_STOP, "halted only after {elapsed:?}");
         assert_eq!(*viseme.lock().unwrap(), SILENCE_VISEME);
     }
 
-    /// A slow ticker widens the halt bound: ticks 100 ms apart keep the
-    /// bound at `IDLE_STOP`, ticks 200 ms apart raise it to four intervals.
+    /// A pulse that last beat at `last`, with no interval learned yet — at
+    /// an explicit time, so the arithmetic is tested and not the scheduler.
+    fn pulse_at(last: f64) -> Pulse {
+        Pulse {
+            last: Arc::new(Mutex::new(last)),
+            interval: Arc::new(Mutex::new(0.0)),
+        }
+    }
+
+    /// The halt bound is `IDLE_STOP` while ticks come faster than a quarter
+    /// of it, and `HALT_TICKS` intervals once they come slower: a slow
+    /// ticker is not mistaken for a halt.
     #[test]
     fn the_halt_bound_follows_a_slow_ticker() {
-        let pulse = Pulse::new();
+        let pulse = pulse_at(0.0);
         assert_eq!(pulse.halt_bound(), IDLE_STOP);
-        std::thread::sleep(Duration::from_millis(100));
-        pulse.beat();
-        assert!(pulse.halt_bound() <= IDLE_STOP + Duration::from_millis(200));
-        std::thread::sleep(Duration::from_millis(200));
-        pulse.beat();
-        let bound = pulse.halt_bound();
-        assert!(bound >= Duration::from_millis(800), "{bound:?}");
-        assert!(!is_halted(&pulse));
-        std::thread::sleep(Duration::from_millis(400));
-        assert!(!is_halted(&pulse), "a gap of two intervals is not a halt");
+        // 50 ms apart: four intervals are 200 ms, inside the idle bound.
+        pulse.beat_at(50.0);
+        assert_eq!(pulse.halt_bound(), IDLE_STOP);
+        // 200 ms apart: the widest gap is the interval, four of them the bound.
+        pulse.beat_at(250.0);
+        assert_eq!(pulse.halt_bound(), Duration::from_millis(800));
+        // A gap of two intervals is not a halt; one past four is.
+        assert!(pulse.since_at(650.0) < pulse.halt_bound());
+        assert!(pulse.since_at(1051.0) > pulse.halt_bound());
         // A run's pulse under the same ticker starts with the bound learned.
         let run = pulse.sharing_interval();
         assert_eq!(run.halt_bound(), pulse.halt_bound());
-        assert!(!is_halted(&run));
+    }
+
+    /// A one-off hiccup widens the interval at once, and the ticks that
+    /// follow bring it back down: the bound forgets a stall instead of
+    /// keeping a dead run alive for good.
+    #[test]
+    fn the_halt_bound_forgets_a_hiccup() {
+        let pulse = pulse_at(0.0);
+        pulse.beat_at(50.0);
+        pulse.beat_at(450.0);
+        assert_eq!(pulse.halt_bound(), Duration::from_millis(1600));
+        let mut now = 450.0;
+        for _ in 0..60 {
+            now += 50.0;
+            pulse.beat_at(now);
+        }
+        assert_eq!(pulse.halt_bound(), IDLE_STOP);
     }
 
     /// Ticks keep a run alive past the idle bound, and the run ends with the
