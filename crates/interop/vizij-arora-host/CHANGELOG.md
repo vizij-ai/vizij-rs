@@ -4,6 +4,17 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [6.3.0] - 2026-10-10
+
+### Added
+
+- The ROS4HRI mapping plays the streamed viseme: each new
+  `standard/ros4hri/viseme` code spawns a `play_viseme` run of its shape at
+  full weight, which takes over from the run before it, and `sil` lets the
+  lips settle at rest. The mapping writes no lip key itself — the run does —
+  so a viseme stream and the device's own `say` share the lips the way
+  players do. The asset needs vizij-graph-core 2.3's `spawn` node.
+
 ## [6.2.0] - 2026-10-10
 
 ### Changed

@@ -70,7 +70,7 @@ serves it); this table summarizes it.
 | `standard/ros4hri/expression/arousal` | f32 `[-1,1]` | `hri_msgs/Expression.arousal` | as above |
 | `standard/ros4hri/gaze/target` | vec3 (m) | a look-at point (face frame: x forward, y left, z up) | per-eye gaze with vergence |
 | `standard/ros4hri/gaze/frame` | string | the look-at point's frame id | consumed by the `look_at` skill, not the mapping |
-| `standard/ros4hri/viseme` | u8 `[0,14]` | `hri_msgs/Viseme.value`, from `/tts/viseme` or `/tts/visemes` | the lip shape at the audio playhead — **nothing consumes it yet** (see Lips below) |
+| `standard/ros4hri/viseme` | u8 `[0,14]` | `hri_msgs/Viseme.value`, from `/tts/viseme` or `/tts/visemes` | the lip shape at the audio playhead — each new code plays through `play_viseme` (see Lips below) |
 | `standard/ros4hri/au/<code>` | f32 `[0,1]` | `hri_msgs/FacialActionUnits` | FACS action-unit intensity → muscle controls |
 | `standard/ros4hri/speech/text` | string | *published* as `/robot_face/speech` (`std_msgs/String`) | the utterance being spoken, empty at rest — the mapping's one output, relayed from the face's speech state (see Speech below) |
 
@@ -89,13 +89,17 @@ serves it); this table summarizes it.
   ([`FACE_CONTROLS`](face-standard.md#muscle-tier)); the eyes-closed unit also
   drives the eyelids, and jaw-open additionally drives the de-facto
   `mouth/morph/jaw_open` control.
-- **Lips** — not the mapping's: the face's lipsync is the viseme players'
-  ([skills](skills.md): `play_viseme`, `say`), which write the face
-  standard's viseme weights themselves, and a mapping cannot share those
-  weights with a run — both would write them every tick and the loser's
-  motion would vanish. So a viseme streamed on `/tts/viseme` reaches
-  `standard/ros4hri/viseme` and stops there: driving the lips from it means
-  giving the stream a player, not a mapping channel. Text is not commanded
+- **Lips** — played, never written by the mapping. The face's lipsync is
+  the viseme players' ([skills](skills.md): `play_viseme`, `say`), which
+  write the face standard's viseme weights themselves; a mapping writing
+  them too would compete with a run every tick, and the loser's motion
+  would vanish. So the mapping turns the stream into players: each new
+  `viseme` code — the shape a TTS node streams on `/tts/viseme` or
+  `/tts/visemes` — spawns a `play_viseme` run of that shape at full weight
+  (a [spawn node](#the-viseme-channel-is-a-spawn)), which takes over from the
+  run before it, and `sil` is a run that drives no shape, so the lips settle
+  at rest. A stream and the device's own `say` then share the lips the way
+  players do. Text is not commanded
   through a topic either: speaking is the [`/skill/say`
   action](#speaking-through-the-standard-skill), which is what produces the
   visemes.
@@ -110,6 +114,30 @@ serves it); this table summarizes it.
 
 All continuous channels pass through a ~200 ms exponential smoother — the
 incumbent ROS4HRI face's dynamics.
+
+### The viseme channel is a spawn
+
+The mapping never writes a lip key. Its viseme channel is one `spawn` node
+(a node kind of `vizij-graph-core`): when the
+`viseme` code it reads changes, it asks the interpreter for a `play_viseme`
+run with the code's shape and a full weight, served once the step's
+evaluation is done. `play_viseme` is exclusive, so the new run halts the one
+before and the crossfade carries over from wherever the lips are.
+
+The graph keeps no handle on these runs, so they are the graph's own: when
+one ends, its fragment is pruned and its keys under `arora/tasks/…` are
+unset. A stream spawning about ten runs a second leaves nothing in the store.
+
+What follows from a key-driven channel:
+
+- **A change, not a message, starts a run.** Two consecutive `PP` visemes are
+  one value on the key, so they play as one run. Its envelope (80 ms attack,
+  250 ms hold, 150 ms release) holds the shape for about half a second; a
+  stream holding one shape longer than that sees the mouth close under it.
+- **`time` and `duration` are not used.** The bridge lands the code at the
+  playhead, and `play_viseme` takes only a shape and a weight.
+- **The first code a device reads only sets the baseline.** A face loaded
+  mid-utterance starts lipsyncing at the next change.
 
 ## Speaking through the standard skill
 
@@ -416,11 +444,12 @@ is a diff of the behavior.
   `mapping("ros4hri", rigPrefix)` returns the graph as an object for an
   authoring app to embed.
 - **Reconcile it against the profiles** with `vizij-bundle surface`: the
-  mapping reads 24 of the profile's 25 keys (`gaze/frame` belongs to the
-  `look_at` skill) and writes 65 of the face standard's 88 (`jaw_left` and
-  `jaw_right` have no FACS code, the 15 viseme weights belong to the
-  players, and the blink, the expressions beyond ROS4HRI's and the
-  conversation state have no ROS4HRI counterpart the mapping reads).
+  mapping reads 25 of the profile's 26 command keys (`gaze/frame` belongs to
+  the `look_at` skill) and writes 65 of the face standard's 88 controls
+  (`jaw_left` and `jaw_right` have no FACS code, the 15 viseme weights are
+  written by the `play_viseme` runs it spawns, and the blink, the
+  expressions beyond ROS4HRI's and the conversation state have no ROS4HRI
+  counterpart the mapping reads).
 
 ## Progressive compliance
 

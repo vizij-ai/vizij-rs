@@ -288,9 +288,8 @@ pub fn vizij_face_profile() -> Profile {
 ///
 /// The shipped ROS 2 exposure preset feeds the expression, gaze and viseme
 /// keys; the action-unit keys are part of the interface and have no topic
-/// behind them yet, and the viseme has no mapping channel behind it yet.
-/// Declaring the set is what makes both visible. The speech text is the one
-/// output: what the face is saying, for subtitles.
+/// behind them yet. Declaring the set is what makes that visible. The speech
+/// text is the one output: what the face is saying, for subtitles.
 pub fn ros4hri_profile() -> Profile {
     let mut keys = vec![
         ProfileKey::text(ros4hri::EXPRESSION_NAME_KEY),
@@ -644,8 +643,8 @@ mod tests {
     }
 
     /// The shipped mapping reads the whole `ros4hri` command surface but
-    /// `gaze/frame` (the look_at skill consumes it) and `viseme` (nothing maps
-    /// it yet, see [`ros4hri::VISEME_KEY`]), plus the face's speech state, and
+    /// `gaze/frame` (the look_at skill consumes it), plus the face's speech
+    /// state, and
     /// writes the whole `vizij-face` control surface but what ROS4HRI has no
     /// channel for, plus the ROS4HRI speech text — and nothing either profile
     /// does not declare on that side. Which keys are declared and unmapped is
@@ -663,7 +662,7 @@ mod tests {
             .into_iter()
             .filter(|p| !consumed.paths().contains(p))
             .collect();
-        assert_eq!(unread, [ros4hri::GAZE_FRAME_KEY, ros4hri::VISEME_KEY]);
+        assert_eq!(unread, [ros4hri::GAZE_FRAME_KEY]);
         let readable = [ros.paths_of("input"), face.paths_of("output")].concat();
         let unreadable: Vec<&str> = consumed
             .paths()

@@ -2559,6 +2559,340 @@
       }
     },
     {
+      "id": "in/viseme",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "const/sil",
+      "type": "constant",
+      "params": {
+        "value": "sil"
+      }
+    },
+    {
+      "id": "viseme/PP/is",
+      "type": "equal",
+      "params": {}
+    },
+    {
+      "id": "const/PP",
+      "type": "constant",
+      "params": {
+        "value": "PP"
+      }
+    },
+    {
+      "id": "viseme/PP/shape",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "viseme/FF/is",
+      "type": "equal",
+      "params": {}
+    },
+    {
+      "id": "const/FF",
+      "type": "constant",
+      "params": {
+        "value": "FF"
+      }
+    },
+    {
+      "id": "viseme/FF/shape",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "const/3",
+      "type": "constant",
+      "params": {
+        "value": 3.0
+      }
+    },
+    {
+      "id": "viseme/TH/is",
+      "type": "equal",
+      "params": {}
+    },
+    {
+      "id": "const/TH",
+      "type": "constant",
+      "params": {
+        "value": "TH"
+      }
+    },
+    {
+      "id": "viseme/TH/shape",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "viseme/DD/is",
+      "type": "equal",
+      "params": {}
+    },
+    {
+      "id": "const/DD",
+      "type": "constant",
+      "params": {
+        "value": "DD"
+      }
+    },
+    {
+      "id": "viseme/DD/shape",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "const/5",
+      "type": "constant",
+      "params": {
+        "value": 5.0
+      }
+    },
+    {
+      "id": "viseme/kk/is",
+      "type": "equal",
+      "params": {}
+    },
+    {
+      "id": "const/kk",
+      "type": "constant",
+      "params": {
+        "value": "kk"
+      }
+    },
+    {
+      "id": "viseme/kk/shape",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "const/6",
+      "type": "constant",
+      "params": {
+        "value": 6.0
+      }
+    },
+    {
+      "id": "viseme/CH/is",
+      "type": "equal",
+      "params": {}
+    },
+    {
+      "id": "const/CH",
+      "type": "constant",
+      "params": {
+        "value": "CH"
+      }
+    },
+    {
+      "id": "viseme/CH/shape",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "const/7",
+      "type": "constant",
+      "params": {
+        "value": 7.0
+      }
+    },
+    {
+      "id": "viseme/SS/is",
+      "type": "equal",
+      "params": {}
+    },
+    {
+      "id": "const/SS",
+      "type": "constant",
+      "params": {
+        "value": "SS"
+      }
+    },
+    {
+      "id": "viseme/SS/shape",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "viseme/nn/is",
+      "type": "equal",
+      "params": {}
+    },
+    {
+      "id": "const/nn",
+      "type": "constant",
+      "params": {
+        "value": "nn"
+      }
+    },
+    {
+      "id": "viseme/nn/shape",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "const/9",
+      "type": "constant",
+      "params": {
+        "value": 9.0
+      }
+    },
+    {
+      "id": "viseme/RR/is",
+      "type": "equal",
+      "params": {}
+    },
+    {
+      "id": "const/RR",
+      "type": "constant",
+      "params": {
+        "value": "RR"
+      }
+    },
+    {
+      "id": "viseme/RR/shape",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "const/10",
+      "type": "constant",
+      "params": {
+        "value": 10.0
+      }
+    },
+    {
+      "id": "viseme/aa/is",
+      "type": "equal",
+      "params": {}
+    },
+    {
+      "id": "const/aa",
+      "type": "constant",
+      "params": {
+        "value": "aa"
+      }
+    },
+    {
+      "id": "viseme/aa/shape",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "const/11",
+      "type": "constant",
+      "params": {
+        "value": 11.0
+      }
+    },
+    {
+      "id": "viseme/E/is",
+      "type": "equal",
+      "params": {}
+    },
+    {
+      "id": "const/E",
+      "type": "constant",
+      "params": {
+        "value": "E"
+      }
+    },
+    {
+      "id": "viseme/E/shape",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "const/12",
+      "type": "constant",
+      "params": {
+        "value": 12.0
+      }
+    },
+    {
+      "id": "viseme/ih/is",
+      "type": "equal",
+      "params": {}
+    },
+    {
+      "id": "const/ih",
+      "type": "constant",
+      "params": {
+        "value": "ih"
+      }
+    },
+    {
+      "id": "viseme/ih/shape",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "const/13",
+      "type": "constant",
+      "params": {
+        "value": 13.0
+      }
+    },
+    {
+      "id": "viseme/oh/is",
+      "type": "equal",
+      "params": {}
+    },
+    {
+      "id": "const/oh",
+      "type": "constant",
+      "params": {
+        "value": "oh"
+      }
+    },
+    {
+      "id": "viseme/oh/shape",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "const/14",
+      "type": "constant",
+      "params": {
+        "value": 14.0
+      }
+    },
+    {
+      "id": "viseme/ou/is",
+      "type": "equal",
+      "params": {}
+    },
+    {
+      "id": "const/ou",
+      "type": "constant",
+      "params": {
+        "value": "ou"
+      }
+    },
+    {
+      "id": "viseme/ou/shape",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "viseme/play",
+      "type": "spawn",
+      "params": {
+        "function": "43747a8e-2f6c-42ae-9d14-d440c2195b2f",
+        "record_keys": [
+          "da9fb9bc-12f7-486b-a65b-7ada44eb15f6",
+          "2055ee33-cdc7-4eb0-a04e-dc49d9314a61"
+        ]
+      }
+    },
+    {
       "id": "in/speech",
       "type": "input",
       "params": {
@@ -8747,6 +9081,654 @@
       "to": {
         "node_id": "out/right_eye_top_eyelid/pos/y",
         "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme"
+      },
+      "to": {
+        "node_id": "viseme/PP/is",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/PP/is",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/PP/is"
+      },
+      "to": {
+        "node_id": "viseme/PP/shape",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/PP"
+      },
+      "to": {
+        "node_id": "viseme/PP/shape",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/sil"
+      },
+      "to": {
+        "node_id": "viseme/PP/shape",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme"
+      },
+      "to": {
+        "node_id": "viseme/FF/is",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/2"
+      },
+      "to": {
+        "node_id": "viseme/FF/is",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/FF/is"
+      },
+      "to": {
+        "node_id": "viseme/FF/shape",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/FF"
+      },
+      "to": {
+        "node_id": "viseme/FF/shape",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/PP/shape"
+      },
+      "to": {
+        "node_id": "viseme/FF/shape",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme"
+      },
+      "to": {
+        "node_id": "viseme/TH/is",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/3"
+      },
+      "to": {
+        "node_id": "viseme/TH/is",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/TH/is"
+      },
+      "to": {
+        "node_id": "viseme/TH/shape",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/TH"
+      },
+      "to": {
+        "node_id": "viseme/TH/shape",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/FF/shape"
+      },
+      "to": {
+        "node_id": "viseme/TH/shape",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme"
+      },
+      "to": {
+        "node_id": "viseme/DD/is",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/4"
+      },
+      "to": {
+        "node_id": "viseme/DD/is",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/DD/is"
+      },
+      "to": {
+        "node_id": "viseme/DD/shape",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/DD"
+      },
+      "to": {
+        "node_id": "viseme/DD/shape",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/TH/shape"
+      },
+      "to": {
+        "node_id": "viseme/DD/shape",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme"
+      },
+      "to": {
+        "node_id": "viseme/kk/is",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/5"
+      },
+      "to": {
+        "node_id": "viseme/kk/is",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/kk/is"
+      },
+      "to": {
+        "node_id": "viseme/kk/shape",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/kk"
+      },
+      "to": {
+        "node_id": "viseme/kk/shape",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/DD/shape"
+      },
+      "to": {
+        "node_id": "viseme/kk/shape",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme"
+      },
+      "to": {
+        "node_id": "viseme/CH/is",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/6"
+      },
+      "to": {
+        "node_id": "viseme/CH/is",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/CH/is"
+      },
+      "to": {
+        "node_id": "viseme/CH/shape",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/CH"
+      },
+      "to": {
+        "node_id": "viseme/CH/shape",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/kk/shape"
+      },
+      "to": {
+        "node_id": "viseme/CH/shape",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme"
+      },
+      "to": {
+        "node_id": "viseme/SS/is",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/7"
+      },
+      "to": {
+        "node_id": "viseme/SS/is",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/SS/is"
+      },
+      "to": {
+        "node_id": "viseme/SS/shape",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/SS"
+      },
+      "to": {
+        "node_id": "viseme/SS/shape",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/CH/shape"
+      },
+      "to": {
+        "node_id": "viseme/SS/shape",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme"
+      },
+      "to": {
+        "node_id": "viseme/nn/is",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/8"
+      },
+      "to": {
+        "node_id": "viseme/nn/is",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/nn/is"
+      },
+      "to": {
+        "node_id": "viseme/nn/shape",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/nn"
+      },
+      "to": {
+        "node_id": "viseme/nn/shape",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/SS/shape"
+      },
+      "to": {
+        "node_id": "viseme/nn/shape",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme"
+      },
+      "to": {
+        "node_id": "viseme/RR/is",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/9"
+      },
+      "to": {
+        "node_id": "viseme/RR/is",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/RR/is"
+      },
+      "to": {
+        "node_id": "viseme/RR/shape",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/RR"
+      },
+      "to": {
+        "node_id": "viseme/RR/shape",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/nn/shape"
+      },
+      "to": {
+        "node_id": "viseme/RR/shape",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme"
+      },
+      "to": {
+        "node_id": "viseme/aa/is",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/10"
+      },
+      "to": {
+        "node_id": "viseme/aa/is",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/aa/is"
+      },
+      "to": {
+        "node_id": "viseme/aa/shape",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/aa"
+      },
+      "to": {
+        "node_id": "viseme/aa/shape",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/RR/shape"
+      },
+      "to": {
+        "node_id": "viseme/aa/shape",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme"
+      },
+      "to": {
+        "node_id": "viseme/E/is",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/11"
+      },
+      "to": {
+        "node_id": "viseme/E/is",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/E/is"
+      },
+      "to": {
+        "node_id": "viseme/E/shape",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/E"
+      },
+      "to": {
+        "node_id": "viseme/E/shape",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/aa/shape"
+      },
+      "to": {
+        "node_id": "viseme/E/shape",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme"
+      },
+      "to": {
+        "node_id": "viseme/ih/is",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/12"
+      },
+      "to": {
+        "node_id": "viseme/ih/is",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ih/is"
+      },
+      "to": {
+        "node_id": "viseme/ih/shape",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/ih"
+      },
+      "to": {
+        "node_id": "viseme/ih/shape",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/E/shape"
+      },
+      "to": {
+        "node_id": "viseme/ih/shape",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme"
+      },
+      "to": {
+        "node_id": "viseme/oh/is",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/13"
+      },
+      "to": {
+        "node_id": "viseme/oh/is",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/oh/is"
+      },
+      "to": {
+        "node_id": "viseme/oh/shape",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/oh"
+      },
+      "to": {
+        "node_id": "viseme/oh/shape",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ih/shape"
+      },
+      "to": {
+        "node_id": "viseme/oh/shape",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme"
+      },
+      "to": {
+        "node_id": "viseme/ou/is",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/14"
+      },
+      "to": {
+        "node_id": "viseme/ou/is",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ou/is"
+      },
+      "to": {
+        "node_id": "viseme/ou/shape",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/ou"
+      },
+      "to": {
+        "node_id": "viseme/ou/shape",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/oh/shape"
+      },
+      "to": {
+        "node_id": "viseme/ou/shape",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ou/shape"
+      },
+      "to": {
+        "node_id": "viseme/play",
+        "input": "args_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/play",
+        "input": "args_1"
       }
     },
     {
