@@ -123,7 +123,8 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
     };
     let input = meta_of(smile);
     assert_eq!(input["editable"], true, "{input}");
-    assert_eq!(input["ty"], "f64", "{input}");
+    // Typed as the `hri_msgs` field a ROS 2 bridge writes it from.
+    assert_eq!(input["ty"], "f32", "{input}");
     assert_eq!(
         (input["min"].as_f64(), input["max"].as_f64()),
         (Some(0.0), Some(1.0))
@@ -151,7 +152,7 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
     // A write lands in the device's store and reads back.
     let written = request(
         &mut socket,
-        json!({"type": "write_values", "values": {smile: {"f64": 0.25}}}),
+        json!({"type": "write_values", "values": {smile: {"f32": 0.25}}}),
         "write_values_resp",
     )
     .await;
