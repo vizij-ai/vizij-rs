@@ -341,9 +341,9 @@ dependencies = [
 
 [[package]]
 name = "arora"
-version = "11.6.0"
+version = "12.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "578ce2efcf430d84e0f69ffe66499440210ea03937e01c789efd50a0a23c8e26"
+checksum = "d161017d5858de3a94e1c9551549a14ade0f9027ee1bae976a97fd8483b2e306"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -491,9 +491,9 @@ dependencies = [
 
 [[package]]
 name = "arora-engine"
-version = "5.1.0"
+version = "5.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8994d445ffb5b5d425cda398e58f8fbce3d5ae2876dad1d32274a7a251cdec6"
+checksum = "e691e0cf9a720107fb3212c5192fc75bd4b320f323a041ebdac7a4da23511b7e"
 dependencies = [
  "anyhow",
  "arora-buffers",
@@ -522,14 +522,16 @@ dependencies = [
 
 [[package]]
 name = "arora-hal"
-version = "4.0.0"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c67602ca23702b4ea993fbf1252c4828dc31fdb532b6809a2738693ee03a0f24"
+checksum = "8d9d5c012d2442c8998c78929750350f4f6583b145977c7d35cf40799b77a373"
 dependencies = [
  "arora-types",
  "async-trait",
  "futures-channel",
  "futures-core",
+ "serde",
+ "sha2",
 ]
 
 [[package]]
@@ -682,9 +684,9 @@ dependencies = [
 
 [[package]]
 name = "arora-types"
-version = "3.3.0"
+version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8843fd69b7caef5ea21757c5368c6663471e96d4a67425905414d5b7253f2904"
+checksum = "0673e4117052c7b4bf9a565ed85be00e0046ce1551ff1268829be15282ea9233"
 dependencies = [
  "arora-types-derive",
  "async-trait",
@@ -724,9 +726,9 @@ dependencies = [
 
 [[package]]
 name = "arora-web"
-version = "8.1.0"
+version = "9.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "368919661bf38e2dc4b76b75364c906d540a785a7650636292d36ff35e5c5b46"
+checksum = "d188c33dbc53c2bcfb5dd349b3523d25d5bb49308eb6a85ac8b02e60689bc81e"
 dependencies = [
  "arora",
  "arora-behavior",
@@ -10370,6 +10372,7 @@ dependencies = [
  "arora-msgs-ros2",
  "arora-types",
  "arora-web",
+ "async-trait",
  "bevy",
  "clap",
  "console_log",

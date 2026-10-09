@@ -106,7 +106,7 @@ bevy = { version = "0.19", default-features = false, features = [
 # slice builds on every target; the native target table below adds `native`
 # (wasmtime, the local WS bridge, the operator flow) and the desktop feature
 # adds `tui`.
-arora = { version = "11.0.1", default-features = false }
+arora = { version = "12.2", default-features = false }
 # The ROS 2 bridge, attached under `--ros2` (feature `ros2`). Heavy (ros2-client
 # + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
 # `studio-bridge` feature instead (`--studio`). It carries the skill plane the
@@ -168,7 +168,7 @@ vizij-arora-tts = { version = "6", path = "../interop/vizij-arora-tts" }
 # arora's operator flow — `native` is the run loop, the local WS bridge and
 # the module executors — with the bridges the build adds. 11.0.1 is where its
 # `studio-bridge` feature builds.
-arora = { version = "11.0.1", default-features = false, features = ["native"] }
+arora = { version = "12.2", default-features = false, features = ["native"] }
 # The bridge seam the Studio identity is read and registered through; the major
 # this arora's bridges implement.
 arora-bridge = "6"
@@ -193,7 +193,7 @@ bevy = { version = "0.19", default-features = false, features = ["android-native
 # The browser module (`web`): the shared JS surface of a device — `step`,
 # the self-pacing `run`, the Value<->JSON store accessors — wraps each face's
 # device; wasm-bindgen carries the module's own surface.
-arora-web = "8.1"
+arora-web = "9"
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4"
 js-sys = { workspace = true }
@@ -205,7 +205,7 @@ getrandom = { version = "0.4", features = ["wasm_js"] }
 
 [dev-dependencies]
 # The HAL seam a headless test writes a face's pose through, as a device does.
-arora-hal = "4"
+arora-hal = "4.1"
 # The image messages a published frame is read back as, so a field landing in
 # the wrong place fails in a unit test rather than at a ROS subscriber.
 arora-msgs-ros2 = "2"
@@ -223,6 +223,8 @@ rand = "0.9"
 # the control panel.
 tokio-tungstenite = "0.24"
 reqwest = "0.13"
+# A test's own bridge endpoint: arora's `Bridge` is an async trait.
+async-trait = "0.1"
 
 [features]
 default = ["desktop"]

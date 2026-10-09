@@ -268,7 +268,10 @@ pub async fn attach_bridges(
 /// composition errors surface to the caller, not in a log.
 pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) -> Result<Runtime> {
     let LoadedFace { meta, spec } = load_face(glb, &config)?;
+    // The rig holds the face it shows: the model the device states and serves
+    // (Semio Studio's `retrieveModels` / `retrieveModelGlb`).
     let rig = RigHal::new();
+    rig.set_model_glb(glb.to_vec());
     let store = BlackboardStore::new();
     let (events_tx, events_rx) = std::sync::mpsc::channel();
     let (commands_tx, commands_rx) = futures::channel::mpsc::unbounded();
@@ -366,6 +369,7 @@ fn supervise(
             .unwrap_or_else(|| (RigHal::new(), BlackboardStore::new()));
         let (frontend, tui) = operator_frontend();
         if let Some(glb) = pending_glb.take() {
+            rig.set_model_glb(glb.clone());
             let _ = events.send(ViewEvent::LoadFace {
                 face_id: FACE.to_string(),
                 meta: Box::new(meta.clone()),
