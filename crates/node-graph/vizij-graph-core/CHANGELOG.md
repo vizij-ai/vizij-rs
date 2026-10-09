@@ -4,6 +4,25 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [2.2.0] - 2026-10-09
+
+### Added
+
+- `PlanCache::append_component` and `PlanCache::remove_nodes` change a plan in
+  place for a component the rest of the graph neither feeds nor reads — the
+  shape of a grafted task run — giving the plan a rebuild would give, or
+  refusing (plan untouched) so the caller rebuilds.
+
+### Fixed
+
+- The evaluation order is the graph's alone. `topo_order` seeded its ready
+  set from a randomly hashed map, so the order of independent nodes — and
+  with it which of two outputs writing one path won — changed from process
+  to process and from rebuild to rebuild. Of the orders the edges allow it
+  now takes the earliest-listed ready node first: the later-listed writer of
+  a path is the last, every time, and a component listed after the rest runs
+  after all of it. Two nodes sharing an id are refused.
+
 ## [2.1.0] - 2026-09-28
 
 ### Changed
