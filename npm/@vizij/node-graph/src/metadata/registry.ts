@@ -3188,8 +3188,16 @@ const registry: Registry = {
       "type_id": "spawn",
       "name": "Spawn",
       "category": "Functions",
-      "doc": "Spawns a task run of its function (module and function are params) each time its arguments change; the first evaluation only records them. The call's args are the `value` param's fields, then the keyed `args` inputs, one per key in params.record_keys (a parameter id), which win for a parameter both name. The host starts the run after the evaluation and owns it: the graph keeps no handle.",
-      "inputs": [],
+      "doc": "Spawns a task run of its function (module and function are params) each time its arguments or its `when` input change; the first evaluation only records them. The call's args are the `value` param's fields, then the keyed `args` inputs, one per key in params.record_keys (a parameter id), which win for a parameter both name. The host starts the run after the evaluation and owns it: the graph keeps no handle.",
+      "inputs": [
+        {
+          "id": "when",
+          "ty": "any",
+          "label": "When",
+          "doc": "Optional. A new value starts a run even when the arguments are unchanged — an event's time, so a repeated command is a new run. It is not passed to the call.",
+          "optional": true
+        }
+      ],
       "variadic_inputs": {
         "id": "args",
         "ty": "any",

@@ -76,7 +76,9 @@ pub const LOOK_AT_JSON: &str = include_str!("../skills/look_at.json");
 
 /// The viseme skill: `play_viseme` plays one viseme `shape` (one of
 /// [`VISEME_SHAPES`]) through the lipsync envelope, driven to `weight` in
-/// `[0, 1]`. Its fragment ([`generate_play_viseme`]) implements it; the
+/// `[0, 1]` and held `duration` seconds from its start — a streamed
+/// viseme's own duration — or, without one, [`VISEME_ATTACK`] plus
+/// [`VISEME_HOLD`]. Its fragment ([`generate_play_viseme`]) implements it; the
 /// module a device registers for it only fails, and exists so the method is
 /// described.
 #[arora_module::contract(name = "play_viseme")]
@@ -86,13 +88,14 @@ pub trait PlayViseme {
         &mut self,
         #[param(id = "da9fb9bc-12f7-486b-a65b-7ada44eb15f6")] shape: String,
         #[param(id = "2055ee33-cdc7-4eb0-a04e-dc49d9314a61")] weight: f32,
+        #[param(id = "48249635-6ecd-4aaa-bd5b-ca570dbba3d0")] duration: Option<f32>,
     ) -> Status;
 }
 
 /// The play_viseme method's parameters, in declared order: the fragment's
 /// placeholder inputs, and the parameter names of
 /// [`PlayViseme::play_viseme`] (a test holds the two equal).
-pub const PLAY_VISEME_PARAMS: [&str; 2] = ["shape", "weight"];
+pub const PLAY_VISEME_PARAMS: [&str; 3] = ["shape", "weight", "duration"];
 
 /// The canonical play_viseme fragment asset; regenerate with
 /// `vizij-bundle export-skill play_viseme`.
@@ -139,9 +142,10 @@ pub const FEEDBACK_INTENSITY: &str = "intensity";
 pub const SAY_JSON: &str = include_str!("../skills/say.json");
 
 /// A played viseme's envelope, seconds: the weight ramps in over
-/// [`VISEME_ATTACK`], holds for [`VISEME_HOLD`], ramps out over
-/// [`VISEME_RELEASE`] — about half a second in all, a spoken viseme's span
-/// with room to read.
+/// [`VISEME_ATTACK`], holds until the viseme's duration has passed since its
+/// start — [`VISEME_ATTACK`] plus [`VISEME_HOLD`] when it gives none — and
+/// ramps out over [`VISEME_RELEASE`]: about half a second in all by default,
+/// a spoken viseme's span with room to read.
 pub const VISEME_ATTACK: f64 = 0.08;
 pub const VISEME_HOLD: f64 = 0.25;
 pub const VISEME_RELEASE: f64 = 0.15;
@@ -558,19 +562,34 @@ fn status_node(g: &mut GraphBuilder, id: &str, variant: Uuid) -> String {
 /// path behind the canonical asset.
 ///
 /// The run plays `shape` at `weight` through the lipsync envelope: the
-/// weight ramps in over [`VISEME_ATTACK`], holds for [`VISEME_HOLD`], ramps
-/// out over [`VISEME_RELEASE`], and the run succeeds once the envelope has
-/// closed and the lips have settled. A new run for the same shape restarts
-/// the envelope: grafted later, it writes last.
+/// weight ramps in over [`VISEME_ATTACK`], holds until `duration` has passed
+/// since the start (no shorter than the attack; [`VISEME_ATTACK`] plus
+/// [`VISEME_HOLD`] when `duration` is not positive), ramps out over
+/// [`VISEME_RELEASE`], and the run succeeds once the envelope has closed and
+/// the lips have settled. A new run for the same shape restarts the
+/// envelope: grafted later, it writes last.
 pub fn generate_play_viseme() -> Json {
     let g = &mut GraphBuilder::new();
     let shape = g.input("in/shape", "task/shape", json!(SILENCE_VISEME));
     let weight = g.input("in/weight", "task/weight", json!(1.0));
+    let duration = g.input("in/duration", "task/duration", json!(0.0));
 
     let elapsed = elapsed_since_spawn(g);
     let attack = g.constant(VISEME_ATTACK);
     let release = g.constant(VISEME_RELEASE);
-    let total = g.constant(VISEME_ATTACK + VISEME_HOLD + VISEME_RELEASE);
+    // How long the shape holds, from the start: the viseme's duration when
+    // it gives one, the default otherwise, and never less than the attack.
+    let zero = g.constant(0.0);
+    let given = g.op(
+        "envelope/given",
+        "greaterthan",
+        json!({}),
+        &[("lhs", &duration), ("rhs", &zero)],
+    );
+    let default_held = g.constant(VISEME_ATTACK + VISEME_HOLD);
+    let chosen = g.select("envelope/chosen", &given, &duration, &default_held);
+    let held = g.max("envelope/held", &chosen, &attack);
+    let total = g.add("envelope/total", &held, &release);
     // The envelope: min(ramp in, ramp out), each clamped to [0, 1].
     let rising = g.div("envelope/rising", &elapsed, &attack);
     let rise = g.clamp("envelope/rise", &rising, 0.0, 1.0);
@@ -867,7 +886,10 @@ mod tests {
             .collect();
         assert_eq!(ids, ["look_at", "play_viseme", "say"]);
         assert_eq!(listed[0]["parameters"][1], "target");
-        assert_eq!(listed[1]["parameters"], json!(["shape", "weight"]));
+        assert_eq!(
+            listed[1]["parameters"],
+            json!(["shape", "weight", "duration"])
+        );
         assert_eq!(listed[2]["parameters"], json!(["text", "voice"]));
         assert!(skill("look_at").is_some());
         assert!(skill("nope").is_none());

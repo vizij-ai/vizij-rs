@@ -307,6 +307,18 @@ pub fn ros4hri_profile() -> Profile {
             default_value: Some(Value::U8(0)),
             ..ProfileKey::input(ros4hri::VISEME_KEY, Type::U8)
         },
+        // Where that viseme falls in the utterance, and how long it holds,
+        // seconds.
+        ProfileKey {
+            min: Some(0.0),
+            default_value: Some(Value::F32(0.0)),
+            ..ProfileKey::input(ros4hri::VISEME_TIME_KEY, Type::F32)
+        },
+        ProfileKey {
+            min: Some(0.0),
+            default_value: Some(Value::F32(0.0)),
+            ..ProfileKey::input(ros4hri::VISEME_DURATION_KEY, Type::F32)
+        },
         ProfileKey::state(ros4hri::SPEECH_TEXT_KEY, ""),
     ];
 
@@ -586,13 +598,13 @@ mod tests {
         assert_eq!(without_au, 2, "only the two jaw-shift controls lack an AU");
     }
 
-    /// The ROS4HRI profile is the mapping's contract: 6 named input keys, one
+    /// The ROS4HRI profile is the mapping's contract: 8 named input keys, one
     /// per distinct action unit, and the speech text it reports —
     /// device-global.
     #[test]
     fn the_ros4hri_profile_matches_its_key_contract() {
         let ros = ros4hri_profile();
-        assert_eq!(ros.keys.len(), 6 + 1 + 20);
+        assert_eq!(ros.keys.len(), 8 + 1 + 20);
         assert_eq!(ros.scope, Scope::Device);
         assert!(ros.paths().contains(&ros4hri::EXPRESSION_NAME_KEY));
         assert_eq!(ros.paths_of("output"), [ros4hri::SPEECH_TEXT_KEY]);
@@ -610,7 +622,16 @@ mod tests {
             .find(|k| k.path == ros4hri::VISEME_KEY)
             .unwrap();
         assert_eq!(viseme.value_type, Some(Type::U8));
-        assert!(!ros.paths().iter().any(|p| p.contains("/viseme/")));
+        assert!(!ros.paths().iter().any(|p| {
+            VISEME_SHAPES
+                .iter()
+                .any(|shape| p.ends_with(&format!("/viseme/{shape}")))
+        }));
+        // With its timing beside it.
+        for key in [ros4hri::VISEME_TIME_KEY, ros4hri::VISEME_DURATION_KEY] {
+            let timing = ros.keys.iter().find(|k| k.path == key).unwrap();
+            assert_eq!(timing.value_type, Some(Type::F32), "{key}");
+        }
     }
 
     /// Only a face-scoped profile is addressed to a face; a device-scoped

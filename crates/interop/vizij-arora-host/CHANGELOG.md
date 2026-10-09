@@ -4,6 +4,25 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [6.5.0] - 2026-10-10
+
+### Added
+
+- `play_viseme` takes an optional `duration`, seconds: the shape holds until
+  it has passed since the run's start, then ramps out. Without one, or with
+  one not positive, it holds `VISEME_ATTACK + VISEME_HOLD` as before.
+- `ros4hri::VISEME_TIME_KEY` (`standard/ros4hri/viseme/time`) and
+  `ros4hri::VISEME_DURATION_KEY` (`standard/ros4hri/viseme/duration`): a
+  streamed viseme's place in the utterance and how long it is held, seconds,
+  as arora-bridge-ros2 10.1's ROS4HRI preset lands them. The `ros4hri`
+  profile declares both as inputs, resting at 0.
+
+### Changed
+
+- The ROS4HRI mapping plays a streamed viseme for its `duration`, and a new
+  `time` starts a new run even for the same shape, so a repeated viseme plays
+  again. The asset needs vizij-graph-core 2.4's `spawn` `when` input.
+
 ## [6.4.0] - 2026-10-10
 
 ### Added

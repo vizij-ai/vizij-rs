@@ -10,6 +10,10 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Added
 
+- A ROS4HRI viseme stream plays each viseme for its `duration`, and a
+  repeated shape at a new `time` plays again, from the `time` and `duration`
+  arora-bridge-ros2 10.1's ROS4HRI preset lands with each viseme. The ROS 2
+  bridge is arora-bridge-ros2 10.1.
 - Under `--studio` the face serves Semio Studio's keys (`vizij::studio`, the
   Studio-key profile, composed into the face's behavior from its RobotData
   bindings): Studio's `<id>.target_position` lands under the animatable id
