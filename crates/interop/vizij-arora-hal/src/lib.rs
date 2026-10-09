@@ -28,7 +28,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use arora_hal::{Hal, HalAssets, HalDescription, HalResult, UpdatesStream};
+use arora_hal::{
+    content_hash, ComponentModel, Hal, HalAssets, HalDescription, HalResult, UpdatesStream, DEVICE,
+};
 use arora_types::data::{Key, State, StateChange};
 use async_trait::async_trait;
 use futures_channel::mpsc::UnboundedSender;
@@ -37,7 +39,8 @@ use vizij_api_core::{TypedPath, Value};
 #[derive(Default)]
 struct Inner {
     description: HalDescription,
-    model_glb: Option<Vec<u8>>,
+    /// The face's GLB and its content hash, hashed once when attached.
+    model: Option<(Vec<u8>, String)>,
     /// Latest actuation targets the rig has been driven to.
     state: State,
     /// The actuation echo — [`RigHal::pose_updates`], renderer-side.
@@ -77,9 +80,12 @@ impl RigHal {
         }
     }
 
-    /// Attach (or replace) the GLB model served by [`HalAssets::model_glb`].
+    /// Attach the face's GLB: the rig's model, which the device states and
+    /// serves ([`HalAssets::models`]). Attach it before the device is built:
+    /// a device's models are fixed for its life.
     pub fn set_model_glb(&self, glb: Vec<u8>) {
-        self.inner.lock().unwrap().model_glb = Some(glb);
+        let hash = content_hash(&glb);
+        self.inner.lock().unwrap().model = Some((glb, hash));
     }
 
     /// A feed of applied actuation changes, for a Vizij renderer that wants
@@ -170,12 +176,47 @@ impl Hal for RigHal {
         self.inner.lock().unwrap().reading_subscribers.push(tx);
         Box::pin(rx)
     }
+
+    /// The rig's model: what [`set_model_glb`](RigHal::set_model_glb)
+    /// attached, which the device serves through its HAL module.
+    fn assets(&self) -> Option<&dyn HalAssets> {
+        Some(self)
+    }
 }
 
-#[async_trait]
+/// The rig is not composed, so it is the one component [`DEVICE`]: a HAL that
+/// composes it with a robot names it there. Its model is the face's GLB, which
+/// is servable — a client needs it to reproduce the face in 3D — and has no
+/// published release of its own.
 impl HalAssets for RigHal {
-    async fn model_glb(&self) -> HalResult<Option<Vec<u8>>> {
-        Ok(self.inner.lock().unwrap().model_glb.clone())
+    fn models(&self) -> Vec<ComponentModel> {
+        let inner = self.inner.lock().unwrap();
+        inner
+            .model
+            .as_ref()
+            .map(|(_, hash)| ComponentModel {
+                component: DEVICE.to_string(),
+                description: Some(inner.description.clone()),
+                reference: None,
+                content_hash: Some(hash.clone()),
+                servable: true,
+                mount: None,
+            })
+            .into_iter()
+            .collect()
+    }
+
+    fn servable_glb(&self, component: &str) -> HalResult<Option<Vec<u8>>> {
+        Ok(match component {
+            DEVICE => self
+                .inner
+                .lock()
+                .unwrap()
+                .model
+                .as_ref()
+                .map(|(glb, _)| glb.clone()),
+            _ => None,
+        })
     }
 }
 
@@ -274,9 +315,24 @@ mod tests {
             model_family: Some("vizij".into()),
             ..Default::default()
         });
+        assert!(hal.models().is_empty());
         hal.set_model_glb(b"glTF".to_vec());
         assert_eq!(hal.describe().await.model_family.as_deref(), Some("vizij"));
-        assert_eq!(hal.model_glb().await.unwrap(), Some(b"glTF".to_vec()));
+        let assets = hal.assets().expect("the rig hands its model over");
+        let models = assets.models();
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].component, DEVICE);
+        assert!(models[0].servable, "a face's GLB is servable");
+        assert_eq!(models[0].content_hash, Some(content_hash(b"glTF")));
+        assert_eq!(
+            models[0]
+                .description
+                .as_ref()
+                .and_then(|d| d.model_family.as_deref()),
+            Some("vizij")
+        );
+        assert_eq!(assets.servable_glb(DEVICE).unwrap(), Some(b"glTF".to_vec()));
+        assert_eq!(assets.servable_glb("robot").unwrap(), None);
     }
 
     #[tokio::test]

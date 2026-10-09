@@ -38,7 +38,7 @@ serde-wasm-bindgen = { workspace = true }
 [dev-dependencies]
 # The browser tests spawn runs the way a bridge does: through the
 # interpreter module, on a device composed like vizij's.
-arora = { version = "11", default-features = false }
+arora = { version = "12", default-features = false }
 serde_json = { workspace = true }
 vizij-arora-host = { path = "../vizij-arora-host" }
 vizij-arora-store = { path = "../vizij-arora-store" }

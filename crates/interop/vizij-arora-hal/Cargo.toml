@@ -6,7 +6,8 @@ publish = false
 description = "Vizij rig presented as an Arora HAL (arora-hal)."
 
 [dependencies]
-arora-hal = "4"
+# 4.1: `Hal::assets`, how the device serves the rig's model.
+arora-hal = "4.1"
 arora-types = "3"
 async-trait = "0.1"
 futures-channel = "0.3"

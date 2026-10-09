@@ -112,8 +112,11 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
 /// writes (the ones a remote may drive) — with the type the store states for
 /// each ([`declare_keys`]):
 /// the input's default value decides (string → String, bool → Boolean,
-/// anything numeric or absent → F64); vector-valued inputs stay out (they
-/// travel as typed topics, e.g. the gaze target). Built-in keys stay out.
+/// anything numeric or absent → F64), except for a ROS4HRI key, which takes
+/// the type and rest its profile states — those of the `hri_msgs` field a
+/// ROS 2 bridge writes it from (`valence` and `arousal` are `f32`);
+/// vector-valued inputs stay out (they travel as typed topics, e.g. the gaze
+/// target). Built-in keys stay out.
 ///
 /// Defaults are read through the API's value parser: composition normalizes
 /// every source, so a default reaches here in its canonical serialized form
@@ -136,7 +139,8 @@ pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
 /// writes stays declared: the program runs only while it runs. Each is open
 /// to remote writers, of its type — a number in `[0, 1]`, unless it is one
 /// of Studio's keys (the `studio` module's), in the units of the feature it
-/// drives — and rests at its authored default. `neutral` (the bundle's
+/// drives, or a ROS4HRI key, in the range its profile states — and rests at
+/// its authored default. `neutral` (the bundle's
 /// neutral pose, [`Bundle::neutral_stage_writes`]) moves the rest of the
 /// keys it names, and gives a rig key that is no free input its rest alone:
 /// the standard inputs feed the rig through the adaptation, so a reset that
@@ -178,12 +182,21 @@ pub fn declare_keys(
         .unwrap_or_default();
     #[cfg(not(feature = "studio"))]
     let unranged = std::collections::HashSet::<String>::new();
+    let ros4hri = ros4hri_keys();
     let mut meta: std::collections::HashMap<Key, KeyMeta> = inputs
         .into_iter()
         .map(|(path, ty, rest)| {
             let mut input = KeyMeta::new().editable().of_type(ty.clone());
-            if ty == Type::F64 && !unranged.contains(&path) {
-                input = input.range(0.0, 1.0);
+            match ros4hri.get(&path) {
+                Some(key) => {
+                    if let (Some(min), Some(max)) = (key.min, key.max) {
+                        input = input.range(min, max);
+                    }
+                }
+                None if ty == Type::F64 && !unranged.contains(&path) => {
+                    input = input.range(0.0, 1.0);
+                }
+                None => {}
             }
             if let Some(rest) = rest {
                 input = input.resting_at(rest);
@@ -228,6 +241,7 @@ fn walk_free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type, Option
         .filter(|n| kind_of(n) == "output")
         .filter_map(path_of)
         .collect();
+    let ros4hri = ros4hri_keys();
     let mut seen = std::collections::HashSet::new();
     let mut inputs = Vec::new();
     for node in nodes.iter().filter(|n| kind_of(n) == "input") {
@@ -249,10 +263,29 @@ fn walk_free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type, Option
                 _ => continue,
             },
         };
+        let (ty, default) = match ros4hri.get(&path) {
+            Some(key) => (
+                key.value_type.clone().unwrap_or(ty),
+                key.default_value.clone().or(default),
+            ),
+            None => (ty, default),
+        };
         inputs.push((path, ty, default));
     }
     inputs.sort_by(|a, b| a.0.cmp(&b.0));
     inputs
+}
+
+/// The ROS4HRI keys a profile types, by path, as the `ros4hri` profile states
+/// them: a ROS 2 bridge writes each as its `hri_msgs` field is typed, and a
+/// device takes a remote write only of the type the key states.
+fn ros4hri_keys() -> std::collections::HashMap<String, vizij_arora_host::profile::ProfileKey> {
+    vizij_arora_host::profile::ros4hri_profile()
+        .keys
+        .into_iter()
+        .filter(|key| key.value_type.is_some())
+        .map(|key| (key.path.clone(), key))
+        .collect()
 }
 
 /// Stage a face's neutral pose into the store before the first tick: the web's
@@ -635,6 +668,46 @@ mod tests {
                 Some(number().resting_at(float(0.25))),
                 Some(number().resting_at(float(0.5))),
             ]
+        );
+    }
+
+    /// The device serves the face it shows: its HAL module answers the
+    /// `device` component's model — what Semio Studio's `retrieveModelGlb`
+    /// asks — with the GLB its rig holds.
+    #[test]
+    fn the_device_answers_with_the_rig_s_model() {
+        use arora_types::value::Value as AValue;
+        let bundle = Bundle::from_bundle_json(&serde_json::json!({
+            "metadata": { "faceId": "f" },
+            "graphs": [
+                { "kind": "rig", "spec": { "nodes": [
+                    { "id": "x", "type": "input", "params": { "path": "rig/f/x", "value": 0.0 } },
+                ], "edges": [] } },
+            ],
+        }));
+        let spec = bundle
+            .compose(&["rig"], &ProgramSelect::None, true, &[])
+            .expect("compose")
+            .to_string();
+        let rig = RigHal::new();
+        rig.set_model_glb(b"glTF".to_vec());
+        let mut arora = builder_for(&spec, rig, BlackboardStore::new(), &[], None)
+            .expect("build the device")
+            .build()
+            .expect("build arora");
+        let model = arora
+            .call(arora_types::call::Call {
+                module_id: Some(arora_hal::hal_module::ID),
+                id: arora_hal::hal_module::MODEL_GLB,
+                args: vec![arora_types::value::StructureField {
+                    id: arora_hal::hal_module::MODEL_GLB_COMPONENT,
+                    value: Box::new(AValue::String(arora_hal::DEVICE.to_string())),
+                }],
+            })
+            .expect("the device answers");
+        assert_eq!(
+            model.ret,
+            AValue::Option(Some(Box::new(AValue::ArrayU8(b"glTF".to_vec()))))
         );
     }
 
@@ -1109,6 +1182,102 @@ mod tests {
         assert!(happy > 0.4, "happy = {happy}");
         assert!(read_f32(&arora, &standard::expression_path("angry")) < 0.01);
         assert!(read_f32(&arora, &standard::expression_path("neutral")) < 0.05);
+    }
+
+    /// A remote endpoint that hands the device the commands a test sends it.
+    #[cfg(not(target_arch = "wasm32"))]
+    struct Remote(Option<futures::channel::mpsc::UnboundedReceiver<arora_bridge::Inbound>>);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[async_trait::async_trait]
+    impl arora_bridge::Bridge for Remote {
+        fn take_inbound(&mut self) -> arora_bridge::InboundStream {
+            Box::pin(self.0.take().expect("taken once"))
+        }
+        fn try_send(&mut self, _change: &StateChange) {}
+        async fn get_device_info(
+            &self,
+        ) -> arora_bridge::BridgeResult<Option<arora_bridge::DeviceInfo>> {
+            Ok(None)
+        }
+        async fn update_device_info(
+            &self,
+            info: Option<arora_bridge::DeviceInfo>,
+        ) -> arora_bridge::BridgeResult<Option<arora_bridge::DeviceInfo>> {
+            Ok(info)
+        }
+    }
+
+    /// A ROS 2 bridge writes `hri_msgs/Expression`'s valence and arousal as
+    /// the message types them, `f32`. The device states those keys `f32`, so
+    /// it takes such a write from a remote — which arora checks against the
+    /// key's type — and the expression follows; a value of another type is
+    /// refused.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_remote_f32_valence_and_arousal_drive_the_expression() {
+        use arora_bridge::{BridgeCommand, BridgeOp, Inbound};
+        use arora_types::value::Type;
+
+        let spec = compose_sources(&[ros4hri_source("")])
+            .expect("compose the ros4hri mapping")
+            .to_string();
+        let store = BlackboardStore::new();
+        declare_keys(&store, &spec, &[], &[]);
+        for key in [
+            ros4hri::EXPRESSION_VALENCE_KEY,
+            ros4hri::EXPRESSION_AROUSAL_KEY,
+        ] {
+            let meta = store
+                .meta(&[Key::from(key)])
+                .remove(0)
+                .unwrap_or_else(|| panic!("{key} is declared"));
+            assert_eq!(meta.ty, Some(Type::F32), "{key}");
+            assert_eq!((meta.min, meta.max), (Some(-1.0), Some(1.0)), "{key}");
+        }
+
+        let (remote, inbound) = futures::channel::mpsc::unbounded();
+        let mut arora = builder_for(&spec, RigHal::new(), store, &[], None)
+            .expect("build the device over the mapping")
+            .with_bridge(Box::new(Remote(Some(inbound))))
+            .build()
+            .expect("build arora");
+        let write = |valence: Value, arousal: Value| {
+            let mut change = StateChange::new();
+            change
+                .set
+                .insert(Key::from(ros4hri::EXPRESSION_VALENCE_KEY), Some(valence));
+            change
+                .set
+                .insert(Key::from(ros4hri::EXPRESSION_AROUSAL_KEY), Some(arousal));
+            let (reply, replied) = futures::channel::oneshot::channel();
+            remote
+                .unbounded_send(Inbound::Command(BridgeCommand::new(
+                    BridgeOp::Update(change),
+                    reply,
+                )))
+                .expect("the device listens");
+            replied
+        };
+
+        let mut refused = write(Value::F64(0.8), Value::F64(0.4));
+        let mut taken = write(Value::F32(0.8), Value::F32(0.4));
+        settle(&mut arora);
+        let refusal = refused
+            .try_recv()
+            .expect("answered")
+            .expect("a reply")
+            .expect_err("an f64 is not the key's type");
+        assert!(refusal.contains("declared type"), "{refusal}");
+        taken
+            .try_recv()
+            .expect("answered")
+            .expect("a reply")
+            .expect("an f32 is taken");
+        // The happy anchor sits at (0.8, 0.4).
+        let happy = read_f32(&arora, &standard::expression_path("happy"));
+        assert!(happy > 0.4, "happy = {happy}");
+        assert!(read_f32(&arora, &standard::expression_path("angry")) < 0.01);
     }
 
     #[test]
