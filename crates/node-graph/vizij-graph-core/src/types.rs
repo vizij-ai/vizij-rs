@@ -167,6 +167,19 @@ pub enum NodeType {
     /// [`value`](NodeParams::value) — so a run grafts into a live graph without
     /// argument-feeder wiring.
     TaskRun,
+    /// Spawns a task run of [`function`](NodeParams::function) each time its
+    /// arguments change: the keyed variadic `args` inputs (slot `i` carries
+    /// the parameter whose id is `record_keys[i]`) over the
+    /// [`value`](NodeParams::value) bundle's fields. The first evaluation
+    /// sets the baseline and spawns nothing, so a graph spawns on a change it
+    /// observes, never on being loaded.
+    ///
+    /// Where a [`TaskRun`](Self::TaskRun) node *is* one run's call, this node
+    /// starts runs: the request is queued on the runtime's
+    /// [`spawns`](crate::eval::GraphRuntime::spawns) and served by the host
+    /// once the evaluation is done. The graph keeps no handle — a run it
+    /// spawns is the host's to end and clean up.
+    Spawn,
 }
 
 /// Node-construction parameters consumed selectively by different [`NodeType`] variants.

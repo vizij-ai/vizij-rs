@@ -3183,6 +3183,31 @@ const registry: Registry = {
         "keyed": true
       },
       "params": []
+    },
+    {
+      "type_id": "spawn",
+      "name": "Spawn",
+      "category": "Functions",
+      "doc": "Spawns a task run of its function (module and function are params) each time its arguments change; the first evaluation only records them. The call's args are the `value` param's fields, then the keyed `args` inputs, one per key in params.record_keys (a parameter id), which win for a parameter both name. The host starts the run after the evaluation and owns it: the graph keeps no handle.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "args",
+        "ty": "any",
+        "label": "Arg",
+        "doc": "The call arg for the parameter whose id is the slot's key in params.record_keys.",
+        "min": 0,
+        "keyed": true
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "bool",
+          "label": "Spawned",
+          "doc": "Whether this evaluation requested a run.",
+          "optional": false
+        }
+      ],
+      "params": []
     }
   ]
 };

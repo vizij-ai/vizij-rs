@@ -108,7 +108,8 @@ export type NodeType =
   | "input"
   | "output"
   | "externalfunction"
-  | "taskrun";
+  | "taskrun"
+  | "spawn";
 
 export type ShapeJSON =
   | { id: "Scalar"; meta?: Record<string, string> }

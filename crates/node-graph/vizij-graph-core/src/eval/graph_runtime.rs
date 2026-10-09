@@ -2,6 +2,7 @@
 
 use crate::types::NodeId;
 use hashbrown::{hash_map::Entry, HashMap};
+use uuid::Uuid;
 use vizij_api_core::{Shape, TypedPath, Value, WriteBatch};
 
 use super::plan::PlanCache;
@@ -103,6 +104,7 @@ pub enum NodeRuntimeState {
     #[cfg(feature = "urdf_ik")]
     UrdfKinematics(UrdfKinematicsState),
     TaskRun(TaskRunState),
+    Spawn(SpawnState),
 }
 
 /// State of a [`TaskRun`](crate::types::NodeType::TaskRun) node's hosted run.
@@ -116,6 +118,24 @@ pub struct TaskRunState {
     /// emitting on `mutated` once latched (the function's final word, e.g. a
     /// rest token).
     pub outputs: Option<Value>,
+}
+
+/// State of a [`Spawn`](crate::types::NodeType::Spawn) node: the arguments it
+/// last saw, which the next evaluation compares against to decide whether to
+/// spawn.
+#[derive(Debug, Default)]
+pub struct SpawnState {
+    pub args: Vec<(Uuid, Value)>,
+}
+
+/// A task run a [`Spawn`](crate::types::NodeType::Spawn) node requested
+/// during an evaluation, for the host to start once the evaluation is done:
+/// `function` addressed to `module`, with its call args by parameter id.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpawnRequest {
+    pub module: Option<Uuid>,
+    pub function: Uuid,
+    pub args: Vec<(Uuid, Value)>,
 }
 
 /// Data staged by the host for consumption by [`NodeType::Input`](crate::types::NodeType::Input).
@@ -142,6 +162,9 @@ pub struct GraphRuntime {
     pub outputs_vec: Vec<Vec<PortValue>>,
     /// Writes emitted by output/sink nodes during the current evaluation.
     pub writes: WriteBatch,
+    /// Task runs requested by spawn nodes during the current evaluation, in
+    /// evaluation order — the host starts them after the evaluation.
+    pub spawns: Vec<SpawnRequest>,
     /// Per-node persistent state for smoothing, kinematics, and other stateful nodes.
     pub node_states: HashMap<NodeId, NodeRuntimeState>,
     /// Host-staged inputs keyed by canonical typed path.
@@ -162,6 +185,7 @@ impl GraphRuntime {
         self.outputs.clear();
         self.outputs_vec.clear();
         self.writes.0.clear();
+        self.spawns.clear();
         self.node_states.clear();
         self.staged_inputs.clear();
         self.input_epoch = 0;

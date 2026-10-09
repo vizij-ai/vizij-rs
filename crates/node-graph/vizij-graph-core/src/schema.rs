@@ -2772,6 +2772,38 @@ pub fn registry() -> Registry {
         params: vec![],
     });
 
+    // Run spawning (starts a task run when its arguments change)
+    nodes.push(NodeSignature {
+        type_id: Spawn,
+        name: "Spawn",
+        category: "Functions",
+        doc: "Spawns a task run of its function (module and function are params) each time its \
+              arguments change; the first evaluation only records them. The call's args are \
+              the `value` param's fields, then the keyed `args` inputs, one per key in \
+              params.record_keys (a parameter id), which win for a parameter both name. The \
+              host starts the run after the evaluation and owns it: the graph keeps no handle.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "args",
+            ty: PortType::Any,
+            label: "Arg",
+            doc: "The call arg for the parameter whose id is the slot's key in \
+                  params.record_keys.",
+            min: 0,
+            max: None,
+            keyed: true,
+        }),
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Bool,
+            label: "Spawned",
+            doc: "Whether this evaluation requested a run.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
     Registry {
         version: "1.0.0",
         nodes,

@@ -389,6 +389,7 @@ fn evaluate_kind_inner(
         NodeType::Output => eval_output(inputs, outputs),
         NodeType::ExternalFunction => eval_external_function(params, inputs, outputs, functions),
         NodeType::TaskRun => eval_task_run(rt, spec, inputs, outputs, functions),
+        NodeType::Spawn => eval_spawn(rt, spec, inputs, outputs),
     }
 }
 
@@ -442,10 +443,7 @@ fn eval_task_run(
     // stated one for the same parameter.
     let mut args = bundle_fields(spec.params.value.as_ref())?;
     for (id, value) in bundle_fields(inputs.get("args").map(|port| &port.value))? {
-        match args.iter_mut().find(|(known, _)| *known == id) {
-            Some(stated) => stated.1 = value,
-            None => args.push((id, value)),
-        }
+        set_arg(&mut args, id, value);
     }
 
     let (status, out_parameters) =
@@ -475,6 +473,69 @@ fn eval_task_run(
     out_parameter_ports(&spec.params, outputs, &mutated)?;
     keyed_output(outputs, "done", vocab::bool_(done))?;
     single_output(outputs, status)
+}
+
+/// Set the call arg for parameter `id`, replacing a value already stated for
+/// it.
+fn set_arg(args: &mut Vec<(Uuid, Value)>, id: Uuid, value: Value) {
+    match args.iter_mut().find(|(known, _)| *known == id) {
+        Some(stated) => stated.1 = value,
+        None => args.push((id, value)),
+    }
+}
+
+/// Spawn a run of the node's function when its args differ from the last
+/// evaluation's, emitting on `out` whether it did. The args are the `value`
+/// param's fields, then the keyed `args` slots — slot `i` is the parameter
+/// whose id is `record_keys[i]` — which win for a parameter both name. The
+/// first evaluation only records them.
+fn eval_spawn(
+    rt: &mut GraphRuntime,
+    spec: &NodeSpec,
+    inputs: &InputSlots,
+    outputs: &mut OutputSlots,
+) -> Result<(), String> {
+    use super::graph_runtime::{NodeRuntimeState, SpawnRequest, SpawnState};
+
+    let function = spec
+        .params
+        .function
+        .ok_or_else(|| "Spawn node requires a function id".to_string())?;
+    let mut args = bundle_fields(spec.params.value.as_ref())?;
+    let keys = spec.params.record_keys.as_deref().unwrap_or(&[]);
+    for (i, slot) in inputs.variadic("args").iter().enumerate() {
+        let key = keys
+            .get(i)
+            .ok_or_else(|| format!("Spawn arg slot {i} has no parameter id in record_keys"))?;
+        let id = Uuid::parse_str(key)
+            .map_err(|e| format!("Spawn arg slot {i}: '{key}' is not a parameter id: {e}"))?;
+        set_arg(&mut args, id, slot.value.clone());
+    }
+
+    let changed = match rt.node_states.get_mut(&spec.id) {
+        Some(NodeRuntimeState::Spawn(state)) => {
+            let changed = state.args != args;
+            if changed {
+                state.args = args.clone();
+            }
+            changed
+        }
+        _ => {
+            rt.node_states.insert(
+                spec.id.clone(),
+                NodeRuntimeState::Spawn(SpawnState { args: args.clone() }),
+            );
+            false
+        }
+    };
+    if changed {
+        rt.spawns.push(SpawnRequest {
+            module: spec.params.module,
+            function,
+            args,
+        });
+    }
+    single_output(outputs, vocab::bool_(changed))
 }
 
 /// The call's out-parameters on the node's keyed variadic `mutated` outputs:
