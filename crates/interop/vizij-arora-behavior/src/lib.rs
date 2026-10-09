@@ -161,7 +161,12 @@ struct GraphRun {
     status_key: Key,
 }
 
-/// The prefix every node id of run `task` starts with: `task/<run id>`.
+/// The name of the graph's root: the `layers` that runs the main behavior,
+/// then the runs.
+const RUNNER: &str = "runner";
+
+/// The prefix every node id of run `task` starts with: `task/<run id>`. It
+/// also names the run's `flow`.
 /// Run ids are uuids of one length, so no other run's ids share it.
 fn run_node_prefix(task: TaskId) -> String {
     format!("task/{}", task.0)
@@ -255,6 +260,8 @@ pub struct ProcessingGraph {
     /// mutate this; the evaluator's [`spec`](Self::spec) is re-lowered from it
     /// when [`dirty`](Self::dirty).
     graph: Graph,
+    /// The main behavior's root: the runner's first child, before the runs.
+    main: Option<Uuid>,
     /// The lowered Vizij spec the evaluator runs — [`graph_codec::decode`] of
     /// [`graph`](Self::graph), rebuilt on the next tick after an edit.
     spec: GraphSpec,
@@ -273,9 +280,9 @@ pub struct ProcessingGraph {
     /// a grafted fragment in [`graph`](Self::graph); this index holds its
     /// pruning coordinates and status key.
     runs: HashMap<TaskId, GraphRun>,
-    /// The live runs in the order they were spawned — the order their nodes
-    /// take after the main behavior's, so a run writes after the behavior
-    /// and a later run after an earlier one.
+    /// The live runs in the order they were spawned — the order the runner
+    /// holds them in after the main behavior, so a run writes after the
+    /// behavior and a later run after an earlier one.
     run_order: Vec<TaskId>,
     /// Registered skill fragments by function id: what SPAWN grafts for these
     /// functions instead of the generic module-call wrapper.
@@ -349,8 +356,10 @@ impl ProcessingGraph {
     /// if the spec cannot be structurally encoded (it is total over valid specs).
     /// The spec is lowered — and the input paths derived — at the first tick.
     pub fn from_spec(spec: GraphSpec) -> Result<Self, String> {
-        Ok(Self {
-            graph: graph_codec::encode(&spec)?,
+        let graph = graph_codec::encode(&spec)?;
+        let mut this = Self {
+            main: graph.root,
+            graph,
             spec: GraphSpec::default(),
             dirty: true,
             rt: GraphRuntime::default(),
@@ -360,7 +369,30 @@ impl ProcessingGraph {
             run_order: Vec::new(),
             fragments: HashMap::new(),
             pending_halts: Vec::new(),
-        })
+        };
+        this.install_runner();
+        Ok(this)
+    }
+
+    /// Make the runner the graph's root: a `layers` holding the main
+    /// behavior, then each live run's `flow` in spawn order. Re-installed
+    /// whenever a run comes or goes.
+    fn install_runner(&mut self) {
+        let children = self
+            .main
+            .into_iter()
+            .chain(
+                self.run_order
+                    .iter()
+                    .map(|task| graph_codec::composite_id(&run_node_prefix(*task))),
+            )
+            .collect();
+        self.graph.root = Some(graph_codec::insert_composite(
+            &mut self.graph,
+            graph_codec::layers_function(),
+            RUNNER,
+            children,
+        ));
     }
 
     /// Register the skill fragment SPAWN grafts for `function` — asset
@@ -392,6 +424,17 @@ impl ProcessingGraph {
         self.graph.apply(graph_diff).map_err(|e| BehaviorError {
             message: format!("graft run: {e}"),
         })?;
+        let children = diff
+            .upsert_nodes
+            .iter()
+            .map(|node| graph_codec::node_id_uuid(&node.id))
+            .collect();
+        graph_codec::insert_composite(
+            &mut self.graph,
+            graph_codec::flow_function(),
+            &run_node_prefix(task),
+            children,
+        );
         self.runs.insert(
             task,
             GraphRun {
@@ -400,6 +443,7 @@ impl ProcessingGraph {
             },
         );
         self.run_order.push(task);
+        self.install_runner();
         if !self.dirty {
             self.lower_grafted_run(diff);
         }
@@ -410,17 +454,16 @@ impl ProcessingGraph {
     /// run is a component of its own — its edges join its nodes only, and it
     /// meets the rest of the graph through store paths — so its nodes go
     /// after everything lowered so far and its plan after theirs, which is
-    /// where a full lowering puts them too ([`order_runs_last`](Self::order_runs_last)).
-    /// Whatever is not a separate component is left to a full lowering.
+    /// where a full lowering puts them too: the run's `flow` is the runner's
+    /// last child. Whatever is not a separate component is left to a full
+    /// lowering.
     fn lower_grafted_run(&mut self, diff: graph_codec::GraphSpecDiff) {
         if !diff.remove_nodes.is_empty() || !diff.remove_edges.is_empty() {
             self.dirty = true;
             return;
         }
         let first = self.spec.nodes.len();
-        let mut nodes = diff.upsert_nodes;
-        nodes.sort_by(|a, b| a.id.cmp(&b.id));
-        self.spec.nodes.extend(nodes);
+        self.spec.nodes.extend(diff.upsert_nodes);
         self.spec.edges.extend(diff.upsert_edges);
         self.relowered();
         match self.rt.plan.append_component(&self.spec, first) {
@@ -470,21 +513,6 @@ impl ProcessingGraph {
         self.spec.fingerprint = 0;
     }
 
-    /// Order a decoded spec's nodes as the precedence the plan follows —
-    /// the main behavior's first, then each live run's in spawn order — each
-    /// group keeping the decoded order. The plan runs a later-listed
-    /// component after the earlier ones, so a run writes after the behavior,
-    /// and a later run after an earlier one.
-    fn order_runs_last(&self, spec: &mut GraphSpec) {
-        let prefixes: Vec<String> = self.run_order.iter().map(|t| run_node_prefix(*t)).collect();
-        spec.nodes.sort_by_cached_key(|node| {
-            prefixes
-                .iter()
-                .position(|prefix| node.id.starts_with(prefix.as_str()))
-                .map_or(0, |rank| rank + 1)
-        });
-    }
-
     /// The ids of the retained graph's nodes that belong to run `task` —
     /// those under its [`run_node_prefix`] — as uuids.
     fn run_nodes(&self, task: TaskId) -> Vec<Uuid> {
@@ -514,10 +542,49 @@ impl ProcessingGraph {
             message: format!("prune run: {e}"),
         })?;
         self.run_order.retain(|live| *live != task);
+        self.install_runner();
         if !self.dirty {
             self.lower_pruned_run(task);
         }
         Ok(())
+    }
+
+    /// Place each node an edit added that no composite holds: a run's node
+    /// at the end of its run's `flow`, any other at the end of the main
+    /// behavior, so an edit to the behavior still runs before the runs.
+    fn place(&mut self, added: &[Uuid]) {
+        let held: HashSet<Uuid> = self
+            .graph
+            .nodes
+            .values()
+            .filter(|node| graph_codec::is_composite(node))
+            .flat_map(|node| node.children.iter().flatten().copied())
+            .collect();
+        for id in added {
+            if held.contains(id)
+                || self
+                    .graph
+                    .nodes
+                    .get(id)
+                    .is_none_or(graph_codec::is_composite)
+            {
+                continue;
+            }
+            let name = self.graph.variables.get(id);
+            let parent = self
+                .run_order
+                .iter()
+                .map(|task| run_node_prefix(*task))
+                .find(|prefix| name.is_some_and(|name| name.starts_with(prefix.as_str())))
+                .map(|prefix| graph_codec::composite_id(&prefix))
+                .or(self.main);
+            if let Some(parent) = parent
+                .and_then(|parent| self.graph.nodes.get_mut(&parent))
+                .filter(|parent| graph_codec::is_composite(parent))
+            {
+                parent.children.get_or_insert_with(Vec::new).push(*id);
+            }
+        }
     }
 
     /// Apply the halts requested since the last tick: write `Status::Failure`
@@ -573,7 +640,6 @@ impl ProcessingGraph {
     fn lower(&mut self) -> Result<(), BehaviorError> {
         let mut spec =
             graph_codec::decode(&self.graph).map_err(|message| BehaviorError { message })?;
-        self.order_runs_last(&mut spec);
         self.inputs = input_paths(&spec);
         // Carry the version forward before re-caching. A freshly decoded spec
         // restarts at version 0 (→ 1 after `with_cache`); bumping from the
@@ -1028,7 +1094,35 @@ impl BehaviorInterpreter for ProcessingGraph {
             graph.nodes.insert(*id, self.graph.nodes[id].clone());
         }
         graph.links.extend(links);
+        let runner = graph_codec::composite_id(RUNNER);
+        self.main = match graph.root {
+            // A graph read back from this interpreter: its main behavior is
+            // its runner's first child.
+            Some(root) if root == runner => graph
+                .nodes
+                .get(&root)
+                .and_then(|node| node.children.as_ref()?.first().copied()),
+            Some(root) => Some(root),
+            // A graph with no structure: its nodes, by id, are the main
+            // behavior.
+            None => {
+                let mut children: Vec<Uuid> = graph
+                    .nodes
+                    .keys()
+                    .filter(|id| !carried.contains(id))
+                    .copied()
+                    .collect();
+                children.sort_by_key(|id| graph.variables.get(id).cloned());
+                Some(graph_codec::insert_composite(
+                    &mut graph,
+                    graph_codec::flow_function(),
+                    "main",
+                    children,
+                ))
+            }
+        };
         self.graph = graph;
+        self.install_runner();
         self.dirty = true;
         Ok(())
     }
@@ -1039,10 +1133,21 @@ impl BehaviorInterpreter for ProcessingGraph {
     /// tick. Unedited nodes keep their id, so their runtime state survives the
     /// edit — an add/remove of one node does not restart the rest. The store and
     /// the `function -> module` map are untouched.
+    ///
+    /// An added node keeps the place its parent's `children` give it; one no
+    /// composite holds is [`place`](Self::place)d. A new root is the main
+    /// behavior's: the runner stays the root, with the runs after it.
     fn apply(&mut self, diff: GraphDiff) -> Result<(), BehaviorError> {
+        let added: Vec<Uuid> = diff.add_nodes.iter().map(|node| node.id).collect();
+        let root = diff.set_root;
         self.graph.apply(diff).map_err(|e| BehaviorError {
             message: format!("graph diff: {e}"),
         })?;
+        if let Some(root) = root.filter(|root| *root != graph_codec::composite_id(RUNNER)) {
+            self.main = Some(root);
+        }
+        self.place(&added);
+        self.install_runner();
         self.dirty = true;
         Ok(())
     }
@@ -1175,6 +1280,16 @@ mod tests {
         });
         vizij_api_core::json::normalize_graph_spec_value(&mut spec).expect("normalize");
         serde_json::from_value(spec).expect("graph spec")
+    }
+
+    /// The Vizij nodes of the interpreter's graph, its composites aside.
+    fn vizij_nodes(graph: &ProcessingGraph) -> usize {
+        graph
+            .graph()
+            .nodes
+            .values()
+            .filter(|node| !graph_codec::is_composite(node))
+            .count()
     }
 
     fn read(store: &SimpleDataStore, path: &str) -> Option<Value> {
@@ -1603,6 +1718,98 @@ mod tests {
         assert_eq!(lowered(&graph), in_place);
     }
 
+    /// A behavior writing 4.0 then 5.0 to `shared/x`, listed in that order
+    /// under ids that sort the other way.
+    fn later_listed_writer() -> GraphSpec {
+        parse_spec(
+            &json!({
+                "nodes": [
+                    { "id": "z_first", "type": "constant", "params": { "value": float(4.0) } },
+                    { "id": "z_first_out", "type": "output", "params": { "path": "shared/x" } },
+                    { "id": "a_second", "type": "constant", "params": { "value": float(5.0) } },
+                    { "id": "a_second_out", "type": "output", "params": { "path": "shared/x" } },
+                ],
+                "edges": [
+                    { "from": { "node_id": "z_first" }, "to": { "node_id": "z_first_out", "input": "in" } },
+                    { "from": { "node_id": "a_second" }, "to": { "node_id": "a_second_out", "input": "in" } },
+                ],
+            })
+            .to_string(),
+        )
+        .expect("the behavior parses")
+    }
+
+    /// Of two writers of one path, the later-listed wins, whatever their ids:
+    /// the order is the graph's, carried through its encoding and a LOAD.
+    #[test]
+    fn the_later_listed_writer_of_a_path_wins() {
+        let store = SimpleDataStore::new();
+        let mut graph = ProcessingGraph::from_spec(later_listed_writer()).expect("from_spec");
+        graph.tick_store(&store, &mut NoopBridge, 0.016).unwrap();
+        assert_eq!(read(&store, "shared/x"), Some(float(5.0)));
+
+        let mut other = shared_writers();
+        other
+            .load(graph_codec::encode(&later_listed_writer()).expect("encode"))
+            .expect("load");
+        other.tick_store(&store, &mut NoopBridge, 0.016).unwrap();
+        assert_eq!(read(&store, "shared/x"), Some(float(5.0)));
+    }
+
+    /// A node an edit adds to the main behavior runs before the runs, so a
+    /// live run still writes after it.
+    #[test]
+    fn an_edit_to_the_behavior_still_runs_before_the_runs() {
+        let store = SimpleDataStore::new();
+        let mut bridge = RunBridge::new(Vec::new());
+        let mut graph = shared_writers();
+        graph.spawn(run_of(EARLY), RunPolicy::Concurrent).unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).unwrap();
+        assert_eq!(read(&store, "shared/x"), Some(float(2.0)));
+
+        let added = later_listed_writer();
+        let diff = graph_codec::GraphSpecDiff {
+            upsert_nodes: added.nodes,
+            upsert_edges: added.edges,
+            ..graph_codec::GraphSpecDiff::default()
+        };
+        graph
+            .apply(graph_codec::spec_diff_to_graph_diff(&diff).expect("translate"))
+            .expect("apply");
+        graph.tick_store(&store, &mut bridge, 0.016).unwrap();
+        assert_eq!(read(&store, "shared/x"), Some(float(2.0)));
+    }
+
+    /// A LOAD replaces the main behavior under the live runs, which still
+    /// write after it — a graph with no structure included, its nodes then
+    /// the main behavior by id.
+    #[test]
+    fn a_loaded_behavior_runs_before_the_live_runs() {
+        let store = SimpleDataStore::new();
+        let mut bridge = RunBridge::new(Vec::new());
+        let mut graph = shared_writers();
+        graph.spawn(run_of(EARLY), RunPolicy::Concurrent).unwrap();
+
+        graph
+            .load(graph_codec::encode(&later_listed_writer()).expect("encode"))
+            .expect("load");
+        graph.tick_store(&store, &mut bridge, 0.016).unwrap();
+        assert_eq!(read(&store, "shared/x"), Some(float(2.0)));
+
+        let mut bare = graph_codec::encode(&later_listed_writer()).expect("encode");
+        let root = bare.root.take().expect("a root");
+        bare.nodes.remove(&root);
+        graph.load(bare).expect("load");
+        graph.tick_store(&store, &mut bridge, 0.016).unwrap();
+        assert_eq!(read(&store, "shared/x"), Some(float(2.0)));
+
+        // The interpreter's own graph loads back as it was.
+        let own = graph.graph().clone();
+        graph.load(own).expect("load");
+        graph.tick_store(&store, &mut bridge, 0.016).unwrap();
+        assert_eq!(read(&store, "shared/x"), Some(float(2.0)));
+    }
+
     /// SPAWN grafts a run as graph structure: the fragment is visible through
     /// `graph()` before it ever ticks, ordinary evaluation advances it once per
     /// tick, and its `Status` lands on the handle's status key.
@@ -1614,13 +1821,13 @@ mod tests {
         store
             .write(StateChange::set("sensor/x", float(0.75)))
             .unwrap();
-        let nodes_before = graph.graph().nodes.len();
+        let nodes_before = vizij_nodes(&graph);
 
         let handle = graph
             .spawn(look_at(), RunPolicy::Concurrent)
             .expect("spawn");
         // The fragment is three nodes: args input, taskrun leaf, status output.
-        assert_eq!(graph.graph().nodes.len(), nodes_before + 3);
+        assert_eq!(vizij_nodes(&graph), nodes_before + 3);
         assert!(handle.status.path.starts_with("arora/tasks/"));
 
         let mut bridge = RunBridge::new(Vec::new());
@@ -1649,7 +1856,7 @@ mod tests {
         store
             .write(StateChange::set("sensor/x", float(0.75)))
             .unwrap();
-        let nodes_before = graph.graph().nodes.len();
+        let nodes_before = vizij_nodes(&graph);
 
         let handle = graph
             .spawn(look_at(), RunPolicy::Concurrent)
@@ -1658,7 +1865,7 @@ mod tests {
         graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
 
         assert_eq!(read_key(&store, &handle.status), Some(task::success()));
-        assert_eq!(graph.graph().nodes.len(), nodes_before);
+        assert_eq!(vizij_nodes(&graph), nodes_before);
 
         graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
         graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
@@ -1676,7 +1883,7 @@ mod tests {
         store
             .write(StateChange::set("sensor/x", float(0.75)))
             .unwrap();
-        let nodes_before = graph.graph().nodes.len();
+        let nodes_before = vizij_nodes(&graph);
 
         let handle = graph
             .spawn(look_at(), RunPolicy::Concurrent)
@@ -1690,7 +1897,7 @@ mod tests {
         graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
 
         assert_eq!(read_key(&store, &handle.status), Some(task::failure()));
-        assert_eq!(graph.graph().nodes.len(), nodes_before);
+        assert_eq!(vizij_nodes(&graph), nodes_before);
         assert_eq!(bridge.calls.len(), 1);
 
         graph
@@ -2003,7 +2210,7 @@ mod tests {
         store
             .write(StateChange::set("sensor/x", float(0.75)))
             .unwrap();
-        let nodes_before = graph.graph().nodes.len();
+        let nodes_before = vizij_nodes(graph);
         let handle = spawn_behavior(graph, "damped", &damped("out"));
         let mut bridge = NoopBridge;
         graph.tick_store(store, &mut bridge, 0.1).expect("tick");
@@ -2041,7 +2248,7 @@ mod tests {
         store
             .write(StateChange::set("sensor/x", float(0.75)))
             .unwrap();
-        let nodes_before = graph.graph().nodes.len();
+        let nodes_before = vizij_nodes(&graph);
 
         let handle = spawn_behavior(
             &mut graph,
@@ -2062,7 +2269,7 @@ mod tests {
             Some(Value::String("constant".to_string()))
         );
         // The graph and the run's own name and status outputs.
-        assert_eq!(graph.graph().nodes.len(), nodes_before + 2 + 4);
+        assert_eq!(vizij_nodes(&graph), nodes_before + 2 + 4);
 
         // Any client finds the run by its name.
         let runs = run::runs(&store);
@@ -2071,7 +2278,7 @@ mod tests {
         graph.halt(handle.id).expect("halt");
         graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
         assert_eq!(read_key(&store, &handle.status), Some(task::failure()));
-        assert_eq!(graph.graph().nodes.len(), nodes_before);
+        assert_eq!(vizij_nodes(&graph), nodes_before);
         store
             .write(StateChange::set("program/in", float(0.25)))
             .unwrap();
@@ -2103,12 +2310,12 @@ mod tests {
         )
         .expect("parse");
         store.write(StateChange::set("a", float(0.0))).unwrap();
-        let nodes_before = graph.graph().nodes.len();
+        let nodes_before = vizij_nodes(&graph);
         let handle = spawn_behavior(&mut graph, "once", &behavior);
         let mut bridge = NoopBridge;
         graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
         assert_eq!(read_key(&store, &handle.status), Some(task::success()));
-        assert_eq!(graph.graph().nodes.len(), nodes_before, "swept");
+        assert_eq!(vizij_nodes(&graph), nodes_before, "swept");
     }
 
     /// A LOAD replaces the main behavior and leaves the live runs running:
@@ -2128,7 +2335,7 @@ mod tests {
         graph
             .load(graph_codec::encode(&main).expect("encode"))
             .expect("load");
-        let nodes_after_load = graph.graph().nodes.len();
+        let nodes_after_load = vizij_nodes(&graph);
         let mut bridge = RunBridge::new(Vec::new());
         store
             .write(StateChange::set("sensor/b", float(0.25)))
@@ -2156,11 +2363,11 @@ mod tests {
         graph.halt(wrapper.id).expect("halt");
         graph.tick_store(&store, &mut bridge, 0.1).expect("tick");
         assert_eq!(
-            graph.graph().nodes.len(),
+            vizij_nodes(&graph),
             nodes_after_load - 3 - 4 - 3,
             "the halts pruned both runs"
         );
-        assert_eq!(graph.graph().nodes.len(), 2, "the main graph remains");
+        assert_eq!(vizij_nodes(&graph), 2, "the main graph remains");
     }
 
     /// run::edit changes a running behavior in place: the nodes the new
@@ -2206,12 +2413,12 @@ mod tests {
             "the kept damp kept its state: {moving} → {next}"
         );
         assert_eq!(f32_at(&store, "out/copy"), next, "the added node runs");
-        assert_eq!(graph.graph().nodes.len(), nodes_before + 4 + 4);
+        assert_eq!(vizij_nodes(&graph), nodes_before + 4 + 4);
 
         graph.halt(handle.id).expect("halt");
         graph.tick_store(&store, &mut bridge, 0.1).expect("tick");
         assert_eq!(
-            graph.graph().nodes.len(),
+            vizij_nodes(&graph),
             nodes_before,
             "the halt pruned the run as edited"
         );
@@ -2222,11 +2429,11 @@ mod tests {
     #[test]
     fn a_run_behavior_call_without_a_graph_is_refused() {
         let mut graph = ProcessingGraph::from_spec(passthrough("a", "b")).expect("from_spec");
-        let nodes_before = graph.graph().nodes.len();
+        let nodes_before = vizij_nodes(&graph);
         let mut call = run::call("bad", &passthrough("c", "d")).expect("encode");
         call.args
             .retain(|field| field.id == run::run_behavior::ids::run_behavior::NAME);
         assert!(graph.spawn(call, RunPolicy::Concurrent).is_err());
-        assert_eq!(graph.graph().nodes.len(), nodes_before);
+        assert_eq!(vizij_nodes(&graph), nodes_before);
     }
 }

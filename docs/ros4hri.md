@@ -372,8 +372,8 @@ edits skill fragments from **File → Skills**.
 
 ## Enabling the mapping
 
-The mapping composes between a face's own graphs and any playing program, so a
-performance overrides it (last-writer-wins).
+The mapping composes after a face's own graphs and before its animations,
+programs and skills, so any of those overrides it on a path they share.
 
 - **From the `vizij` binary** it is **on by default**; opt out with
   `--no-ros4hri`.

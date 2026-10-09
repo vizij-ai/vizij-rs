@@ -4,6 +4,15 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [6.2.0] - 2026-10-10
+
+### Changed
+
+- `Bundle::compose` composes the program after the animation source: base
+  graphs, then mappings, then animations, then the program. A playing program
+  overrides a playing animation on a path both write, as a program or skill a
+  device runs as a task run does.
+
 ## [6.1.0] - 2026-10-06
 
 ### Added

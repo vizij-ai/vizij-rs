@@ -48,6 +48,18 @@
 //! shapes — but the eval path honors them where present, so they must survive a
 //! round trip). This is the one carrier that is not a per-value slot.
 //!
+//! # Order
+//!
+//! The shared model keeps nodes in a map, so a graph's order is its structure:
+//! `root` and each node's ordered `children`. Two composites carry it, bound to
+//! functions of their own: a **`flow`** holds a dataflow network, a node after
+//! every node it reads from and otherwise in listed order; a **`layers`** holds
+//! parts of a behavior, run one after the other. An encoded spec is one `flow`
+//! of its nodes in listed order, and decoding lists the nodes in a pre-order
+//! walk of the structure. Where two outputs write one path, the later-listed
+//! one wins: the order of a composed behavior's sources survives the round
+//! trip, and with it their precedence.
+//!
 //! # Not yet mapped
 //!
 //! An edge selector's `Field` name rides verbatim: reading it against a
@@ -84,7 +96,7 @@ fn kind_name(kind: &NodeType) -> Result<String, String> {
     }
 }
 
-fn node_id_uuid(id: &str) -> Uuid {
+pub(crate) fn node_id_uuid(id: &str) -> Uuid {
     gen_uuid_from_str(&format!("vizij/graph/node/{id}"))
 }
 
@@ -105,6 +117,50 @@ fn param_slot(field: &str) -> Uuid {
 /// on decode, so it needs no `variables` entry.
 fn meta_slot() -> Uuid {
     gen_uuid_from_str("vizij/graph/meta")
+}
+
+/// The function of a composite whose children run in their listed order, a
+/// later child writing after an earlier one: the parts of a behavior.
+pub(crate) fn layers_function() -> Uuid {
+    gen_uuid_from_str("vizij/graph/composite/layers")
+}
+
+/// The function of a composite whose children are a dataflow network: a node
+/// after every node it reads from, ties in their listed order.
+pub(crate) fn flow_function() -> Uuid {
+    gen_uuid_from_str("vizij/graph/composite/flow")
+}
+
+/// The id of the composite named `name`.
+pub(crate) fn composite_id(name: &str) -> Uuid {
+    gen_uuid_from_str(&format!("vizij/graph/group/{name}"))
+}
+
+/// Whether `node` is a composite — structure, not a Vizij node.
+pub(crate) fn is_composite(node: &Node) -> bool {
+    node.function == layers_function() || node.function == flow_function()
+}
+
+/// Add the composite `name`, of `function`, holding `children` in order, and
+/// return its id. Replaces a composite of the same name.
+pub(crate) fn insert_composite(
+    graph: &mut Graph,
+    function: Uuid,
+    name: &str,
+    children: Vec<Uuid>,
+) -> Uuid {
+    let id = composite_id(name);
+    graph.variables.insert(id, name.to_string());
+    graph.nodes.insert(
+        id,
+        Node {
+            id,
+            function,
+            children: Some(children),
+            ..Node::default()
+        },
+    );
+    id
 }
 
 /// The present (non-null) fields of a [`NodeParams`], as `(field, json)` pairs.
@@ -161,7 +217,8 @@ fn node_meta_json(node: &NodeSpec) -> Result<Option<String>, String> {
 ///
 /// Total over every valid spec — the whole-graph composition of `encode_node`
 /// (one shared node, its parameter/input-default/metadata literal slots) and
-/// `encode_edge` (one link, with a `Select` for a selector).
+/// `encode_edge` (one link, with a `Select` for a selector). The root is a
+/// `flow` holding the nodes in their listed order.
 pub fn encode(spec: &GraphSpec) -> Result<Graph, String> {
     let mut graph = Graph::empty();
 
@@ -181,6 +238,17 @@ pub fn encode(spec: &GraphSpec) -> Result<Graph, String> {
     for edge in &spec.edges {
         encode_edge(&mut graph, edge);
     }
+    let children = spec
+        .nodes
+        .iter()
+        .map(|node| node_id_uuid(&node.id))
+        .collect();
+    graph.root = Some(insert_composite(
+        &mut graph,
+        flow_function(),
+        "main",
+        children,
+    ));
 
     Ok(graph)
 }
@@ -326,9 +394,42 @@ fn declare_io(graph: &mut Graph, node: Uuid, slot: Uuid, is_input: bool) {
     }
 }
 
+/// The graph's Vizij nodes in the order its structure gives: a pre-order walk
+/// of the composites from the root, each composite's children in their listed
+/// order, then every node no composite holds, by id. A child the graph no
+/// longer has (an edit removed it) is skipped.
+fn structural_order(graph: &Graph) -> Vec<&Node> {
+    let mut order = Vec::with_capacity(graph.nodes.len());
+    let mut seen = HashSet::new();
+    let mut stack: Vec<Uuid> = graph.root.into_iter().collect();
+    while let Some(id) = stack.pop() {
+        let Some(node) = graph.nodes.get(&id) else {
+            continue;
+        };
+        if !seen.insert(id) {
+            continue;
+        }
+        if is_composite(node) {
+            stack.extend(node.children.iter().flatten().rev());
+        } else {
+            order.push(node);
+        }
+    }
+    let mut unplaced: Vec<&Node> = graph
+        .nodes
+        .values()
+        .filter(|node| !seen.contains(&node.id) && !is_composite(node))
+        .collect();
+    unplaced.sort_by_key(|node| graph.variables.get(&node.id));
+    order.extend(unplaced);
+    order
+}
+
 /// Decode an Arora shared [`Graph`] produced by [`encode`] back into a
-/// [`GraphSpec`]. Nodes are ordered by id (the shared model stores them
-/// unordered); evaluation is order-independent (the plan topo-sorts).
+/// [`GraphSpec`], its nodes in the order the graph's structure gives
+/// ([`structural_order`]). That order is the evaluation's: the plan runs a
+/// node after every node it reads from, and otherwise in listed order, so of
+/// two writers of one path the later-listed wins.
 pub fn decode(graph: &Graph) -> Result<GraphSpec, String> {
     let name = |id: &Uuid| -> Result<String, String> {
         graph
@@ -430,7 +531,7 @@ pub fn decode(graph: &Graph) -> Result<GraphSpec, String> {
     }
 
     let mut nodes: Vec<NodeSpec> = Vec::with_capacity(graph.nodes.len());
-    for node in graph.nodes.values() {
+    for node in structural_order(graph) {
         let params_obj = param_objs.remove(&node.id).unwrap_or_default();
         let params: NodeParams = serde_json::from_value(serde_json::Value::Object(params_obj))
             .map_err(|e| format!("rebuild node params: {e}"))?;
@@ -470,7 +571,6 @@ pub fn decode(graph: &Graph) -> Result<GraphSpec, String> {
             input_defaults: input_defaults.into_iter().collect(),
         });
     }
-    nodes.sort_by(|a, b| a.id.cmp(&b.id));
 
     Ok(GraphSpec {
         nodes,
@@ -593,7 +693,15 @@ mod tests {
         .expect("valid spec");
 
         let graph = encode(&spec).expect("encode");
-        assert_eq!(graph.nodes.len(), 2);
+        let vizij: Vec<&Node> = graph.nodes.values().filter(|n| !is_composite(n)).collect();
+        assert_eq!(vizij.len(), 2);
+        // The root is a flow holding them in their listed order.
+        let root = &graph.nodes[&graph.root.expect("a root")];
+        assert_eq!(root.function, flow_function());
+        assert_eq!(
+            root.children,
+            Some(vec![node_id_uuid("a"), node_id_uuid("b")])
+        );
         // constant's `value` param and the a->b edge are both links; `value`
         // rides a Literal source, the edge a Port source.
         let literals = graph
@@ -608,6 +716,59 @@ mod tests {
             .count();
         assert_eq!(ports, 1, "one edge");
         assert!(literals >= 1, "at least the constant value param");
+    }
+
+    fn ids(spec: &GraphSpec) -> Vec<&str> {
+        spec.nodes.iter().map(|node| node.id.as_str()).collect()
+    }
+
+    /// Decoding lists the nodes in the order the spec listed them, whatever
+    /// their ids.
+    #[test]
+    fn decoding_keeps_the_listed_order() {
+        let spec: GraphSpec = serde_json::from_value(json!({
+            "nodes": [
+                { "id": "z", "type": "constant", "params": { "value": { "f32": 1.0 } } },
+                { "id": "a", "type": "constant", "params": { "value": { "f32": 2.0 } } },
+                { "id": "m", "type": "constant", "params": { "value": { "f32": 3.0 } } }
+            ],
+            "edges": []
+        }))
+        .expect("valid spec");
+        let decoded = decode(&encode(&spec).expect("encode")).expect("decode");
+        assert_eq!(ids(&decoded), ["z", "a", "m"]);
+    }
+
+    /// A node no composite holds comes after every placed one, by id; a child
+    /// the graph no longer has is skipped.
+    #[test]
+    fn unplaced_nodes_come_after_the_placed_ones_by_id() {
+        let spec: GraphSpec = serde_json::from_value(json!({
+            "nodes": [
+                { "id": "z", "type": "constant", "params": { "value": { "f32": 1.0 } } },
+                { "id": "a", "type": "constant", "params": { "value": { "f32": 2.0 } } }
+            ],
+            "edges": []
+        }))
+        .expect("valid spec");
+        let mut graph = encode(&spec).expect("encode");
+        let added: GraphSpec = serde_json::from_value(json!({
+            "nodes": [
+                { "id": "y", "type": "constant", "params": { "value": { "f32": 3.0 } } },
+                { "id": "b", "type": "constant", "params": { "value": { "f32": 4.0 } } }
+            ],
+            "edges": []
+        }))
+        .expect("valid spec");
+        let diff = GraphSpecDiff {
+            upsert_nodes: added.nodes,
+            remove_nodes: vec!["z".to_string()],
+            ..GraphSpecDiff::default()
+        };
+        graph
+            .apply(spec_diff_to_graph_diff(&diff).expect("translate"))
+            .expect("apply");
+        assert_eq!(ids(&decode(&graph).expect("decode")), ["a", "b", "y"]);
     }
 
     /// An edge selector round-trips through `LinkSource::Select`.

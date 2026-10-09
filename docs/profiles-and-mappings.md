@@ -90,8 +90,9 @@ them, `const/<value>` for shared constants — so a mapping can be reviewed
 channel by channel and diffed meaningfully (see [the ROS4HRI
 mapping](ros4hri.md#embedding-and-editing-the-mapping)).
 
-A mapping composes into a face's behavior between the face's own graphs and
-any playing program, last writer wins. A face may **embed** a mapping
+A mapping composes into a face's behavior after the face's own graphs and
+before its animations and any playing program or skill: on a path they share,
+the later one wins. A face may **embed** a mapping
 (`vizij-bundle add-standard`) as its pinned copy, which then replaces the
 built-in of the same id.
 
