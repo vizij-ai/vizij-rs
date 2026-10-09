@@ -530,3 +530,99 @@ fn load_unload_cycles_leave_nothing_behind() {
     let last = settle(&mut app, Duration::from_secs(1), Duration::from_secs(15));
     assert_eq!(last, floor.unwrap(), "the cycles left something behind");
 }
+
+/// A face draws only once it is indexed, so a load or a reload never shows
+/// the GLB as it spawned: unposed and unshaded. A reload's scene spawns
+/// behind the face it replaces and comes into view in the frame that face
+/// retires; every frame in between still draws the old face alone.
+#[test]
+#[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job with VIZIJ_FIXTURES set"]
+fn a_face_draws_only_once_indexed() {
+    use vizij::view::{Superseded, ViewEvent};
+
+    let Some(fixtures) = std::env::var_os("VIZIJ_FIXTURES").map(PathBuf::from) else {
+        eprintln!("VIZIJ_FIXTURES unset — skipping the indexed-draw test");
+        return;
+    };
+    let glb = std::fs::read(fixtures.join("Quori_Current_Extended.glb")).expect("read Quori");
+    let config = FaceConfig {
+        wanted: ["rig", "pose-driver", "pose", "standard-adaptation"]
+            .map(String::from)
+            .to_vec(),
+        program: ProgramSelect::None,
+        stage_neutral: true,
+        ros4hri: true,
+        #[cfg(feature = "studio")]
+        studio: false,
+        speech: None,
+    };
+    let device = start(&glb, config, BridgeConfig::default(), Mode::Quiet).expect("start");
+    let (events_tx, events_rx) = std::sync::mpsc::channel();
+
+    let mut app = App::new();
+    FaceAssets::register(&mut app);
+    app.add_plugins(SnapshotPlugin {
+        width: WIDTH,
+        height: HEIGHT,
+    })
+    .insert_resource(ViewEvents(std::sync::Mutex::new(events_rx)))
+    .insert_resource(ViewOptions {
+        background: Color::BLACK,
+        fit: view::Fit::Contain,
+        zoom: Vec2::ONE,
+        ambient: std::f32::consts::FRAC_PI_2,
+        unlit: false,
+    })
+    .add_plugins(ViewPlugin);
+    vizij::view::snapshot::ensure_ready(&mut app);
+
+    let load = || ViewEvent::LoadFace {
+        face_id: "face".into(),
+        meta: Box::new(device.meta.clone()),
+        glb: glb.clone(),
+        rig: device.rig.clone(),
+    };
+    // Each frame's faces, as the frame drew them: whether it was indexed,
+    // whether it was superseded, whether it was in view.
+    fn drawn(app: &mut App) -> Vec<(bool, bool, bool)> {
+        let mut faces = app
+            .world_mut()
+            .query::<(&Face, Has<Superseded>, &InheritedVisibility)>();
+        faces
+            .iter(app.world())
+            .map(|(face, superseded, visible)| (face.bindings.ready, superseded, visible.get()))
+            .collect()
+    }
+    // Frames until one face is left and it is indexed, checking each frame
+    // that only an indexed face was in view, and the old face alone while
+    // its successor was not indexed.
+    let frames_until_swapped = |app: &mut App, what: &str| {
+        for frame in 0..600 {
+            app.update();
+            let faces = drawn(app);
+            for &(ready, superseded, visible) in &faces {
+                assert!(
+                    ready || !visible,
+                    "{what}, frame {frame}: a face was drawn before it was indexed ({faces:?})"
+                );
+                if superseded {
+                    assert!(
+                        visible,
+                        "{what}, frame {frame}: the face being replaced left view"
+                    );
+                }
+            }
+            if let [(true, false, true)] = faces[..] {
+                return;
+            }
+        }
+        panic!("{what}: the face never came into view alone");
+    };
+
+    events_tx.send(load()).unwrap();
+    frames_until_swapped(&mut app, "the load");
+    for reload in 0..3 {
+        events_tx.send(load()).unwrap();
+        frames_until_swapped(&mut app, &format!("reload {reload}"));
+    }
+}
