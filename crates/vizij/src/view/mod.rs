@@ -697,7 +697,8 @@ fn apply_view_events(
                             camera,
                         },
                         Transform::from_translation(slot_origin(slot)),
-                        Visibility::default(),
+                        // In view once indexed ([`index_faces`]).
+                        Visibility::Hidden,
                         children![WorldAssetRoot(
                             asset_server.load(FaceAssets::scene(&asset_path))
                         )],
@@ -1066,6 +1067,10 @@ fn visible_extent(bounds: Vec2, fit: Fit, zoom: Vec2, width: f32, height: f32) -
 /// rectangle whose node carries no mesh its unit mesh. Names are looked up
 /// under the face's own root, so two faces with the same node names never
 /// cross.
+///
+/// A face comes into view here, in the frame it is indexed: its scene spawns
+/// after `Update`, so until the next frame's posing and toning it would draw
+/// as the GLB holds it.
 #[allow(clippy::too_many_arguments)]
 fn index_faces(
     mut faces: Query<(Entity, &mut Face)>,
@@ -1311,6 +1316,7 @@ fn index_faces(
             surfaces: shaded.into_iter().collect(),
             ready: true,
         };
+        commands.entity(root).insert(Visibility::Inherited);
     }
 }
 

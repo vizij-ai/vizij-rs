@@ -117,6 +117,9 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   (`GltfNode<index>`).
 - A face whose RobotData carries static features (a value in place of an
   animatable) loads; it was refused as bad RobotData.
+- A face comes into view only once it is indexed, posed and shaded. A load
+  or a reload no longer shows one frame of the GLB as it spawned, and during
+  a reload the face being replaced is the only one drawn until the swap.
 
 ## [0.1.0] - 2026-10-02
 
