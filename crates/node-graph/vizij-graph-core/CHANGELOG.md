@@ -4,6 +4,20 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [2.3.0] - 2026-10-10
+
+### Added
+
+- `Spawn` node: spawns a task run of its function (`module` and `function`
+  params) each time its arguments change. The arguments are the `value`
+  param's fields, then the keyed `args` inputs, one per parameter id in
+  `record_keys`, which win for a parameter both name; the first evaluation
+  only records them, so a graph spawns on a change it observes, never on
+  being loaded. The request is queued on `GraphRuntime::spawns` (a
+  `SpawnRequest`: module, function, args by parameter id) for the host to
+  serve after the evaluation — the graph keeps no handle. `out` says whether
+  the evaluation spawned.
+
 ## [2.2.0] - 2026-10-09
 
 ### Added

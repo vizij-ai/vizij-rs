@@ -4,6 +4,18 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [5.2.0] - 2026-10-10
+
+### Added
+
+- `ProcessingGraph` serves the runs a graph's `spawn` nodes request: each
+  one is grafted once the evaluation that asked for it is done, like a
+  SPAWN. Nothing holds its handle, so the run is the graph's own: when it
+  ends, or an exclusive spawn halts it, its fragment is pruned and the keys
+  it held under `arora/tasks/…` are unset — a graph spawning on every change
+  leaves nothing behind in the store. A request that does not graft is
+  logged and the step goes on. Requires vizij-graph-core 2.3.
+
 ## [5.1.0] - 2026-10-10
 
 ### Added

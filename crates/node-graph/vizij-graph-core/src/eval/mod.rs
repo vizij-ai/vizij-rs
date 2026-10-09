@@ -29,7 +29,7 @@ mod value_layout;
 mod variadic;
 
 pub use eval_node::eval_node;
-pub use graph_runtime::{GraphRuntime, StagedInput};
+pub use graph_runtime::{GraphRuntime, SpawnRequest, StagedInput};
 pub use node_function::{NodeFunction, NodeFunctionRegistry, NodeFunctions};
 pub use plan::{fingerprint_spec, PlanCache};
 pub use value_layout::PortValue;
@@ -78,6 +78,7 @@ fn evaluate_all_inner(
     rt.outputs.clear();
     rt.outputs.reserve(spec.nodes.len());
     rt.writes.0.clear();
+    rt.spawns.clear();
     rt.node_states
         .retain(|id, _| spec.nodes.iter().any(|node| node.id == *id));
 

@@ -316,3 +316,97 @@ fn external_function_missing_id_errors() {
         "unexpected error message: {err}"
     );
 }
+
+/// A spawn node whose `shape` arg follows the input at `test/shape`, over a
+/// stated `weight`.
+fn spawn_graph(function: Uuid, shape: Uuid, weight: Uuid) -> GraphSpec {
+    GraphSpec {
+        nodes: vec![
+            NodeSpec {
+                id: "shape".to_string(),
+                kind: NodeType::Input,
+                params: NodeParams {
+                    path: Some(vizij_api_core::TypedPath::parse("test/shape").expect("path")),
+                    value: Some(vocab::text("sil")),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "spawn".to_string(),
+                kind: NodeType::Spawn,
+                params: NodeParams {
+                    function: Some(function),
+                    record_keys: Some(vec![shape.to_string()]),
+                    value: Some(bundle(&[(weight, Value::F32(1.0))])),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![link("shape", "spawn", "args_0")],
+        ..Default::default()
+    }
+    .with_cache()
+}
+
+/// Stage `shape` and evaluate once, returning the runs that evaluation
+/// requested.
+fn spawn_step(rt: &mut GraphRuntime, graph: &GraphSpec, shape: &str) -> Vec<SpawnRequest> {
+    let path = vizij_api_core::TypedPath::parse("test/shape").expect("path");
+    rt.set_input(path, vocab::text(shape), None);
+    evaluate_all(rt, graph).expect("the graph evaluates without a host");
+    rt.spawns.clone()
+}
+
+#[test]
+fn spawn_requests_a_run_each_time_its_args_change() {
+    let (function, shape, weight) = (
+        Uuid::from_u128(0x7771),
+        Uuid::from_u128(0x7772),
+        Uuid::from_u128(0x7773),
+    );
+    let graph = spawn_graph(function, shape, weight);
+    let mut rt = GraphRuntime::default();
+
+    // The first evaluation is the baseline, whatever it reads.
+    assert!(spawn_step(&mut rt, &graph, "aa").is_empty());
+    // Unchanged args spawn nothing, however many evaluations go by.
+    assert!(spawn_step(&mut rt, &graph, "aa").is_empty());
+
+    let spawned = spawn_step(&mut rt, &graph, "oh");
+    assert_eq!(
+        spawned,
+        vec![SpawnRequest {
+            module: None,
+            function,
+            args: vec![(weight, Value::F32(1.0)), (shape, vocab::text("oh"))],
+        }]
+    );
+    assert_eq!(rt.outputs["spawn"]["out"].value, vocab::bool_(true));
+    // The queue holds one evaluation's requests: served, they are gone.
+    assert!(spawn_step(&mut rt, &graph, "oh").is_empty());
+    assert_eq!(rt.outputs["spawn"]["out"].value, vocab::bool_(false));
+    assert_eq!(spawn_step(&mut rt, &graph, "sil").len(), 1);
+}
+
+#[test]
+fn spawn_refuses_an_arg_slot_without_a_parameter_id() {
+    let mut graph = spawn_graph(
+        Uuid::from_u128(0x7771),
+        Uuid::from_u128(0x7772),
+        Uuid::from_u128(0x7773),
+    );
+    graph.nodes[1].params.record_keys = Some(vec!["shape".to_string()]);
+    let graph = graph.with_cache();
+    let mut rt = GraphRuntime::default();
+    let path = vizij_api_core::TypedPath::parse("test/shape").expect("path");
+    rt.set_input(path, vocab::text("aa"), None);
+    let err = evaluate_all(&mut rt, &graph).expect_err("a slot keyed by a name is refused");
+    assert!(
+        err.contains("not a parameter id"),
+        "unexpected error: {err}"
+    );
+}

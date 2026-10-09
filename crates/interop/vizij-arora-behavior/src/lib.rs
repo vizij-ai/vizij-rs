@@ -159,6 +159,12 @@ struct GraphRun {
     /// The function the run implements — what an exclusive spawn halts by.
     function: Uuid,
     status_key: Key,
+    /// The keys a run the graph spawned holds in the store, unset when it
+    /// ends: nothing keeps its handle, so nothing reads them afterwards, and
+    /// a graph spawning on every change would otherwise leave a key set per
+    /// run behind. Empty for a run spawned through the interpreter module,
+    /// whose spawner reads the terminal status off its key.
+    owned_keys: Vec<Key>,
 }
 
 /// The name of the graph's root: the `layers` that runs the main behavior,
@@ -412,12 +418,73 @@ impl ProcessingGraph {
     /// Graft run `task` of `function` — its fragment `diff` — into the
     /// retained graph and index it by its status key. Nothing changes on an
     /// error.
+    /// Graft `call` as a run — what SPAWN does, and what a spawn node's
+    /// request does with `owned`: the graph spawned the run and keeps no
+    /// handle, so the keys it holds are unset when it ends.
+    fn spawn_run(&mut self, call: Call, owned: bool) -> Result<TaskHandle, BehaviorError> {
+        let task = TaskId(Uuid::new_v4());
+        if call.id == run::FUNCTION {
+            let prefix = run::prefix(task);
+            let diff = behavior_graft(task, &prefix, &call)?;
+            let handle = run::handle(task);
+            let owned_keys = if owned {
+                keys_under(&diff, &prefix)
+            } else {
+                Vec::new()
+            };
+            self.graft(task, call.id, handle.status.clone(), diff, owned_keys)?;
+            return Ok(handle);
+        }
+        let module = call
+            .module_id
+            .map(|m| m.to_string())
+            .unwrap_or_else(|| "none".to_string());
+        let prefix = format!("arora/tasks/{module}/{}/{}", call.id, task.0);
+        let status_key = Key::from(format!("{prefix}/status"));
+
+        let (diff, update) = match self.fragments.get(&call.id) {
+            Some(fragment) => {
+                // An exclusive function's live runs yield to the new one:
+                // halted on the next tick, which prunes them with their
+                // terminal status written — the run that takes over is then
+                // the only writer.
+                if fragment.exclusive {
+                    let live: Vec<TaskId> = self
+                        .runs
+                        .iter()
+                        .filter(|(_, run)| run.function == call.id)
+                        .map(|(id, _)| *id)
+                        .collect();
+                    self.pending_halts.extend(live);
+                }
+                fragment_graft(fragment, task, &prefix, &call)?
+            }
+            None => wrapper_graft(task, &prefix, &call)?,
+        };
+        let owned_keys = if owned {
+            keys_under(&diff, &prefix)
+        } else {
+            Vec::new()
+        };
+        self.graft(task, call.id, status_key.clone(), diff, owned_keys)?;
+
+        Ok(TaskHandle {
+            id: task,
+            stop: interpreter_module::encode_halt(task),
+            status: status_key,
+            feedback: vec![Key::from(format!("{prefix}/feedback"))],
+            result: vec![Key::from(format!("{prefix}/result"))],
+            update,
+        })
+    }
+
     fn graft(
         &mut self,
         task: TaskId,
         function: Uuid,
         status_key: Key,
         diff: graph_codec::GraphSpecDiff,
+        owned_keys: Vec<Key>,
     ) -> Result<(), BehaviorError> {
         let graph_diff = graph_codec::spec_diff_to_graph_diff(&diff)
             .map_err(|message| BehaviorError { message })?;
@@ -440,6 +507,7 @@ impl ProcessingGraph {
             GraphRun {
                 function,
                 status_key,
+                owned_keys,
             },
         );
         self.run_order.push(task);
@@ -595,14 +663,35 @@ impl ProcessingGraph {
             let Some(run) = self.runs.remove(&task) else {
                 continue;
             };
+            if run.owned_keys.is_empty() {
+                let mut change = StateChange::new();
+                change
+                    .set
+                    .insert(run.status_key.clone(), Some(task::failure()));
+                store.write(change).map_err(|e| BehaviorError {
+                    message: e.to_string(),
+                })?;
+            }
+            self.retire_run(task, run, store)?;
+        }
+        Ok(())
+    }
+
+    /// Prune an ended run's fragment and, for a run the graph spawned, unset
+    /// the keys it held.
+    fn retire_run(
+        &mut self,
+        task: TaskId,
+        run: GraphRun,
+        store: &dyn DataStore,
+    ) -> Result<(), BehaviorError> {
+        self.prune_run(task)?;
+        if !run.owned_keys.is_empty() {
             let mut change = StateChange::new();
-            change
-                .set
-                .insert(run.status_key.clone(), Some(task::failure()));
+            change.unset.extend(run.owned_keys);
             store.write(change).map_err(|e| BehaviorError {
                 message: e.to_string(),
             })?;
-            self.prune_run(task)?;
         }
         Ok(())
     }
@@ -625,8 +714,8 @@ impl ProcessingGraph {
             .map(|(task, _)| *task)
             .collect();
         for task in ended {
-            if self.runs.remove(&task).is_some() {
-                self.prune_run(task)?;
+            if let Some(run) = self.runs.remove(&task) {
+                self.retire_run(task, run, store)?;
             }
         }
         Ok(())
@@ -719,11 +808,52 @@ impl ProcessingGraph {
             message: e.to_string(),
         })?;
 
+        // The runs the graph's spawn nodes requested, started now that the
+        // evaluation is over. The graph keeps no handle, so the runs are its
+        // own: their keys go when they end. A request that does not graft is
+        // the graph's error, not the step's — the device keeps running.
+        for request in std::mem::take(&mut self.rt.spawns) {
+            let call = Call {
+                module_id: request.module,
+                id: request.function,
+                args: request
+                    .args
+                    .into_iter()
+                    .map(|(id, value)| StructureField {
+                        id,
+                        value: Box::new(value),
+                    })
+                    .collect(),
+            };
+            if let Err(e) = self.spawn_run(call, true) {
+                log::warn!(
+                    "a spawn node's run of {} did not start: {e}",
+                    request.function
+                );
+            }
+        }
+
         // A run whose status just went terminal is done; its fragment leaves
         // the graph.
         self.sweep_terminal_runs(store)?;
         Ok(())
     }
+}
+
+/// The store keys a grafted run reads or writes under its key `prefix` — the
+/// placeholder paths its nodes were rewritten to.
+fn keys_under(diff: &graph_codec::GraphSpecDiff, prefix: &str) -> Vec<Key> {
+    let within = format!("{prefix}/");
+    let mut paths: Vec<String> = diff
+        .upsert_nodes
+        .iter()
+        .filter_map(|node| node.params.path.as_ref())
+        .map(ToString::to_string)
+        .filter(|path| path.starts_with(&within))
+        .collect();
+    paths.sort();
+    paths.dedup();
+    paths.into_iter().map(Key::from).collect()
 }
 
 /// A node of a run's own, outside any fragment: an id under the run's
@@ -1170,49 +1300,7 @@ impl BehaviorInterpreter for ProcessingGraph {
         // `RunPolicy` arbitration lands as visible graph structure later; the
         // policy is accepted and treated as `Concurrent` until then.
         let _ = policy;
-        let task = TaskId(Uuid::new_v4());
-        if call.id == run::FUNCTION {
-            let diff = behavior_graft(task, &run::prefix(task), &call)?;
-            let handle = run::handle(task);
-            self.graft(task, call.id, handle.status.clone(), diff)?;
-            return Ok(handle);
-        }
-        let module = call
-            .module_id
-            .map(|m| m.to_string())
-            .unwrap_or_else(|| "none".to_string());
-        let prefix = format!("arora/tasks/{module}/{}/{}", call.id, task.0);
-        let status_key = Key::from(format!("{prefix}/status"));
-
-        let (diff, update) = match self.fragments.get(&call.id) {
-            Some(fragment) => {
-                // An exclusive function's live runs yield to the new one:
-                // halted on the next tick, which prunes them with their
-                // terminal status written — the run that takes over is then
-                // the only writer.
-                if fragment.exclusive {
-                    let live: Vec<TaskId> = self
-                        .runs
-                        .iter()
-                        .filter(|(_, run)| run.function == call.id)
-                        .map(|(id, _)| *id)
-                        .collect();
-                    self.pending_halts.extend(live);
-                }
-                fragment_graft(fragment, task, &prefix, &call)?
-            }
-            None => wrapper_graft(task, &prefix, &call)?,
-        };
-        self.graft(task, call.id, status_key.clone(), diff)?;
-
-        Ok(TaskHandle {
-            id: task,
-            stop: interpreter_module::encode_halt(task),
-            status: status_key,
-            feedback: vec![Key::from(format!("{prefix}/feedback"))],
-            result: vec![Key::from(format!("{prefix}/result"))],
-            update,
-        })
+        self.spawn_run(call, false)
     }
 
     /// Halt a run — the interpreter module's HALT entry point. Applied on the
@@ -1808,6 +1896,76 @@ mod tests {
         graph.load(own).expect("load");
         graph.tick_store(&store, &mut bridge, 0.016).unwrap();
         assert_eq!(read(&store, "shared/x"), Some(float(2.0)));
+    }
+
+    /// A spawn node starts a run when its argument changes, and the run is the
+    /// graph's: it is grafted after the evaluation that asked for it, advances
+    /// like any run, and when it ends leaves neither nodes nor keys behind —
+    /// no one holds its handle to read them.
+    #[test]
+    fn a_spawn_node_starts_an_owned_run_that_leaves_nothing_behind() {
+        let call = look_at();
+        let parameter = call.args[0].id;
+        let spec = parse_spec(
+            &serde_json::json!({
+                "nodes": [
+                    { "id": "x", "type": "input",
+                      "params": { "path": "cmd/x", "value": 0.0 } },
+                    { "id": "spawn", "type": "spawn",
+                      "params": {
+                          "function": call.id.to_string(),
+                          "module": call.module_id.unwrap().to_string(),
+                          "record_keys": [parameter.to_string()],
+                      } },
+                ],
+                "edges": [
+                    { "from": { "node_id": "x" },
+                      "to": { "node_id": "spawn", "input": "args_0" } },
+                ],
+            })
+            .to_string(),
+        )
+        .expect("the spec parses");
+        let store = SimpleDataStore::new();
+        let mut graph = ProcessingGraph::from_spec(spec).expect("from_spec");
+        // The run answers running once, then succeeds.
+        let mut bridge = RunBridge::new(vec![task::running(), task::success()]);
+
+        graph
+            .tick_store(&store, &mut bridge, 0.016)
+            .expect("baseline tick");
+        assert!(graph.runs.is_empty(), "the first evaluation spawns nothing");
+        let nodes_before = vizij_nodes(&graph);
+
+        store.write(StateChange::set("cmd/x", float(0.5))).unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        let run = graph
+            .runs
+            .values()
+            .next()
+            .expect("the change spawned a run");
+        let status = run.status_key.clone();
+        assert!(!run.owned_keys.is_empty());
+        assert!(run.owned_keys.contains(&status));
+        assert!(
+            bridge.calls.is_empty(),
+            "the run starts after the evaluation"
+        );
+
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read_key(&store, &status), Some(task::running()));
+        assert_eq!(bridge.calls.len(), 1);
+        assert_eq!(bridge.calls[0].id, call.id);
+        assert_eq!(bridge.calls[0].args[0].id, parameter);
+        assert_eq!(*bridge.calls[0].args[0].value, float(0.5));
+
+        // Success: swept, its nodes pruned and its keys unset.
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert!(graph.runs.is_empty());
+        assert_eq!(read_key(&store, &status), None);
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(vizij_nodes(&graph), nodes_before);
+        assert_eq!(bridge.calls.len(), 2, "an ended run is never invoked again");
     }
 
     /// SPAWN grafts a run as graph structure: the fragment is visible through
