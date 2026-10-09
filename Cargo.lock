@@ -8288,9 +8288,9 @@ dependencies = [
 
 [[package]]
 name = "ros2-client-multi-rmw"
-version = "0.13.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56b24a7b1d5cc1fa0fcad16b8896758b397629c1b2a38c9d66147f2003941335"
+checksum = "75ad255e9d38f81d6c2aa02cfb969e424a544510685065ce6f510958fe3080c4"
 dependencies = [
  "async-channel",
  "bstr",

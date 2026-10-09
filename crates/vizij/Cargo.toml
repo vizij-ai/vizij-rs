@@ -215,8 +215,9 @@ vizij-bundle = { path = "../tools/vizij-bundle" }
 # The typed ROS 2 peer of the live action E2E (the semio-ai ros2-client fork;
 # the library imports as `ros2_client`). The same line the bridge speaks: two
 # versions in one build are two crates, and the peer's topics stop typing
-# against the bridge's.
-ros2-client = { package = "ros2-client-multi-rmw", version = "0.13", default-features = false, features = ["jazzy", "dds"] }
+# against the bridge's. 0.13.1 is the floor: before it, `wait_for_subscription`
+# and `wait_for_service` could miss a match under load and wait forever.
+ros2-client = { package = "ros2-client-multi-rmw", version = "0.13.1", default-features = false, features = ["jazzy", "dds"] }
 rand = "0.9"
 # The wire test's client, on the local bridge's WebSocket, and its GET of
 # the control panel.
