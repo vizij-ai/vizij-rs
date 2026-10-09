@@ -74,6 +74,7 @@ pub fn play_viseme_parameters() -> HashMap<Uuid, String> {
     [
         play_viseme::ids::play_viseme::SHAPE,
         play_viseme::ids::play_viseme::WEIGHT,
+        play_viseme::ids::play_viseme::DURATION,
     ]
     .into_iter()
     .zip(skills::PLAY_VISEME_PARAMS)
@@ -109,6 +110,10 @@ mod tests {
             HashMap::from([
                 (play_viseme::ids::play_viseme::SHAPE, "shape".to_string()),
                 (play_viseme::ids::play_viseme::WEIGHT, "weight".to_string()),
+                (
+                    play_viseme::ids::play_viseme::DURATION,
+                    "duration".to_string()
+                ),
             ])
         );
     }

@@ -437,9 +437,9 @@ dependencies = [
 
 [[package]]
 name = "arora-bridge-ros2"
-version = "8.0.0"
+version = "10.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2930fd0b4d5b4676ca2a29ad5546b3afd526e2e8d4c75abc9155fd8eea23dd51"
+checksum = "fc143ff5c55b8dd764f5ad12df5bf73d685662ec2d512b9317d445503298cdea"
 dependencies = [
  "arora-behavior-tree-types",
  "arora-bridge",
@@ -608,9 +608,9 @@ dependencies = [
 
 [[package]]
 name = "arora-msgs-ros2"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49aa53eadc55c127f76c090fb72f2d74fb42ee0b110e834d0760668d6aa727b2"
+checksum = "c00bbb4fd545978fccb6113030dabf4da8d25073f5fc14304bcb0594da67a743"
 dependencies = [
  "arora-types",
  "proc-macro2",
@@ -10484,7 +10484,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-behavior"
-version = "5.3.0"
+version = "5.4.0"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
@@ -10516,7 +10516,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-host"
-version = "6.4.0"
+version = "6.5.0"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -10584,7 +10584,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-graph-core"
-version = "2.3.0"
+version = "2.4.0"
 dependencies = [
  "anyhow",
  "arora-behavior",

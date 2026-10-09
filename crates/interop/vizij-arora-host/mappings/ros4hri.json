@@ -2882,13 +2882,30 @@
       "params": {}
     },
     {
+      "id": "in/viseme/duration",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/duration",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "in/viseme/time",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/time",
+        "value": 0.0
+      }
+    },
+    {
       "id": "viseme/play",
       "type": "spawn",
       "params": {
         "function": "43747a8e-2f6c-42ae-9d14-d440c2195b2f",
         "record_keys": [
           "da9fb9bc-12f7-486b-a65b-7ada44eb15f6",
-          "2055ee33-cdc7-4eb0-a04e-dc49d9314a61"
+          "2055ee33-cdc7-4eb0-a04e-dc49d9314a61",
+          "48249635-6ecd-4aaa-bd5b-ca570dbba3d0"
         ]
       }
     },
@@ -9729,6 +9746,24 @@
       "to": {
         "node_id": "viseme/play",
         "input": "args_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/duration"
+      },
+      "to": {
+        "node_id": "viseme/play",
+        "input": "args_2"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/time"
+      },
+      "to": {
+        "node_id": "viseme/play",
+        "input": "when"
       }
     },
     {

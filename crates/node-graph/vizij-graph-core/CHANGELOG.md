@@ -4,6 +4,14 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [2.4.0] - 2026-10-10
+
+### Added
+
+- `Spawn` takes an optional `when` input: a new value starts a run even when
+  the arguments are unchanged, and it is not passed to the call. An event's
+  time on `when` makes a repeated command a new run.
+
 ## [2.3.0] - 2026-10-10
 
 ### Added

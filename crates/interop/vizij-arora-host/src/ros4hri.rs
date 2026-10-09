@@ -71,6 +71,13 @@ pub const GAZE_FRAME_KEY: &str = "standard/ros4hri/gaze/frame";
 /// ROS4HRI's own (`SIL`, `PP`, `FF`, … `OU`), `0` (`sil`) at rest. The
 /// mapping plays each new code through the `play_viseme` skill.
 pub const VISEME_KEY: &str = "standard/ros4hri/viseme";
+/// Where the streamed viseme falls in the utterance, seconds
+/// (`hri_msgs/Viseme.time`): a new time is a new viseme, even of the same
+/// shape.
+pub const VISEME_TIME_KEY: &str = "standard/ros4hri/viseme/time";
+/// How long the streamed viseme's shape is held, seconds
+/// (`hri_msgs/Viseme.duration`); `0` when the stream gives none.
+pub const VISEME_DURATION_KEY: &str = "standard/ros4hri/viseme/duration";
 
 /// The output key, as a ROS bridge publishes it: the utterance being spoken,
 /// empty at rest — the face's speech state ([`standard::SPEECH`]) relayed to
@@ -455,10 +462,13 @@ fn build(rig_prefix: &str) -> (String, Json) {
         let text = g.text(name);
         shape = g.select(&id("shape"), &is, &text, &shape);
     }
-    // Full weight: the stream names the shape, and its timing is the
-    // stream's. The run, not this graph, writes the lips — so the graph never
-    // competes with a player for them.
+    // Full weight, held as long as the stream says: the stream names the
+    // shape, and its timing is the stream's. A new time is a new viseme, so a
+    // repeated shape plays again. The run, not this graph, writes the lips —
+    // so the graph never competes with a player for them.
     let full = g.constant(1.0);
+    let duration = g.input("in/viseme/duration", VISEME_DURATION_KEY, json!(0.0));
+    let time = g.input("in/viseme/time", VISEME_TIME_KEY, json!(0.0));
     let spawn = g.node(
         "viseme/play",
         "spawn",
@@ -467,11 +477,14 @@ fn build(rig_prefix: &str) -> (String, Json) {
             "record_keys": [
                 play_viseme::ids::play_viseme::SHAPE.to_string(),
                 play_viseme::ids::play_viseme::WEIGHT.to_string(),
+                play_viseme::ids::play_viseme::DURATION.to_string(),
             ],
         }),
     );
     g.edge(&shape, &spawn, "args_0");
     g.edge(&full, &spawn, "args_1");
+    g.edge(&duration, &spawn, "args_2");
+    g.edge(&time, &spawn, "when");
 
     // --- Speech: the face's speech state, relayed as is to the ROS4HRI
     // speech key a bridge publishes. ------------------------------------
@@ -585,7 +598,8 @@ mod tests {
     }
 
     /// The viseme channel writes nothing itself: it spawns play_viseme with
-    /// the shape and a full weight, by the contract's parameter ids.
+    /// the shape, a full weight and the stream's duration, by the contract's
+    /// parameter ids, and a new time spawns again.
     #[test]
     fn the_viseme_channel_spawns_play_viseme() {
         let spec = spec();
@@ -604,8 +618,22 @@ mod tests {
             json!([
                 play_viseme::ids::play_viseme::SHAPE.to_string(),
                 play_viseme::ids::play_viseme::WEIGHT.to_string(),
+                play_viseme::ids::play_viseme::DURATION.to_string(),
             ])
         );
+        let when = spec["edges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["to"]["node_id"] == spawn["id"] && e["to"]["input"] == "when")
+            .expect("a new time spawns again");
+        let source = spec["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["id"] == when["from"]["node_id"])
+            .unwrap();
+        assert_eq!(source["params"]["path"], VISEME_TIME_KEY);
     }
 
     #[test]

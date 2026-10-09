@@ -118,11 +118,25 @@ incumbent ROS4HRI face's dynamics.
 ### The viseme channel is a spawn
 
 The mapping never writes a lip key. Its viseme channel is one `spawn` node
-(a node kind of `vizij-graph-core`): when the
-`viseme` code it reads changes, it asks the interpreter for a `play_viseme`
-run with the code's shape and a full weight, served once the step's
-evaluation is done. `play_viseme` is exclusive, so the new run halts the one
-before and the crossfade carries over from wherever the lips are.
+(a node kind of `vizij-graph-core`). A streamed `hri_msgs/Viseme` lands as
+three keys in one change: its code on `standard/ros4hri/viseme`, its `time`
+(seconds into the utterance) on `standard/ros4hri/viseme/time`, and its
+`duration` (seconds the shape is held) on `standard/ros4hri/viseme/duration`.
+
+When the code or the duration changes, or the time does, the spawn node asks
+the interpreter for a `play_viseme` run, served once the step's evaluation is
+done:
+
+- **The shape** is the one the code indexes, at full weight.
+- **The duration** holds the shape: the weight ramps in over 80 ms, holds
+  until the duration has passed since the start, and ramps out over 150 ms.
+  A duration of 0, which is what a stream that gives none leaves, holds for
+  the default 330 ms.
+- **The time** tells one viseme from the next. Two consecutive `PP` visemes
+  at different times are two runs, so the shape plays again.
+
+`play_viseme` is exclusive, so the new run halts the one before and the
+crossfade carries over from wherever the lips are.
 
 The graph keeps no handle on these runs, so they are the graph's own: when
 one ends, its fragment is pruned and its keys under `arora/tasks/…` are
@@ -130,14 +144,12 @@ unset. A stream spawning about ten runs a second leaves nothing in the store.
 
 What follows from a key-driven channel:
 
-- **A change, not a message, starts a run.** Two consecutive `PP` visemes are
-  one value on the key, so they play as one run. Its envelope (80 ms attack,
-  250 ms hold, 150 ms release) holds the shape for about half a second; a
-  stream holding one shape longer than that sees the mouth close under it.
-- **`time` and `duration` are not used.** The bridge lands the code at the
-  playhead, and `play_viseme` takes only a shape and a weight.
-- **The first code a device reads only sets the baseline.** A face loaded
-  mid-utterance starts lipsyncing at the next change.
+- **A run starts on arrival.** The time identifies a viseme, but the run
+  plays it when it lands, not at that time in the utterance, so a sequence
+  sent ahead of the audio is not played out on its own schedule. A
+  `hri_msgs/Visemes` lands its first viseme only.
+- **The first viseme a device reads only sets the baseline.** A face loaded
+  mid-utterance starts lipsyncing at the next one.
 
 ## Speaking through the standard skill
 

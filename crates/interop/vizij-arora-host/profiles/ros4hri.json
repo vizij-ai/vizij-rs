@@ -57,6 +57,24 @@
       }
     },
     {
+      "path": "standard/ros4hri/viseme/time",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "default_value": {
+        "f32": 0.0
+      }
+    },
+    {
+      "path": "standard/ros4hri/viseme/duration",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "default_value": {
+        "f32": 0.0
+      }
+    },
+    {
       "path": "standard/ros4hri/speech/text",
       "kind": "output",
       "value_type": "str",

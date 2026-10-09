@@ -392,6 +392,49 @@ fn spawn_requests_a_run_each_time_its_args_change() {
     assert_eq!(spawn_step(&mut rt, &graph, "sil").len(), 1);
 }
 
+/// A new `when` makes the same args a new run, and `when` is not an arg.
+#[test]
+fn spawn_requests_a_run_each_time_its_when_changes() {
+    let (function, shape, weight) = (
+        Uuid::from_u128(0x7771),
+        Uuid::from_u128(0x7772),
+        Uuid::from_u128(0x7773),
+    );
+    let mut graph = spawn_graph(function, shape, weight);
+    graph.nodes.push(NodeSpec {
+        id: "when".to_string(),
+        kind: NodeType::Input,
+        params: NodeParams {
+            path: Some(vizij_api_core::TypedPath::parse("test/when").expect("path")),
+            value: Some(Value::F32(0.0)),
+            ..Default::default()
+        },
+        output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
+    });
+    graph.edges.push(link("when", "spawn", "when"));
+    let graph = graph.with_cache();
+    let mut rt = GraphRuntime::default();
+    let when = vizij_api_core::TypedPath::parse("test/when").expect("path");
+    let step = |rt: &mut GraphRuntime, at: f32| {
+        rt.set_input(when.clone(), Value::F32(at), None);
+        spawn_step(rt, &graph, "pp")
+    };
+
+    assert!(step(&mut rt, 0.1).is_empty(), "the baseline");
+    assert!(step(&mut rt, 0.1).is_empty(), "nothing changed");
+    assert_eq!(
+        step(&mut rt, 0.2),
+        vec![SpawnRequest {
+            module: None,
+            function,
+            args: vec![(weight, Value::F32(1.0)), (shape, vocab::text("pp"))],
+        }],
+        "the same shape at a new time is a new run"
+    );
+    assert!(step(&mut rt, 0.2).is_empty());
+}
+
 #[test]
 fn spawn_refuses_an_arg_slot_without_a_parameter_id() {
     let mut graph = spawn_graph(

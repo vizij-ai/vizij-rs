@@ -484,11 +484,12 @@ fn set_arg(args: &mut Vec<(Uuid, Value)>, id: Uuid, value: Value) {
     }
 }
 
-/// Spawn a run of the node's function when its args differ from the last
-/// evaluation's, emitting on `out` whether it did. The args are the `value`
-/// param's fields, then the keyed `args` slots — slot `i` is the parameter
-/// whose id is `record_keys[i]` — which win for a parameter both name. The
-/// first evaluation only records them.
+/// Spawn a run of the node's function when its args, or its `when` input,
+/// differ from the last evaluation's, emitting on `out` whether it did. The
+/// args are the `value` param's fields, then the keyed `args` slots — slot
+/// `i` is the parameter whose id is `record_keys[i]` — which win for a
+/// parameter both name. `when` is not passed to the call: a new value of it
+/// makes the same args a new run. The first evaluation only records them.
 fn eval_spawn(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,
@@ -512,18 +513,24 @@ fn eval_spawn(
         set_arg(&mut args, id, slot.value.clone());
     }
 
+    let when = inputs.get("when").map(|port| port.value.clone());
+
     let changed = match rt.node_states.get_mut(&spec.id) {
         Some(NodeRuntimeState::Spawn(state)) => {
-            let changed = state.args != args;
+            let changed = state.args != args || state.when != when;
             if changed {
                 state.args = args.clone();
+                state.when = when;
             }
             changed
         }
         _ => {
             rt.node_states.insert(
                 spec.id.clone(),
-                NodeRuntimeState::Spawn(SpawnState { args: args.clone() }),
+                NodeRuntimeState::Spawn(SpawnState {
+                    args: args.clone(),
+                    when,
+                }),
             );
             false
         }

@@ -17,6 +17,14 @@
       }
     },
     {
+      "id": "in/duration",
+      "type": "input",
+      "params": {
+        "path": "task/duration",
+        "value": 0.0
+      }
+    },
+    {
       "id": "clock",
       "type": "time",
       "params": {}
@@ -73,11 +81,31 @@
       }
     },
     {
-      "id": "const/0.48",
+      "id": "envelope/given",
+      "type": "greaterthan",
+      "params": {}
+    },
+    {
+      "id": "const/0.33",
       "type": "constant",
       "params": {
-        "value": 0.48
+        "value": 0.33
       }
+    },
+    {
+      "id": "envelope/chosen",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "envelope/held",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "envelope/total",
+      "type": "add",
+      "params": {}
     },
     {
       "id": "envelope/rising",
@@ -974,6 +1002,87 @@
     },
     {
       "from": {
+        "node_id": "in/duration"
+      },
+      "to": {
+        "node_id": "envelope/given",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "envelope/given",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "envelope/given"
+      },
+      "to": {
+        "node_id": "envelope/chosen",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/duration"
+      },
+      "to": {
+        "node_id": "envelope/chosen",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.33"
+      },
+      "to": {
+        "node_id": "envelope/chosen",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "envelope/chosen"
+      },
+      "to": {
+        "node_id": "envelope/held",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.08"
+      },
+      "to": {
+        "node_id": "envelope/held",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "envelope/held"
+      },
+      "to": {
+        "node_id": "envelope/total",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.15"
+      },
+      "to": {
+        "node_id": "envelope/total",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
         "node_id": "envelope/elapsed"
       },
       "to": {
@@ -1019,7 +1128,7 @@
     },
     {
       "from": {
-        "node_id": "const/0.48"
+        "node_id": "envelope/total"
       },
       "to": {
         "node_id": "envelope/remaining",
@@ -2843,7 +2952,7 @@
     },
     {
       "from": {
-        "node_id": "const/0.48"
+        "node_id": "envelope/total"
       },
       "to": {
         "node_id": "lifecycle/closed",

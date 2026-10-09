@@ -1398,11 +1398,6 @@ mod tests {
         }
     }
 
-    /// A play_viseme run drives its shape's weight through the lipsync
-    /// envelope — up within the attack, held, then closed — reports the
-    /// shape as the face's current viseme and as its feedback while it is
-    /// driven, and succeeds once the envelope has closed; the other shapes
-    /// stay at rest.
     /// A viseme a ROS4HRI TTS node streams lands as its code, and the
     /// mapping plays each new code through play_viseme: the shape comes up,
     /// the next one takes over from it, and `sil` lets the lips settle at
@@ -1438,6 +1433,41 @@ mod tests {
         assert_eq!(read_value(&arora, standard::VISEME), Some(text("sil")));
     }
 
+    /// A ROS4HRI viseme is held as long as the stream says, and a repeated
+    /// shape at a new time plays again: two `aa` visemes, the second staged
+    /// after the first has closed, each bring the shape back up.
+    #[test]
+    fn a_ros4hri_viseme_holds_its_duration_and_a_new_time_plays_again() {
+        let mut arora = ros4hri_device();
+        step_for(&mut arora, 0.05);
+        let viseme = |arora: &arora::Arora, time: f32, duration: f32| {
+            stage(arora, ros4hri::VISEME_DURATION_KEY, Value::F32(duration));
+            stage(arora, ros4hri::VISEME_TIME_KEY, Value::F32(time));
+            stage(arora, ros4hri::VISEME_KEY, Value::U8(10));
+        };
+
+        // Held 0.8 s: still up at 0.7 s, where the default envelope (0.33 s
+        // held, 0.15 s release) would have closed.
+        viseme(&arora, 0.0, 0.8);
+        step_for(&mut arora, 0.7);
+        let held = read_f32(&arora, &standard::viseme_path("aa"));
+        assert!(held > 0.8, "aa = {held} within its duration");
+        step_for(&mut arora, 0.6);
+        let closed = read_f32(&arora, &standard::viseme_path("aa"));
+        assert!(closed < 0.1, "aa = {closed} after its duration");
+
+        // The same shape and duration at a new time is a new viseme.
+        viseme(&arora, 1.3, 0.8);
+        step_for(&mut arora, 0.2);
+        let again = read_f32(&arora, &standard::viseme_path("aa"));
+        assert!(again > 0.8, "aa = {again} played again");
+    }
+
+    /// A play_viseme run drives its shape's weight through the lipsync
+    /// envelope — up within the attack, held, then closed — reports the
+    /// shape as the face's current viseme and as its feedback while it is
+    /// driven, and succeeds once the envelope has closed; the other shapes
+    /// stay at rest.
     #[test]
     fn a_play_viseme_run_plays_the_shape_through_its_envelope() {
         use vizij_arora_behavior::task;

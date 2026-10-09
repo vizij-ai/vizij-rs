@@ -4,6 +4,13 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [5.4.0] - 2026-10-10
+
+### Changed
+
+- The play_viseme fragment serves the contract's `duration` parameter as its
+  `task/duration` input. Requires vizij-arora-host 6.5.
+
 ## [5.3.0] - 2026-10-10
 
 ### Added

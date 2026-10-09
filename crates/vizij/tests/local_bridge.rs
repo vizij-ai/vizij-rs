@@ -216,7 +216,7 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
         .iter()
         .map(|param| param["name"].as_str().unwrap())
         .collect();
-    assert_eq!(parameters, ["shape", "weight"], "{play_viseme}");
+    assert_eq!(parameters, ["shape", "weight", "duration"], "{play_viseme}");
 
     // A skill is called by name and answers with its run; the run stops on
     // `halt`, by the id it carried.

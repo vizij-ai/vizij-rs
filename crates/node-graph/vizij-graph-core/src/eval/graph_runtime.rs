@@ -120,12 +120,13 @@ pub struct TaskRunState {
     pub outputs: Option<Value>,
 }
 
-/// State of a [`Spawn`](crate::types::NodeType::Spawn) node: the arguments it
-/// last saw, which the next evaluation compares against to decide whether to
-/// spawn.
+/// State of a [`Spawn`](crate::types::NodeType::Spawn) node: the arguments
+/// and the `when` value it last saw, which the next evaluation compares
+/// against to decide whether to spawn.
 #[derive(Debug, Default)]
 pub struct SpawnState {
     pub args: Vec<(Uuid, Value)>,
+    pub when: Option<Value>,
 }
 
 /// A task run a [`Spawn`](crate::types::NodeType::Spawn) node requested
