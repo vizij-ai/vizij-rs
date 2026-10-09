@@ -1234,6 +1234,41 @@ mod tests {
     /// shape as the face's current viseme and as its feedback while it is
     /// driven, and succeeds once the envelope has closed; the other shapes
     /// stay at rest.
+    /// A viseme a ROS4HRI TTS node streams lands as its code, and the
+    /// mapping plays each new code through play_viseme: the shape comes up,
+    /// the next one takes over from it, and `sil` lets the lips settle at
+    /// rest — the face's viseme state following throughout.
+    #[test]
+    fn a_ros4hri_viseme_stream_plays_through_play_viseme() {
+        let mut arora = ros4hri_device();
+        step_for(&mut arora, 0.05);
+
+        // 10 is `aa`: the code indexes the standard's shapes.
+        stage(&arora, ros4hri::VISEME_KEY, Value::U8(10));
+        step_for(&mut arora, 0.2);
+        let aa = read_f32(&arora, &standard::viseme_path("aa"));
+        assert!(aa > 0.8, "aa = {aa}");
+        assert!(read_f32(&arora, &standard::viseme_path("oh")) < 0.01);
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("aa")));
+
+        // 13 is `oh`: it takes over, and `aa` fades out under it.
+        stage(&arora, ros4hri::VISEME_KEY, Value::U8(13));
+        step_for(&mut arora, 0.2);
+        let oh = read_f32(&arora, &standard::viseme_path("oh"));
+        assert!(oh > 0.8, "oh = {oh}");
+        assert!(read_f32(&arora, &standard::viseme_path("aa")) < 0.02);
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("oh")));
+
+        // `sil` drives no shape: every weight settles back to rest.
+        stage(&arora, ros4hri::VISEME_KEY, Value::U8(0));
+        step_for(&mut arora, 0.6);
+        for shape in standard::VISEME_SHAPES {
+            let weight = read_f32(&arora, &standard::viseme_path(shape));
+            assert!(weight < 0.02, "{shape} = {weight} at rest");
+        }
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("sil")));
+    }
+
     #[test]
     fn a_play_viseme_run_plays_the_shape_through_its_envelope() {
         use vizij_arora_behavior::task;

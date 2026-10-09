@@ -9,8 +9,9 @@
 //! control paths; what an expression or a viseme *looks like* stays with the
 //! face (its rig and adaptation graphs). Per channel:
 //!
-//! - **Expression** — a non-empty `expression/name` one-hots the named weight;
-//!   otherwise `valence`/`arousal` blend the named weights by proximity to
+//! - **Expression** — a non-empty `expression/name` selects the named
+//!   expression at the commanded `arousal` as its intensity; otherwise
+//!   `valence`/`arousal` blend the named weights by proximity to
 //!   each expression's circumplex anchor. Weights are smoothed and written to
 //!   `standard/vizij/expression/<name>` for ROS4HRI's names
 //!   ([`ROS4HRI_EXPRESSION_NAMES`]). The standard's expressions beyond them
@@ -28,6 +29,13 @@
 //!   commanded closed or the face is asleep. The standard's
 //!   `standard/vizij/blink` is not written: that key is for a caller's
 //!   blinks, which the face layers over these lids.
+//! - **Viseme** — `viseme`, the ROS4HRI code of the lip shape at the audio
+//!   playhead, plays through the `play_viseme` skill: each new code spawns a
+//!   run of that shape at full weight, which takes over from the run before
+//!   it. The lips are a player's, never this graph's: a run writes the
+//!   face's viseme weights and state, so a stream and the device's own `say`
+//!   arbitrate as players do, and `sil` is a run that drives no shape — the
+//!   lips settle at rest.
 //! - **Speech** — the other direction: the utterance a say run is speaking
 //!   (`standard/vizij/speech`, the face's speech state) is relayed as is to
 //!   `speech/text`, the ROS4HRI speech state a bridge publishes for
@@ -43,7 +51,8 @@
 use serde_json::{json, Value as Json};
 
 use crate::graph_builder::GraphBuilder;
-use crate::standard::{self, FACE_CONTROLS, ROS4HRI_EXPRESSION_NAMES};
+use crate::skills::{play_viseme, SILENCE_VISEME};
+use crate::standard::{self, FACE_CONTROLS, ROS4HRI_EXPRESSION_NAMES, VISEME_SHAPES};
 
 /// Source id of the composed mapping (node ids get `ros4hri::` prefixes).
 pub const ROS4HRI_SOURCE_ID: &str = "ros4hri";
@@ -59,10 +68,8 @@ pub const GAZE_TARGET_KEY: &str = "standard/ros4hri/gaze/target";
 pub const GAZE_FRAME_KEY: &str = "standard/ros4hri/gaze/frame";
 /// The lip shape at the audio playhead, as ROS4HRI's `hri_msgs/Viseme.value`
 /// — an index into [`crate::standard::VISEME_SHAPES`], whose order is
-/// ROS4HRI's own (`SIL`, `PP`, `FF`, … `OU`), `0` (`sil`) at rest. Part of
-/// the interface a bridge writes; no channel of this mapping reads it yet,
-/// because the face's lips belong to whichever viseme player is running and
-/// a mapping is not one (VIZ-162).
+/// ROS4HRI's own (`SIL`, `PP`, `FF`, … `OU`), `0` (`sil`) at rest. The
+/// mapping plays each new code through the `play_viseme` skill.
 pub const VISEME_KEY: &str = "standard/ros4hri/viseme";
 
 /// The output key, as a ROS bridge publishes it: the utterance being spoken,
@@ -430,6 +437,42 @@ fn build(rig_prefix: &str) -> (String, Json) {
         g.output(&out_id(path), &lid, out(path.to_string()));
     }
 
+    // --- Viseme: each new code spawns a play_viseme run of its shape -------
+    // The code indexes the standard's shapes: ROS4HRI numbers them in the
+    // order the 15-shape set lists them, so the two tables are one (a test
+    // holds them equal), and a code past the end rests like `sil`.
+    let code = g.input("in/viseme", VISEME_KEY, json!(0.0));
+    let mut shape = g.text(SILENCE_VISEME);
+    for (index, name) in VISEME_SHAPES.iter().enumerate().skip(1) {
+        let id = |step: &str| format!("viseme/{name}/{step}");
+        let wanted = g.constant(index as f64);
+        let is = g.op(
+            &id("is"),
+            "equal",
+            json!({}),
+            &[("lhs", &code), ("rhs", &wanted)],
+        );
+        let text = g.text(name);
+        shape = g.select(&id("shape"), &is, &text, &shape);
+    }
+    // Full weight: the stream names the shape, and its timing is the
+    // stream's. The run, not this graph, writes the lips — so the graph never
+    // competes with a player for them.
+    let full = g.constant(1.0);
+    let spawn = g.node(
+        "viseme/play",
+        "spawn",
+        json!({
+            "function": play_viseme::ids::play_viseme::FUNCTION.to_string(),
+            "record_keys": [
+                play_viseme::ids::play_viseme::SHAPE.to_string(),
+                play_viseme::ids::play_viseme::WEIGHT.to_string(),
+            ],
+        }),
+    );
+    g.edge(&shape, &spawn, "args_0");
+    g.edge(&full, &spawn, "args_1");
+
     // --- Speech: the face's speech state, relayed as is to the ROS4HRI
     // speech key a bridge publishes. ------------------------------------
     let speech = g.input("in/speech", &out(standard::SPEECH.to_string()), json!(""));
@@ -521,6 +564,48 @@ mod tests {
                 _ => {}
             }
         }
+    }
+
+    /// ROS4HRI numbers the visemes in the order the 15-shape set lists them,
+    /// so a code a TTS node publishes indexes the standard's shapes directly
+    /// and the mapping keeps no code table of its own.
+    #[test]
+    fn ros4hri_viseme_codes_index_the_standard_shapes() {
+        let ros4hri = [
+            "SIL", "PP", "FF", "TH", "DD", "KK", "CH", "SS", "NN", "RR", "AA", "E", "IH", "OH",
+            "OU",
+        ];
+        assert_eq!(VISEME_SHAPES.len(), ros4hri.len());
+        for (shape, code_name) in VISEME_SHAPES.iter().zip(ros4hri) {
+            assert!(
+                shape.eq_ignore_ascii_case(code_name),
+                "{shape} vs {code_name}"
+            );
+        }
+    }
+
+    /// The viseme channel writes nothing itself: it spawns play_viseme with
+    /// the shape and a full weight, by the contract's parameter ids.
+    #[test]
+    fn the_viseme_channel_spawns_play_viseme() {
+        let spec = spec();
+        let spawn = spec["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["type"] == "spawn")
+            .expect("the mapping holds a spawn node");
+        assert_eq!(
+            spawn["params"]["function"],
+            play_viseme::ids::play_viseme::FUNCTION.to_string()
+        );
+        assert_eq!(
+            spawn["params"]["record_keys"],
+            json!([
+                play_viseme::ids::play_viseme::SHAPE.to_string(),
+                play_viseme::ids::play_viseme::WEIGHT.to_string(),
+            ])
+        );
     }
 
     #[test]
