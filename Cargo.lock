@@ -374,9 +374,9 @@ dependencies = [
 
 [[package]]
 name = "arora-behavior"
-version = "9.1.0"
+version = "9.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "037444eae49bac2032f0e752839b84bcb7a820e76a3da07bd9a741349927dd16"
+checksum = "911028415596de5229e56b9fa300d8ee4880e5e910cc53e7b8870f4ad6df4219"
 dependencies = [
  "arora-types",
  "semver",
