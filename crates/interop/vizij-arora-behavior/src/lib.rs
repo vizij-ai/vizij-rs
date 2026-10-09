@@ -273,6 +273,10 @@ pub struct ProcessingGraph {
     /// a grafted fragment in [`graph`](Self::graph); this index holds its
     /// pruning coordinates and status key.
     runs: HashMap<TaskId, GraphRun>,
+    /// The live runs in the order they were spawned — the order their nodes
+    /// take after the main behavior's, so a run writes after the behavior
+    /// and a later run after an earlier one.
+    run_order: Vec<TaskId>,
     /// Registered skill fragments by function id: what SPAWN grafts for these
     /// functions instead of the generic module-call wrapper.
     fragments: HashMap<Uuid, TaskFragment>,
@@ -353,6 +357,7 @@ impl ProcessingGraph {
             inputs: Vec::new(),
             function_modules: HashMap::new(),
             runs: HashMap::new(),
+            run_order: Vec::new(),
             fragments: HashMap::new(),
             pending_halts: Vec::new(),
         })
@@ -382,9 +387,9 @@ impl ProcessingGraph {
         status_key: Key,
         diff: graph_codec::GraphSpecDiff,
     ) -> Result<(), BehaviorError> {
-        let diff = graph_codec::spec_diff_to_graph_diff(&diff)
+        let graph_diff = graph_codec::spec_diff_to_graph_diff(&diff)
             .map_err(|message| BehaviorError { message })?;
-        self.graph.apply(diff).map_err(|e| BehaviorError {
+        self.graph.apply(graph_diff).map_err(|e| BehaviorError {
             message: format!("graft run: {e}"),
         })?;
         self.runs.insert(
@@ -394,8 +399,90 @@ impl ProcessingGraph {
                 status_key,
             },
         );
-        self.dirty = true;
+        self.run_order.push(task);
+        if !self.dirty {
+            self.lower_grafted_run(diff);
+        }
         Ok(())
+    }
+
+    /// Lower a grafted run in place rather than the whole graph again. The
+    /// run is a component of its own — its edges join its nodes only, and it
+    /// meets the rest of the graph through store paths — so its nodes go
+    /// after everything lowered so far and its plan after theirs, which is
+    /// where a full lowering puts them too ([`order_runs_last`](Self::order_runs_last)).
+    /// Whatever is not a separate component is left to a full lowering.
+    fn lower_grafted_run(&mut self, diff: graph_codec::GraphSpecDiff) {
+        if !diff.remove_nodes.is_empty() || !diff.remove_edges.is_empty() {
+            self.dirty = true;
+            return;
+        }
+        let first = self.spec.nodes.len();
+        let mut nodes = diff.upsert_nodes;
+        nodes.sort_by(|a, b| a.id.cmp(&b.id));
+        self.spec.nodes.extend(nodes);
+        self.spec.edges.extend(diff.upsert_edges);
+        self.relowered();
+        match self.rt.plan.append_component(&self.spec, first) {
+            Ok(()) => self.inputs = input_paths(&self.spec),
+            Err(_) => self.dirty = true,
+        }
+    }
+
+    /// Take a pruned run's nodes out of the lowered graph and its plan in
+    /// place — nothing else read them, being a component of its own. Left to
+    /// a full lowering when they were not.
+    fn lower_pruned_run(&mut self, task: TaskId) {
+        let prefix = run_node_prefix(task);
+        let removed: Vec<usize> = self
+            .spec
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| node.id.starts_with(&prefix))
+            .map(|(idx, _)| idx)
+            .collect();
+        if removed.is_empty() {
+            return;
+        }
+        let removed_ids: HashSet<String> = removed
+            .iter()
+            .map(|&idx| self.spec.nodes[idx].id.clone())
+            .collect();
+        self.spec
+            .nodes
+            .retain(|node| !removed_ids.contains(&node.id));
+        self.spec.edges.retain(|edge| {
+            !removed_ids.contains(&edge.from.node_id) && !removed_ids.contains(&edge.to.node_id)
+        });
+        self.relowered();
+        match self.rt.plan.remove_nodes(&self.spec, &removed) {
+            Ok(()) => self.inputs = input_paths(&self.spec),
+            Err(_) => self.dirty = true,
+        }
+    }
+
+    /// A lowered spec changed in place: a new version for the plan to serve.
+    /// Its fingerprint is not recomputed — the plan is keyed by version —
+    /// and is cleared rather than left stale.
+    fn relowered(&mut self) {
+        self.spec.version += 1;
+        self.spec.fingerprint = 0;
+    }
+
+    /// Order a decoded spec's nodes as the precedence the plan follows —
+    /// the main behavior's first, then each live run's in spawn order — each
+    /// group keeping the decoded order. The plan runs a later-listed
+    /// component after the earlier ones, so a run writes after the behavior,
+    /// and a later run after an earlier one.
+    fn order_runs_last(&self, spec: &mut GraphSpec) {
+        let prefixes: Vec<String> = self.run_order.iter().map(|t| run_node_prefix(*t)).collect();
+        spec.nodes.sort_by_cached_key(|node| {
+            prefixes
+                .iter()
+                .position(|prefix| node.id.starts_with(prefix.as_str()))
+                .map_or(0, |rank| rank + 1)
+        });
     }
 
     /// The ids of the retained graph's nodes that belong to run `task` —
@@ -426,7 +513,10 @@ impl ProcessingGraph {
         self.graph.apply(diff).map_err(|e| BehaviorError {
             message: format!("prune run: {e}"),
         })?;
-        self.dirty = true;
+        self.run_order.retain(|live| *live != task);
+        if !self.dirty {
+            self.lower_pruned_run(task);
+        }
         Ok(())
     }
 
@@ -483,6 +573,7 @@ impl ProcessingGraph {
     fn lower(&mut self) -> Result<(), BehaviorError> {
         let mut spec =
             graph_codec::decode(&self.graph).map_err(|message| BehaviorError { message })?;
+        self.order_runs_last(&mut spec);
         self.inputs = input_paths(&spec);
         // Carry the version forward before re-caching. A freshly decoded spec
         // restarts at version 0 (→ 1 after `with_cache`); bumping from the
@@ -1371,6 +1462,145 @@ mod tests {
             .into_iter()
             .next()
             .flatten()
+    }
+
+    /// A fragment that keeps running and writes `value` to `shared/x`.
+    fn writer_fragment(value: f32) -> TaskFragment {
+        let spec = json!({
+            "nodes": [
+                { "id": "v", "type": "constant", "params": { "value": float(value) } },
+                { "id": "out", "type": "output", "params": { "path": "shared/x" } },
+                { "id": "s", "type": "constant", "params": { "value": task::running() } },
+                { "id": "status", "type": "output", "params": { "path": "task/status" } },
+            ],
+            "edges": [
+                { "from": { "node_id": "v" }, "to": { "node_id": "out", "input": "in" } },
+                { "from": { "node_id": "s" }, "to": { "node_id": "status", "input": "in" } },
+            ],
+        });
+        TaskFragment::parse(&spec.to_string(), HashMap::new()).expect("the fragment parses")
+    }
+
+    const EARLY: Uuid = Uuid::from_u128(0xea71);
+    const LATE: Uuid = Uuid::from_u128(0x1a7e);
+
+    /// The main behavior writes 1.0 to `shared/x`; the `EARLY` and `LATE`
+    /// runs write 2.0 and 3.0 to it.
+    fn shared_writers() -> ProcessingGraph {
+        let behavior = parse_spec(
+            &json!({
+                "nodes": [
+                    { "id": "v", "type": "constant", "params": { "value": float(1.0) } },
+                    { "id": "out", "type": "output", "params": { "path": "shared/x" } },
+                ],
+                "edges": [
+                    { "from": { "node_id": "v" }, "to": { "node_id": "out", "input": "in" } },
+                ],
+            })
+            .to_string(),
+        )
+        .expect("the behavior parses");
+        let mut graph = ProcessingGraph::from_spec(behavior).expect("from_spec");
+        graph.set_task_fragment(EARLY, writer_fragment(2.0));
+        graph.set_task_fragment(LATE, writer_fragment(3.0));
+        graph
+    }
+
+    fn run_of(function: Uuid) -> Call {
+        Call {
+            module_id: None,
+            id: function,
+            args: Vec::new(),
+        }
+    }
+
+    /// Where a run and the main behavior write one path, the run wins, and a
+    /// later run wins over an earlier one — whether the runs were lowered in
+    /// place or the whole graph was lowered again.
+    #[test]
+    fn a_later_run_writes_after_the_behavior_and_earlier_runs() {
+        let store = SimpleDataStore::new();
+        let mut bridge = RunBridge::new(Vec::new());
+        let mut graph = shared_writers();
+        let tick = |graph: &mut ProcessingGraph, bridge: &mut RunBridge| {
+            graph.tick_store(&store, bridge, 0.016).expect("tick");
+            read(&store, "shared/x")
+        };
+
+        assert_eq!(tick(&mut graph, &mut bridge), Some(float(1.0)));
+        let early = graph.spawn(run_of(EARLY), RunPolicy::Concurrent).unwrap();
+        assert_eq!(tick(&mut graph, &mut bridge), Some(float(2.0)));
+        graph.spawn(run_of(LATE), RunPolicy::Concurrent).unwrap();
+        assert_eq!(tick(&mut graph, &mut bridge), Some(float(3.0)));
+
+        // A full lowering keeps the precedence.
+        graph.dirty = true;
+        assert_eq!(tick(&mut graph, &mut bridge), Some(float(3.0)));
+        // With the early run gone, the late one still writes last.
+        graph.halt(early.id).unwrap();
+        assert_eq!(tick(&mut graph, &mut bridge), Some(float(3.0)));
+    }
+
+    /// The order a plan follows and what it binds, in comparable form.
+    fn lowered(graph: &ProcessingGraph) -> Vec<String> {
+        let mut out: Vec<String> = graph
+            .spec
+            .nodes
+            .iter()
+            .map(|n| format!("node {}", n.id))
+            .collect();
+        let order: Vec<&str> = graph
+            .rt
+            .plan
+            .order
+            .iter()
+            .map(|&idx| graph.spec.nodes[idx].id.as_str())
+            .collect();
+        out.push(format!("order {order:?}"));
+        let mut edges: Vec<String> = graph
+            .spec
+            .edges
+            .iter()
+            .map(|e| {
+                format!(
+                    "edge {}.{} -> {}.{}",
+                    e.from.node_id, e.from.output, e.to.node_id, e.to.input
+                )
+            })
+            .collect();
+        edges.sort();
+        out.extend(edges);
+        let mut inputs: Vec<String> = graph.inputs.iter().map(|p| format!("input {p}")).collect();
+        inputs.sort();
+        out.extend(inputs);
+        out
+    }
+
+    /// Lowering runs in place as they come and go gives exactly what
+    /// lowering the whole graph again gives.
+    #[test]
+    fn lowering_runs_in_place_matches_a_full_lowering() {
+        let store = SimpleDataStore::new();
+        let mut bridge = RunBridge::new(Vec::new());
+        let mut graph = shared_writers();
+        graph.tick_store(&store, &mut bridge, 0.016).unwrap();
+
+        let first = graph.spawn(run_of(EARLY), RunPolicy::Concurrent).unwrap();
+        graph.spawn(run_of(LATE), RunPolicy::Concurrent).unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).unwrap();
+        graph.halt(first.id).unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).unwrap();
+        graph.spawn(run_of(EARLY), RunPolicy::Concurrent).unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).unwrap();
+        // The runs were lowered in place: the fingerprint is the in-place
+        // path's mark, a full lowering recomputing it.
+        assert_eq!(graph.spec.fingerprint, 0);
+        let in_place = lowered(&graph);
+
+        graph.dirty = true;
+        graph.lower().unwrap();
+        graph.rt.plan.ensure_versioned(&graph.spec).unwrap();
+        assert_eq!(lowered(&graph), in_place);
     }
 
     /// SPAWN grafts a run as graph structure: the fragment is visible through

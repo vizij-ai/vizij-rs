@@ -99,6 +99,150 @@ impl PlanCache {
         }
     }
 
+    /// Extend the plan to `spec`, whose nodes from `first` on form a component
+    /// the earlier nodes neither feed nor read — what grafting a run adds.
+    /// The plan for the nodes before `first` stands; the component's own is
+    /// built from its nodes and edges and placed after it, which is the
+    /// order a rebuild gives, since [`topo_order`](crate::topo::topo_order)
+    /// runs a later-listed component after all of the earlier ones. The plan
+    /// then serves `spec`'s version.
+    ///
+    /// Errors, leaving the plan unchanged, when the plan does not cover
+    /// exactly the nodes before `first` or an edge crosses `first`: the
+    /// caller rebuilds.
+    pub fn append_component(&mut self, spec: &GraphSpec, first: usize) -> Result<(), String> {
+        if self.layouts.len() != first || first > spec.nodes.len() {
+            return Err(format!(
+                "the plan covers {} nodes, not the {first} before the component",
+                self.layouts.len()
+            ));
+        }
+        let component_ids: HashSet<&str> = spec.nodes[first..]
+            .iter()
+            .map(|node| node.id.as_str())
+            .collect();
+        let mut edges = Vec::new();
+        for edge in &spec.edges {
+            let from = component_ids.contains(edge.from.node_id.as_str());
+            let to = component_ids.contains(edge.to.node_id.as_str());
+            match (from, to) {
+                (true, true) => edges.push(edge.clone()),
+                (false, false) => {}
+                _ => {
+                    return Err(format!(
+                        "edge {} -> {} crosses into the component",
+                        edge.from.node_id, edge.to.node_id
+                    ))
+                }
+            }
+        }
+        let component = GraphSpec {
+            nodes: spec.nodes[first..].to_vec(),
+            edges,
+            ..GraphSpec::default()
+        };
+        let mut plan = PlanCache::default();
+        plan.rebuild(&component, 0, 0)?;
+
+        self.order
+            .extend(plan.order.into_iter().map(|idx| idx + first));
+        for mut bindings in plan.input_bindings {
+            for binding in &mut bindings {
+                if let Some(source) = &mut binding.source {
+                    source.node_idx += first;
+                }
+            }
+            self.input_bindings.push(bindings);
+        }
+        self.layouts.extend(plan.layouts);
+        self.node_index.extend(
+            plan.node_index
+                .into_iter()
+                .map(|(id, idx)| (id, idx + first)),
+        );
+        self.fingerprint = spec.fingerprint;
+        self.version = spec.version;
+        Ok(())
+    }
+
+    /// Shrink the plan to `spec`: the spec it served minus the nodes at
+    /// `removed` (indices into that spec), which no remaining node reads —
+    /// what pruning a run takes out. Nothing is rebuilt: the remaining
+    /// layouts, bindings and order keep theirs, their indices closed up over
+    /// the gap. The plan then serves `spec`'s version.
+    ///
+    /// Errors, leaving the plan unchanged, when the counts do not add up or
+    /// a remaining node reads a removed one: the caller rebuilds.
+    pub fn remove_nodes(&mut self, spec: &GraphSpec, removed: &[usize]) -> Result<(), String> {
+        let before = self.layouts.len();
+        let mut gone = vec![false; before];
+        for &idx in removed {
+            match gone.get_mut(idx) {
+                Some(slot) if !*slot => *slot = true,
+                _ => return Err(format!("{idx} is not a node the plan covers, once")),
+            }
+        }
+        if before != spec.nodes.len() + removed.len() {
+            return Err(format!(
+                "the plan covers {before} nodes, not {} kept and {} removed",
+                spec.nodes.len(),
+                removed.len()
+            ));
+        }
+        let mut remap: Vec<Option<usize>> = Vec::with_capacity(before);
+        let mut next = 0;
+        for gone in gone {
+            if gone {
+                remap.push(None);
+            } else {
+                remap.push(Some(next));
+                next += 1;
+            }
+        }
+        let reads_removed = self
+            .input_bindings
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| remap[*idx].is_some())
+            .flat_map(|(_, bindings)| bindings)
+            .filter_map(|binding| binding.source.as_ref())
+            .any(|source| remap[source.node_idx].is_none());
+        if reads_removed {
+            return Err("a remaining node reads a removed one".into());
+        }
+
+        let kept = |idx: &usize| remap[*idx].is_some();
+        let layouts = std::mem::take(&mut self.layouts);
+        self.layouts = layouts
+            .into_iter()
+            .enumerate()
+            .filter(|(idx, _)| kept(idx))
+            .map(|(_, layout)| layout)
+            .collect();
+        let input_bindings = std::mem::take(&mut self.input_bindings);
+        self.input_bindings = input_bindings
+            .into_iter()
+            .enumerate()
+            .filter(|(idx, _)| kept(idx))
+            .map(|(_, mut bindings)| {
+                for binding in &mut bindings {
+                    if let Some(source) = &mut binding.source {
+                        source.node_idx = remap[source.node_idx].expect("checked above");
+                    }
+                }
+                bindings
+            })
+            .collect();
+        self.order = self.order.iter().filter_map(|&idx| remap[idx]).collect();
+        self.node_index.retain(|_, idx| remap[*idx].is_some());
+        for idx in self.node_index.values_mut() {
+            *idx = remap[*idx].expect("retained above");
+        }
+        self.fingerprint = spec.fingerprint;
+        self.version = spec.version;
+        Ok(())
+    }
+
     /// Version-aware fast path: compare caller-managed version for O(1) steady-state checks.
     pub fn ensure_versioned(&mut self, spec: &GraphSpec) -> Result<(), String> {
         debug_assert!(
@@ -491,4 +635,162 @@ pub fn fingerprint_spec(spec: &GraphSpec) -> u64 {
     }
 
     hasher.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, NodeParams, NodeSpec};
+    use vizij_api_core::value::float;
+
+    fn constant(id: &str) -> NodeSpec {
+        NodeSpec {
+            id: id.into(),
+            kind: NodeType::Constant,
+            params: NodeParams {
+                value: Some(float(1.0)),
+                ..Default::default()
+            },
+            output_shapes: Default::default(),
+            input_defaults: Default::default(),
+        }
+    }
+
+    fn add(id: &str) -> NodeSpec {
+        NodeSpec {
+            kind: NodeType::Add,
+            params: NodeParams::default(),
+            ..constant(id)
+        }
+    }
+
+    fn edge(from: &str, to: &str, input: &str) -> EdgeSpec {
+        EdgeSpec {
+            from: EdgeOutputEndpoint {
+                node_id: from.into(),
+                output: "out".into(),
+            },
+            to: EdgeInputEndpoint {
+                node_id: to.into(),
+                input: input.into(),
+            },
+            selector: None,
+        }
+    }
+
+    /// A component of `prefix`: two constants summed.
+    fn component(prefix: &str) -> (Vec<NodeSpec>, Vec<EdgeSpec>) {
+        let (a, b, sum) = (
+            format!("{prefix}/a"),
+            format!("{prefix}/b"),
+            format!("{prefix}/sum"),
+        );
+        (
+            vec![constant(&a), constant(&b), add(&sum)],
+            vec![edge(&a, &sum, "operand_0"), edge(&b, &sum, "operand_1")],
+        )
+    }
+
+    fn spec_of(parts: &[(Vec<NodeSpec>, Vec<EdgeSpec>)]) -> GraphSpec {
+        GraphSpec {
+            nodes: parts.iter().flat_map(|(n, _)| n.clone()).collect(),
+            edges: parts.iter().flat_map(|(_, e)| e.clone()).collect(),
+            ..GraphSpec::default()
+        }
+        .with_cache()
+    }
+
+    /// Everything a plan says, in comparable form.
+    fn shape(plan: &PlanCache) -> Vec<String> {
+        let mut index: Vec<String> = plan
+            .node_index
+            .iter()
+            .map(|(id, idx)| format!("index {id}={idx}"))
+            .collect();
+        index.sort();
+        let mut out = vec![format!("order {:?}", plan.order)];
+        out.extend(index);
+        for (idx, layout) in plan.layouts.iter().enumerate() {
+            out.push(format!(
+                "layout {idx}: in {:?} out {:?}",
+                layout.inputs.slots, layout.outputs.slots
+            ));
+        }
+        for (idx, bindings) in plan.input_bindings.iter().enumerate() {
+            for binding in bindings {
+                out.push(format!(
+                    "binding {idx}: {:?} default {}",
+                    binding
+                        .source
+                        .as_ref()
+                        .map(|s| (s.node_idx, s.slot, s.output_name.clone())),
+                    binding.default.is_some()
+                ));
+            }
+        }
+        out
+    }
+
+    fn rebuilt(spec: &GraphSpec) -> PlanCache {
+        let mut plan = PlanCache::default();
+        plan.ensure_versioned(spec).expect("the spec plans");
+        plan
+    }
+
+    /// Appending a component gives the plan a rebuild gives, and serves the
+    /// spec's version without rebuilding.
+    #[test]
+    fn appending_a_component_matches_a_rebuild() {
+        let base = spec_of(&[component("base"), component("more")]);
+        let mut plan = rebuilt(&base);
+
+        let mut grown = spec_of(&[component("base"), component("more"), component("run")]);
+        grown.version = base.version + 1;
+        plan.append_component(&grown, base.nodes.len())
+            .expect("the run is a component");
+        assert_eq!(shape(&plan), shape(&rebuilt(&grown)));
+        assert!(plan.ensure_versioned(&grown).is_ok());
+        assert_eq!(plan.version, grown.version);
+    }
+
+    /// Removing a component from the middle gives the plan a rebuild of what
+    /// remains gives.
+    #[test]
+    fn removing_a_component_matches_a_rebuild() {
+        let full = spec_of(&[component("base"), component("run1"), component("run2")]);
+        let mut plan = rebuilt(&full);
+
+        let mut kept = spec_of(&[component("base"), component("run2")]);
+        kept.version = full.version + 1;
+        plan.remove_nodes(&kept, &[3, 4, 5])
+            .expect("run1 is read by nothing");
+        assert_eq!(shape(&plan), shape(&rebuilt(&kept)));
+        assert_eq!(plan.version, kept.version);
+    }
+
+    /// Anything that is not a separate component is refused, the plan
+    /// untouched: the caller rebuilds.
+    #[test]
+    fn a_crossing_edge_is_refused_and_the_plan_kept() {
+        let base = spec_of(&[component("base")]);
+        let mut plan = rebuilt(&base);
+        let before = shape(&plan);
+
+        let (mut nodes, mut edges) = component("run");
+        nodes.push(add("run/reads_base"));
+        edges.push(edge("base/sum", "run/reads_base", "operand_0"));
+        let crossing = spec_of(&[component("base"), (nodes, edges)]);
+        assert!(plan.append_component(&crossing, base.nodes.len()).is_err());
+        assert_eq!(shape(&plan), before);
+
+        // A remaining node reading a removed one blocks the removal.
+        let full = spec_of(&[component("base")]);
+        let mut plan = rebuilt(&full);
+        let kept = GraphSpec {
+            nodes: vec![full.nodes[2].clone()],
+            ..GraphSpec::default()
+        };
+        assert!(plan.remove_nodes(&kept, &[0, 1]).is_err());
+        assert_eq!(shape(&plan), shape(&rebuilt(&full)));
+    }
 }

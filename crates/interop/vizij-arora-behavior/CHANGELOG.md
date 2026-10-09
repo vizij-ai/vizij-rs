@@ -4,6 +4,20 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [5.0.1] - 2026-10-09
+
+### Fixed
+
+- A task run writes after the main behavior, and a later run after an
+  earlier one: where they write one path, the run's value stands. Lowering
+  orders the nodes that way — the behavior's, then each live run's in spawn
+  order — where the winner used to vary from process to process.
+- Grafting or pruning a run no longer lowers and re-plans the whole graph.
+  A run is a component of its own, so its nodes and plan are added after the
+  rest, or taken out, in place; anything else still lowers in full. In a
+  face device that is about 30 M instructions less per run, roughly a third
+  of what a run cost. Requires vizij-graph-core 2.2.
+
 ## [5.0.0] - 2026-10-06
 
 ### Changed
