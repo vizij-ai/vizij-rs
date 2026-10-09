@@ -4,6 +4,30 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [5.1.0] - 2026-10-10
+
+### Added
+
+- A graph carries its order in its structure: `root` and each node's ordered
+  `children`, over two composites with functions of their own. A `flow` holds
+  a dataflow network, a node after every node it reads from and otherwise in
+  listed order; a `layers` holds parts of a behavior, one after the other.
+  `graph_codec::encode` makes a spec one `flow` of its nodes in listed order,
+  and `decode` lists the nodes in a pre-order walk of the structure, then any
+  node no composite holds, by id.
+- The interpreter's root is a `layers` runner: the main behavior, then each
+  live run's `flow` in spawn order. A LOAD replaces the main behavior under
+  the runs (a graph with no structure becomes a `flow` of its nodes by id),
+  and a node an EDIT adds without placing it joins the end of its run or of
+  the main behavior.
+
+### Fixed
+
+- Of two writers of one path, the later-listed wins. Decoding sorted nodes by
+  id, so a composed behavior's sources evaluated in the order of their
+  prefixes rather than the order they were composed in: on a face device the
+  animations came first and lost every path they share with the mappings.
+
 ## [5.0.1] - 2026-10-09
 
 ### Fixed

@@ -120,6 +120,12 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 - A face comes into view only once it is indexed, posed and shaded. A load
   or a reload no longer shows one frame of the GLB as it spawned, and during
   a reload the face being replaced is the only one drawn until the swap.
+- A face's behavior evaluates its sources in the order they compose: the
+  face's own graphs, the mappings (ROS4HRI, Studio), the animations, then the
+  runs (the program and every skill, in spawn order). Of two writers of one
+  path the later wins, so a playing animation overrides a mapping, and a
+  skill overrides a playing animation. The sources used to evaluate in the
+  order of their prefixes, the animations first.
 
 ## [0.1.0] - 2026-10-02
 

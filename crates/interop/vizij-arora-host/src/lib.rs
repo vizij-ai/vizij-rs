@@ -262,13 +262,13 @@ impl Bundle {
     }
 
     /// Compose the device's behavior: the base graphs whose kind is in `wanted`,
-    /// then the standard mappings, then the chosen program, then (when
-    /// `with_animations`) the animation source — each **last** wins over the
-    /// earlier ones on any store path they share (the web composes the same
-    /// way, for the same last-writer-wins reason). So a mapping overrides the
-    /// base rig's resting writes, a playing program overrides the mapping, and
-    /// a playing animation overrides everything. Returns the composed graph
-    /// spec.
+    /// then the standard mappings, then (when `with_animations`) the animation
+    /// source, then the chosen program — each **last** wins over the earlier
+    /// ones on any store path they share, the order the composed spec lists
+    /// them being the order it evaluates in. So a mapping overrides the base
+    /// rig's resting writes, a playing animation overrides the mapping, and a
+    /// playing program overrides everything, as a program or skill a device
+    /// runs as a task run does. Returns the composed graph spec.
     ///
     /// Mappings come from two places: the face's own embedded copies
     /// ([`standard_mappings`](Bundle::standard_mappings)), always composed,
@@ -306,12 +306,12 @@ impl Bundle {
             }
             sources.push((id.clone(), spec.clone()));
         }
+        if with_animations {
+            sources.push(animations_source());
+        }
         if let Some((id, spec)) = self.program(select) {
             log::info!("autoplaying program {id}");
             sources.push((format!("program::{id}"), spec.clone()));
-        }
-        if with_animations {
-            sources.push(animations_source());
         }
         compose_sources(&sources)
     }
@@ -758,13 +758,13 @@ mod tests {
     }
 
     #[test]
-    fn compose_inserts_mappings_between_base_and_program() {
+    fn compose_orders_base_mappings_animations_then_program() {
         let b = Bundle::from_bundle_json(&bundle_json());
         let composed = b
             .compose(
                 &["rig"],
                 &ProgramSelect::Auto,
-                false,
+                true,
                 &[ros4hri::ros4hri_source("rig/f/")],
             )
             .unwrap();
@@ -774,8 +774,8 @@ mod tests {
             .iter()
             .map(|n| n["id"].as_str().unwrap())
             .collect();
-        // Base rig first, mapping in the middle, program last (a playing
-        // program out-writes the mapping on shared paths).
+        // Base rig first, then the mapping, the animations, and the program
+        // last: a later source out-writes an earlier one on a shared path.
         let rig = ids
             .iter()
             .position(|id| *id == "rig::input_gaze_x")
@@ -788,7 +788,11 @@ mod tests {
             .iter()
             .position(|id| *id == "program::prog.speaks::o")
             .unwrap();
-        assert!(rig < mapping && mapping < program);
+        let animations = ids
+            .iter()
+            .position(|id| id.starts_with("animations::"))
+            .unwrap();
+        assert!(rig < mapping && mapping < animations && animations < program);
 
         // Without mappings the composition is untouched — the opt-in default.
         let bare = b

@@ -30,7 +30,9 @@
 
 ## Features
 
-- Deterministic topological evaluation with cycle detection.
+- Deterministic topological evaluation with cycle detection: a node runs after
+  every node it reads from, and otherwise in the order the spec lists it, so of
+  two outputs writing one path the later-listed wins.
 - Input staging model with epoch tracking to prevent stale data from leaking between frames.
 - Shape-aware validators (`Shape`, `ShapeId`) for predictable coercions and helpful diagnostics.
 - Selector support (`field`, `index`) on edges for structured projection.
