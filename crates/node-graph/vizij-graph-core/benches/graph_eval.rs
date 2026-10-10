@@ -1,5 +1,6 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use hashbrown::HashMap;
+use std::hint::black_box;
 use std::str::FromStr;
 use std::time::Duration;
 use vizij_api_core::json::normalize_graph_spec_value;
