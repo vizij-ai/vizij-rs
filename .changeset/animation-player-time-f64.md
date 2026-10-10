@@ -1,0 +1,6 @@
+---
+"@vizij/animation": minor
+"@vizij/animation-module": minor
+---
+
+A player's time is kept in `f64` seconds, summed with compensation, where it was an `f32` sum. Stepped at 100 Hz for an hour, the playhead stays within one `f64` rounding (4.5e-13 s) of `n × dt`, where it drifted 0.13 ms after 10 s, −4.1 ms after 60 s and 3.2 s after an hour. A `once` player ends on the step that reaches its window's end, and a step samples exactly the frame a bake takes at the same clip time, where the two differed by up to 6e-3 on a ramp of range 200. A player advances by `dt × speed`, with the speed an `f32`. A bake takes its frames up to the first at or past its end, counted by the times it samples them at, so a window that is a whole number of frames long takes that number plus one: 150 ms at 100 Hz takes 16 frames, where it took 17. In `@vizij/animation`, `update`'s `dt`, the times of `Seek`, `SetWindow`, `PlayAfter` and an instance's `start_offset`, a bake's `frame_rate`, `start_time` and `end_time`, and the times `listPlayers` reports keep full `f64` precision; every JSON shape is unchanged. In `@vizij/animation-module` (module 2.0.0, interface unchanged), `player_states`' `time_ns` follows the steps' `dt_ns`, and `seek`, `set_window`, `set_start_offset` and `play_at` reach the engine at full precision.
