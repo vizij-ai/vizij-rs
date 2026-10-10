@@ -1179,8 +1179,9 @@ export async function skillSource(id: string, input?: InitInput): Promise<object
   return bindings().skillSource(id);
 }
 
-/** Options for {@link composeVizij}; every field falls back to the native
- * `vizij` app's deploy default. */
+/** Options for {@link composeVizij}. A face speaks the vizij standard
+ * (`standard/vizij/*`) by default; ROS4HRI is the profile a ROS robot asks
+ * for with `ros4hri`. */
 export interface ComposeVizijOptions {
   /** Base bundle graph kinds to compose. Default: `rig`, `pose-driver`,
    * `pose`, `standard-adaptation`. */
@@ -1188,8 +1189,10 @@ export interface ComposeVizijOptions {
   /** `"auto"` (the bundle's active program — default), `"none"`, or a
    * program id. */
   program?: string;
-  /** Compose the built-in ROS4HRI mapping (an embedded copy still wins).
-   * Default `true`. */
+  /** Compose the built-in ROS4HRI mapping, so the `standard/ros4hri/*`
+   * keys drive the face too. Default `false`; the native `vizij` app
+   * composes it unless `--no-ros4hri`. A face that embeds its own copy runs
+   * that copy either way, and the built-in never composes over it. */
   ros4hri?: boolean;
   /** Compose the animation source. Default `false`; every device this
    * package builds links the animation module, so the source dispatches. */
@@ -1200,10 +1203,11 @@ export interface ComposeVizijOptions {
  * The composed behavior graph of a face bundle — the composition the native
  * `vizij` app deploys: the bundle's base graphs, its embedded standard
  * mappings (each suppressing the built-in of the same id — an embedded copy
- * is the author's pinned override), the built-in ROS4HRI mapping unless opted
- * out, then the selected program. `gltf` is the GLB's glTF JSON document. The
- * returned spec feeds {@link startRuntime} or {@link Runtime.loadGraph}, so an
- * exported GLB can be deployed and verified without the native app.
+ * is the author's pinned override), the built-in ROS4HRI mapping when
+ * `ros4hri` asks for it, then the selected program. `gltf` is the GLB's glTF
+ * JSON document. The returned spec feeds {@link startRuntime} or
+ * {@link Runtime.loadGraph}, so an exported GLB can be deployed and verified
+ * without the native app.
  */
 export async function composeVizij(
   gltf: object,

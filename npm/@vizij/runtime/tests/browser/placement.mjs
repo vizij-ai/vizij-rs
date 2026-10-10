@@ -25,7 +25,6 @@ try {
   // A static face, so two frames of it compare pixel for pixel.
   await loadVizij(page, "a", "Quori_Current_Extended.glb", {
     program: "none",
-    ros4hri: false,
     animations: false,
   });
   const authored = await page.evaluate(async () => {

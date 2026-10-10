@@ -431,6 +431,11 @@ programs and skills, so any of those overrides it on a path they share.
 
 - **From the `vizij` binary** it is **on by default**; opt out with
   `--no-ros4hri`.
+- **From [`@vizij/runtime`](../npm/@vizij/runtime/README.md)** it is opt-in:
+  a page's face speaks the [face standard](face-standard.md)
+  (`standard/vizij/*`) and composes the mapping only when it asks for it —
+  `loadVizij(id, glb, { ros4hri: true })`, or
+  `composeVizij(gltf, { ros4hri: true })`.
 - **From a library** it is opt-in: `vizij_arora_host::ros4hri::ros4hri_source(rig_prefix)`
   returns the composable graph source, or embed it into a face GLB so it travels
   with the asset (see below).

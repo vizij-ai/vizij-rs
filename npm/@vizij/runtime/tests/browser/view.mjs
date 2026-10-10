@@ -21,11 +21,10 @@ const INSET = 4;
 
 const { page, logs, close } = await open(FIXTURES);
 try {
-  // Static faces: no program, no ROS4HRI mapping (its idle blink runs on each
-  // device's own clock) and no animations, so the twins' frames compare pixel
-  // for pixel.
+  // Static faces: no program and no animations, so the twins' frames compare
+  // pixel for pixel.
   for (const id of ["a", "b"]) {
-    await loadVizij(page, id, FACE, { program: "none", ros4hri: false, animations: false });
+    await loadVizij(page, id, FACE, { program: "none", animations: false });
   }
   await page.evaluate((rects) => {
     for (const [id, rect] of Object.entries(rects)) window.vizijHarness.place(id, rect);

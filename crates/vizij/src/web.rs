@@ -173,16 +173,16 @@ fn send(event: ViewEvent) -> Result<(), JsValue> {
 
 /// Show a Vizij under `vizij_id` and start its device: the GLB's bindings and
 /// bundle are read, its graphs composed (`options_json` as
-/// [`compose_vizij`]'s: `graphs`, `ros4hri`, plus `stageNeutral`, default
-/// `true`, `animations`, default `true`, and `speechApiUrl`, the TTS
-/// deployment), the device built over `RigHal` + `BlackboardStore` with the
-/// animation module, the rest module behind [`VizijRuntime::reset`] and the
-/// skills, its keys declared with where they rest, the bundle's animations
-/// loaded into it unless `animations` is `false` ([`face::load_animations`]),
-/// the program `program` names (`auto`, `none` or an id, as
-/// [`compose_vizij`]'s) running beside its graph as a task run
-/// ([`face::spawn_program`]) rather than composed into it, and — given
-/// `play`, the page's playback hook
+/// [`compose_vizij`]'s: `graphs`, `ros4hri`, default `false`, plus
+/// `stageNeutral`, default `true`, `animations`, default `true`, and
+/// `speechApiUrl`, the TTS deployment), the device built over `RigHal` +
+/// `BlackboardStore` with the animation module, the rest module behind
+/// [`VizijRuntime::reset`] and the skills, its keys declared with where they
+/// rest, the bundle's animations loaded into it unless `animations` is
+/// `false` ([`face::load_animations`]), the program `program` names
+/// (`auto`, `none` or an id, as [`compose_vizij`]'s) running beside its graph
+/// as a task run ([`face::spawn_program`]) rather than composed into it, and
+/// — given `play`, the page's playback hook
 /// ([`vizij_arora_tts::Config::play`]) — the speech provider, and the scene
 /// queued for the App. `modules` optionally loads Arora wasm modules into
 /// the device's engine as guests: a JS array of `{ headerJson, wasmBytes }`
@@ -1090,21 +1090,21 @@ fn parse_face_config(json: Option<&str>) -> Result<(FaceConfig, bool), JsValue> 
         Some("none") => ProgramSelect::None,
         Some(id) => ProgramSelect::Id(id.to_string()),
     };
-    let flag = |name: &str| {
+    let flag = |name: &str, default: bool| {
         options
             .get(name)
             .and_then(serde_json::Value::as_bool)
-            .unwrap_or(true)
+            .unwrap_or(default)
     };
     Ok((
         FaceConfig {
             wanted,
             program,
-            stage_neutral: flag("stageNeutral"),
-            ros4hri: flag("ros4hri"),
+            stage_neutral: flag("stageNeutral", true),
+            ros4hri: flag("ros4hri", false),
             speech: None,
         },
-        flag("stageNeutral"),
+        flag("stageNeutral", true),
     ))
 }
 
@@ -1256,7 +1256,7 @@ fn parse_modules(modules: Option<js_sys::Array>) -> Result<Vec<face::GuestModule
 /// `vizij` app deploys and [`load_vizij`] installs: the bundle's base graphs,
 /// its embedded standard mappings (each suppressing the built-in of the same
 /// id — an embedded copy is the author's pinned override), the built-in
-/// ROS4HRI mapping unless opted out, then the selected program. The returned
+/// ROS4HRI mapping when asked for, then the selected program. The returned
 /// spec is ready for [`VizijRuntime::from_graph`] or
 /// [`loadGraph`](VizijRuntime::load_graph), so an exported GLB can be deployed
 /// and verified without a Vizij on screen.
@@ -1266,7 +1266,10 @@ fn parse_modules(modules: Option<js_sys::Array>) -> Result<Vec<face::GuestModule
 /// - `graphs`: base kinds to compose — default `rig`, `pose-driver`, `pose`,
 ///   `standard-adaptation` (the native default);
 /// - `program`: `"auto"` (default), `"none"`, or a program id;
-/// - `ros4hri`: compose the built-in ROS4HRI mapping — default `true`;
+/// - `ros4hri`: compose the built-in ROS4HRI mapping — default `false`: a
+///   face speaks the vizij standard (`standard/vizij/*`), and ROS4HRI is the
+///   profile a ROS robot asks for (the native app composes it unless
+///   `--no-ros4hri`);
 /// - `animations`: compose the animation source — default `false`; a device
 ///   built by [`load_vizij`] or [`VizijRuntime::from_graph`] always links the
 ///   animation module, so the source dispatches there.
@@ -1304,7 +1307,7 @@ pub fn compose_vizij(gltf_json: &str, options_json: Option<String>) -> Result<Js
     if options
         .get("ros4hri")
         .and_then(serde_json::Value::as_bool)
-        .unwrap_or(true)
+        .unwrap_or(false)
     {
         mappings.push(ros4hri::ros4hri_source(&bundle.rig_prefix()));
     }

@@ -1,8 +1,20 @@
-// An exported face GLB deploys through composeVizij: the bundle's embedded
-// (here: modified) standard mapping composes and wins over the built-in —
+// An exported face GLB deploys through composeVizij: the built-in ROS4HRI
+// mapping composes only when asked for, and the bundle's embedded (here:
+// modified) standard mapping always composes and wins over the built-in —
 // the VIZ-92 precedence, proven on the wasm runtime anywhere Node runs.
 import assert from "node:assert/strict";
 import { composeVizij, startRuntime } from "../dist/runtime/src/index.js";
+
+const builtIn = (spec) => spec.nodes.some((node) => node.id.startsWith("ros4hri::"));
+const plain = { extensions: { VIZIJ_bundle: { graphs: [] } } };
+assert.ok(
+  !builtIn(await composeVizij(plain, { program: "none" })),
+  "by default a face speaks the vizij standard: no ROS4HRI mapping",
+);
+assert.ok(
+  builtIn(await composeVizij(plain, { program: "none", ros4hri: true })),
+  "ros4hri: true composes the built-in ROS4HRI mapping",
+);
 
 // A modified ros4hri copy: valence rides verbatim onto the happy weight (no
 // smoothing, no blending, name ignored) — a mapping the built-in never
@@ -41,16 +53,14 @@ const gltf = {
   ],
 };
 
-const spec = await composeVizij(gltf, { program: "none" });
-const ids = spec.nodes.map((node) => node.id);
+const embedded = (spec) => spec.nodes.some((node) => node.id.startsWith("standard::ros4hri::"));
 assert.ok(
-  ids.some((id) => id.startsWith("standard::ros4hri::")),
-  "the embedded mapping composes under its stable id",
+  embedded(await composeVizij(gltf, { program: "none" })),
+  "the embedded mapping composes under its stable id, unasked",
 );
-assert.ok(
-  !ids.some((id) => id.startsWith("ros4hri::")),
-  "the built-in of the same id is suppressed",
-);
+const spec = await composeVizij(gltf, { program: "none", ros4hri: true });
+assert.ok(embedded(spec), "the embedded mapping composes when ROS4HRI is asked for");
+assert.ok(!builtIn(spec), "the built-in of the same id is suppressed");
 
 // Deploy the composed face and drive it over the ROS4HRI keys.
 const runtime = await startRuntime();
