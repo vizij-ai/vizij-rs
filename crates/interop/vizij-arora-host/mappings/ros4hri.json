@@ -2923,6 +2923,21 @@
       "params": {
         "path": "standard/ros4hri/speech/text"
       }
+    },
+    {
+      "id": "in/speech/viseme",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme",
+        "value": "sil"
+      }
+    },
+    {
+      "id": "out/speech/viseme",
+      "type": "output",
+      "params": {
+        "path": "standard/ros4hri/speech/viseme"
+      }
     }
   ],
   "edges": [
@@ -9772,6 +9787,15 @@
       },
       "to": {
         "node_id": "out/speech/text",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/speech/viseme"
+      },
+      "to": {
+        "node_id": "out/speech/viseme",
         "input": "in"
       }
     }

@@ -12,28 +12,36 @@ import {
 } from "../dist/runtime/src/index.js";
 
 // The shipped profiles, summarized: the face standard (face-scoped — 88
-// inputs plus the two speech state keys it reports) and the ROS4HRI
-// interface (device-scoped — 8 named command keys, the streamed viseme among
-// them as one code rather than a weight per shape, with its time and
-// duration; one per action unit; and the speech text it reports).
+// controls, the lipsync gain, and the two speech state keys it reports) and
+// the ROS4HRI interface (device-scoped — 8 named command keys, the streamed
+// viseme among them as one code rather than a weight per shape, with its time
+// and duration; one per action unit; and the speech state it reports, the
+// utterance and its current viseme).
 const listed = await profiles();
 assert.deepEqual(
   listed.map((p) => [p.id, p.scope, p.keys]),
   [
-    ["vizij-face", "face", 90],
-    ["ros4hri", "device", 29],
+    ["vizij-face", "face", 91],
+    ["ros4hri", "device", 30],
   ],
 );
 
 // A face-scoped profile is addressed to the face: every path takes the prefix.
 const face = await profile("vizij-face", "rig/quori/");
-assert.equal(face.keys.length, 90);
+assert.equal(face.keys.length, 91);
 assert.ok(face.keys.every((k) => k.path.startsWith("rig/quori/standard/vizij/")));
 // What the face reports rather than takes: the current viseme and the
 // utterance being spoken, output keys outside the control tiers.
 assert.deepEqual(
   face.keys.filter((k) => k.kind === "output").map((k) => k.path),
   ["rig/quori/standard/vizij/viseme", "rig/quori/standard/vizij/speech"],
+);
+// A setting of the face, outside the tiers: the lipsync gain its adaptation
+// scales the viseme weights by, resting at 1.
+const gain = face.keys.find((k) => k.path === "rig/quori/standard/vizij/lipsync/gain");
+assert.deepEqual(
+  [gain.kind, gain.value_type, gain.min, gain.default_value, gain.meta],
+  ["input", "f32", 0, { f32: 1 }, undefined],
 );
 const jaw = face.keys.find((k) => k.path.endsWith("/face/jaw_open"));
 assert.deepEqual(jaw.meta, { au: 26, arkit: "jawOpen", tier: "muscle" });
@@ -63,8 +71,10 @@ const ros = await profile("ros4hri", "rig/quori/");
 assert.ok(ros.keys.every((k) => k.path.startsWith("standard/ros4hri/")));
 const target = ros.keys.find((k) => k.path === "standard/ros4hri/gaze/target");
 assert.equal(target.value_type, "struct");
-const speech = ros.keys.find((k) => k.path === "standard/ros4hri/speech/text");
-assert.equal(speech.kind, "output");
+assert.deepEqual(
+  ros.keys.filter((k) => k.kind === "output").map((k) => k.path),
+  ["standard/ros4hri/speech/text", "standard/ros4hri/speech/viseme"],
+);
 
 // The portable form, and an unknown id.
 const portable = await profile("vizij-face");
@@ -74,24 +84,29 @@ assert.equal(await profile("nope"), null);
 // The shipped mappings, and the ROS4HRI graph with the face's paths prefixed:
 // it reads the device-scoped ROS4HRI commands and writes the face's controls,
 // and the speech channel runs the other way — the face's speech state in,
-// the ROS4HRI speech text out — the prefix landing on the face's side only.
+// the ROS4HRI speech state out — the prefix landing on the face's side only.
 assert.deepEqual((await mappings()).map((m) => m.id), ["ros4hri"]);
 const graph = await mapping("ros4hri", "rig/quori/");
 const outputs = graph.nodes.filter((n) => n.type === "output").map((n) => n.params.path);
 assert.ok(outputs.length > 0);
 assert.ok(
   outputs.every(
-    (p) => p.startsWith("rig/quori/standard/vizij/") || p === "standard/ros4hri/speech/text",
+    (p) => p.startsWith("rig/quori/standard/vizij/") || p.startsWith("standard/ros4hri/speech/"),
   ),
 );
 assert.ok(outputs.includes("standard/ros4hri/speech/text"));
+assert.ok(outputs.includes("standard/ros4hri/speech/viseme"));
 const inputs = graph.nodes.filter((n) => n.type === "input").map((n) => n.params.path);
 assert.ok(
   inputs.every(
-    (p) => p.startsWith("standard/ros4hri/") || p === "rig/quori/standard/vizij/speech",
+    (p) =>
+      p.startsWith("standard/ros4hri/") ||
+      p === "rig/quori/standard/vizij/speech" ||
+      p === "rig/quori/standard/vizij/viseme",
   ),
 );
 assert.ok(inputs.includes("rig/quori/standard/vizij/speech"));
+assert.ok(inputs.includes("rig/quori/standard/vizij/viseme"));
 assert.equal(await mapping("nope"), null);
 
 // The deprecated names are the same functions.

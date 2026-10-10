@@ -259,8 +259,15 @@ pub fn vizij_face_profile() -> Profile {
     for state in CONVERSATION_STATES {
         keys.push(ProfileKey::weight(standard::conversation_path(state)).with_tier("conversation"));
     }
+    // A setting of the face rather than a control: the gain its adaptation
+    // scales the viseme weights by. No tier — the tiers grade controls.
+    keys.push(ProfileKey {
+        min: Some(0.0),
+        default_value: Some(Value::F32(1.0)),
+        ..ProfileKey::input(standard::LIPSYNC_GAIN, Type::F32)
+    });
     // What the face reports rather than takes: the lipsync state the viseme
-    // players write. No tier — the tiers grade controls.
+    // players write. No tier, for the same reason.
     keys.push(ProfileKey::state(standard::VISEME, skills::SILENCE_VISEME));
     keys.push(ProfileKey::state(standard::SPEECH, ""));
 
@@ -272,8 +279,9 @@ pub fn vizij_face_profile() -> Profile {
                       expressions, 15 visemes, 36 muscle controls keyed to FACS action \
                       units and ARKit blendshapes (35 named per FACS/ARKit, plus the \
                       de-facto jaw-open path), and the conversation state (speaking, \
-                      user speaking, thinking); and the speech state the face reports, \
-                      its current viseme and the utterance being spoken."
+                      user speaking, thinking); its lipsync gain; and the speech state \
+                      the face reports, its current viseme and the utterance being \
+                      spoken."
             .into(),
         scope: Scope::Face,
         keys,
@@ -289,7 +297,8 @@ pub fn vizij_face_profile() -> Profile {
 /// The shipped ROS 2 exposure preset feeds the expression, gaze and viseme
 /// keys; the action-unit keys are part of the interface and have no topic
 /// behind them yet. Declaring the set is what makes that visible. The speech
-/// text is the one output: what the face is saying, for subtitles.
+/// state is the output: what the face is saying, for subtitles, and the lip
+/// shape it is saying it with.
 pub fn ros4hri_profile() -> Profile {
     let mut keys = vec![
         ProfileKey::text(ros4hri::EXPRESSION_NAME_KEY),
@@ -320,6 +329,7 @@ pub fn ros4hri_profile() -> Profile {
             ..ProfileKey::input(ros4hri::VISEME_DURATION_KEY, Type::F32)
         },
         ProfileKey::state(ros4hri::SPEECH_TEXT_KEY, ""),
+        ProfileKey::state(ros4hri::SPEECH_VISEME_KEY, skills::SILENCE_VISEME),
     ];
 
     // The action units the standard's muscle tier can express, in the order
@@ -342,7 +352,7 @@ pub fn ros4hri_profile() -> Profile {
         description: "The ROS4HRI face interface: expression name with valence and \
                       arousal, a gaze target and its frame, the streamed viseme, and FACS \
                       action-unit intensities commanded; the utterance being spoken \
-                      reported."
+                      and its current viseme reported."
             .into(),
         scope: Scope::Device,
         keys,
@@ -532,7 +542,7 @@ mod tests {
         assert_eq!(tier("viseme"), 15);
         assert_eq!(tier("muscle"), 36);
         assert_eq!(tier("conversation"), 3);
-        assert_eq!(face.keys.len(), 90);
+        assert_eq!(face.keys.len(), 91);
         assert_eq!(
             face.tiers(),
             ["gaze", "expression", "viseme", "muscle", "conversation"]
@@ -542,6 +552,14 @@ mod tests {
             [standard::VISEME, standard::SPEECH],
             "the speech state the face reports, outside the control tiers"
         );
+        let gain = face
+            .keys
+            .iter()
+            .find(|k| k.path == standard::LIPSYNC_GAIN)
+            .expect("the face's lipsync gain");
+        assert_eq!(gain.kind.as_deref(), Some("input"));
+        assert_eq!(gain.tier(), None, "a setting, outside the control tiers");
+        assert_eq!(gain.default_value, Some(Value::F32(1.0)));
         assert_eq!(face.scope, Scope::Face);
     }
 
@@ -599,15 +617,18 @@ mod tests {
     }
 
     /// The ROS4HRI profile is the mapping's contract: 8 named input keys, one
-    /// per distinct action unit, and the speech text it reports —
-    /// device-global.
+    /// per distinct action unit, and the speech state it reports (the
+    /// utterance and its current viseme) — device-global.
     #[test]
     fn the_ros4hri_profile_matches_its_key_contract() {
         let ros = ros4hri_profile();
-        assert_eq!(ros.keys.len(), 8 + 1 + 20);
+        assert_eq!(ros.keys.len(), 8 + 2 + 20);
         assert_eq!(ros.scope, Scope::Device);
         assert!(ros.paths().contains(&ros4hri::EXPRESSION_NAME_KEY));
-        assert_eq!(ros.paths_of("output"), [ros4hri::SPEECH_TEXT_KEY]);
+        assert_eq!(
+            ros.paths_of("output"),
+            [ros4hri::SPEECH_TEXT_KEY, ros4hri::SPEECH_VISEME_KEY]
+        );
         let target = ros
             .keys
             .iter()
@@ -667,7 +688,7 @@ mod tests {
     /// `gaze/frame` (the look_at skill consumes it), plus the face's speech
     /// state, and
     /// writes the whole `vizij-face` control surface but what ROS4HRI has no
-    /// channel for, plus the ROS4HRI speech text — and nothing either profile
+    /// channel for, plus the ROS4HRI speech state — and nothing either profile
     /// does not declare on that side. Which keys are declared and unmapped is
     /// the point of declaring them apart from the mapping.
     #[test]
@@ -702,7 +723,8 @@ mod tests {
         // Unwritten, in profile order: the caller's blink (the mapping's
         // idle blink drives the lids), the expressions ROS4HRI does not name,
         // the lipsync surface (the viseme players own it), the two jaw shifts
-        // (no action unit drives them), and the conversation state.
+        // (no action unit drives them), the conversation state, and the
+        // face's lipsync gain (a setting of the face, not a command).
         let mut expected: Vec<String> = vec![standard::BLINK.into()];
         expected.extend(
             standard::VIZIJ_EXPRESSION_NAMES
@@ -717,6 +739,7 @@ mod tests {
                 .iter()
                 .map(|s| standard::conversation_path(s)),
         );
+        expected.push(standard::LIPSYNC_GAIN.into());
         assert_eq!(unwritten, expected);
         assert_eq!(
             ros.paths_of("output")

@@ -331,8 +331,10 @@ ros2 topic pub --once /<namespace>/keys/rig/<faceId>/standard/vizij/viseme/aa \
 **What it is saying:** while a `say` run's audio plays, the utterance is the
 face's speech state, `standard/vizij/speech` (empty before playback starts
 and once it ends), next to the current viseme at `standard/vizij/viseme`. The
-ROS4HRI mapping relays it to `standard/ros4hri/speech/text`, which `--ros2`
-publishes as `/robot_face/speech` for subtitles.
+ROS4HRI mapping relays them to `standard/ros4hri/speech/text` and
+`standard/ros4hri/speech/viseme`, which `--ros2` publishes as
+`/robot_face/speech` for subtitles and `/robot_face/viseme` for anything that
+follows the lips.
 
 ## Lighting model
 

@@ -2,7 +2,7 @@
   "id": "ros4hri",
   "version": "v1",
   "title": "ROS4HRI face command",
-  "description": "The ROS4HRI face interface: expression name with valence and arousal, a gaze target and its frame, the streamed viseme, and FACS action-unit intensities commanded; the utterance being spoken reported.",
+  "description": "The ROS4HRI face interface: expression name with valence and arousal, a gaze target and its frame, the streamed viseme, and FACS action-unit intensities commanded; the utterance being spoken and its current viseme reported.",
   "scope": "device",
   "keys": [
     {
@@ -80,6 +80,14 @@
       "value_type": "str",
       "default_value": {
         "str": ""
+      }
+    },
+    {
+      "path": "standard/ros4hri/speech/viseme",
+      "kind": "output",
+      "value_type": "str",
+      "default_value": {
+        "str": "sil"
       }
     },
     {

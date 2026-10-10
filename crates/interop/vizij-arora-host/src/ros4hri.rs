@@ -36,11 +36,13 @@
 //!   face's viseme weights and state, so a stream and the device's own `say`
 //!   arbitrate as players do, and `sil` is a run that drives no shape — the
 //!   lips settle at rest.
-//! - **Speech** — the other direction: the utterance a say run is speaking
-//!   (`standard/vizij/speech`, the face's speech state) is relayed as is to
-//!   `speech/text`, the ROS4HRI speech state a bridge publishes for
-//!   subtitles. The face's key is per face; the ROS4HRI key is the device's,
-//!   which is what a static bridge profile can name.
+//! - **Speech** — the other direction: the face's speech state is relayed
+//!   as is to the ROS4HRI speech state a bridge publishes — the utterance a
+//!   say run is speaking (`standard/vizij/speech`) to `speech/text`, for
+//!   subtitles, and the current viseme (`standard/vizij/viseme`, a shape
+//!   name) to `speech/viseme`, for anything that follows the lips. The face's
+//!   keys are per face; the ROS4HRI keys are the device's, which is what a
+//!   static bridge profile can name.
 //!
 //! All continuous channels pass through a ~200 ms exponential smoother (the
 //! incumbent ROS4HRI face's dynamics). The graph is generated data: it
@@ -83,6 +85,11 @@ pub const VISEME_DURATION_KEY: &str = "standard/ros4hri/viseme/duration";
 /// empty at rest — the face's speech state ([`standard::SPEECH`]) relayed to
 /// the device-scoped key the bridge's ROS4HRI profile names.
 pub const SPEECH_TEXT_KEY: &str = "standard/ros4hri/speech/text";
+/// The lip shape being spoken, one of [`standard::VISEME_SHAPES`] by name,
+/// `sil` at rest — the face's current viseme ([`standard::VISEME`]) relayed
+/// to the device-scoped key, so one topic follows the lips of the whole
+/// robot whichever player is speaking.
+pub const SPEECH_VISEME_KEY: &str = "standard/ros4hri/speech/viseme";
 
 /// The key carrying a FACS action-unit intensity, [0, 1].
 pub fn au_key(code: u8) -> String {
@@ -487,9 +494,15 @@ fn build(rig_prefix: &str) -> (String, Json) {
     g.edge(&time, &spawn, "when");
 
     // --- Speech: the face's speech state, relayed as is to the ROS4HRI
-    // speech key a bridge publishes. ------------------------------------
+    // speech keys a bridge publishes. -----------------------------------
     let speech = g.input("in/speech", &out(standard::SPEECH.to_string()), json!(""));
     g.output("out/speech/text", &speech, SPEECH_TEXT_KEY.to_string());
+    let spoken = g.input(
+        "in/speech/viseme",
+        &out(standard::VISEME.to_string()),
+        json!(SILENCE_VISEME),
+    );
+    g.output("out/speech/viseme", &spoken, SPEECH_VISEME_KEY.to_string());
 
     (
         ROS4HRI_SOURCE_ID.to_string(),
@@ -551,18 +564,21 @@ mod tests {
     /// The mapping reads the ROS4HRI command keys and writes the face's
     /// controls; the speech channel runs the other way, reading the face's
     /// speech state (per face, under the rig prefix) and writing the
-    /// device-scoped ROS4HRI speech key — and nothing else crosses over.
+    /// device-scoped ROS4HRI speech keys — and nothing else crosses over.
     #[test]
     fn source_reads_ros4hri_keys_and_relays_the_speech_state() {
         let spec = spec();
-        let speech_in = format!("rig/test_face/{}", standard::SPEECH);
+        let speech_in = [
+            format!("rig/test_face/{}", standard::SPEECH),
+            format!("rig/test_face/{}", standard::VISEME),
+        ];
         for node in spec["nodes"].as_array().unwrap() {
             let path = node["params"]["path"].as_str();
             match node["type"].as_str() {
                 Some("input") => {
                     let path = path.unwrap();
                     assert!(
-                        path.starts_with(ROS4HRI_PREFIX) || path == speech_in,
+                        path.starts_with(ROS4HRI_PREFIX) || speech_in.iter().any(|p| p == path),
                         "unexpected input {path}"
                     );
                 }
@@ -570,7 +586,8 @@ mod tests {
                     let path = path.unwrap();
                     assert!(
                         path.starts_with("rig/test_face/standard/vizij/")
-                            || path == SPEECH_TEXT_KEY,
+                            || path == SPEECH_TEXT_KEY
+                            || path == SPEECH_VISEME_KEY,
                         "unexpected output {path}"
                     );
                 }
