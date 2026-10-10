@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.0.0
+
+### Major Changes
+
+- e459227: The module (2.0.0) returns a bake as typed records of Arora values instead of a JSON string. `bake(anim, frame_rate?, start_ns?, end_ns?)` and `bake_with_derivatives(…)` return `BakedAnimation? { frame_rate, start_ns, end_ns, tracks: [BakedTrack { animatable_id, values, derivatives }] }`: `values` is a `Value::ArrayValue` with each frame's sample as a dynamic value, as `Keypoint::value` is, and `derivatives` one `Value::Option` per frame from `bake_with_derivatives`, empty from `bake`. An animation not loaded, or a bake beyond 2²⁰ samples, returns none, where it returned an empty string. The window arguments are nanoseconds of the clip's time, like the module's other times, where they were seconds: they keep their parameter ids, so a caller still sending seconds as `f32` is refused, naming the parameter, rather than misread (an integer it sends is read as nanoseconds). The window reads back as requested, clamped into the clip.
+
+### Minor Changes
+
+- 8ec8636: The module (2.0.0) steps returning values by position, with the keys sent only when they change. `output_keys() -> OutputKeys { revision, keys }` gives the key of each position: per player, in creation order, each key its instances write, in the order they first write it. Only a structural edit changes it (`add_instance`, `add_instance_with_weight`, `remove_instance`, `remove_player`, `unload_animation`, `reload_animation`), each that does giving a new `revision`. `step_values(dt_ns, time_ns?) -> StepValues { revision, values }` is `step` returning the values alone, a `Value::ArrayValue` as long as the table, `Value::Unit` at a position no instance weighs on this step; a `revision` other than the one the keys were read at says to read them again. `step`'s outputs come in the same order, where they came in an order that varied from step to step.
+
+### Patch Changes
+
+- 0faddff: The module (1.1.2) refuses a bake it cannot hold with a value. `bake` and `bake_with_derivatives` return no result, as for an animation not loaded, when the window at the frame rate would take more than 2²⁰ samples over all tracks (derivative samples included); such a bake used to trap the guest. A window starting past the clip's end bakes the clip's end. `bake` samples the values alone, without computing derivatives it does not return.
+- a1f0cfa: The module (1.1.1) reaches its state without a lock, so the calls after a trap are answered, where a lock the trapped call held stayed held and failed every later call of the instance. A trap still leaves the instance unsound to keep — what the trapped call had changed stays changed, and its stack frames and argument buffer are not reclaimed — so a host that sees a trap should retire the instance. `set_speed` rejects a speed that is not finite, and `set_weight` and `add_instance_with_weight` a weight that is not finite and non-negative, with `u32::MAX`: a NaN or infinite value used to reach the engine and leave the playhead or the blend at NaN, and a negative weight, which the engine ignored, is now refused.
+
 ## 2.1.0
 
 ### Minor Changes
