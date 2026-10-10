@@ -1,6 +1,6 @@
 {
   "name": "@vizij/animation-module",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "vizij-animation-core packaged as an Arora wasm module: the built artifact (wasm + header) as importable assets.",
   "license": "MIT",
   "repository": {
