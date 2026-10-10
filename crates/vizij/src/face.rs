@@ -1822,6 +1822,8 @@ mod tests {
             program: ProgramSelect::None,
             stage_neutral: true,
             ros4hri: false,
+            #[cfg(feature = "studio")]
+            studio: false,
             speech: None,
         };
         for (glb, sidecar, face_id, controls) in faces {
