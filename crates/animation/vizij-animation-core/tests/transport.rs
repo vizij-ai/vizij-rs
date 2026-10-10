@@ -66,7 +66,7 @@ fn commands(commands: Vec<PlayerCommand>) -> Inputs {
 }
 
 /// Step by `dt` and return the sampled value of `key`.
-fn sample(engine: &mut Engine, dt: f32, inputs: Inputs, key: &str) -> f32 {
+fn sample(engine: &mut Engine, dt: f64, inputs: Inputs, key: &str) -> f32 {
     let out = engine.update(dt, inputs);
     let change = out
         .changes
@@ -87,14 +87,15 @@ fn info(engine: &Engine, player: PlayerId) -> PlayerInfo {
         .expect("player info")
 }
 
-fn approx(actual: f32, expected: f32) {
+fn approx(actual: impl Into<f64>, expected: f64) {
+    let actual = actual.into();
     assert!(
         (actual - expected).abs() < 1e-4,
         "expected {expected}, got {actual}"
     );
 }
 
-fn windowed(player: PlayerId, mode: LoopMode, start: f32, end: f32) -> Inputs {
+fn windowed(player: PlayerId, mode: LoopMode, start: f64, end: f64) -> Inputs {
     commands(vec![
         PlayerCommand::SetLoopMode { player, mode },
         PlayerCommand::SetWindow {
@@ -272,7 +273,7 @@ fn offset_and_time_scale_apply_per_instance() {
 fn play_after_starts_at_the_anchor_whatever_the_step() {
     // The anchor is 0.3 s after the first update starts; two engines step by
     // 0.125 s and 0.2 s.
-    let playhead_at = |step: f32, until: f32| {
+    let playhead_at = |step: f64, until: f64| {
         let (mut engine, p) = ramp_player(10.0);
         engine.update(0.0, commands(vec![PlayerCommand::Stop { player: p }]));
         engine.update(

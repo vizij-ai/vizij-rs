@@ -26,6 +26,25 @@ All notable changes to `vizij-animation-core`. The format follows
 - `Outputs::changes` come in output order — per player, in creation order,
   each key in the order its instances first write it — where they came in
   hash order, varying from step to step.
+- Player time is `f64` seconds, where it was `f32`: `Engine::update*`'s
+  `dt`, `Player::{time, start_time, end_time, total_duration}`,
+  `PlayerInfo::{time, start_time, end_time, length}`, `PlayerCommand::Seek`'s
+  `time`, `SetWindow`'s bounds and `PlayAfter`'s `delay`,
+  `InstanceCfg::start_offset` and `InstanceUpdate::start_offset`,
+  `Engine::player_total_duration`, `BakingConfig::{frame_rate, start_time,
+  end_time}`, `Baked*AnimationData::{frame_rate, start_time, end_time}` and
+  the `CoreEvent` times. A player's time sums its advances with
+  compensation: stepped at 100 Hz for an hour it stays within one `f64`
+  rounding (4.5e-13 s) of `n × dt`, where it drifted 0.13 ms after 10 s and
+  3.2 s after an hour, and a `Once` player ends on the step that reaches
+  its window's end. It advances by `dt × speed`, the speed an `f32`. Only
+  the normalized time a track is sampled at is `f32`; a bake's frames are
+  timed in `f64` too, so a step samples exactly the frame a bake takes at
+  the same clip time. Serialized, each is still a number.
+- A bake takes its frames up to the first at or past its end, by the times
+  it samples them at: a window that is a whole number of frames long takes
+  that number plus one, where an inexact `f32` product of span and rate
+  could take one more (150 ms at 100 Hz takes 16 frames, where it took 17).
 
 ### Added
 
