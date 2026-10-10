@@ -1,5 +1,12 @@
 # @vizij/animation
 
+## 2.0.1
+
+### Patch Changes
+
+- 8ec8636: The changes of an update come in a stable order: per player, in creation order, then each key in the order the player's instances first write it. They came in an order that varied from step to step.
+- 0faddff: `bake_animation` and `bake_animation_with_derivatives` throw for a bake of more than 2²⁰ samples over all tracks, derivative samples counted, instead of allocating it; the error names the sample count. An animation not loaded throws "no animation is loaded under id N". A `start_time` past the clip's end bakes the clip's end. `bake_animation` samples the values alone.
+
 ## 2.0.0
 
 ### Major Changes

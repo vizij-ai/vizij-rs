@@ -1,5 +1,21 @@
 # Changelog
 
+## 5.0.0
+
+### Major Changes
+
+- ae39c50: The device runs on arora 12.2. A write from a client must be of the type the key's meta states: a value of another type is refused, with no conversion, and the update writes nothing. `describeMethods()` lists the functions every Arora device's HAL module exports: `models`, `model_glb` and `model_glbs`. In the browser the face's model is not stated, because the page already holds the face it loaded.
+
+### Minor Changes
+
+- d4b9ffc: A face's behavior evaluates its sources in the order they compose, and of two writers of one path the later wins: the face's own graphs, then the mappings, then the animations, then the playing program. A playing program now overrides a playing animation on a path both write; the sources used to evaluate in the order of their prefixes.
+- 1d812ca: The `ros4hri` mapping plays the streamed viseme: each new `standard/ros4hri/viseme` code spawns a `play_viseme` run of its shape, which takes over from the run before it, and `sil` lets the lips settle at rest. The mapping writes no lip key itself, so a stream and the device's own `say` share the lips the way players do.
+
+### Patch Changes
+
+- e355a0b: The evaluation order is the graph's alone: where two outputs write one path, the later-listed one wins every time, instead of a winner that changed between loads. In a device, a task run writes after the main behavior and a later run after an earlier one, and grafting or pruning a run no longer re-plans the whole graph.
+- b85594c: A face comes into view only once it is indexed, posed and shaded. A load or a reload no longer shows one frame of the GLB as it spawned, and during a reload the face being replaced is the only one drawn until the swap.
+
 ## 4.1.0
 
 ### Minor Changes

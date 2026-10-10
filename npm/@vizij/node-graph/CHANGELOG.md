@@ -1,5 +1,15 @@
 # @vizij/node-graph
 
+## 0.10.0
+
+### Minor Changes
+
+- d95ff01: A `spawn` node starts a task run of its function each time its arguments change: the `value` param's fields, then the keyed `args` inputs, one per parameter id in `record_keys`. The first evaluation only records them. The host serves the request after the evaluation and owns the run.
+
+### Patch Changes
+
+- e355a0b: The evaluation order is the graph's alone: where two outputs write one path, the later-listed one wins every time, instead of a winner that changed between loads. In a device, a task run writes after the main behavior and a later run after an earlier one, and grafting or pruning a run no longer re-plans the whole graph.
+
 ## 0.9.0
 
 0.9.0 follows 0.7.1: 0.8.0 was never published, and its changes ship here.
