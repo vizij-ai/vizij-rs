@@ -23,6 +23,12 @@
 //! keypoint's `transitions_in`/`transitions_out` carry its cubic-bezier timing
 //! handles (zero or one each; empty = the engine's default ease).
 //!
+//! A number keeps the width of its keypoints: `F32` keypoints output `F32`,
+//! `F64` keypoints `F64` (sampled and blended in `f64`), from every step and
+//! bake. A track with any `F64` keypoint outputs `F64` throughout; a key an
+//! `F32` and an `F64` track blend into outputs `F64` on the steps the `F64`
+//! track weighs on it.
+//!
 //! Exports:
 //! - loading — `load_animation` / `reload_animation` / `create_player` /
 //!   `add_instance` / `add_instance_with_weight`, and unloading —
@@ -96,6 +102,8 @@ pub struct AnimTrack {
 
 /// A keyframe: a normalized stamp, a dynamic value, and the cubic-bezier
 /// timing handles of the segments it bounds (zero or one per side).
+/// A number `value` sets the width its track outputs in: `Value::F32` or
+/// `Value::F64`.
 #[derive(Debug, Clone, PartialEq, AroraType)]
 #[arora(id = "76697a69-6a00-0000-0000-000000000102", version = "1.1.0")]
 pub struct Keypoint {
@@ -1909,6 +1917,158 @@ mod tests {
             (100_000_000, 1_000_000_000)
         );
         assert!(a.bake(u32::MAX, None, None, None).is_none());
+    }
+
+    /// A clip of four number tracks: `w/f32` ramps 0 to 1 over `F32`
+    /// keypoints, `w/f64` the same over `F64` keypoints, `w/held` holds
+    /// `F64` 0.1, a double no `f32` holds, and `w/mixed` ramps from an `F32`
+    /// keypoint to an `F64` one.
+    fn widths_clip() -> AnimationClip {
+        let (r#in, out) = linear_handles();
+        let ramp = |name: &str, k0: AValue, k1: AValue| AnimTrack {
+            id: format!("{name}-t"),
+            name: name.into(),
+            animatable_id: format!("w/{name}"),
+            points: vec![
+                Keypoint {
+                    value: k0,
+                    transitions_out: out.clone(),
+                    ..keypoint("k0", 0.0, 0.0)
+                },
+                Keypoint {
+                    value: k1,
+                    transitions_in: r#in.clone(),
+                    ..keypoint("k1", 1.0, 0.0)
+                },
+            ],
+        };
+        let held = AnimTrack {
+            id: "held-t".into(),
+            name: "held".into(),
+            animatable_id: "w/held".into(),
+            points: vec![Keypoint {
+                value: AValue::F64(0.1),
+                ..keypoint("k0", 0.0, 0.0)
+            }],
+        };
+        AnimationClip {
+            name: "widths".into(),
+            duration: 1000,
+            tracks: vec![
+                ramp("f32", AValue::F32(0.0), AValue::F32(1.0)),
+                ramp("f64", AValue::F64(0.0), AValue::F64(1.0)),
+                held,
+                ramp("mixed", AValue::F32(0.0), AValue::F64(1.0)),
+            ],
+        }
+    }
+
+    /// Whether `value` is a number of the width `wide` names: `F64` when
+    /// set, `F32` when not.
+    fn is_width(value: &AValue, wide: bool) -> bool {
+        matches!(
+            (value, wide),
+            (AValue::F64(_), true) | (AValue::F32(_), false)
+        )
+    }
+
+    /// A number track's values come out in the width of its keypoints —
+    /// `F32` from `F32` keypoints, `F64` from `F64` ones, a double at full
+    /// precision, and `F64` throughout from a track with any `F64` keypoint
+    /// — through `step`, `step_values` and both bakes.
+    #[test]
+    fn a_number_track_outputs_in_the_width_of_its_keypoints() {
+        let mut a = AnimationModule::new();
+        let anim = a.load_animation(widths_clip());
+        let player = a.create_player(None);
+        a.add_instance(player, anim);
+        assert_eq!(
+            a.output_keys().keys,
+            ["w/f32", "w/f64", "w/held", "w/mixed"]
+        );
+
+        let Value::ArrayValue(values) = a.step_values(0, None).values else {
+            panic!("an array value");
+        };
+        assert!(
+            matches!(
+                values[..],
+                [
+                    AValue::F32(_),
+                    AValue::F64(_),
+                    AValue::F64(_),
+                    AValue::F64(_)
+                ]
+            ),
+            "at the F32 keypoint of the mixed track too: {values:?}"
+        );
+        let Value::ArrayValue(values) = a.step_values(500_000_000, None).values else {
+            panic!("an array value");
+        };
+        near(as_f32(&values[0]), 0.5);
+        let AValue::F64(v) = values[1] else {
+            panic!("an F64 track gives F64, got {:?}", values[1]);
+        };
+        assert!((v - 0.5).abs() < 1e-3, "~0.5 at the midpoint, got {v}");
+        assert_eq!(values[2], AValue::F64(0.1));
+
+        let records = a.step(0, None);
+        for (key, wide) in [
+            ("w/f32", false),
+            ("w/f64", true),
+            ("w/held", true),
+            ("w/mixed", true),
+        ] {
+            let value = value_of(&records, key).expect("written");
+            assert!(is_width(value, wide), "{key}: {value:?}");
+        }
+        assert_eq!(value_of(&records, "w/held"), Some(&AValue::F64(0.1)));
+
+        let baked = a
+            .bake_with_derivatives(anim, Some(4.0), None, None)
+            .expect("a loaded animation bakes");
+        let values_only = a
+            .bake(anim, Some(4.0), None, None)
+            .expect("a loaded animation bakes");
+        for ((track, only), wide) in baked
+            .tracks
+            .iter()
+            .zip(&values_only.tracks)
+            .zip([false, true, true, true])
+        {
+            assert_eq!(only.values, track.values);
+            let (Value::ArrayValue(values), Value::ArrayValue(derivatives)) =
+                (&track.values, &track.derivatives)
+            else {
+                panic!("array values");
+            };
+            assert_eq!(values.len(), 5, "0 to 1 s at 4 Hz, both ends");
+            assert!(
+                values.iter().all(|v| is_width(v, wide)),
+                "{}: {values:?}",
+                track.animatable_id
+            );
+            assert!(
+                derivatives.iter().all(|d| match d {
+                    Value::Option(Some(d)) => is_width(d, wide),
+                    Value::Option(None) => true,
+                    _ => false,
+                }),
+                "{}: {derivatives:?}",
+                track.animatable_id
+            );
+        }
+        let Value::ArrayValue(slopes) = &baked.tracks[1].derivatives else {
+            panic!("an array value");
+        };
+        assert!(
+            matches!(slopes[2], Value::Option(Some(_))),
+            "the ramp has a slope at 0.5 s"
+        );
+        let Value::ArrayValue(held) = &baked.tracks[2].values else {
+            panic!("an array value");
+        };
+        assert!(held.iter().all(|v| *v == AValue::F64(0.1)), "{held:?}");
     }
 
     /// `step_values` reports each output's value at its position in

@@ -8,6 +8,15 @@ All notable changes to `vizij-animation-core`. The format follows
 
 ### Breaking
 
+- A scalar keeps the width of its keypoints. `TrackValue` gains
+  `Float64(f64)`: a `Value::F64` keypoint decodes to it, where it decoded to
+  `Float(f32)`, and it is interpolated, blended, differentiated and baked in
+  `f64`, encoding as `Value::F64`. A scalar track with any `Float64`
+  keypoint samples as `Float64` at every time, its `Float` keypoints
+  widened; a key a `Float64` blends into on a step blends in `f64` on that
+  step. A `Value::F32` keypoint still decodes to `Float` and outputs
+  `Value::F32`.
+
 - `AccumulatorWithDerivatives` accumulates by output index, not by key:
   `reset(outputs)`, `add(output, …)` and `take(output)` replace the
   key-taking `add` and the `HashMap`-returning `finalize`, and its buffers

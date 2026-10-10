@@ -16,7 +16,7 @@
 
 use crate::data::{Keypoint, Track};
 use crate::interp::functions::{bezier_value, step_value};
-use crate::value::{TrackValue, Transform};
+use crate::value::{wide_scalars, TrackValue, Transform};
 
 /// Symmetric finite difference offset applied around the normalized parameter when approximating
 /// derivatives. Smaller values reduce smoothing but increase numerical noise; larger values trade
@@ -72,13 +72,14 @@ fn value_difference(a: &TrackValue, b: &TrackValue) -> Option<TrackValue> {
                 ],
             }))
         }
-        _ => None,
+        _ => wide_scalars(a, b).map(|(va, vb)| TrackValue::Float64(va - vb)),
     }
 }
 
 fn value_scale(value: &TrackValue, scale: f32) -> Option<TrackValue> {
     match value {
         TrackValue::Float(v) => Some(TrackValue::Float(v * scale)),
+        TrackValue::Float64(v) => Some(TrackValue::Float64(v * f64::from(scale))),
         TrackValue::Vec2(v) => Some(TrackValue::Vec2([v[0] * scale, v[1] * scale])),
         TrackValue::Vec3(v) => Some(TrackValue::Vec3([v[0] * scale, v[1] * scale, v[2] * scale])),
         TrackValue::Vec4(v) => Some(TrackValue::Vec4([
@@ -152,8 +153,27 @@ fn find_segment(points: &[Keypoint], u: f32) -> (usize, usize, f32) {
 }
 
 /// Sample a single track at normalized time `u` in `[0, 1]`.
+///
+/// A scalar track any keypoint of which is `Float64` samples as `Float64`
+/// at every `u`, its `Float` keypoints widened, so the track keeps one
+/// width over its whole length.
 pub fn sample_track(track: &Track, u: f32) -> TrackValue {
-    let points = &track.points;
+    match sample_points(&track.points, u) {
+        TrackValue::Float(v)
+            if track
+                .points
+                .iter()
+                .any(|p| matches!(p.value, TrackValue::Float64(_))) =>
+        {
+            TrackValue::Float64(f64::from(v))
+        }
+        value => value,
+    }
+}
+
+/// [`sample_track`] over `points`, each segment in the width of its two
+/// keypoints.
+fn sample_points(points: &[Keypoint], u: f32) -> TrackValue {
     let n = points.len();
     match n {
         0 => {

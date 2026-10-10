@@ -4,8 +4,9 @@
 //! stubs over the real buffer ABI — and assert a one-track 0->1 ramp advances,
 //! the player states come back with their instances and weights, a paused
 //! player keeps its speed, a reloaded animation writes its new tracks, the
-//! animation unloads, and the transport (a window, a reversed speed, instance
-//! timing, an anchored start) reaches the guest.
+//! animation unloads, the transport (a window, a reversed speed, instance
+//! timing, an anchored start) reaches the guest, and a number track's values
+//! come back in the width of its keypoints.
 //!
 //! What it proves is the `arora_call` boundary contract: the guest entry points
 //! the declaration generates and the client stubs it generates agree, arrays of
@@ -337,4 +338,70 @@ fn step_values_follow_the_output_keys_through_the_wasm_module() {
         (sample - 0.5).abs() < 1e-3,
         "~0.5 at the midpoint, got {sample}"
     );
+}
+
+/// A number track's values come back through the guest in the width of its
+/// keypoints, from `step`, `step_values` and `bake`: `F64` keypoints give
+/// `F64`, a double no `f32` holds unchanged, and `F32` keypoints give `F32`.
+#[ignore = "needs the wasm artifact pre-built (a nested cargo build deadlocks on the build lock); run with --ignored after `cargo build -p vizij-animation-module --target wasm32-wasip1`"]
+#[test]
+fn number_tracks_keep_their_width_through_the_wasm_module() {
+    use animation::client;
+    let mut engine = engine_with_the_guest();
+    let mut clip = ramp_clip();
+    let mut held = clip.tracks[0].clone();
+    for point in &mut clip.tracks[0].points {
+        let Value::F32(v) = point.value else {
+            panic!("an F32 keypoint");
+        };
+        point.value = Value::F64(f64::from(v));
+    }
+    held.id = "held".into();
+    held.animatable_id = "node/held".into();
+    held.points.drain(1..);
+    held.points[0].value = Value::F64(0.1);
+    clip.tracks.push(held);
+    let single = client::load_animation(&mut engine, ramp_clip()).expect("load_animation");
+    let double = client::load_animation(&mut engine, clip).expect("load_animation");
+    let player = client::create_player(&mut engine, None).expect("create_player");
+    client::add_instance(&mut engine, player, double).expect("add_instance");
+
+    let keys = client::output_keys(&mut engine).expect("output_keys");
+    assert_eq!(keys.keys, ["node/x", "node/held"]);
+    let step = client::step_values(&mut engine, 500_000_000, None).expect("step_values");
+    let Value::ArrayValue(values) = step.values else {
+        panic!("an array value, got {:?}", step.values);
+    };
+    let Value::F64(sample) = values[0] else {
+        panic!("an F64 track gives F64, got {:?}", values[0]);
+    };
+    assert!(
+        (sample - 0.5).abs() < 1e-3,
+        "~0.5 at the midpoint, got {sample}"
+    );
+    assert_eq!(values[1], Value::F64(0.1));
+    let records = client::step(&mut engine, 0, None).expect("step");
+    let record_values: Vec<&Value> = records.iter().map(|o| &o.value).collect();
+    assert!(
+        matches!(record_values[..], [Value::F64(_), Value::F64(_)]),
+        "{record_values:?}"
+    );
+    assert_eq!(*record_values[1], Value::F64(0.1));
+
+    for (anim, f64_width) in [(single, false), (double, true)] {
+        let baked = client::bake(&mut engine, anim, Some(10.0), None, None)
+            .expect("bake")
+            .expect("a loaded animation bakes");
+        let Value::ArrayValue(values) = &baked.tracks[0].values else {
+            panic!("an array value, got {:?}", baked.tracks[0].values);
+        };
+        assert!(
+            values.iter().all(|v| match v {
+                Value::F64(_) => f64_width,
+                Value::F32(_) => !f64_width,
+                _ => false,
+            }),
+            "{values:?}"
+        );
+    }
 }

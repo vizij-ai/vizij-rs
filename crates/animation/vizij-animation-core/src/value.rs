@@ -15,7 +15,11 @@ pub use vizij_api_core::{Transform, Value};
 /// Keyframe value in plain-Rust form.
 ///
 /// Numeric variants interpolate and blend; `Bool`, `Text`, and `Step` hold
-/// their value (step semantics). `Vector` is a variable-length numeric
+/// their value (step semantics). A scalar keeps the width it is given in:
+/// `Value::F32` decodes to `Float` and `Value::F64` to `Float64`, each
+/// encoding back to the type it came in. A scalar track samples in the
+/// width of its keypoints, and as `Float64` throughout when any of them is
+/// `Float64`. `Vector` is a variable-length numeric
 /// vector (`ArrayF32` on the wire); `NumericArray` is an all-scalar
 /// `ArrayValue` sequence, kept distinct so it re-encodes as `ArrayValue`.
 /// `Step` carries any other [`Value`] untouched.
@@ -26,8 +30,13 @@ pub use vizij_api_core::{Transform, Value};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(into = "Value", from = "Value")]
 pub enum TrackValue {
-    /// Scalar float.
+    /// Single-precision scalar (`Value::F32`).
     Float(f32),
+    /// Double-precision scalar (`Value::F64`), interpolated, blended and
+    /// encoded in `f64`. A track with a `Float64` keypoint samples as
+    /// `Float64` throughout, and a key a `Float64` blends into on a step
+    /// blends, and encodes, in `f64` on that step.
+    Float64(f64),
     /// 2D vector.
     Vec2([f32; 2]),
     /// 3D vector.
@@ -60,11 +69,23 @@ impl TrackValue {
     }
 }
 
+/// Two scalars of which at least one is `Float64`, both widened to `f64`:
+/// what a sample, a difference or a blend of the pair computes on, so a
+/// double-precision scalar never narrows. `None` for any other pair.
+pub(crate) fn wide_scalars(a: &TrackValue, b: &TrackValue) -> Option<(f64, f64)> {
+    match (a, b) {
+        (TrackValue::Float64(a), TrackValue::Float64(b)) => Some((*a, *b)),
+        (TrackValue::Float64(a), TrackValue::Float(b)) => Some((*a, f64::from(*b))),
+        (TrackValue::Float(a), TrackValue::Float64(b)) => Some((f64::from(*a), *b)),
+        _ => None,
+    }
+}
+
 impl From<Value> for TrackValue {
     fn from(value: Value) -> Self {
         match value {
             Value::F32(f) => TrackValue::Float(f),
-            Value::F64(f) => TrackValue::Float(f as f32),
+            Value::F64(f) => TrackValue::Float64(f),
             Value::Boolean(b) => TrackValue::Bool(b),
             Value::String(s) => TrackValue::Text(s),
             Value::ArrayF32(xs) => TrackValue::Vector(xs),
@@ -105,6 +126,7 @@ impl From<TrackValue> for Value {
     fn from(tv: TrackValue) -> Self {
         match tv {
             TrackValue::Float(f) => vocab::float(f),
+            TrackValue::Float64(f) => Value::F64(f),
             TrackValue::Vec2(a) => vocab::vec2(a),
             TrackValue::Vec3(a) => vocab::vec3(a),
             TrackValue::Vec4(a) => vocab::vec4(a),
@@ -133,7 +155,11 @@ mod tests {
     #[test]
     fn decodes_the_vocabulary_into_pods() {
         assert_eq!(TrackValue::from(float(1.5)), TrackValue::Float(1.5));
-        assert_eq!(TrackValue::from(Value::F64(2.5)), TrackValue::Float(2.5));
+        assert_eq!(
+            TrackValue::from(Value::F64(0.1)),
+            TrackValue::Float64(0.1),
+            "a double keeps its width"
+        );
         assert_eq!(TrackValue::from(bool_(true)), TrackValue::Bool(true));
         assert_eq!(
             TrackValue::from(text("hi")),
@@ -198,6 +224,7 @@ mod tests {
     fn encodes_back_through_the_vocabulary() {
         let cases = [
             float(1.5),
+            Value::F64(0.1),
             bool_(true),
             text("hi"),
             vector(vec![1.0, 2.0]),
