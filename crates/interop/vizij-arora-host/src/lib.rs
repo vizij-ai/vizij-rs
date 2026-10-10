@@ -416,14 +416,15 @@ pub const ANIMATION_PLAYERS_PATH: &str = "vizij/animations/players";
 const FN_STEP: &str = "76697a69-6a00-0000-0f00-000000000004";
 const FN_PLAYER_STATES: &str = "76697a69-6a00-0000-0f00-00000000000d";
 const PARAM_DT_NS: &str = "76697a69-6a00-0000-0f04-000000000001";
+const PARAM_TIME_NS: &str = "76697a69-6a00-0000-0f04-000000000002";
 const FIELD_OUTPUT_DEFAULT_KEY: &str = "76697a69-6a00-0000-0110-000000000002";
 const FIELD_OUTPUT_VALUE: &str = "76697a69-6a00-0000-0110-000000000003";
 
-/// The graph source that ticks the animation module **inside the device** (the
-/// native port of the web host's `animationsGraphSource`): an `ExternalFunction`
-/// node calls the module's `step` every tick, fed the runtime's built-in
-/// `arora/dt` (nanoseconds), and a path-less `output` node fans the returned
-/// `[TrackOutput]` batch onto the store keys each record names — its
+/// The graph source that ticks the animation module **inside the device**: an
+/// `ExternalFunction` node calls the module's `step` every tick, fed the
+/// runtime's built-in `arora/dt` and `arora/time` (nanoseconds), so the
+/// module's `play_at` counts on the device's clock, and a path-less `output`
+/// node fans the returned `[TrackOutput]` batch onto the store keys each record names — its
 /// `default_key`, the final rig paths decided when an animation loads. A
 /// second `ExternalFunction` node writes `player_states()` to
 /// [`ANIMATION_PLAYERS_PATH`].
@@ -435,13 +436,15 @@ const FIELD_OUTPUT_VALUE: &str = "76697a69-6a00-0000-0110-000000000003";
 /// seek/…, an instance's weight) are driven through the module's declared
 /// functions — over a bridge, or in-process — not from here.
 pub fn animations_source() -> (String, Json) {
+    use arora_behavior::built_in;
     let spec = json!({
         "nodes": [
-            { "id": "dt", "type": "input", "params": { "path": "arora/dt" } },
+            { "id": "dt", "type": "input", "params": { "path": built_in::DT } },
+            { "id": "time", "type": "input", "params": { "path": built_in::TIME } },
             {
                 "id": "step",
                 "type": "externalfunction",
-                "params": { "function": FN_STEP, "param_ids": [PARAM_DT_NS] },
+                "params": { "function": FN_STEP, "param_ids": [PARAM_DT_NS, PARAM_TIME_NS] },
             },
             {
                 "id": "apply",
@@ -460,6 +463,7 @@ pub fn animations_source() -> (String, Json) {
         ],
         "edges": [
             { "from": { "node_id": "dt" }, "to": { "node_id": "step", "input": "args_0" } },
+            { "from": { "node_id": "time" }, "to": { "node_id": "step", "input": "args_1" } },
             { "from": { "node_id": "step" }, "to": { "node_id": "apply", "input": "in" } },
             { "from": { "node_id": "states" }, "to": { "node_id": "states-out", "input": "in" } },
         ],
