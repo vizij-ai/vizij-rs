@@ -46,5 +46,10 @@ ln -s /Applications "$staging/Applications"
 
 dmg="vizij-$version-macos-$arch.dmg"
 rm -f "$dmg"
-hdiutil create -volname "Vizij" -srcfolder "$staging" -format UDZO -ov "$dmg"
+# The image is sized from the staged content plus room for the filesystem:
+# hdiutil's own estimate from -srcfolder can come out short of the content,
+# and the copy then fails with "No space left on device".
+size_kb=$(( $(du -sk "$staging" | cut -f1) * 12 / 10 + 16384 ))
+hdiutil create -volname "Vizij" -srcfolder "$staging" -size "${size_kb}k" \
+  -format UDZO -ov "$dmg"
 echo "built: $dmg"
