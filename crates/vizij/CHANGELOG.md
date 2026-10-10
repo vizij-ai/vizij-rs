@@ -88,6 +88,9 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- The animation module's `play_at` counts on the device's clock: the
+  animation source steps the module with `arora/time`, so a client that
+  schedules a start at a device time gets it there.
 - The ROS4HRI mapping shows a named expression at the commanded arousal as
   its intensity (clamped to 0..1) instead of at full weight; an arousal of 0
   or below shows none.

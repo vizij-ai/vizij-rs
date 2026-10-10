@@ -4,6 +4,15 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [6.4.0] - 2026-10-10
+
+### Changed
+
+- `animations_source` feeds the device's `arora/time` to the animation
+  module's `step` as its `time_ns`, beside `arora/dt`: `play_at(player, t)`
+  counts `t` on the device's clock, where it counted from the module's first
+  step.
+
 ## [6.3.0] - 2026-10-10
 
 ### Added

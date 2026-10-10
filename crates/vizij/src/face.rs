@@ -2060,6 +2060,59 @@ mod animation_tests {
         );
     }
 
+    /// `play_at` counts on the device's clock: the animation source steps the
+    /// module with `arora/time`, so a player anchored at a device time starts
+    /// there even when the module's own count of its steps is elsewhere —
+    /// here, a client stepped it once directly.
+    #[test]
+    fn play_at_starts_a_face_animation_at_the_device_time_it_names() {
+        let mut arora = ramp_face();
+        step_for(&mut arora, 0.1);
+        call(
+            &mut arora,
+            ids::step::FUNCTION,
+            vec![(ids::step::DT_NS, AValue::U64(1_000_000_000))],
+        );
+        let ramp = player(&mut arora, "ramp");
+        call(
+            &mut arora,
+            ids::set_weight::FUNCTION,
+            vec![
+                (ids::set_weight::PLAYER, AValue::U32(ramp.player)),
+                (
+                    ids::set_weight::INSTANCE,
+                    AValue::U32(ramp.instances[0].instance),
+                ),
+                (ids::set_weight::WEIGHT, AValue::F32(1.0)),
+            ],
+        );
+        let anchored = call(
+            &mut arora,
+            ids::play_at::FUNCTION,
+            vec![
+                (ids::play_at::PLAYER, AValue::U32(ramp.player)),
+                (ids::play_at::TIME_NS, AValue::U64(300_000_000)),
+            ],
+        );
+        assert_eq!(anchored, AValue::U32(ramp.player));
+
+        // Device time 200 ms: before the anchor, the player holds.
+        step_for(&mut arora, 0.1);
+        let state = player(&mut arora, "ramp");
+        assert_eq!(state.state, "stopped", "{state:?}");
+        assert_eq!(state.time_ns, 0);
+
+        // Device time 450 ms: 150 ms after the anchor.
+        step_for(&mut arora, 0.25);
+        let state = player(&mut arora, "ramp");
+        assert_eq!(state.state, "playing", "{state:?}");
+        assert!(
+            state.time_ns.abs_diff(150_000_000) < 1_000,
+            "150 ms after the anchor, got {} ns",
+            state.time_ns
+        );
+    }
+
     /// The native device plays the animations the bundle of the demo face
     /// carries. Needs `VIZIJ_FIXTURES` (see
     /// `ros4hri_drives_the_adapted_quori`); skipped otherwise.
