@@ -2,9 +2,9 @@
 // one the face loads with halted, its outputs holding until the page returns
 // them to rest, the other edited live — while a key neither program writes
 // keeps its value throughout. Quori's bundle carries two motiongraphs:
-// "Speaks", its active program, and "Live". The ROS4HRI mapping is left out
-// so the programs alone write their keys (the mapping writes some of
-// Speaks'; which of two writers of one key wins is VIZ-173's). Needs
+// "Speaks", its active program, and "Live". The face composes no ROS4HRI
+// mapping, so the programs alone write their keys (that mapping writes some
+// of Speaks'; which of two writers of one key wins is VIZ-173's). Needs
 // `VIZIJ_FIXTURES`; skips without.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -57,7 +57,7 @@ const edited = {
 
 const { page, logs, close } = await open(FIXTURES);
 try {
-  await loadVizij(page, "face", "Quori_Current_Extended.glb", { ros4hri: false, audio: false });
+  await loadVizij(page, "face", "Quori_Current_Extended.glb", { audio: false });
 
   // What a page reads to return a program's outputs to rest: outputKeys of
   // the program's graph as describe lists it.

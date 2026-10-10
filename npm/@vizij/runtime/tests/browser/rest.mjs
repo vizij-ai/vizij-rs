@@ -27,12 +27,10 @@ function same(a, b) {
 
 const { page, logs, close } = await open(FIXTURES);
 try {
-  // A static face: no program, no ROS4HRI mapping (its idle blink runs on the
-  // device's own clock) and no animations, so the rest frame and the frame
-  // after reset compare pixel for pixel.
+  // A static face: no program and no animations, so the rest frame and the
+  // frame after reset compare pixel for pixel.
   await loadVizij(page, "quori", "Quori_Current_Extended.glb", {
     program: "none",
-    ros4hri: false,
     animations: false,
   });
   await settled(page);

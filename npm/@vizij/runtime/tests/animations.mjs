@@ -18,7 +18,7 @@ import {
 // A bundle with no graph composes to the animation source alone.
 const graph = await composeVizij(
   { extensions: { VIZIJ_bundle: { graphs: [] } } },
-  { animations: true, ros4hri: false },
+  { animations: true },
 );
 const runtime = await startRuntime(graph);
 // Step the device, 10 ms at a time, until a promise resolves — an invoke

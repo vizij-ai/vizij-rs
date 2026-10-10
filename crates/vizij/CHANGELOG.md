@@ -107,6 +107,12 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- The browser module composes the built-in ROS4HRI mapping only when asked
+  for: `loadVizij` and `composeVizij` take `ros4hri`, default `false`, so a
+  page's face speaks the vizij standard (`standard/vizij/*`) unless it asks
+  for ROS4HRI. The idle blink is the mapping's, so such a face blinks only
+  when its program or a client blinks it. The binary composes the mapping
+  unless `--no-ros4hri`.
 - The ROS4HRI mapping shows a named expression at the commanded arousal as
   its intensity (clamped to 0..1) instead of at full weight; an arousal of 0
   or below shows none.
