@@ -1457,3 +1457,171 @@ fn replacing_an_animation_lays_out_its_new_keys() {
     assert!(eng.replace_animation(a, wider()));
     assert_eq!(eng.output_revision(), replaced, "the same keys");
 }
+
+/// [`mk_scalar_track_linear`] with its keypoints given as `Value::F64`.
+fn mk_f64_track_linear(path: &str, keys: &[(f32, f64)]) -> Track {
+    let stamps: Vec<(f32, f32)> = keys.iter().map(|(stamp, _)| (*stamp, 0.0)).collect();
+    let mut track = mk_scalar_track_linear(path, &stamps);
+    for (point, (_, value)) in track.points.iter_mut().zip(keys) {
+        point.value = TrackValue::Float64(*value);
+    }
+    track
+}
+
+/// A scalar track samples, blends and bakes in the width of its keypoints:
+/// `F32` keypoints give `F32`, `F64` keypoints `F64` at full precision, a
+/// track with any `F64` keypoint `F64` at every time, and a key an `F32` and
+/// an `F64` track blend into `F64`, whichever contributes first.
+#[test]
+fn a_track_outputs_in_the_width_of_its_keypoints() {
+    let mut eng = Engine::new(Config::default());
+    let mut mixed = mk_scalar_track_linear("k.mixed", &[(0.0, 0.0), (1.0, 0.0)]);
+    mixed.points[1].value = TrackValue::Float64(1.0);
+    let a = eng.load_animation(mk_anim(
+        "a",
+        1.0,
+        vec![
+            mk_scalar_track_linear("k.f32", &[(0.0, 0.0), (1.0, 1.0)]),
+            mk_f64_track_linear("k.f64", &[(0.0, 0.0), (1.0, 1.0)]),
+            mk_f64_track_linear("k.held", &[(0.0, 0.1), (1.0, 0.1)]),
+            mixed,
+            mk_scalar_track_linear("k.blend", &[(0.0, 1.0), (1.0, 1.0)]),
+            mk_f64_track_linear("k.blend-first", &[(0.0, 3.0), (1.0, 3.0)]),
+            mk_f64_track_linear("k.fine", &[(0.0, 1e9), (1.0, 1e9 + 1.0)]),
+        ],
+    ));
+    let b = eng.load_animation(mk_anim(
+        "b",
+        1.0,
+        vec![
+            mk_f64_track_linear("k.blend", &[(0.0, 3.0), (1.0, 3.0)]),
+            mk_scalar_track_linear("k.blend-first", &[(0.0, 1.0), (1.0, 1.0)]),
+        ],
+    ));
+    let p = eng.create_player("p");
+    eng.add_instance(p, a, InstanceCfg::default());
+    eng.add_instance(p, b, InstanceCfg::default());
+
+    let values = eng.update_by_target(0.5, Inputs::default()).to_vec();
+    let by_key: Vec<(String, Option<Value>)> = eng
+        .output_targets()
+        .iter()
+        .map(|t| t.key.clone())
+        .zip(values)
+        .collect();
+    let value = |key: &str| {
+        by_key
+            .iter()
+            .find(|(k, _)| k == key)
+            .and_then(|(_, v)| v.clone())
+            .unwrap_or_else(|| panic!("{key} written: {by_key:?}"))
+    };
+    match value("k.f32") {
+        Value::F32(v) => approx(v, 0.5, 1e-3),
+        other => panic!("an F32 track gives F32, got {other:?}"),
+    }
+    match value("k.f64") {
+        Value::F64(v) => assert!((v - 0.5).abs() < 1e-3, "{v}"),
+        other => panic!("an F64 track gives F64, got {other:?}"),
+    }
+    assert_eq!(
+        value("k.held"),
+        Value::F64(0.1),
+        "a double that f32 cannot hold comes back unchanged"
+    );
+    match value("k.mixed") {
+        Value::F64(v) => assert!((v - 0.5).abs() < 1e-3, "{v}"),
+        other => panic!("F32 to F64 keypoints give F64, got {other:?}"),
+    }
+    assert_eq!(
+        value("k.blend"),
+        Value::F64(2.0),
+        "an F32 and an F64 track blended on one key give F64"
+    );
+    assert_eq!(value("k.blend-first"), Value::F64(2.0), "F64 first");
+    match value("k.fine") {
+        Value::F64(v) => assert!(
+            (v - (1e9 + 0.5)).abs() < 1e-6,
+            "interpolated in f64, got {v}"
+        ),
+        other => panic!("an F64 track gives F64, got {other:?}"),
+    }
+
+    let changes = eng
+        .update_values_and_derivatives(0.0, Inputs::default())
+        .changes
+        .clone();
+    let derivative = |key: &str| {
+        changes
+            .iter()
+            .find(|c| c.key == key)
+            .and_then(|c| c.derivative.clone())
+            .unwrap_or_else(|| panic!("{key} has a derivative"))
+    };
+    match derivative("k.f32") {
+        Value::F32(d) => approx(d, 1.0, 1e-2),
+        other => panic!("an F32 track's derivative is F32, got {other:?}"),
+    }
+    match derivative("k.f64") {
+        Value::F64(d) => assert!((d - 1.0).abs() < 1e-2, "{d}"),
+        other => panic!("an F64 track's derivative is F64, got {other:?}"),
+    }
+
+    let cfg = BakingConfig {
+        frame_rate: 4.0,
+        start_time: 0.0,
+        end_time: Some(1.0),
+        ..Default::default()
+    };
+    let (baked, derivatives) = eng
+        .bake_animation_with_derivatives(a, &cfg)
+        .expect("a bake within the bound");
+    let samples = |key: &str| {
+        let i = baked
+            .tracks
+            .iter()
+            .position(|t| t.target_path == key)
+            .expect("baked track");
+        (&baked.tracks[i].values, &derivatives.tracks[i].values)
+    };
+    let (values, slopes) = samples("k.f32");
+    assert!(
+        values.iter().all(|v| matches!(v, Value::F32(_))),
+        "{values:?}"
+    );
+    assert!(
+        slopes.iter().flatten().all(|d| matches!(d, Value::F32(_))),
+        "{slopes:?}"
+    );
+    let (values, slopes) = samples("k.f64");
+    assert!(
+        values.iter().all(|v| matches!(v, Value::F64(_))),
+        "{values:?}"
+    );
+    assert!(
+        slopes.iter().flatten().all(|d| matches!(d, Value::F64(_))),
+        "{slopes:?}"
+    );
+    assert!(slopes.iter().any(Option::is_some));
+    assert!(samples("k.held").0.iter().all(|v| *v == Value::F64(0.1)));
+    let (values, slopes) = samples("k.mixed");
+    assert!(
+        values.iter().all(|v| matches!(v, Value::F64(_))),
+        "a track with an F64 keypoint is F64 at its F32 keypoint too: {values:?}"
+    );
+    assert!(
+        slopes.iter().flatten().all(|d| matches!(d, Value::F64(_))),
+        "{slopes:?}"
+    );
+    let values_only = eng
+        .bake_animation(a, &cfg)
+        .expect("a bake within the bound");
+    assert!(
+        values_only
+            .tracks
+            .iter()
+            .zip(&baked.tracks)
+            .all(|(only, with)| only.values == with.values),
+        "a values-only bake samples the same"
+    );
+}

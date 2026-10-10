@@ -60,6 +60,12 @@ enum AccumEntry {
         sum: f32,
         w: f32,
     },
+    /// A scalar a `Float64` contributes to this step: its values and weights
+    /// summed, and the blend encoded, in `f64`.
+    Scalar64 {
+        sum: f64,
+        w: f64,
+    },
     Vec2 {
         sum: [f32; 2],
         w: f32,
@@ -101,6 +107,22 @@ impl AccumEntry {
             (AccumEntry::Scalar { sum, w: ww }, TrackValue::Float(x)) => {
                 *sum += x * w;
                 *ww += w;
+            }
+            (entry @ AccumEntry::Scalar { .. }, TrackValue::Float64(x)) => {
+                if let AccumEntry::Scalar { sum, w: ww } = *entry {
+                    *entry = AccumEntry::Scalar64 {
+                        sum: f64::from(sum) + x * f64::from(w),
+                        w: f64::from(ww) + f64::from(w),
+                    };
+                }
+            }
+            (AccumEntry::Scalar64 { sum, w: ww }, TrackValue::Float64(x)) => {
+                *sum += x * f64::from(w);
+                *ww += f64::from(w);
+            }
+            (AccumEntry::Scalar64 { sum, w: ww }, TrackValue::Float(x)) => {
+                *sum += f64::from(*x) * f64::from(w);
+                *ww += f64::from(w);
             }
             (AccumEntry::Vec2 { sum, w: ww }, TrackValue::Vec2(a)) => {
                 sum[0] += a[0] * w;
@@ -196,6 +218,10 @@ impl AccumEntry {
     fn from_value(v: &TrackValue, w: f32) -> Self {
         match v {
             TrackValue::Float(x) => AccumEntry::Scalar { sum: *x * w, w },
+            TrackValue::Float64(x) => AccumEntry::Scalar64 {
+                sum: x * f64::from(w),
+                w: f64::from(w),
+            },
             TrackValue::Vec2(a) => AccumEntry::Vec2 {
                 sum: [a[0] * w, a[1] * w],
                 w,
@@ -250,6 +276,13 @@ impl AccumEntry {
             AccumEntry::Scalar { sum, w } => {
                 if w > 0.0 {
                     Some(vocab::float(sum / w))
+                } else {
+                    None
+                }
+            }
+            AccumEntry::Scalar64 { sum, w } => {
+                if w > 0.0 {
+                    Some(Value::F64(sum / w))
                 } else {
                     None
                 }

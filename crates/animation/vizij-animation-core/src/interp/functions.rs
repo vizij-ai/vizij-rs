@@ -8,7 +8,7 @@
 //! Step-only kinds (Bool/Text/Vector/NumericArray/Step) fall back to the
 //! left operand in every blend, so mismatched pairs are fail-soft.
 
-use crate::value::{TrackValue, Transform};
+use crate::value::{wide_scalars, TrackValue, Transform};
 
 #[inline]
 fn sub_vec4(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
@@ -156,8 +156,11 @@ pub fn linear_value(a: &TrackValue, b: &TrackValue, t: f32) -> TrackValue {
                 scale: lerp_vec3(ta.scale, tb.scale, t),
             })
         }
-        // Fallback: step-only kinds and mismatched pairs prefer left (fail-soft).
-        _ => a.clone(),
+        _ => match wide_scalars(a, b) {
+            Some((va, vb)) => TrackValue::Float64(va + (vb - va) * f64::from(t)),
+            // Fallback: step-only kinds and mismatched pairs prefer left (fail-soft).
+            None => a.clone(),
+        },
     }
 }
 
@@ -207,7 +210,10 @@ pub fn linear_derivative(a: &TrackValue, b: &TrackValue, t: f32, dt_du: f32) -> 
                 scale,
             })
         }
-        _ => TrackValue::Float(0.0),
+        _ => match wide_scalars(a, b) {
+            Some((va, vb)) => TrackValue::Float64((vb - va) * f64::from(dt_du)),
+            None => TrackValue::Float(0.0),
+        },
     }
 }
 

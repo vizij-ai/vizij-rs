@@ -6,6 +6,15 @@ All notable changes to `vizij-animation-wasm`. The format follows
 
 ## [Unreleased]
 
+### Breaking
+
+- Built on `vizij-animation-core` 5: a number track's values come out in
+  the width of its keypoints. Keypoints given as `{"f64": …}` output
+  `{"f64": …}` from updates and bakes, derivatives included, where they
+  output `{"f32": …}`. A track with any `{"f64": …}` keypoint outputs
+  `{"f64": …}` throughout; a key an `f32` and an `f64` track blend into
+  outputs `{"f64": …}` on the steps the `f64` track weighs on it.
+
 ### Changed
 
 - Built on `vizij-animation-core` 5: the changes of an update come in a

@@ -51,6 +51,17 @@ hatch), so Vizij composites (`Vec3`/`Quat`/`Transform`/`ColorRgba`) ride through
 as `Value::Structure` carrying **vizij-arora's Vizij-namespaced UUIDs** — no
 per-composite type is declared here; the runtime `Value` carries the identity.
 
+A number keeps the width of its keypoints. A track keyed with `Value::F32`
+outputs `F32` from `step`, `step_values` and both bakes; one keyed with
+`Value::F64` outputs `F64`, sampled and blended in `f64`. A track with any
+`F64` keypoint outputs `F64` throughout. A key an `F32` and an `F64` track
+blend into outputs `F64` on the steps the `F64` track weighs on it, and `F32`
+on the others. A consumer that writes the values onto typed keys, such as a
+device's declared inputs, keys every track of a key in the type the key
+declares. The composites, `ArrayF32`
+and an `ArrayValue` of numbers are single precision: their numbers come out
+`F32`.
+
 ### Exports
 
 Loading and unloading are structural edits, applied immediately:
