@@ -363,6 +363,19 @@
       }
     },
     {
+      "id": "gain_p",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "in_lipsync_gain",
+      "type": "input",
+      "params": {
+        "path": "rig/quori_latest/standard/vizij/lipsync/gain",
+        "value": 1
+      }
+    },
+    {
       "id": "clamp_p",
       "type": "clamp",
       "params": {}
@@ -388,6 +401,11 @@
       }
     },
     {
+      "id": "gain_f",
+      "type": "multiply",
+      "params": {}
+    },
+    {
       "id": "clamp_f",
       "type": "clamp",
       "params": {}
@@ -411,6 +429,11 @@
         "path": "rig/quori_latest/standard/vizij/viseme/TH",
         "value": 0
       }
+    },
+    {
+      "id": "gain_t_2",
+      "type": "multiply",
+      "params": {}
     },
     {
       "id": "clamp_t_2",
@@ -446,6 +469,11 @@
       }
     },
     {
+      "id": "gain_t",
+      "type": "multiply",
+      "params": {}
+    },
+    {
       "id": "clamp_t",
       "type": "clamp",
       "params": {}
@@ -469,6 +497,11 @@
         "path": "rig/quori_latest/standard/vizij/viseme/kk",
         "value": 0
       }
+    },
+    {
+      "id": "gain_k",
+      "type": "multiply",
+      "params": {}
     },
     {
       "id": "clamp_k",
@@ -504,6 +537,11 @@
       }
     },
     {
+      "id": "gain_s",
+      "type": "multiply",
+      "params": {}
+    },
+    {
       "id": "clamp_s",
       "type": "clamp",
       "params": {}
@@ -527,6 +565,11 @@
         "path": "rig/quori_latest/standard/vizij/viseme/RR",
         "value": 0
       }
+    },
+    {
+      "id": "gain_r",
+      "type": "multiply",
+      "params": {}
     },
     {
       "id": "clamp_r",
@@ -554,6 +597,11 @@
       }
     },
     {
+      "id": "gain_a",
+      "type": "multiply",
+      "params": {}
+    },
+    {
       "id": "clamp_a",
       "type": "clamp",
       "params": {}
@@ -577,6 +625,11 @@
         "path": "rig/quori_latest/standard/vizij/viseme/E",
         "value": 0
       }
+    },
+    {
+      "id": "gain_e",
+      "type": "multiply",
+      "params": {}
     },
     {
       "id": "clamp_e",
@@ -604,6 +657,11 @@
       }
     },
     {
+      "id": "gain_i",
+      "type": "multiply",
+      "params": {}
+    },
+    {
       "id": "clamp_i",
       "type": "clamp",
       "params": {}
@@ -629,6 +687,11 @@
       }
     },
     {
+      "id": "gain_o",
+      "type": "multiply",
+      "params": {}
+    },
+    {
       "id": "clamp_o",
       "type": "clamp",
       "params": {}
@@ -652,6 +715,11 @@
         "path": "rig/quori_latest/standard/vizij/viseme/ou",
         "value": 0
       }
+    },
+    {
+      "id": "gain_u",
+      "type": "multiply",
+      "params": {}
     },
     {
       "id": "clamp_u",
@@ -1360,6 +1428,24 @@
         "node_id": "sum_p"
       },
       "to": {
+        "node_id": "gain_p",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_lipsync_gain"
+      },
+      "to": {
+        "node_id": "gain_p",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gain_p"
+      },
+      "to": {
         "node_id": "clamp_p",
         "input": "in"
       }
@@ -1405,6 +1491,24 @@
         "node_id": "sum_f"
       },
       "to": {
+        "node_id": "gain_f",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_lipsync_gain"
+      },
+      "to": {
+        "node_id": "gain_f",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gain_f"
+      },
+      "to": {
         "node_id": "clamp_f",
         "input": "in"
       }
@@ -1448,6 +1552,24 @@
     {
       "from": {
         "node_id": "sum_t_2"
+      },
+      "to": {
+        "node_id": "gain_t_2",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_lipsync_gain"
+      },
+      "to": {
+        "node_id": "gain_t_2",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gain_t_2"
       },
       "to": {
         "node_id": "clamp_t_2",
@@ -1504,6 +1626,24 @@
         "node_id": "sum_t"
       },
       "to": {
+        "node_id": "gain_t",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_lipsync_gain"
+      },
+      "to": {
+        "node_id": "gain_t",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gain_t"
+      },
+      "to": {
         "node_id": "clamp_t",
         "input": "in"
       }
@@ -1547,6 +1687,24 @@
     {
       "from": {
         "node_id": "sum_k"
+      },
+      "to": {
+        "node_id": "gain_k",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_lipsync_gain"
+      },
+      "to": {
+        "node_id": "gain_k",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gain_k"
       },
       "to": {
         "node_id": "clamp_k",
@@ -1603,6 +1761,24 @@
         "node_id": "sum_s"
       },
       "to": {
+        "node_id": "gain_s",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_lipsync_gain"
+      },
+      "to": {
+        "node_id": "gain_s",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gain_s"
+      },
+      "to": {
         "node_id": "clamp_s",
         "input": "in"
       }
@@ -1646,6 +1822,24 @@
     {
       "from": {
         "node_id": "sum_r"
+      },
+      "to": {
+        "node_id": "gain_r",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_lipsync_gain"
+      },
+      "to": {
+        "node_id": "gain_r",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gain_r"
       },
       "to": {
         "node_id": "clamp_r",
@@ -1693,6 +1887,24 @@
         "node_id": "sum_a"
       },
       "to": {
+        "node_id": "gain_a",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_lipsync_gain"
+      },
+      "to": {
+        "node_id": "gain_a",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gain_a"
+      },
+      "to": {
         "node_id": "clamp_a",
         "input": "in"
       }
@@ -1736,6 +1948,24 @@
     {
       "from": {
         "node_id": "sum_e"
+      },
+      "to": {
+        "node_id": "gain_e",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_lipsync_gain"
+      },
+      "to": {
+        "node_id": "gain_e",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gain_e"
       },
       "to": {
         "node_id": "clamp_e",
@@ -1783,6 +2013,24 @@
         "node_id": "sum_i"
       },
       "to": {
+        "node_id": "gain_i",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_lipsync_gain"
+      },
+      "to": {
+        "node_id": "gain_i",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gain_i"
+      },
+      "to": {
         "node_id": "clamp_i",
         "input": "in"
       }
@@ -1828,6 +2076,24 @@
         "node_id": "sum_o"
       },
       "to": {
+        "node_id": "gain_o",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_lipsync_gain"
+      },
+      "to": {
+        "node_id": "gain_o",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gain_o"
+      },
+      "to": {
         "node_id": "clamp_o",
         "input": "in"
       }
@@ -1871,6 +2137,24 @@
     {
       "from": {
         "node_id": "sum_u"
+      },
+      "to": {
+        "node_id": "gain_u",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_lipsync_gain"
+      },
+      "to": {
+        "node_id": "gain_u",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gain_u"
       },
       "to": {
         "node_id": "clamp_u",

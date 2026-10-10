@@ -45,8 +45,8 @@ stays with the face.
 > `/expressive_face/look_at` — and routes their fields onto these keys,
 > publishes the [face image](#driving-a-key-from-ros-2) on
 > `/robot_face/image_raw[/compressed]` and [what the face is
-> saying](#speaking-through-the-standard-skill) on `/robot_face/speech`,
-> and binds the [`/skill/look_at`](#the-look_at-skill) action. The `vizij`
+> saying](#speaking-through-the-standard-skill) on `/robot_face/speech`
+> and the lip shape it is saying it with on `/robot_face/viseme`, and binds the [`/skill/look_at`](#the-look_at-skill) action. The `vizij`
 > binary wires the preset when run with `--ros2` (`--no-ros4hri` leaves it
 > out). The message
 > vocabulary (`hri_msgs`, `geometry_msgs`, `interaction_skills`, …) ships as
@@ -72,7 +72,8 @@ serves it); this table summarizes it.
 | `standard/ros4hri/gaze/frame` | string | the look-at point's frame id | consumed by the `look_at` skill, not the mapping |
 | `standard/ros4hri/viseme` | u8 `[0,14]` | `hri_msgs/Viseme.value`, from `/tts/viseme` or `/tts/visemes` | the lip shape at the audio playhead — each new code plays through `play_viseme` (see Lips below) |
 | `standard/ros4hri/au/<code>` | f32 `[0,1]` | `hri_msgs/FacialActionUnits` | FACS action-unit intensity → muscle controls |
-| `standard/ros4hri/speech/text` | string | *published* as `/robot_face/speech` (`std_msgs/String`) | the utterance being spoken, empty at rest — the mapping's one output, relayed from the face's speech state (see Speech below) |
+| `standard/ros4hri/speech/text` | string | *published* as `/robot_face/speech` (`std_msgs/String`) | the utterance being spoken, empty at rest — relayed from the face's speech state (see Speech below) |
+| `standard/ros4hri/speech/viseme` | string | *published* as `/robot_face/viseme` (`std_msgs/String`) | the lip shape being spoken, a Vizij standard shape name, `sil` at rest — relayed from the face's current viseme (see Speech below) |
 
 ## Per-channel behaviour
 
@@ -103,11 +104,17 @@ serves it); this table summarizes it.
   through a topic either: speaking is the [`/skill/say`
   action](#speaking-through-the-standard-skill), which is what produces the
   visemes.
-- **Speech** — the other direction: the utterance a `say` run is speaking
-  (`standard/vizij/speech`, the face's speech state, per face) is relayed as
-  is to the device-scoped `speech/text`, which the bridge publishes on
-  `/robot_face/speech`. Empty before the audio starts and once it ends, so a
-  subtitle appears and clears with the voice.
+- **Speech** — the other direction: the face's speech state, per face, is
+  relayed as is to device-scoped keys the bridge publishes.
+  - The utterance a `say` run is speaking (`standard/vizij/speech`) goes to
+    `speech/text`, on `/robot_face/speech`. It is empty before the audio
+    starts and once it ends, so a subtitle appears and clears with the voice.
+  - The current viseme (`standard/vizij/viseme`) goes to `speech/viseme`, on
+    `/robot_face/viseme`: the shape whichever player is driving the lips, a
+    `say` run or a streamed viseme, `sil` at rest. One topic follows the lips
+    of the whole robot, without knowing the face id. It is the standard's
+    shape name rather than an `hri_msgs/Viseme`: the face reports the shape,
+    and a stream's time and duration are not part of its state.
 - **Blink** — an idle generator (≈8 s cycle, deterministically jittered, 0.2 s
   parabolic pulse) drives the eyelids, inhibited while the eyes are commanded
   closed or the face is asleep.
@@ -192,6 +199,13 @@ empty string once it ends:
 
 ```bash
 ros2 topic echo --qos-reliability best_effort /robot_face/speech
+```
+
+The lip shape follows on `/robot_face/viseme`, a standard shape name (`aa`,
+`PP`, …) for each viseme and `sil` once the lips are at rest:
+
+```bash
+ros2 topic echo --qos-reliability best_effort /robot_face/viseme
 ```
 
 This is exercised end to end, from `rclpy` on Jazzy with `rmw_zenoh`, by the

@@ -171,6 +171,16 @@ pub fn viseme_path(shape: &str) -> String {
 /// are the actions; this is what they report.
 pub const VISEME: &str = "standard/vizij/viseme";
 
+/// The face's lipsync gain: how strongly it shows the viseme weights. The
+/// face's adaptation scales every viseme weight by it before mapping it onto
+/// a pose, each pose clamped to [0, 1], so a face whose mouth shapes read too
+/// strong or too weak is tuned once rather than on every call. A caller's
+/// weight keeps its meaning; the gain is the face's rendering of it. Rests at
+/// the gain the face's adaptation is authored with, 1 unless it says
+/// otherwise, and a deployment overrides it by writing the key. A setting,
+/// not a control: nothing animates it.
+pub const LIPSYNC_GAIN: &str = "standard/vizij/lipsync/gain";
+
 /// The utterance being spoken, the face's speech state: the text of a `say`
 /// run from the moment its audio starts playing — whether or not synthesis
 /// has finished — until it ends, empty at rest. Written by the say player

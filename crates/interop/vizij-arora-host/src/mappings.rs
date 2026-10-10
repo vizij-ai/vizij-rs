@@ -2,7 +2,7 @@
 //! implement one profile in terms of another, so a face responds to an
 //! external standard. One entry today (ROS4HRI): it consumes the `ros4hri`
 //! profile's commands and produces the `vizij-face` profile's controls, and
-//! relays the face's speech state back as the `ros4hri` profile's one output;
+//! relays the face's speech state back as the `ros4hri` profile's outputs;
 //! both profiles are declared in [`crate::profile`].
 //!
 //! A mapping is the operation half of a standard; the profile is the

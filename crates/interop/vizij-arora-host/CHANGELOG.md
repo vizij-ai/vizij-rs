@@ -4,6 +4,27 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [6.6.0] - 2026-10-10
+
+### Added
+
+- `standard::LIPSYNC_GAIN` (`standard/vizij/lipsync/gain`): the face's
+  lipsync gain, which its adaptation scales every viseme weight by before
+  mapping it onto a pose. The `vizij-face` profile declares it as an input
+  with no tier, resting at 1, so coverage grading is unchanged; the profile
+  has 91 keys.
+- `ros4hri::SPEECH_VISEME_KEY` (`standard/ros4hri/speech/viseme`): the lip
+  shape being spoken, a standard shape name, `sil` at rest, as
+  arora-bridge-ros2 10.2's ROS4HRI preset publishes it on
+  `/robot_face/viseme`. The `ros4hri` profile declares it as an output; the
+  profile has 30 keys.
+
+### Changed
+
+- The ROS4HRI mapping relays the face's current viseme
+  (`standard/vizij/viseme`) to `standard/ros4hri/speech/viseme`, as it relays
+  the utterance to `standard/ros4hri/speech/text`.
+
 ## [6.5.0] - 2026-10-10
 
 ### Added

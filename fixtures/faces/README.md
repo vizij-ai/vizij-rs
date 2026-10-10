@@ -47,7 +47,9 @@ which applies the same mapping to whatever controls the rig has:
   faces author (anger, sad, concerned, surprise, happy, sleepy, neutral): each
   pose weight is the sum of the expressions that drive it, clamped to [0, 1].
 - **Visemes** — the 15 shapes onto the letter poses (`PP` → `p`, `DD`/`nn` →
-  `t`, …); `sil`, the closed-mouth rest, is listened to and drives nothing.
+  `t`, …), each pose's sum scaled by the face's lipsync gain
+  (`lipsync/gain`, resting at 1) before the clamp; `sil`, the closed-mouth
+  rest, is listened to and drives nothing.
 - **Gaze** — a rig that listens on `standard/vizij/*` needs nothing; a rig
   with the earlier `standard/<eye>/pos/*` inputs takes them one to one; a rig
   that moves its eyes only through `propsrig/<l|r>_eye/translation/*` takes

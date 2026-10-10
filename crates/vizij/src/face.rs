@@ -1467,7 +1467,8 @@ mod tests {
     /// envelope — up within the attack, held, then closed — reports the
     /// shape as the face's current viseme and as its feedback while it is
     /// driven, and succeeds once the envelope has closed; the other shapes
-    /// stay at rest.
+    /// stay at rest. The mapping relays the current viseme to the ROS4HRI
+    /// speech state.
     #[test]
     fn a_play_viseme_run_plays_the_shape_through_its_envelope() {
         use vizij_arora_behavior::task;
@@ -1480,6 +1481,10 @@ mod tests {
         assert!(aa > 0.8, "aa = {aa} after the attack");
         assert!(read_f32(&arora, &standard::viseme_path("oh")) < 0.01);
         assert_eq!(read_value(&arora, standard::VISEME), Some(text("aa")));
+        assert_eq!(
+            read_value(&arora, ros4hri::SPEECH_VISEME_KEY),
+            Some(text("aa"))
+        );
         assert_eq!(
             fed_back_viseme(&arora, &handle.feedback[0].path).as_deref(),
             Some("aa")
@@ -1496,6 +1501,10 @@ mod tests {
         let aa = read_f32(&arora, &standard::viseme_path("aa"));
         assert!(aa < 0.1, "aa = {aa} after the release");
         assert_eq!(read_value(&arora, standard::VISEME), Some(text("sil")));
+        assert_eq!(
+            read_value(&arora, ros4hri::SPEECH_VISEME_KEY),
+            Some(text("sil"))
+        );
         assert_eq!(
             read_value(&arora, &handle.status.path),
             Some(task::success())
@@ -1781,6 +1790,24 @@ mod tests {
         step_for(&mut arora, 0.45);
         let mouth = read_f32(&arora, "rig/quori_latest/poses/pose_a.weight");
         assert!(mouth < 0.1, "the envelope closes (pose_a = {mouth})");
+
+        // The face's lipsync gain scales what the mouth shows; the run's
+        // weight is unchanged.
+        stage(
+            &arora,
+            &format!("rig/quori_latest/{}", standard::LIPSYNC_GAIN),
+            float(0.5),
+        );
+        spawn(&mut arora, &play_viseme_call("aa", 1.0));
+        step_for(&mut arora, 0.2);
+        let weight = read_f32(&arora, "rig/quori_latest/standard/vizij/viseme/aa");
+        assert!(weight > 0.8, "the run drives at its weight (aa = {weight})");
+        let mouth = read_f32(&arora, "rig/quori_latest/poses/pose_a.weight");
+        assert!(
+            (mouth - 0.5 * weight).abs() < 0.02,
+            "the gain halves the pose (pose_a = {mouth}, aa = {weight})"
+        );
+        step_for(&mut arora, 0.45);
 
         // The keys beyond ROS4HRI, written directly: an expression it does
         // not name, the blink, and a conversation state each reach the input

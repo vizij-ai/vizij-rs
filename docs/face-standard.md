@@ -94,14 +94,24 @@ the industry 15-shape set (Oculus/Meta naming); `sil` is silence.
 sil PP FF TH DD kk CH SS nn RR aa E ih oh ou
 ```
 
-The weights are raw: a face maps each onto its own poses as is, with no
-transition of its own. Rest is the face's neutral — every viseme weight at
+The weights are raw: a face maps each onto its own poses, scaled by its
+lipsync gain, with no transition of its own. Rest is the face's neutral — every viseme weight at
 zero, `sil` included (a viseme player writes the `sil` weight, never drives
 it). The timing is the player's: the attack, hold and release of a played
 viseme and the crossfade to the next shape come from the two viseme players
 Vizij ships as [skills](skills.md) — `play_viseme(shape, weight)`, one shape
 through a lipsync envelope, and `say(text, voice)`, whose run streams the
 visemes of the speech it synthesizes through the same driver.
+
+The **lipsync gain**, at `standard/vizij/lipsync/gain`, is a setting of the
+face rather than a control: how strongly it shows the viseme weights. The
+face's adaptation multiplies every viseme weight by it before mapping it onto
+a pose, each pose clamped to [0, 1]. A face whose mouth shapes read too strong
+or too weak is tuned once rather than on every call, and a caller's weight
+keeps its meaning. The gain rests at the value the adaptation is authored
+with, 1 unless the face says otherwise, and a deployment overrides it by
+writing the key. The profile declares it as an `input` with no tier, so it
+doesn't count toward a face's compliance level.
 
 The face's **current viseme** is state, at `standard/vizij/viseme`: one of the
 shapes as a string, `sil` at rest, written by whichever player is driving the
@@ -110,7 +120,7 @@ monitor). Next to it, `standard/vizij/speech` is **what the face is saying**:
 the utterance of a `say` run from the moment its audio starts playing until it
 ends, empty at rest. Neither is a command: the players are the actions; this
 is what they report, and what their runs feed back. Both are declared as the
-`vizij-face` profile's `output` keys, the rest being its `input` controls.
+`vizij-face` profile's `output` keys, the rest being its `input` keys.
 
 ## Muscle tier
 
