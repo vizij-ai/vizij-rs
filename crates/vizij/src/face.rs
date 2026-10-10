@@ -112,9 +112,10 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
 /// writes (the ones a remote may drive) — with the type the store states for
 /// each ([`declare_keys`]):
 /// the input's default value decides (string → String, bool → Boolean,
-/// anything numeric or absent → F64), except for a ROS4HRI key, which takes
-/// the type and rest its profile states — those of the `hri_msgs` field a
-/// ROS 2 bridge writes it from (`valence` and `arousal` are `f32`);
+/// anything numeric or absent → F64), except for a key a shipped profile
+/// types — the face standard's (`f32`) or ROS4HRI's, typed as the `hri_msgs`
+/// field a ROS 2 bridge writes it from — which takes the type and rest its
+/// profile states;
 /// vector-valued inputs stay out (they travel as typed topics, e.g. the gaze
 /// target). Built-in keys stay out.
 ///
@@ -123,7 +124,7 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
 /// (`{"f32": 0.0}`, `{"str": ""}`), not as the bare JSON literal an author
 /// wrote.
 pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
-    walk_free_inputs(spec)
+    walk_free_inputs(spec, &profile_keys(&rig_prefix_of(spec)))
         .into_iter()
         .map(|(path, ty, _)| (path, ty))
         .collect()
@@ -139,8 +140,10 @@ pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
 /// writes stays declared: the program runs only while it runs. Each is open
 /// to remote writers, of its type — a number in `[0, 1]`, unless it is one
 /// of Studio's keys (the `studio` module's), in the units of the feature it
-/// drives, or a ROS4HRI key, in the range its profile states — and rests at
-/// its authored default. `neutral` (the bundle's
+/// drives, or a key a shipped profile declares (the face standard's, under
+/// the prefix the face's standard controls live under, or ROS4HRI's), of the
+/// type and in the range that profile states — and rests at its authored
+/// default, or a profile key at the profile's. `neutral` (the bundle's
 /// neutral pose, [`Bundle::neutral_stage_writes`]) moves the rest of the
 /// keys it names, and gives a rig key that is no free input its rest alone:
 /// the standard inputs feed the rig through the adaptation, so a reset that
@@ -155,7 +158,8 @@ pub fn declare_keys(
 ) {
     use arora_types::data::KeyMeta;
     use arora_types::value::Type;
-    let mut inputs = walk_free_inputs(spec);
+    let profiled = profile_keys(&rig_prefix_of(spec));
+    let mut inputs = walk_free_inputs(spec, &profiled);
     // A program's inputs over the graph: the free inputs of the two composed,
     // which the graph's own already hold but for the program's.
     match serde_json::from_str::<serde_json::Value>(spec) {
@@ -166,7 +170,9 @@ pub fn declare_keys(
                     (format!("program::{id}"), program.clone()),
                 ]);
                 match composed {
-                    Ok(composed) => inputs.extend(walk_free_inputs(&composed.to_string())),
+                    Ok(composed) => {
+                        inputs.extend(walk_free_inputs(&composed.to_string(), &profiled))
+                    }
                     Err(e) => log::warn!("program {id:?} declares no keys: {e:#}"),
                 }
             }
@@ -182,12 +188,11 @@ pub fn declare_keys(
         .unwrap_or_default();
     #[cfg(not(feature = "studio"))]
     let unranged = std::collections::HashSet::<String>::new();
-    let ros4hri = ros4hri_keys();
     let mut meta: std::collections::HashMap<Key, KeyMeta> = inputs
         .into_iter()
         .map(|(path, ty, rest)| {
             let mut input = KeyMeta::new().editable().of_type(ty.clone());
-            match ros4hri.get(&path) {
+            match profiled.get(&path) {
                 Some(key) => {
                     if let (Some(min), Some(max)) = (key.min, key.max) {
                         input = input.range(min, max);
@@ -213,8 +218,12 @@ pub fn declare_keys(
 }
 
 /// Each free input with its type and its authored default, if any (see
-/// [`free_inputs`]).
-fn walk_free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type, Option<Value>)> {
+/// [`free_inputs`]) — for a key of `profiled`, the type and default its
+/// profile states.
+fn walk_free_inputs(
+    spec: &str,
+    profiled: &ProfileKeys,
+) -> Vec<(String, arora_types::value::Type, Option<Value>)> {
     use arora_types::value::Type;
     let Ok(spec) = serde_json::from_str::<serde_json::Value>(spec) else {
         return Vec::new();
@@ -241,7 +250,6 @@ fn walk_free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type, Option
         .filter(|n| kind_of(n) == "output")
         .filter_map(path_of)
         .collect();
-    let ros4hri = ros4hri_keys();
     let mut seen = std::collections::HashSet::new();
     let mut inputs = Vec::new();
     for node in nodes.iter().filter(|n| kind_of(n) == "input") {
@@ -263,7 +271,7 @@ fn walk_free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type, Option
                 _ => continue,
             },
         };
-        let (ty, default) = match ros4hri.get(&path) {
+        let (ty, default) = match profiled.get(&path) {
             Some(key) => (
                 key.value_type.clone().unwrap_or(ty),
                 key.default_value.clone().or(default),
@@ -276,13 +284,22 @@ fn walk_free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type, Option
     inputs
 }
 
-/// The ROS4HRI keys a profile types, by path, as the `ros4hri` profile states
-/// them: a ROS 2 bridge writes each as its `hri_msgs` field is typed, and a
-/// device takes a remote write only of the type the key states.
-fn ros4hri_keys() -> std::collections::HashMap<String, vizij_arora_host::profile::ProfileKey> {
-    vizij_arora_host::profile::ros4hri_profile()
+/// Keys a shipped profile types, by path.
+type ProfileKeys = std::collections::HashMap<String, vizij_arora_host::profile::ProfileKey>;
+
+/// The keys the shipped profiles type, by path, as each profile states them:
+/// the face standard's (`vizij-face`) addressed to the face under
+/// `rig_prefix`, and ROS4HRI's, device-scoped. A device takes a remote write
+/// only of the type its key states, so a key is declared as its profile
+/// types it — a ROS 2 bridge writes each ROS4HRI key as its `hri_msgs` field
+/// is typed, and a page writes a number as an `f32`.
+fn profile_keys(rig_prefix: &str) -> ProfileKeys {
+    use vizij_arora_host::profile::{ros4hri_profile, vizij_face_profile};
+    vizij_face_profile()
+        .with_rig_prefix(rig_prefix)
         .keys
         .into_iter()
+        .chain(ros4hri_profile().keys)
         .filter(|key| key.value_type.is_some())
         .map(|key| (key.path.clone(), key))
         .collect()
@@ -593,6 +610,35 @@ mod tests {
                 ("flags/awake".to_string(), Type::Boolean),
                 ("standard/ros4hri/expression/name".to_string(), Type::String),
             ]
+        );
+    }
+
+    /// A face-standard input is declared as the `vizij-face` profile states
+    /// it, under the face's rig prefix: an `f32`, a gaze key in `[-1, 1]` and
+    /// a weight in `[0, 1]`, resting at the profile's rest.
+    #[test]
+    fn declared_face_standard_keys_take_their_profile() {
+        use arora_types::data::KeyMeta;
+        use arora_types::value::Type;
+        let spec = r#"{"nodes": [
+            {"id": "a", "type": "input", "params": {"path": "rig/f/standard/vizij/left_eye/pos/x", "value": 0.0}},
+            {"id": "b", "type": "input", "params": {"path": "rig/f/standard/vizij/expression/happy", "value": 0.0}}
+        ], "edges": []}"#;
+        let store = BlackboardStore::new();
+        declare_keys(&store, spec, &[], &[]);
+        let f32_key = |min, max| {
+            KeyMeta::new()
+                .editable()
+                .of_type(Type::F32)
+                .range(min, max)
+                .resting_at(Value::F32(0.0))
+        };
+        assert_eq!(
+            store.meta(&[
+                Key::from("rig/f/standard/vizij/left_eye/pos/x"),
+                Key::from("rig/f/standard/vizij/expression/happy"),
+            ]),
+            vec![Some(f32_key(-1.0, 1.0)), Some(f32_key(0.0, 1.0))]
         );
     }
 
