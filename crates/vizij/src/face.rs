@@ -2668,9 +2668,9 @@ mod animation_tests {
             .unwrap_or_else(|| panic!("no player named {id}"))
     }
 
-    /// What a transport sends to play an animation: weight, then play.
-    fn play(arora: &mut arora::Arora, id: &str) {
-        let state = player(arora, id);
+    /// Weigh in the instance of `state`'s player at full weight, as a
+    /// transport does before it plays an animation.
+    fn weigh_in(arora: &mut arora::Arora, state: &PlayerState) {
         call(
             arora,
             ids::set_weight::FUNCTION,
@@ -2683,11 +2683,33 @@ mod animation_tests {
                 (ids::set_weight::WEIGHT, AValue::F32(1.0)),
             ],
         );
+    }
+
+    /// What a transport sends to play an animation: weight, then play.
+    fn play(arora: &mut arora::Arora, id: &str) {
+        let state = player(arora, id);
+        weigh_in(arora, &state);
         call(
             arora,
             ids::play::FUNCTION,
             vec![(ids::play::PLAYER, AValue::U32(state.player))],
         );
+    }
+
+    /// What a transport sends to start an animation at the device time
+    /// `time_ns`: weight, then `play_at`.
+    fn play_at(arora: &mut arora::Arora, id: &str, time_ns: u64) {
+        let state = player(arora, id);
+        weigh_in(arora, &state);
+        let anchored = call(
+            arora,
+            ids::play_at::FUNCTION,
+            vec![
+                (ids::play_at::PLAYER, AValue::U32(state.player)),
+                (ids::play_at::TIME_NS, AValue::U64(time_ns)),
+            ],
+        );
+        assert_eq!(anchored, AValue::U32(state.player));
     }
 
     fn read(arora: &arora::Arora, path: &str) -> Option<f32> {
@@ -2710,6 +2732,12 @@ mod animation_tests {
     /// A one-rig-input face whose animation ramps it, composed and built,
     /// its animations loaded.
     fn ramp_face() -> arora::Arora {
+        ramp_face_starting_at(Duration::ZERO)
+    }
+
+    /// [`ramp_face`] on a device whose clock reads `start` before its first
+    /// step.
+    fn ramp_face_starting_at(start: Duration) -> arora::Arora {
         let bundle = Bundle::from_bundle_json(&serde_json::json!({
             "metadata": { "faceId": "f" },
             "graphs": [{ "kind": "rig", "spec": { "nodes": [
@@ -2732,6 +2760,7 @@ mod animation_tests {
             .to_string();
         let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
             .expect("build the device")
+            .with_start_time(start)
             .build()
             .expect("build arora");
         load_animations(&mut arora, &bundle).expect("load the face's animations");
@@ -2796,6 +2825,78 @@ mod animation_tests {
             read(&arora, "rig/f/x"),
             held,
             "its key keeps its last value"
+        );
+    }
+
+    /// `play_at` counts on the device's clock: the animation source steps the
+    /// module with `arora/time`, so a player anchored at a device time starts
+    /// there even when the module's own count of its steps is elsewhere —
+    /// here, a client stepped it once directly.
+    #[test]
+    fn play_at_starts_a_face_animation_at_the_device_time_it_names() {
+        let mut arora = ramp_face();
+        step_for(&mut arora, 0.1);
+        call(
+            &mut arora,
+            ids::step::FUNCTION,
+            vec![(ids::step::DT_NS, AValue::U64(1_000_000_000))],
+        );
+        play_at(&mut arora, "ramp", 300_000_000);
+
+        // Device time 200 ms: before the anchor, the player holds.
+        step_for(&mut arora, 0.1);
+        let state = player(&mut arora, "ramp");
+        assert_eq!(state.state, "stopped", "{state:?}");
+        assert_eq!(state.time_ns, 0);
+
+        // Device time 450 ms: 150 ms after the anchor.
+        step_for(&mut arora, 0.25);
+        let state = player(&mut arora, "ramp");
+        assert_eq!(state.state, "playing", "{state:?}");
+        assert!(
+            state.time_ns.abs_diff(150_000_000) < 1_000,
+            "150 ms after the anchor, got {} ns",
+            state.time_ns
+        );
+    }
+
+    /// On a device whose clock starts far from zero — at a Unix time, as
+    /// devices sharing a wall clock's reference start — a `play_at` start
+    /// lands at the device time it names, and a step at a zero dt moves no
+    /// player: it neither brings an anchored start forward nor advances a
+    /// player that plays.
+    #[test]
+    fn play_at_counts_on_a_device_clock_that_starts_far_from_zero() {
+        let start = Duration::from_secs(1_760_000_000);
+        let start_ns = u64::try_from(start.as_nanos()).expect("in u64 nanoseconds");
+        let mut arora = ramp_face_starting_at(start);
+        step_for(&mut arora, 0.1);
+        play_at(&mut arora, "ramp", start_ns + 300_000_000);
+
+        // A zero-dt step applies the anchor and brings it no closer.
+        arora.step(Duration::ZERO).expect("a step at a zero dt");
+        // Device time start + 200 ms: before the anchor, the player holds.
+        step_for(&mut arora, 0.1);
+        let state = player(&mut arora, "ramp");
+        assert_eq!(state.state, "stopped", "{state:?}");
+        assert_eq!(state.time_ns, 0);
+
+        // Device time start + 450 ms: 150 ms after the anchor.
+        step_for(&mut arora, 0.25);
+        let state = player(&mut arora, "ramp");
+        assert_eq!(state.state, "playing", "{state:?}");
+        assert!(
+            state.time_ns.abs_diff(150_000_000) < 1_000,
+            "150 ms after the anchor, got {} ns",
+            state.time_ns
+        );
+
+        arora.step(Duration::ZERO).expect("a step at a zero dt");
+        let held = player(&mut arora, "ramp");
+        assert_eq!(
+            (held.state.as_str(), held.time_ns),
+            ("playing", state.time_ns),
+            "a zero-dt step moves no player"
         );
     }
 

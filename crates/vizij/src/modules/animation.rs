@@ -575,7 +575,7 @@ mod tests {
     }
 
     /// `vizij-arora-host`'s animation source names the module's functions, the
-    /// `step` parameter and the `TrackOutput` fields by id; they are the
+    /// `step` parameters and the `TrackOutput` fields by id; they are the
     /// declaration's.
     #[test]
     fn the_animation_source_names_the_declared_ids() {
@@ -604,6 +604,10 @@ mod tests {
         let step = node("step");
         assert_eq!(step["params"]["function"], ids::step::FUNCTION.to_string());
         assert_eq!(step["params"]["param_ids"][0], ids::step::DT_NS.to_string());
+        assert_eq!(
+            step["params"]["param_ids"][1],
+            ids::step::TIME_NS.to_string()
+        );
         assert_eq!(
             node("states")["params"]["function"],
             ids::player_states::FUNCTION.to_string()

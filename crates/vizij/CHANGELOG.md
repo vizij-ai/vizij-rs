@@ -10,6 +10,10 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- The animation module's `play_at` counts on the device's clock: the
+  animation source steps the module with `arora/time`, so a client that
+  schedules a start at a device time gets it there.
+
 - A face's settings — its lipsync gain, eye spacing and gaze range
   (`vizij_arora_host::standard::FACE_SETTINGS`) — rest in the store at the
   value the face's graphs author, so `reset` returns them to the face's own
