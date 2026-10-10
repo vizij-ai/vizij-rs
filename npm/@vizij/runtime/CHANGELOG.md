@@ -1,5 +1,18 @@
 # Changelog
 
+## 5.1.0
+
+### Minor Changes
+
+- 0db97cd: A Vizij's rectangle is any rectangle of the canvas. `placeVizij` frames the Vizij on the whole rectangle and draws the part on the canvas, so a slot scrolled past the canvas's edge shows its Vizij cut off there, at the position and scale the whole slot gives it, where it used to be moved (past the top or left edge) or refitted into what was left (past the bottom or right edge). An empty rectangle (a width or height of 0 or less) or one wholly off the canvas draws nothing and takes no picks; a Vizij never placed still draws over the whole canvas. `safeArea` follows the whole rectangle, and reads `null` while it is empty. The canvas shows `mount`'s background wherever no Vizij draws, also when none does.
+
+  `outputKeys(graph)` lists the store keys a run of `graph` writes and leaves holding when halted — its output nodes' paths, read as the device reads them, without the `task/…` outputs that write the run's own keys — what `invoke("reset_keys", { keys: { strs } })` takes to return a halted program's outputs to rest.
+
+  `describe(glb).graphs` carries each graph's `id` beside its `kind` (`null` for an entry without one).
+
+- e394ec0: The `vizij-face` profile declares the face's lipsync gain, `standard/vizij/lipsync/gain`, an input resting at 1 that the face's adaptation scales every viseme weight by. The ROS4HRI mapping relays the face's current viseme to `standard/ros4hri/speech/viseme`, which the `ros4hri` profile declares as an output.
+- 7730edb: The `spawn` node takes an optional `when` input: a new value starts a run even when the arguments are unchanged. `play_viseme` takes an optional `duration`, and the ROS4HRI mapping plays each streamed viseme for its duration and starts a new run for each new time, so a repeated shape plays again.
+
 ## 5.0.0
 
 ### Major Changes
