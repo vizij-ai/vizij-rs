@@ -113,6 +113,10 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   for ROS4HRI. The idle blink is the mapping's, so such a face blinks only
   when its program or a client blinks it. The binary composes the mapping
   unless `--no-ros4hri`.
+- A face's standard controls are declared as the `vizij-face` profile
+  states them (`face::declare_keys`): each `standard/vizij/*` input is an
+  `F32`, an eye position in `[-1, 1]` and a weight in `[0, 1]`, resting at
+  the profile's rest, so a remote write of one is taken only as an `F32`.
 - The ROS4HRI mapping shows a named expression at the commanded arousal as
   its intensity (clamped to 0..1) instead of at full weight; an arousal of 0
   or below shows none.
