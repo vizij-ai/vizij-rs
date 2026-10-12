@@ -166,9 +166,12 @@ Every run serves arora's open local bridge
 `http://127.0.0.1:9000/`. The bridge relays the device as its store and
 modules describe it, so the app declares nothing to it. `list_keys` gives each
 key with its `__meta`: the face's **free inputs** — the input paths no graph in
-the composition writes — are the keys a client may write, each typed, numbers
-in `[0, 1]`, with the value it rests at: the authored default, the rig's under
-the bundle's neutral pose. The device refuses a write to any other key.
+the composition writes — are the keys a client may write, each typed, with
+the value it rests at: the authored default, the rig's under the bundle's
+neutral pose. A number is ranged `[0, 1]`, or as its input node authors it:
+`params.min` and `params.max`, both optional, together give the range when
+`max` exceeds `min`. A key a shipped profile declares takes that profile's
+type, range and rest. The device refuses a write to any other key.
 `reset`, the rest module's function, returns every key to its rest.
 
 The face's **skills** are the device's own, listed and called by name on the

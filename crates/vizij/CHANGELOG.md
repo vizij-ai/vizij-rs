@@ -23,6 +23,11 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   `/diagnostics` once a second: the view's frame rate, and the face's id,
   its compliance level with the face standard and every path its
   composition writes from more than one source, a warning.
+- A face's free input outside the shipped profiles takes the range its input
+  node authors: `params.min` and `params.max`, when both are there and `max`
+  exceeds `min`, are the range `list_keys` states for it; otherwise it stays
+  `[0, 1]`. Both are optional. A key a shipped profile declares keeps that
+  profile's range; types are unchanged.
 
 ### Changed
 
