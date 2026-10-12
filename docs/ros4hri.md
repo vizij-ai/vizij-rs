@@ -10,7 +10,7 @@ any compliant Vizij face.
 
 Support spans both ROS4HRI planes:
 
-- **Topics** — the face-command vocabulary (expressions, action units, gaze)
+- **Topics** — the face-command vocabulary (expressions, gaze, visemes)
   lands on the `ros4hri` profile's `standard/ros4hri/*` keys through typed
   topic endpoints.
 - **The skill plane** — the device serves ROS4HRI's gaze skill as a native
@@ -71,7 +71,6 @@ serves it); this table summarizes it.
 | `standard/ros4hri/gaze/target` | vec3 (m) | a look-at point (face frame: x forward, y left, z up) | per-eye gaze with vergence |
 | `standard/ros4hri/gaze/frame` | string | the look-at point's frame id | consumed by the `look_at` skill, not the mapping |
 | `standard/ros4hri/viseme` | u8 `[0,14]` | `hri_msgs/Viseme.value`, from `/tts/viseme` or `/tts/visemes` | the lip shape at the audio playhead — each new code plays through `play_viseme` (see Lips below) |
-| `standard/ros4hri/au/<code>` | f32 `[0,1]` | `hri_msgs/FacialActionUnits` | FACS action-unit intensity → muscle controls |
 | `standard/ros4hri/speech/text` | string | *published* as `/robot_face/speech` (`std_msgs/String`) | the utterance being spoken, empty at rest — relayed from the face's speech state (see Speech below) |
 | `standard/ros4hri/speech/viseme` | string | *published* as `/robot_face/viseme` (`std_msgs/String`) | the lip shape being spoken, a Vizij standard shape name, `sil` at rest — relayed from the face's current viseme (see Speech below) |
 
@@ -86,10 +85,6 @@ serves it); this table summarizes it.
 - **Gaze** — `gaze/target` maps to per-eye positions with vergence, the
   incumbent ±0.78 rad → ±1 normalization, and a center fallback for targets at
   or behind the face plane (x ≤ 0.1 m).
-- **Action units** — `au/<code>` intensities route to the muscle-tier controls
-  ([`FACE_CONTROLS`](face-standard.md#muscle-tier)); the eyes-closed unit also
-  drives the eyelids, and jaw-open additionally drives the de-facto
-  `mouth/morph/jaw_open` control.
 - **Lips** — played, never written by the mapping. The face's lipsync is
   the viseme players' ([skills](skills.md): `play_viseme`, `say`), which
   write the face standard's viseme weights themselves; a mapping writing
@@ -116,8 +111,8 @@ serves it); this table summarizes it.
     shape name rather than an `hri_msgs/Viseme`: the face reports the shape,
     and a stream's time and duration are not part of its state.
 - **Blink** — an idle generator (≈8 s cycle, deterministically jittered, 0.2 s
-  parabolic pulse) drives the eyelids, inhibited while the eyes are commanded
-  closed or the face is asleep.
+  parabolic pulse) drives the eyelids. The `asleep` expression closes them and
+  inhibits the blink in proportion to its weight.
 
 All continuous channels pass through a ~200 ms exponential smoother — the
 incumbent ROS4HRI face's dynamics.
@@ -215,29 +210,33 @@ manual test in [`crates/vizij/tests/ros4hri/`](../crates/vizij/tests/ros4hri/REA
 
 With the bridge attached (`vizij --ros2 <namespace>`), every `standard/ros4hri/*`
 key the mapping reads and nothing in the composition writes is a **free
-input**, subscribed at `/<namespace>/keys/<path>` as the `std_msgs` type of
-its default value (`Float64` for the weights). The keys are **device-global**:
+input**, subscribed at `/<namespace>/keys/<path>` as the `std_msgs` type the
+`ros4hri` profile declares for it (`Float32` for valence and arousal, as
+`hri_msgs/Expression` types them); a free input outside the profile takes the
+type of its default value (`Float64` for a weight). The keys are **device-global**:
 the mapping prefixes only what it *writes* (`rig/<faceId>/standard/vizij/…`),
 never what it reads, so the topic carries no face id. The store keeps the last
 value, so one message holds a shape until the next one.
 
-Open the jaw through the jaw-open action unit (AU 26) and hold it, then
+Make the face happy through the expression's valence and hold it, then
 release it (the device runs as `vizij --ros2 quori`; `--once` waits for the
 device's subscription to match, then sends one message):
 
 ```bash
-ros2 topic pub --once /quori/keys/standard/ros4hri/au/26 \
-  std_msgs/msg/Float64 "{data: 1.0}"
-ros2 topic pub --once /quori/keys/standard/ros4hri/au/26 \
-  std_msgs/msg/Float64 "{data: 0.0}"
+ros2 topic pub --once /quori/keys/standard/ros4hri/expression/valence \
+  std_msgs/msg/Float32 "{data: 0.8}"
+ros2 topic pub --once /quori/keys/standard/ros4hri/expression/valence \
+  std_msgs/msg/Float32 "{data: 0.0}"
 ```
 
-What happens on the device: the mapping's exponential smoother (half-life
-0.14 s — a ≈200 ms time constant) carries the intensity to the muscle-tier
-control `rig/<faceId>/standard/vizij/face/jaw_open` (and to the de-facto
-`mouth/morph/jaw_open`), and the face's own graphs map that onto its rig. A
-face without the muscle tier moves nothing — `vizij-bundle validate` reports
-which tiers a face covers. The same goes for the typed topics: publishing
+What happens on the device: with no expression name set, the mapping blends
+the named expressions by the commanded affect's proximity to each one's
+circumplex anchor — at valence 0.8 and arousal 0 that is `happy` alone, and at
+rest `neutral`. Its exponential smoother (half-life 0.14 s — a ≈200 ms time
+constant) carries the weight to
+`rig/<faceId>/standard/vizij/expression/happy`, and the face's own graphs map
+that onto its rig. A face without the expression tier moves nothing —
+`vizij-bundle validate` reports which tiers a face covers. The same goes for the typed topics: publishing
 `hri_msgs/Expression` on `/robot_face/expression` lands on
 `standard/ros4hri/expression/*`.
 
@@ -255,7 +254,7 @@ Watch it land: the device publishes every key it writes on the same plane,
 so the face's controls and its rendered frames are topics too:
 
 ```bash
-ros2 topic echo /quori/keys/rig/quori_latest/pose/control/propsrig_mouth_jawud_value
+ros2 topic echo /quori/keys/rig/quori_latest/standard/vizij/expression/happy
 ros2 topic echo /quori/keys/rig/quori_latest/standard/vizij/viseme
 ros2 topic hz /robot_face/image_raw/compressed
 ```
@@ -451,7 +450,7 @@ editable and exportable.
 The asset reads by channel. Node ids are hierarchical: `in/…` are the
 `ros4hri` profile's keys it consumes, `out/…` the `vizij-face` controls it
 produces (named by control, `out/expression/happy`, `out/left_eye/pos/x`),
-and `expression/…`, `gaze/…`, `au/…`, `viseme/…`, `blink/…` the computation
+and `expression/…`, `gaze/…`, `viseme/…`, `blink/…` the computation
 of each channel — `expression/happy/kernel` is the circumplex weight of the
 happy anchor, `gaze/left/yaw/atan` the left eye's yaw before normalization,
 `blink/pulse` the idle pulse. Scalar constants are shared and named for their
@@ -470,17 +469,19 @@ is a diff of the behavior.
   `mapping("ros4hri", rigPrefix)` returns the graph as an object for an
   authoring app to embed.
 - **Reconcile it against the profiles** with `vizij-bundle surface`: the
-  mapping reads 25 of the profile's 26 command keys (`gaze/frame` belongs to
-  the `look_at` skill) and writes 65 of the face standard's 88 controls
-  (`jaw_left` and `jaw_right` have no FACS code, the 15 viseme weights are
-  written by the `play_viseme` runs it spawns, and the blink, the
-  expressions beyond ROS4HRI's and the conversation state have no ROS4HRI
-  counterpart the mapping reads).
+  mapping reads 7 of the profile's 8 command keys (`gaze/frame` belongs to
+  the `look_at` skill) and writes 31 of the face standard's 89 inputs (the 15
+  viseme weights are written by the `play_viseme` runs it spawns; the muscle
+  tier, the blink, the expressions beyond ROS4HRI's and the conversation
+  state have no ROS4HRI command the mapping reads; and the lipsync gain is a
+  setting of the face).
 
 ## Progressive compliance
 
-A face implements the standard tiers it covers, and the mapping degrades to
-them: gaze & lids (L0), expressions (L1), visemes (L2), muscle/AU (L3).
+A face implements the standard tiers it covers — gaze & lids (L0),
+expressions (L1), visemes (L2), muscle (L3) — and the mapping, which drives
+the gaze and expression tiers and spawns the runs that play visemes, degrades
+to them.
 `vizij-bundle validate --min-level <n>` reports and gates a face's coverage of
 the `vizij-face` profile; it reports the conversation state without grading
 it.

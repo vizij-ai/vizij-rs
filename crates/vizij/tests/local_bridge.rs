@@ -101,14 +101,14 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
 
     // The client is pushed the key it watches and nothing else — the device's
     // own keys (the clock among them) change every step.
-    let smile = "standard/ros4hri/au/12";
+    let valence = "standard/ros4hri/expression/valence";
     let subscribed = request(
         &mut socket,
-        json!({"type": "subscribe", "keys": [smile]}),
+        json!({"type": "subscribe", "keys": [valence]}),
         "subscribe_resp",
     )
     .await;
-    assert_eq!(subscribed["keys"], json!([smile]), "{subscribed}");
+    assert_eq!(subscribed["keys"], json!([valence]), "{subscribed}");
 
     // The keys come with what the store says of them: the face's free inputs,
     // the ROS4HRI ones among them, open to the client, typed, ranged and
@@ -121,13 +121,13 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
             .map(|key| key["__meta"].clone())
             .unwrap_or_else(|| panic!("no {path} among the keys"))
     };
-    let input = meta_of(smile);
+    let input = meta_of(valence);
     assert_eq!(input["editable"], true, "{input}");
     // Typed as the `hri_msgs` field a ROS 2 bridge writes it from.
     assert_eq!(input["ty"], "f32", "{input}");
     assert_eq!(
         (input["min"].as_f64(), input["max"].as_f64()),
-        (Some(0.0), Some(1.0))
+        (Some(-1.0), Some(1.0))
     );
     assert_eq!(number(&input["default"]), Some(0.0), "{input}");
     let clock = meta_of("arora/time");
@@ -152,7 +152,7 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
     // A write lands in the device's store and reads back.
     let written = request(
         &mut socket,
-        json!({"type": "write_values", "values": {smile: {"f32": 0.25}}}),
+        json!({"type": "write_values", "values": {valence: {"f32": -0.5}}}),
         "write_values_resp",
     )
     .await;
@@ -161,11 +161,11 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
     for _ in 0..50 {
         let read = request(
             &mut socket,
-            json!({"type": "read_values", "keys": [smile]}),
+            json!({"type": "read_values", "keys": [valence]}),
             "read_values_resp",
         )
         .await;
-        if number(&read["values"][smile]) == Some(0.25) {
+        if number(&read["values"][valence]) == Some(-0.5) {
             read_back = Some(read);
             break;
         }
@@ -174,13 +174,13 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
     assert!(read_back.is_some(), "the write never read back");
     let held = device
         .store
-        .read(&[Key::from(smile)])
+        .read(&[Key::from(valence)])
         .into_iter()
         .next()
         .flatten();
     assert_eq!(
         held.as_ref().and_then(vizij_api_core::value::as_float),
-        Some(0.25),
+        Some(-0.5),
         "the store holds the written value: {held:?}"
     );
 
@@ -257,17 +257,17 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
     for _ in 0..50 {
         let read = request(
             &mut socket,
-            json!({"type": "read_values", "keys": [smile]}),
+            json!({"type": "read_values", "keys": [valence]}),
             "read_values_resp",
         )
         .await;
-        if number(&read["values"][smile]) == Some(0.0) {
+        if number(&read["values"][valence]) == Some(0.0) {
             neutral = Some(read);
             break;
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    assert!(neutral.is_some(), "reset left the smile where it was");
+    assert!(neutral.is_some(), "reset left the valence where it was");
 
     // The control panel is served on the same port.
     let page = reqwest::get(format!("http://127.0.0.1:{port}/"))

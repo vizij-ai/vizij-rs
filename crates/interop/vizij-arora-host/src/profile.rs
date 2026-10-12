@@ -209,10 +209,9 @@ impl Profile {
 /// `muscle`, `conversation`.
 ///
 /// This is the full standard, not the subset any one mapping happens to reach.
-/// The ROS4HRI mapping covers 34 of the 36 muscle-tier keys (`jaw_left` and
-/// `jaw_right` have no FACS code, so its action-unit channel cannot express
-/// them); that difference is only computable because this set is declared
-/// independently.
+/// The ROS4HRI mapping writes none of the muscle tier, since ROS4HRI defines
+/// no channel commanding action units; that difference is only computable
+/// because this set is declared independently.
 pub fn vizij_face_profile() -> Profile {
     let mut keys = Vec::new();
 
@@ -294,13 +293,15 @@ pub fn vizij_face_profile() -> Profile {
 /// reads, and the one the mapping writes and the bridge publishes. Generated
 /// from [`crate::ros4hri`]'s key contract.
 ///
-/// The shipped ROS 2 exposure preset feeds the expression, gaze and viseme
-/// keys; the action-unit keys are part of the interface and have no topic
-/// behind them yet. Declaring the set is what makes that visible. The speech
-/// state is the output: what the face is saying, for subtitles, and the lip
-/// shape it is saying it with.
+/// The inputs are the expression, gaze and viseme keys the shipped ROS 2
+/// exposure preset feeds. ROS4HRI publishes facial action units only as
+/// perception output (`hri_msgs/FacialActionUnits` per detected face) and
+/// defines no command for them, so the profile carries none; a FACS-granular
+/// pose is the `vizij-face` muscle tier's. The speech state is the output:
+/// what the face is saying, for subtitles, and the lip shape it is saying it
+/// with.
 pub fn ros4hri_profile() -> Profile {
-    let mut keys = vec![
+    let keys = vec![
         ProfileKey::text(ros4hri::EXPRESSION_NAME_KEY),
         ProfileKey::bipolar(ros4hri::EXPRESSION_VALENCE_KEY),
         ProfileKey::bipolar(ros4hri::EXPRESSION_AROUSAL_KEY),
@@ -331,28 +332,14 @@ pub fn ros4hri_profile() -> Profile {
         ProfileKey::state(ros4hri::SPEECH_TEXT_KEY, ""),
         ProfileKey::state(ros4hri::SPEECH_VISEME_KEY, skills::SILENCE_VISEME),
     ];
-
-    // The action units the standard's muscle tier can express, in the order
-    // the mapping enumerates them.
-    let mut au_codes: Vec<u8> = FACE_CONTROLS.iter().filter_map(|c| c.au).collect();
-    au_codes.sort_unstable();
-    au_codes.dedup();
-    for code in au_codes {
-        keys.push(
-            ProfileKey::weight(ros4hri::au_key(code)).with_meta(KeyMeta {
-                au: Some(code),
-                ..KeyMeta::default()
-            }),
-        );
-    }
     Profile {
         id: "ros4hri".into(),
         version: "v1".into(),
         title: "ROS4HRI face command".into(),
         description: "The ROS4HRI face interface: expression name with valence and \
-                      arousal, a gaze target and its frame, the streamed viseme, and FACS \
-                      action-unit intensities commanded; the utterance being spoken \
-                      and its current viseme reported."
+                      arousal, a gaze target and its frame, and the streamed viseme \
+                      commanded; the utterance being spoken and its current viseme \
+                      reported."
             .into(),
         scope: Scope::Device,
         keys,
@@ -458,7 +445,8 @@ impl std::str::FromStr for Side {
 /// interface it actually implements. It is deliberately *not* the source of
 /// truth: a mapping only touches the part of a profile it needs, so a surface
 /// lifted this way can be a strict subset of the profile it claims (ROS4HRI
-/// reaches 33 of the standard's 35 muscle controls). Compare, do not replace.
+/// reaches the gaze and expression tiers, none of the muscle tier). Compare,
+/// do not replace.
 pub fn surface(spec: &Json, side: Side, id: &str, scope: Scope) -> Profile {
     let mut keys: Vec<ProfileKey> = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
@@ -597,7 +585,7 @@ mod tests {
 
     /// Every muscle-tier key carries the ARKit name it corresponds to; the AU
     /// code is optional because two of them (`jaw_left`, `jaw_right`) have no
-    /// FACS code — which is exactly why ROS4HRI cannot reach them.
+    /// FACS code.
     #[test]
     fn muscle_controls_carry_their_arkit_and_au_metadata() {
         let face = vizij_face_profile();
@@ -616,13 +604,14 @@ mod tests {
         assert_eq!(without_au, 2, "only the two jaw-shift controls lack an AU");
     }
 
-    /// The ROS4HRI profile is the mapping's contract: 8 named input keys, one
-    /// per distinct action unit, and the speech state it reports (the
-    /// utterance and its current viseme) — device-global.
+    /// The ROS4HRI profile is the mapping's contract: 8 named input keys and
+    /// the speech state it reports (the utterance and its current viseme) —
+    /// device-global, and no action-unit keys, which ROS4HRI does not command.
     #[test]
     fn the_ros4hri_profile_matches_its_key_contract() {
         let ros = ros4hri_profile();
-        assert_eq!(ros.keys.len(), 8 + 2 + 20);
+        assert_eq!(ros.keys.len(), 8 + 2);
+        assert!(ros.keys.iter().all(|k| k.meta.is_none()));
         assert_eq!(ros.scope, Scope::Device);
         assert!(ros.paths().contains(&ros4hri::EXPRESSION_NAME_KEY));
         assert_eq!(
@@ -722,24 +711,25 @@ mod tests {
             .collect();
         // Unwritten, in profile order: the caller's blink (the mapping's
         // idle blink drives the lids), the expressions ROS4HRI does not name,
-        // the lipsync surface (the viseme players own it), the two jaw shifts
-        // (no action unit drives them), the conversation state, and the
+        // the lipsync surface (the viseme players own it), the muscle tier
+        // (ROS4HRI commands no action units), the conversation state, and the
         // face's lipsync gain (a setting of the face, not a command).
-        let mut expected: Vec<String> = vec![standard::BLINK.into()];
-        expected.extend(
-            standard::VIZIJ_EXPRESSION_NAMES
-                .iter()
-                .map(|n| standard::expression_path(n)),
-        );
-        expected.extend(VISEME_SHAPES.iter().map(|s| standard::viseme_path(s)));
-        expected.push("standard/vizij/face/jaw_left".into());
-        expected.push("standard/vizij/face/jaw_right".into());
-        expected.extend(
-            CONVERSATION_STATES
-                .iter()
-                .map(|s| standard::conversation_path(s)),
-        );
-        expected.push(standard::LIPSYNC_GAIN.into());
+        let beyond_ros4hri: Vec<String> = standard::VIZIJ_EXPRESSION_NAMES
+            .iter()
+            .map(|n| standard::expression_path(n))
+            .collect();
+        let expected: Vec<&str> = face
+            .keys
+            .iter()
+            .filter(|k| k.kind.as_deref() == Some("input"))
+            .filter(|k| match k.tier() {
+                Some("gaze") => k.path == standard::BLINK,
+                Some("expression") => beyond_ros4hri.contains(&k.path),
+                Some("viseme" | "muscle" | "conversation") | None => true,
+                Some(other) => panic!("unexpected tier {other}"),
+            })
+            .map(|k| k.path.as_str())
+            .collect();
         assert_eq!(unwritten, expected);
         assert_eq!(
             ros.paths_of("output")

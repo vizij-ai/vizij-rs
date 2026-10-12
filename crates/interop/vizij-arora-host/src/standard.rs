@@ -15,14 +15,14 @@
 //!   convention).
 //! - **Muscle** — fine-grained face controls cherry-picked from FACS action
 //!   units and ARKit blendshapes: FACS supplies the taxonomy (each control
-//!   names an action unit, so ROS4HRI's `FacialActionUnits` maps losslessly),
-//!   ARKit supplies lateralization and naming familiarity (its blendshape
-//!   arrays carry left/right where the FACS message cannot, and assets in the
-//!   wild ship ARKit-named morph targets). Controls exist for the union that
-//!   makes sense on a commanded robot face; ARKit's tracking-only shapes
-//!   (`eyeLook*` — redundant with the gaze tier) and FACS codes a command
-//!   channel cannot express (visibility, head/eye movement — owned by the
-//!   gaze tier) have none.
+//!   names an action unit, so an `hri_msgs/FacialActionUnits` message maps
+//!   losslessly), ARKit supplies lateralization and naming familiarity (its
+//!   blendshape arrays carry left/right where the FACS message cannot, and
+//!   assets in the wild ship ARKit-named morph targets). Controls exist for
+//!   the union that makes sense on a commanded robot face; ARKit's
+//!   tracking-only shapes (`eyeLook*` — redundant with the gaze tier) and
+//!   FACS codes a command channel cannot express (visibility, head/eye
+//!   movement — owned by the gaze tier) have none.
 //! - **Conversation** — whether the face is speaking, its interlocutor is
 //!   speaking, or it is thinking: state a face may react to, not a pose.
 //!

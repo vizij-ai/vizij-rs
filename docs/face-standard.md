@@ -128,7 +128,8 @@ Fine-grained controls at `standard/vizij/face/<control>`, cherry-picked from two
 standards so each is reachable from either:
 
 - **FACS supplies the taxonomy.** Each control names a facial action unit, so
-  ROS4HRI's `hri_msgs/FacialActionUnits` maps onto the muscle tier losslessly.
+  an `hri_msgs/FacialActionUnits` message maps onto the muscle tier
+  losslessly.
   AU codes repeat across lateralized pairs — FACS does not split left/right at
   the code level.
 - **ARKit supplies lateralization and naming.** Its blendshape arrays carry the
@@ -165,7 +166,12 @@ AU 45 (blink) aliases AU 43 (eyes closed) — both command the eyelid controls.
 
 One more muscle-tier path, `standard/vizij/mouth/morph/jaw_open`, is the same
 muscle as `jaw_open` (AU 26, ARKit `jawOpen`) under the de-facto name every
-current face implements; the ROS4HRI mapping drives both.
+current face implements.
+
+ROS4HRI has no counterpart the mapping reads: it publishes action units only
+as perception output (`/humans/faces/<faceID>/facs`, one message per detected
+face) and defines no command for them, so the ROS4HRI mapping writes none of
+this tier.
 
 ## Conversation state
 

@@ -175,7 +175,7 @@ Each is a **run** (`"task": true`): the `invoke` answers as soon as it starts,
 with the run's id and the key that says how it ends, and
 `{"type": "halt", "run": "<id>"}` stops it. Writes and reads travel as the wire
 format documents
-(`{"type": "write_values", "values": {"standard/ros4hri/au/12": {"f64": 0.5}}}`),
+(`{"type": "write_values", "values": {"standard/ros4hri/expression/valence": {"f32": 0.5}}}`),
 and a client is pushed the keys it subscribes to — subscribe to what you
 display, or take the whole feed, the clock included, by not subscribing. The
 server lives with the device generation: a reload frees the port before the

@@ -20,13 +20,10 @@
 //!   z up) maps to per-eye positions with vergence, the incumbent ±0.78 rad →
 //!   ±1 normalization, and a center fallback for targets at or behind the
 //!   face plane (x ≤ 0.1).
-//! - **Action units** — `au/<code>` intensities route to the muscle-tier
-//!   controls per [`crate::standard::FACE_CONTROLS`]; the eyes-closed unit
-//!   also drives the eyelids, and jaw-open additionally drives the de-facto
-//!   `mouth/morph/jaw_open` control.
 //! - **Blink** — an idle generator (≈8 s cycle, deterministically jittered,
-//!   0.2 s parabolic pulse) drives the eyelids, inhibited while the eyes are
-//!   commanded closed or the face is asleep. The standard's
+//!   0.2 s parabolic pulse) drives the eyelids; the `asleep` expression
+//!   closes them and inhibits the blink in proportion to its weight. The
+//!   standard's
 //!   `standard/vizij/blink` is not written: that key is for a caller's
 //!   blinks, which the face layers over these lids.
 //! - **Viseme** — `viseme`, the ROS4HRI code of the lip shape at the audio
@@ -54,7 +51,7 @@ use serde_json::{json, Value as Json};
 
 use crate::graph_builder::GraphBuilder;
 use crate::skills::{play_viseme, SILENCE_VISEME};
-use crate::standard::{self, FACE_CONTROLS, ROS4HRI_EXPRESSION_NAMES, VISEME_SHAPES};
+use crate::standard::{self, ROS4HRI_EXPRESSION_NAMES, VISEME_SHAPES};
 
 /// Source id of the composed mapping (node ids get `ros4hri::` prefixes).
 pub const ROS4HRI_SOURCE_ID: &str = "ros4hri";
@@ -90,11 +87,6 @@ pub const SPEECH_TEXT_KEY: &str = "standard/ros4hri/speech/text";
 /// to the device-scoped key, so one topic follows the lips of the whole
 /// robot whichever player is speaking.
 pub const SPEECH_VISEME_KEY: &str = "standard/ros4hri/speech/viseme";
-
-/// The key carrying a FACS action-unit intensity, [0, 1].
-pub fn au_key(code: u8) -> String {
-    format!("{ROS4HRI_PREFIX}/au/{code}")
-}
 
 /// Circumplex anchor (valence, arousal) per expression name, used to blend
 /// the named weights when only `valence`/`arousal` are commanded. Order
@@ -188,7 +180,7 @@ fn gaze_angle(g: &mut GraphBuilder, prefix: &str, num: &str, den: &str) -> Strin
 
 /// The mapping, section by section. Node ids are hierarchical — `in/…` the
 /// consumed profile, `out/…` the produced one, and `expression/…`,
-/// `gaze/…`, `au/…`, `blink/…` the channel that computes each
+/// `gaze/…`, `blink/…`, `viseme/…` the channel that computes each
 /// output — so the asset reads by channel and every node says what it holds.
 fn build(rig_prefix: &str) -> (String, Json) {
     let g = &mut GraphBuilder::new();
@@ -373,30 +365,7 @@ fn build(rig_prefix: &str) -> (String, Json) {
         g.output(&out_id(path_y), &smooth_y, out(path_y.to_string()));
     }
 
-    // --- Action units → muscle-tier controls -------------------------------
-    let mut au_codes: Vec<u8> = FACE_CONTROLS.iter().filter_map(|c| c.au).collect();
-    au_codes.sort_unstable();
-    au_codes.dedup();
-    let mut eyes_closed = String::new();
-    for code in au_codes {
-        let raw = g.input(&format!("in/au/{code}"), &au_key(code), json!(0.0));
-        let smooth = g.damp(&format!("au/{code}/smooth"), &raw, HALF_LIFE);
-        if code == 43 {
-            eyes_closed = smooth.clone();
-        }
-        for control in standard::controls_for_au(code) {
-            let path = standard::face_path(control.name);
-            g.output(&out_id(&path), &smooth, out(path));
-        }
-        // Jaw-open also drives the de-facto mouth control every current face
-        // implements, so the AU channel moves faces without a muscle tier.
-        if code == 26 {
-            let path = standard::MOUTH_JAW_OPEN.to_string();
-            g.output(&out_id(&path), &smooth, out(path));
-        }
-    }
-
-    // --- Blink: jittered idle pulse, inhibited when lids are commanded -----
+    // --- Blink: jittered idle pulse, inhibited while the face is asleep ----
     let t = g.node("blink/time", "time", json!({}));
     let period = g.constant(BLINK_PERIOD);
     let cycle = g.div("blink/cycle", &t, &period);
@@ -437,13 +406,12 @@ fn build(rig_prefix: &str) -> (String, Json) {
     );
     let gated = g.select("blink/pulse/gated", &in_window, &parabola, &zero);
     let pulse = g.clamp("blink/pulse", &gated, 0.0, 1.0);
-    // Inhibit while the eyes are commanded closed or the face is asleep.
+    // Asleep is the one commanded close: it inhibits the blink in proportion
+    // to its weight, and the lids follow the stronger of the two.
     let asleep = asleep_weight.expect("asleep is in ROS4HRI_EXPRESSION_NAMES");
-    let commanded = g.max("blink/commanded", &eyes_closed, &asleep);
-    let open_share = g.sub("blink/open_share", &one, &commanded);
+    let open_share = g.sub("blink/open_share", &one, &asleep);
     let idle = g.mul("blink/idle", &pulse, &open_share);
-    // Lids follow the strongest closer: the blink pulse or the commanded close.
-    let lid = g.max("blink/lid", &idle, &commanded);
+    let lid = g.max("blink/lid", &idle, &asleep);
     for path in [
         standard::LEFT_EYE_TOP_EYELID_POS_Y,
         standard::RIGHT_EYE_TOP_EYELID_POS_Y,
@@ -545,17 +513,12 @@ mod tests {
         // Visemes are not the profile's: ROS4HRI has no viseme channel, and the
         // face's lipsync is the viseme players' (the play_viseme and say skills).
         assert!(!paths.iter().any(|p| p.contains("/viseme/")));
-        for control in &FACE_CONTROLS {
-            if control.au.is_some() {
-                let path = format!("rig/test_face/standard/vizij/face/{}", control.name);
-                assert!(paths.contains(&path.as_str()), "missing {path}");
-            }
-        }
+        // Nor is the muscle tier: ROS4HRI commands no action units.
+        assert!(!paths.iter().any(|p| p.contains("/standard/vizij/face/")));
         for path in [
             "rig/test_face/standard/vizij/left_eye/pos/x",
             "rig/test_face/standard/vizij/right_eye/pos/y",
             "rig/test_face/standard/vizij/left_eye_top_eyelid/pos/y",
-            "rig/test_face/standard/vizij/mouth/morph/jaw_open",
         ] {
             assert!(paths.contains(&path), "missing {path}");
         }

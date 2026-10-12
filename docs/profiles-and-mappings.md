@@ -63,8 +63,8 @@ Vizij ships two:
 
 | profile | scope | keys | declared by |
 |---|---|---|---|
-| `vizij-face` | face | 90 — gaze, lids & blink, 27 expressions, 15 visemes, 36 muscle-tier controls, 3 conversation states; and the 2 speech-state keys it reports (the current viseme, the utterance) | the [face standard](face-standard.md) |
-| `ros4hri` | device | 27 — expression name/valence/arousal, gaze target and frame, the streamed viseme, 20 action units; and the speech text it reports | the [ROS4HRI key contract](ros4hri.md#the-standardros4hri-key-contract) |
+| `vizij-face` | face | 91 — gaze, lids & blink, 27 expressions, 15 visemes, 36 muscle-tier controls, 3 conversation states, the lipsync gain; and the 2 speech-state keys it reports (the current viseme, the utterance) | the [face standard](face-standard.md) |
+| `ros4hri` | device | 10 — expression name/valence/arousal, gaze target and frame, the streamed viseme with its time and duration; and the 2 speech-state keys it reports (the utterance, its current viseme) | the [ROS4HRI key contract](ros4hri.md#the-standardros4hri-key-contract) |
 
 Both are generated from the Rust constants
 ([`profile.rs`](../crates/interop/vizij-arora-host/src/profile.rs)) and held
@@ -118,8 +118,8 @@ the declared profiles, the shipped ROS4HRI mapping shows:
 
 | profile | declares | mapping touches | |
 |---|---|---|---|
-| `ros4hri` | 25 | 24 | `gaze/frame` is consumed by the `look_at` skill, not the mapping |
-| `vizij-face` | 88 | 65 | the 15 viseme weights belong to the viseme players; `jaw_left` / `jaw_right` have no FACS code, so the action-unit channel cannot reach them; the blink, `concerned`, `sleepy` and the 3 conversation states have no ROS4HRI counterpart the mapping reads |
+| `ros4hri` | 8 | 7 | `gaze/frame` is consumed by the `look_at` skill, not the mapping |
+| `vizij-face` | 89 | 31 | the 15 viseme weights belong to the viseme players; the 36 muscle-tier controls, the blink, `concerned`, `sleepy` and the 3 conversation states have no ROS4HRI command the mapping reads; the lipsync gain is a setting of the face |
 
 Every path the mapping writes is declared.
 
