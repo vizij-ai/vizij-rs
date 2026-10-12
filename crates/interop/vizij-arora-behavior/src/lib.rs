@@ -30,6 +30,7 @@
 //! [`ProcessingGraph::load`]: arora_behavior::BehaviorInterpreter::load
 //! [`ProcessingGraph::apply`]: arora_behavior::BehaviorInterpreter::apply
 
+pub mod expression;
 pub mod gaze;
 pub mod graph_codec;
 pub mod run;
