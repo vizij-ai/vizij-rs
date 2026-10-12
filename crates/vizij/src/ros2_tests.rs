@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
-use crate::face::{builder_for, declare_keys, free_inputs};
+use crate::face::{builder_for, declare_keys, free_inputs, InputRanges};
 
 // The typed client's view of `interaction_skills/LookAt` — local mirrors of
 // the standard messages (`ros2_client::Message` is a foreign marker trait).
@@ -395,7 +395,7 @@ async fn a_free_input_takes_a_published_data_topic() {
     );
     // The store opens it; the bridge subscribes what the store opens.
     let store = BlackboardStore::new();
-    declare_keys(&store, spec, &[], &[]);
+    declare_keys(&store, spec, &[], &[], &InputRanges::default());
     let config = arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
         .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
     let bridge = arora_bridge_ros2::Ros2Bridge::new(config).await;
@@ -501,7 +501,7 @@ async fn the_device_keeps_a_flat_heap_in_a_ros_graph() {
     // key each step, its free input subscribed, and the ROS4HRI profile.
     let spec = fan_out_spec();
     let store = BlackboardStore::new();
-    declare_keys(&store, &spec, &[], &[]);
+    declare_keys(&store, &spec, &[], &[], &InputRanges::default());
     let config = arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
         .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
     // The frame publishes as the `sensor_msgs` image it already is, on the

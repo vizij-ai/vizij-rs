@@ -816,7 +816,13 @@ mod tests {
             .expect("compose the profile")
             .to_string();
         let store = BlackboardStore::new();
-        crate::face::declare_keys(&store, &spec, &[], &[]);
+        crate::face::declare_keys(
+            &store,
+            &spec,
+            &[],
+            &[],
+            &crate::face::InputRanges::default(),
+        );
         let mut arora =
             crate::face::builder_for(&spec, vizij_arora_hal::RigHal::new(), store, &[], None)
                 .expect("build the device over the profile")

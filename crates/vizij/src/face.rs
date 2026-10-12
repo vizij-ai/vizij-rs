@@ -139,6 +139,27 @@ pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
         .collect()
 }
 
+/// Store paths with the range declared for each, `(min, max)`.
+pub type InputRanges = std::collections::HashMap<String, (f64, f64)>;
+
+/// The ranges the face's rig declares for its inputs — the rig graph's
+/// `metadata.vizij.inputs`, each `range` with `max` above `min` — by store
+/// path, under the bundle's rig prefix. What [`declare_keys`] states for a
+/// free input whose node authors no range of its own.
+pub fn rig_ranges(bundle: &vizij_arora_host::Bundle) -> InputRanges {
+    let prefix = bundle.rig_prefix();
+    bundle
+        .rig_inputs
+        .iter()
+        .filter_map(|input| match (input.min, input.max) {
+            (Some(min), Some(max)) if max > min => {
+                Some((format!("{prefix}{}", input.path), (min, max)))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 /// A free input as its input node declares it: its path, the type the store
 /// states, its rest, and the range its node authors, if any.
 struct FreeInput {
@@ -158,7 +179,8 @@ struct FreeInput {
 /// writes stays declared: the program runs only while it runs. Each is open
 /// to remote writers, of its type — a number in the range its input node
 /// authors (`params.min` and `params.max`, when both are there and `max`
-/// exceeds `min`), in `[0, 1]` otherwise, unless it is one of Studio's keys
+/// exceeds `min`), else in the range the rig declares for it (`rig_ranges`,
+/// see [`rig_ranges`]), else in `[0, 1]`, unless it is one of Studio's keys
 /// (the `studio` module's), in the units of the feature it drives, or a key
 /// a shipped profile declares (the face standard's, under the prefix the
 /// face's standard controls live under, or ROS4HRI's), of the type and in the
@@ -184,6 +206,7 @@ pub fn declare_keys(
     spec: &str,
     programs: &[(String, serde_json::Value)],
     neutral: &[(String, f32)],
+    rig_ranges: &InputRanges,
 ) {
     use arora_types::data::KeyMeta;
     use arora_types::value::Type;
@@ -238,8 +261,12 @@ pub fn declare_keys(
                 (None, Some((min, max))) if matches!(ty, Type::F32 | Type::F64) => {
                     input = input.range(min, max);
                 }
-                (None, None) if matches!(ty, Type::F32 | Type::F64) && !unranged.contains(&path) => {
-                    input = input.range(0.0, 1.0);
+                (None, None) if matches!(ty, Type::F32 | Type::F64) => {
+                    if let Some(&(min, max)) = rig_ranges.get(&path) {
+                        input = input.range(min, max);
+                    } else if !unranged.contains(&path) {
+                        input = input.range(0.0, 1.0);
+                    }
                 }
                 _ => {}
             }
@@ -725,7 +752,7 @@ mod tests {
             {"id": "d", "type": "input", "params": {"path": "rig/f/standard/vizij/gaze/target/weight", "value": 1.0}}
         ], "edges": []}"#;
         let store = BlackboardStore::new();
-        declare_keys(&store, spec, &[], &[]);
+        declare_keys(&store, spec, &[], &[], &InputRanges::default());
         let f32_key = |min, max, rest| {
             KeyMeta::new()
                 .editable()
@@ -769,7 +796,7 @@ mod tests {
             {"id": "a", "type": "input", "params": {"path": "rig/f/standard/vizij/blink", "value": 0.0}}
         ], "edges": []}"#;
         let store = BlackboardStore::new();
-        declare_keys(&store, bare, &[], &[]);
+        declare_keys(&store, bare, &[], &[], &InputRanges::default());
         assert_eq!(
             store.meta(&[caption.clone(), speaker.clone()]),
             vec![Some(text.clone()), Some(text.clone())]
@@ -782,7 +809,7 @@ mod tests {
         .unwrap()
         .to_string();
         let store = BlackboardStore::new();
-        declare_keys(&store, &mapped, &[], &[]);
+        declare_keys(&store, &mapped, &[], &[], &InputRanges::default());
         assert_eq!(store.meta(&[caption, speaker]), vec![None, None]);
         assert_eq!(
             store.meta(&[Key::from(CAPTION_TEXT_KEY)]),
@@ -793,8 +820,8 @@ mod tests {
 
     /// A free input outside the profiles takes the range its input node
     /// authors, when both bounds are there and the upper exceeds the lower;
-    /// otherwise `[0, 1]`. A profile key keeps its profile's range whatever
-    /// its node says.
+    /// else the range the rig declares for it; otherwise `[0, 1]`. A profile
+    /// key keeps its profile's range whatever its node or the rig says.
     #[test]
     fn a_free_input_takes_its_authored_range() {
         use arora_types::data::KeyMeta;
@@ -803,10 +830,20 @@ mod tests {
             {"id": "a", "type": "input", "params": {"path": "idle/explore", "value": {"f32": 1.0}, "min": 0.0, "max": 2.0}},
             {"id": "b", "type": "input", "params": {"path": "idle/half", "value": {"f32": 0.5}, "min": 0.0}},
             {"id": "c", "type": "input", "params": {"path": "idle/flat", "value": {"f32": 0.5}, "min": 1.0, "max": 1.0}},
-            {"id": "d", "type": "input", "params": {"path": "rig/f/standard/vizij/blink", "value": 0.0, "min": -5.0, "max": 5.0}}
+            {"id": "d", "type": "input", "params": {"path": "rig/f/standard/vizij/blink", "value": 0.0, "min": -5.0, "max": 5.0}},
+            {"id": "e", "type": "input", "params": {"path": "rig/f/eye/x", "value": {"f32": 0.0}}},
+            {"id": "f", "type": "input", "params": {"path": "rig/f/jaw", "value": {"f32": 0.0}, "min": 0.0, "max": 0.5}}
         ], "edges": []}"#;
+        // The rig declares ranges for the eye, the jaw (whose node authors
+        // its own) and the blink (a profile key).
+        let rig_ranges: InputRanges = [
+            ("rig/f/eye/x".to_string(), (-6.7, 6.7)),
+            ("rig/f/jaw".to_string(), (-1.0, 1.0)),
+            ("rig/f/standard/vizij/blink".to_string(), (-1.0, 1.0)),
+        ]
+        .into();
         let store = BlackboardStore::new();
-        declare_keys(&store, spec, &[], &[]);
+        declare_keys(&store, spec, &[], &[], &rig_ranges);
         let number = |min, max, rest| {
             KeyMeta::new()
                 .editable()
@@ -820,6 +857,8 @@ mod tests {
                 Key::from("idle/half"),
                 Key::from("idle/flat"),
                 Key::from("rig/f/standard/vizij/blink"),
+                Key::from("rig/f/eye/x"),
+                Key::from("rig/f/jaw"),
             ]),
             vec![
                 Some(number(0.0, 2.0, 1.0)),
@@ -832,7 +871,29 @@ mod tests {
                         .range(0.0, 1.0)
                         .resting_at(Value::F32(0.0))
                 ),
+                Some(number(-6.7, 6.7, 0.0)),
+                Some(number(0.0, 0.5, 0.0)),
             ]
+        );
+    }
+
+    /// The rig's declared ranges, by store path under the face's prefix: a
+    /// range with `max` above `min` only.
+    #[test]
+    fn the_rig_declares_ranges_by_store_path() {
+        let gltf = serde_json::json!({ "nodes": [{ "extensions": { "VIZIJ_bundle": {
+            "metadata": { "faceId": "f" },
+            "graphs": [{ "kind": "rig", "id": "f", "spec": { "nodes": [], "edges": [],
+                "metadata": { "vizij": { "inputs": [
+                    { "path": "/eye/x", "range": { "min": -6.7, "max": 6.7 } },
+                    { "path": "/flat", "range": { "min": 1.0, "max": 1.0 } },
+                    { "path": "/none" }
+                ] } } } }]
+        } } }] });
+        let bundle = vizij_arora_host::Bundle::from_gltf_json(&gltf).expect("the bundle parses");
+        assert_eq!(
+            rig_ranges(&bundle),
+            InputRanges::from([("rig/f/eye/x".to_string(), (-6.7, 6.7))])
         );
     }
 
@@ -854,6 +915,7 @@ mod tests {
             spec,
             &[],
             &[("face/brow".to_string(), 0.5), ("rig/jaw".to_string(), 0.1)],
+            &InputRanges::default(),
         );
         let number = || KeyMeta::new().editable().of_type(Type::F32).range(0.0, 1.0);
         assert_eq!(
@@ -900,7 +962,13 @@ mod tests {
             {"from": {"node_id": "speed"}, "to": {"node_id": "x", "input": "in"}}
         ]});
         let store = BlackboardStore::new();
-        declare_keys(&store, spec, &[("p".to_string(), program)], &[]);
+        declare_keys(
+            &store,
+            spec,
+            &[("p".to_string(), program)],
+            &[],
+            &InputRanges::default(),
+        );
         let number = || KeyMeta::new().editable().of_type(Type::F32).range(0.0, 1.0);
         assert_eq!(
             store.meta(&[Key::from("rig/f/x"), Key::from("program/speed")]),
@@ -1463,7 +1531,7 @@ mod tests {
             .expect("compose the ros4hri mapping")
             .to_string();
         let store = BlackboardStore::new();
-        declare_keys(&store, &spec, &[], &[]);
+        declare_keys(&store, &spec, &[], &[], &InputRanges::default());
         for key in [
             ros4hri::EXPRESSION_VALENCE_KEY,
             ros4hri::EXPRESSION_AROUSAL_KEY,

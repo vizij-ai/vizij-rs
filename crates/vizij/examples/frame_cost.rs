@@ -229,6 +229,7 @@ fn device(glb: &[u8], args: &Args) -> Device {
         &spec,
         &meta.bundle.programs,
         &meta.bundle.neutral_stage_writes(),
+        &face::rig_ranges(&meta.bundle),
     );
     let speech = args.speaking.then(|| {
         arora::HostModule::from_exports(
