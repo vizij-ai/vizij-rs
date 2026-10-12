@@ -408,8 +408,9 @@ pub fn builder_with_guests(
     // interpreter describes them. say's fragment wraps the provider's call,
     // which the provider describes. The players and setters write the face's
     // standard controls, so they take its rig prefix; the lips' players
-    // (play_viseme, set_viseme, play_visemes, say) share one exclusivity
-    // domain, the expression's setters another.
+    // (play_viseme, set_viseme, play_visemes) share one exclusivity domain,
+    // the expression's setters another. say is exclusive among its own runs
+    // only: a lips player spawned while it speaks shows over it.
     graph.set_task_fragment(
         gaze::look_at::ids::look_at::FUNCTION,
         gaze::look_at_fragment_from(embedded_skills),
@@ -1751,6 +1752,147 @@ mod tests {
             5,
             "a finished run is not re-invoked"
         );
+    }
+
+    /// A lips command does not stop speech: the lips are layered over a
+    /// speaking say run. A play_viseme run spawned while it speaks writes
+    /// after it, so its shape shows and the face's viseme state is its own;
+    /// once it ends, say's shape comes back from where the face is. A viseme
+    /// the ROS4HRI stream plays does the same. The say run keeps running
+    /// throughout, its provider polled every tick, and ends with the
+    /// provider's own status.
+    #[test]
+    fn a_lips_command_shows_over_a_speaking_say_run() {
+        use arora_behavior::Status;
+        use arora_types::value::StructureField;
+        use uuid::Uuid;
+        use vizij_arora_behavior::task;
+
+        use speech::say::ids::say as ids;
+
+        /// `aa` for `TICKS` ticks, then done at rest.
+        struct Speaking {
+            calls: usize,
+        }
+        const TICKS: usize = 150;
+
+        impl speech::Say for Speaking {
+            fn say(
+                &mut self,
+                _text: String,
+                _voice: Option<String>,
+                viseme: &mut String,
+                speech: &mut String,
+            ) -> Status {
+                self.calls += 1;
+                if self.calls > TICKS {
+                    *viseme = speech::SILENCE_VISEME.to_string();
+                    *speech = String::new();
+                    return Status::Success;
+                }
+                *viseme = "aa".to_string();
+                *speech = "hello".to_string();
+                Status::Running
+            }
+        }
+
+        // The device as the binary builds it over the ROS4HRI mapping, the
+        // speaking provider as its text-to-speech.
+        const PROVIDER: Uuid = Uuid::from_u128(0x7474732d6c6f6e67);
+        let provider =
+            arora::HostModule::from_exports(PROVIDER, speech::say::exports(Speaking { calls: 0 }));
+        let spec = compose_sources(&[ros4hri_source("")])
+            .expect("compose the ros4hri mapping")
+            .to_string();
+        let mut arora = builder_for(
+            &spec,
+            RigHal::new(),
+            BlackboardStore::new(),
+            &[],
+            Some(provider),
+        )
+        .expect("build the device over the mapping")
+        .build()
+        .expect("build arora");
+        let weight =
+            |arora: &arora::Arora, shape: &str| read_f32(arora, &standard::viseme_path(shape));
+
+        let say = spawn(
+            &mut arora,
+            &arora_types::call::Call {
+                module_id: Some(PROVIDER),
+                id: ids::FUNCTION,
+                args: vec![
+                    StructureField {
+                        id: ids::TEXT,
+                        value: Box::new(Value::String("hello".to_string())),
+                    },
+                    StructureField {
+                        id: ids::VOICE,
+                        value: Box::new(Value::String(String::new())),
+                    },
+                ],
+            },
+        );
+        step_for(&mut arora, 0.2);
+        assert!(weight(&arora, "aa") > 0.8, "say speaks");
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("aa")));
+
+        // A play_viseme run shows over the speech; say keeps running.
+        let overlay = spawn(&mut arora, &play_viseme_call("oh", 1.0));
+        step_for(&mut arora, 0.2);
+        assert!(weight(&arora, "oh") > 0.8, "oh = {}", weight(&arora, "oh"));
+        assert!(weight(&arora, "aa") < 0.05, "aa = {}", weight(&arora, "aa"));
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("oh")));
+        assert_eq!(
+            fed_back_viseme(&arora, &overlay.feedback[0].path).as_deref(),
+            Some("oh")
+        );
+        assert_eq!(
+            fed_back_viseme(&arora, &say.feedback[0].path).as_deref(),
+            Some("aa"),
+            "say's feedback is the provider's viseme"
+        );
+        assert_eq!(read_value(&arora, &say.status.path), Some(task::running()));
+        assert_eq!(read_value(&arora, standard::SPEECH), Some(text("hello")));
+
+        // The overlay ends on its own; say's shape comes back, no snap.
+        step_for(&mut arora, 0.4);
+        assert_eq!(
+            read_value(&arora, &overlay.status.path),
+            Some(task::success())
+        );
+        let back = weight(&arora, "aa");
+        step_for(&mut arora, 0.032);
+        let rising = weight(&arora, "aa");
+        assert!(
+            rising > back && rising < 0.9,
+            "aa comes back through the crossfade: {back} → {rising}"
+        );
+        step_for(&mut arora, 0.2);
+        assert!(weight(&arora, "aa") > 0.8, "say's shape is back");
+        assert!(weight(&arora, "oh") < 0.02);
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("aa")));
+        assert_eq!(read_value(&arora, &say.status.path), Some(task::running()));
+
+        // A viseme the ROS4HRI stream plays shows over it the same way.
+        stage(&arora, ros4hri::VISEME_KEY, Value::U8(1));
+        step_for(&mut arora, 0.2);
+        assert!(weight(&arora, "PP") > 0.8, "PP = {}", weight(&arora, "PP"));
+        assert!(weight(&arora, "aa") < 0.05);
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("PP")));
+        assert_eq!(read_value(&arora, &say.status.path), Some(task::running()));
+        step_for(&mut arora, 0.6);
+        assert!(weight(&arora, "aa") > 0.8, "say's shape is back");
+        assert!(weight(&arora, "PP") < 0.02);
+
+        // The provider ends: say succeeds once its lips have settled.
+        step_for(&mut arora, 1.0);
+        assert_eq!(read_value(&arora, &say.status.path), Some(task::success()));
+        for shape in standard::VISEME_SHAPES {
+            assert!(weight(&arora, shape) < 0.02, "{shape} at rest");
+        }
+        assert_eq!(read_value(&arora, standard::SPEECH), Some(text("")));
     }
 
     /// A call of a skill the interpreter describes, as a bridge would build

@@ -1809,6 +1809,35 @@ mod tests {
         assert_eq!(read(&store, "shared/x"), Some(float(2.0)));
     }
 
+    /// A run exclusive among its own runs is layered under a later run of a
+    /// domain it is not in: both keep running, the later one's write shows,
+    /// and once it ends the earlier run's write shows again — the say skill
+    /// under a lips player.
+    #[test]
+    fn a_later_run_outside_the_domain_layers_over_a_live_run() {
+        let store = SimpleDataStore::new();
+        let mut bridge = RunBridge::new(Vec::new());
+        let mut graph = shared_writers();
+        graph.set_task_fragment(EARLY, writer_fragment(2.0).exclusive());
+        graph.set_task_fragment(LATE, writer_fragment(3.0).exclusive_in("lips"));
+        let status = |handle: &TaskHandle| read_key(&store, &handle.status);
+
+        let under = graph.spawn(run_of(EARLY), RunPolicy::Concurrent).unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read(&store, "shared/x"), Some(float(2.0)));
+
+        let over = graph.spawn(run_of(LATE), RunPolicy::Concurrent).unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(status(&under), Some(task::running()));
+        assert_eq!(read(&store, "shared/x"), Some(float(3.0)));
+
+        graph.halt(over.id).unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(status(&under), Some(task::running()));
+        assert_eq!(read(&store, "shared/x"), Some(float(2.0)));
+    }
+
     /// The order a plan follows and what it binds, in comparable form.
     fn lowered(graph: &ProcessingGraph) -> Vec<String> {
         let mut out: Vec<String> = graph
