@@ -1,13 +1,36 @@
 //! The Studio-key profile: how a face takes Semio Studio's writes and
 //! reports back to it.
 //!
-//! Studio addresses a device's animatables by key. For an animatable `<id>`
-//! it writes, in one update, `<id>.target_position` (the value to show),
-//! `<id>.studio_value` (the same value, untyped) and, while its timeline
-//! plays, `<id>.target_velocity`; it reads `<id>.position` back as the
-//! device's feedback. `<id>` is the RobotData animatable id of a number, and
-//! `<uuid>.<axis>` for each component of a vector, euler or colour, which
-//! Studio splits per axis on load.
+//! Studio addresses a device's animatables by key: `<id>` is the RobotData
+//! animatable id of a number, and `<uuid>.<axis>` for each component of a
+//! vector, euler or colour, which Studio splits per axis on load. For an
+//! animatable it writes, in one update, the target — the value to show —
+//! and, while its timeline plays, the target velocity; it reads
+//! `<id>.position` back as the device's feedback.
+//!
+//! A target is accepted in each form a client writes it in:
+//!
+//! - `<id>/target.position` and `<id>/target.velocity`: the target as a
+//!   field of `<id>/target`, named by what it sets, the same for every value
+//!   type;
+//! - `<id>.target_position` and `<id>.target_velocity`: the form Studio
+//!   writes today;
+//! - `<id>.studio_value`: the target again, which Studio writes untyped
+//!   beside `<id>.target_position` for every animatable, and the device
+//!   declares `f64` like the target. It is legacy, an
+//!   input only so that Studio's update is accepted, and drives nothing:
+//!   every animatable the face draws is a number or a number's component,
+//!   for which Studio's update carries `<id>.target_position` with the same
+//!   value. It goes once Studio no longer sends it.
+//!
+//! Every animatable the profile maps is numeric, so its target is a
+//! `position`; the profile takes no `<id>/target.value`.
+//!
+//! The device keeps a target's two forms in agreement (`TargetForms`): a
+//! change that writes the target in either form writes it in both, so a
+//! client speaking either form drives the face and the latest write wins.
+//! A change that carries both forms of one target takes the
+//! `<id>/target.position` form's value.
 //!
 //! The view indexes a face's pose by bare animatable id — a compound feature
 //! whole, under its `<uuid>` — so the profile is the mapping between the two:
@@ -15,14 +38,15 @@
 //! mapping, generated from the face's [`FaceMeta`] bindings. Per animatable
 //! (its value shape is its [`Rest`]):
 //!
-//! - a number reads `<id>.target_position` and writes `<id>`;
-//! - a compound reads `<uuid>.<axis>.target_position` per component and
+//! - a number reads `<id>/target.position` and writes `<id>`;
+//! - a compound reads `<uuid>.<axis>/target.position` per component and
 //!   writes the three joined under `<uuid>`;
 //! - each target is echoed to its `.position` key, Studio's feedback;
-//! - `.studio_value` and `.target_velocity` are read and go nowhere: they are
-//!   inputs only so that Studio's update, which carries them beside the
-//!   target, is accepted — a device refuses a whole update that names a key
-//!   it never opened.
+//! - the other keys — the target's other form, which agrees with it, the
+//!   velocity in both forms and `.studio_value` — are read and go nowhere:
+//!   they are inputs so that an update carrying them beside the target is
+//!   accepted, since a device refuses a whole update that names a key it
+//!   never opened.
 //!
 //! Every target rests at its animatable's RobotData default, so the face
 //! holds its authored pose until Studio writes.
@@ -36,8 +60,13 @@
 //! key would take turns; and an animatable bound to nothing the view draws
 //! (a joint's value, a stroke) has nowhere to land.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::Arc;
 
+use arora_types::data::{
+    DataError, DataStore, Key, KeyMeta, Slot, State, StateChange, Subscription,
+};
+use arora_types::value::Value;
 use serde_json::{json, Value as Json};
 
 use crate::view::meta::{Binding, FaceMeta, Rest};
@@ -46,14 +75,29 @@ use crate::view::meta::{Binding, FaceMeta, Rest};
 /// prefix.
 pub(crate) const STUDIO_SOURCE_ID: &str = "studio";
 
-/// The key Studio writes an animatable's value to, under its id.
-pub(crate) const TARGET_POSITION: &str = "target_position";
-/// The key Studio reads an animatable's feedback from, under its id.
+/// What a target sets that drives the animatable: its value.
 pub(crate) const POSITION: &str = "position";
-/// The key Studio writes the same value to beside the target, untyped.
-pub(crate) const STUDIO_VALUE: &str = "studio_value";
-/// The key Studio writes an animatable's velocity to while its timeline plays.
-pub(crate) const TARGET_VELOCITY: &str = "target_velocity";
+/// What a target sets that the face takes and leaves: its rate of change.
+pub(crate) const VELOCITY: &str = "velocity";
+/// The key Studio writes the target to again, untyped, under an
+/// animatable's id: legacy, read and going nowhere.
+pub(crate) const LEGACY_VALUE: &str = "studio_value";
+
+/// The target of `key` setting `what`, in the form `<key>/target.<what>`.
+pub(crate) fn target(key: &str, what: &str) -> String {
+    format!("{key}/target.{what}")
+}
+
+/// The target of `key` setting `what`, in the form Studio writes today,
+/// `<key>.target_<what>`.
+pub(crate) fn underscored_target(key: &str, what: &str) -> String {
+    format!("{key}.target_{what}")
+}
+
+/// Studio's feedback key for `key`: the target it last took.
+pub(crate) fn feedback(key: &str) -> String {
+    format!("{key}.{POSITION}")
+}
 
 /// The Studio-key profile of a face, as a composable graph source. It maps
 /// every animatable `meta` binds but those whose key is in `written` — the
@@ -190,23 +234,188 @@ impl Graph {
     }
 
     /// The keys Studio writes and reads for the animatable (or component)
-    /// `key`: its target, echoed to its feedback, and the two it ignores.
-    /// Returns the target's node.
+    /// `key`: its target, echoed to its feedback, and the keys it reads and
+    /// leaves. Returns the target's node.
     fn studio_key(&mut self, key: &str, rest: f32) -> String {
-        let target = self.input(&format!("{key}.{TARGET_POSITION}"), rest);
-        self.output(&format!("{key}.{POSITION}"), &target);
-        self.input(&format!("{key}.{STUDIO_VALUE}"), rest);
-        self.input(&format!("{key}.{TARGET_VELOCITY}"), 0.0);
-        target
+        let position = self.input(&target(key, POSITION), rest);
+        self.output(&feedback(key), &position);
+        self.input(&underscored_target(key, POSITION), rest);
+        self.left(key, rest);
+        position
     }
 
     /// The keys Studio writes for the animatable (or component) `key`, read
     /// and going nowhere: Studio's update naming them is accepted, and no
     /// feedback claims they moved anything.
     fn accepted(&mut self, key: &str, rest: f32) {
-        self.input(&format!("{key}.{TARGET_POSITION}"), rest);
-        self.input(&format!("{key}.{STUDIO_VALUE}"), rest);
-        self.input(&format!("{key}.{TARGET_VELOCITY}"), 0.0);
+        self.input(&target(key, POSITION), rest);
+        self.input(&underscored_target(key, POSITION), rest);
+        self.left(key, rest);
+    }
+
+    /// The keys of `key` the profile reads and leaves whatever it does with
+    /// the target: the velocity in both forms, and the legacy value.
+    fn left(&mut self, key: &str, rest: f32) {
+        self.input(&target(key, VELOCITY), 0.0);
+        self.input(&underscored_target(key, VELOCITY), 0.0);
+        self.input(&format!("{key}.{LEGACY_VALUE}"), rest);
+    }
+}
+
+/// The device's store, keeping the two forms of each target the profile
+/// reads in agreement — `<key>/target.<what>` and `<key>.target_<what>`:
+/// a change that writes a target in either form writes it in both, the
+/// `<key>/target.<what>` form's value when it carries both. A change that
+/// unsets a target in either form, and sets it in neither, unsets both.
+///
+/// The profile reads one form, so a client writing either drives the face,
+/// and the store never holds two values for one target, whichever form a
+/// reader asks for. Every other key passes as the change states it.
+pub(crate) struct TargetForms {
+    store: Box<dyn DataStore>,
+    targets: Arc<Targets>,
+}
+
+/// Each target with both of its forms among a composed spec's inputs.
+#[derive(Default)]
+struct Targets {
+    /// Each target's forms, `<key>/target.<what>` first.
+    forms: Vec<[Key; 2]>,
+    /// Each form → its target's index in `forms`.
+    index: HashMap<Key, usize>,
+}
+
+impl TargetForms {
+    /// `store`, keeping in agreement each target the profile composed into
+    /// `spec` reads. `store` alone when `spec` carries no profile.
+    pub(crate) fn over(store: Box<dyn DataStore>, spec: &Json) -> Box<dyn DataStore> {
+        let inputs = studio_inputs(spec);
+        let mut targets = Targets::default();
+        for path in &inputs {
+            for what in [POSITION, VELOCITY] {
+                let Some(key) = path.strip_suffix(&format!("/target.{what}")) else {
+                    continue;
+                };
+                let underscored = underscored_target(key, what);
+                if !inputs.contains(&underscored) {
+                    continue;
+                }
+                let forms = [Key::from(path.as_str()), Key::from(underscored)];
+                for form in &forms {
+                    targets.index.insert(form.clone(), targets.forms.len());
+                }
+                targets.forms.push(forms);
+            }
+        }
+        if targets.forms.is_empty() {
+            return store;
+        }
+        Box::new(Self {
+            store,
+            targets: Arc::new(targets),
+        })
+    }
+
+    /// `change`, each target it writes in either form written in both.
+    fn agreed(&self, mut change: StateChange) -> StateChange {
+        let touched: HashSet<usize> = change
+            .set
+            .keys()
+            .chain(&change.unset)
+            .filter_map(|key| self.targets.index.get(key).copied())
+            .collect();
+        for index in touched {
+            let forms = &self.targets.forms[index];
+            match forms.iter().find_map(|form| change.set.get(form).cloned()) {
+                Some(value) => {
+                    for form in forms {
+                        change.unset.remove(form);
+                        change.set.insert(form.clone(), value.clone());
+                    }
+                }
+                None => change.unset.extend(forms.iter().cloned()),
+            }
+        }
+        change
+    }
+}
+
+impl DataStore for TargetForms {
+    fn read(&self, keys: &[Key]) -> Vec<Option<Value>> {
+        self.store.read(keys)
+    }
+
+    fn write(&self, changes: StateChange) -> Result<(), DataError> {
+        self.store.write(self.agreed(changes))
+    }
+
+    fn snapshot(&self) -> State {
+        self.store.snapshot()
+    }
+
+    /// A target form's slot writes through [`DataStore::write`], so it
+    /// writes both forms; any other key's is the store's own.
+    fn slot(&self, key: &Key) -> Box<dyn Slot> {
+        if self.targets.index.contains_key(key) {
+            Box::new(FormSlot {
+                store: self.clone_box(),
+                key: key.clone(),
+            })
+        } else {
+            self.store.slot(key)
+        }
+    }
+
+    fn subscribe(&self) -> Subscription {
+        self.store.subscribe()
+    }
+
+    fn subscribe_prefix(&self, prefix: &str) -> Subscription {
+        self.store.subscribe_prefix(prefix)
+    }
+
+    fn meta(&self, keys: &[Key]) -> Vec<Option<KeyMeta>> {
+        self.store.meta(keys)
+    }
+
+    fn all_meta(&self) -> HashMap<Key, KeyMeta> {
+        self.store.all_meta()
+    }
+
+    fn set_meta(&self, meta: HashMap<Key, KeyMeta>) -> Result<(), DataError> {
+        self.store.set_meta(meta)
+    }
+
+    fn set_prefix_meta(&self, meta: HashMap<String, KeyMeta>) -> Result<(), DataError> {
+        self.store.set_prefix_meta(meta)
+    }
+
+    fn clone_box(&self) -> Box<dyn DataStore> {
+        Box::new(Self {
+            store: self.store.clone_box(),
+            targets: Arc::clone(&self.targets),
+        })
+    }
+}
+
+/// A target form's cell, written through [`TargetForms`].
+struct FormSlot {
+    store: Box<dyn DataStore>,
+    key: Key,
+}
+
+impl Slot for FormSlot {
+    fn get(&self) -> Option<Value> {
+        self.store
+            .read(std::slice::from_ref(&self.key))
+            .pop()
+            .flatten()
+    }
+
+    fn set(&self, value: Option<Value>) -> Result<(), DataError> {
+        let mut change = StateChange::new();
+        change.set.insert(self.key.clone(), value);
+        self.store.write(change)
     }
 }
 
@@ -255,27 +464,48 @@ mod tests {
         paths
     }
 
+    /// The keys the profile reads for the animatable (or component) `key`:
+    /// the target in both forms, the velocity in both, and the legacy value.
+    fn read_keys(key: &str) -> [String; 5] {
+        [
+            target(key, POSITION),
+            underscored_target(key, POSITION),
+            target(key, VELOCITY),
+            underscored_target(key, VELOCITY),
+            format!("{key}.{LEGACY_VALUE}"),
+        ]
+    }
+
     /// A number takes its target, a compound one target per component; each
-    /// target is echoed to its feedback, and the two keys Studio sends
+    /// target is echoed to its feedback, and the other keys Studio sends
     /// beside it are read and go nowhere.
     #[test]
     fn the_profile_reads_studio_s_keys_and_writes_the_view_s() {
         let (meta, x, color) = studio_face();
         let (id, spec) = studio_source(&meta, &HashSet::new());
         assert_eq!(id, STUDIO_SOURCE_ID);
-        let keys = |key: String| {
-            [TARGET_POSITION, STUDIO_VALUE, TARGET_VELOCITY].map(|k| format!("{key}.{k}"))
-        };
-        let mut inputs: Vec<String> = keys(x.to_string()).to_vec();
+        let mut inputs: Vec<String> = read_keys(&x.to_string()).to_vec();
         for axis in ["r", "g", "b"] {
-            inputs.extend(keys(format!("{color}.{axis}")));
+            inputs.extend(read_keys(&format!("{color}.{axis}")));
         }
         inputs.sort();
         assert_eq!(paths(&spec, "input"), inputs);
-        let mut outputs = vec![x.to_string(), format!("{x}.{POSITION}"), color.to_string()];
-        outputs.extend(["r", "g", "b"].map(|axis| format!("{color}.{axis}.{POSITION}")));
+        let mut outputs = vec![x.to_string(), feedback(&x.to_string()), color.to_string()];
+        outputs.extend(["r", "g", "b"].map(|axis| feedback(&format!("{color}.{axis}"))));
         outputs.sort();
         assert_eq!(paths(&spec, "output"), outputs);
+        // The animatable and its feedback follow the `/target.position` form.
+        let edges = spec["edges"].as_array().expect("edges");
+        let target_node = format!("in/{}", target(&x.to_string(), POSITION));
+        for out in [x.to_string(), feedback(&x.to_string())] {
+            assert!(
+                edges
+                    .iter()
+                    .any(|edge| edge["from"]["node_id"] == target_node
+                        && edge["to"]["node_id"] == format!("out/{out}")),
+                "{out} follows {target_node}"
+            );
+        }
     }
 
     /// An animatable the face's own graphs write stays theirs, and one bound
@@ -289,11 +519,8 @@ mod tests {
         let (_, spec) = studio_source(&meta, &HashSet::from([color.to_string()]));
         let inputs = paths(&spec, "input");
         for key in [format!("{color}.g"), joint] {
-            for k in [TARGET_POSITION, STUDIO_VALUE, TARGET_VELOCITY] {
-                assert!(
-                    inputs.contains(&format!("{key}.{k}")),
-                    "{key}.{k} is accepted"
-                );
+            for path in read_keys(&key) {
+                assert!(inputs.contains(&path), "{path} is accepted");
             }
         }
         let outputs = paths(&spec, "output");
@@ -301,5 +528,166 @@ mod tests {
             outputs.iter().all(|path| path.starts_with(&x.to_string())),
             "{outputs:?}"
         );
+    }
+
+    use vizij_api_core::value::{as_float, float};
+    use vizij_arora_store::BlackboardStore;
+
+    /// A Studio-exported face's store, keeping its targets' forms in
+    /// agreement, and the number animatable's id.
+    fn agreeing_store() -> (Box<dyn DataStore>, String) {
+        let (meta, x, _) = studio_face();
+        let spec = vizij_arora_host::compose_sources(&[studio_source(&meta, &HashSet::new())])
+            .expect("compose the profile");
+        (
+            TargetForms::over(Box::new(BlackboardStore::new()), &spec),
+            x.to_string(),
+        )
+    }
+
+    fn write(store: &dyn DataStore, values: &[(&str, Option<f64>)]) {
+        let mut change = StateChange::new();
+        for (key, value) in values {
+            match value {
+                Some(value) => {
+                    change
+                        .set
+                        .insert(Key::from(*key), Some(float(*value as f32)));
+                }
+                None => {
+                    change.unset.insert(Key::from(*key));
+                }
+            }
+        }
+        store.write(change).expect("write");
+    }
+
+    fn read(store: &dyn DataStore, key: &str) -> Option<Value> {
+        store.read(&[Key::from(key)]).pop().flatten()
+    }
+
+    /// A target written in either form lands in both, the latest write
+    /// winning whichever form it took.
+    #[test]
+    fn a_target_written_in_either_form_lands_in_both() {
+        let (store, x) = agreeing_store();
+        let (slash, underscore) = (target(&x, POSITION), underscored_target(&x, POSITION));
+        for (form, value) in [(&underscore, 0.25), (&slash, 0.5), (&underscore, 0.75)] {
+            write(&*store, &[(form, Some(value))]);
+            for read_form in [&slash, &underscore] {
+                assert_eq!(
+                    read(&*store, read_form),
+                    Some(float(value as f32)),
+                    "{read_form} after {form} = {value}"
+                );
+            }
+        }
+        let (slash, underscore) = (target(&x, VELOCITY), underscored_target(&x, VELOCITY));
+        write(&*store, &[(&underscore, Some(2.0))]);
+        assert_eq!(read(&*store, &slash), Some(float(2.0)), "the velocity too");
+    }
+
+    /// A change carrying both forms of one target takes the
+    /// `<key>/target.position` form's value.
+    #[test]
+    fn a_change_carrying_both_forms_takes_the_slash_form() {
+        let (store, x) = agreeing_store();
+        let (slash, underscore) = (target(&x, POSITION), underscored_target(&x, POSITION));
+        write(&*store, &[(&underscore, Some(0.25)), (&slash, Some(0.5))]);
+        assert_eq!(read(&*store, &slash), Some(float(0.5)));
+        assert_eq!(read(&*store, &underscore), Some(float(0.5)));
+        write(&*store, &[(&slash, Some(0.75)), (&underscore, Some(0.25))]);
+        assert_eq!(read(&*store, &slash), Some(float(0.75)));
+        assert_eq!(read(&*store, &underscore), Some(float(0.75)));
+        // A set beats an unset of the other form.
+        write(&*store, &[(&underscore, None), (&slash, Some(0.1))]);
+        assert_eq!(read(&*store, &underscore), Some(float(0.1)));
+    }
+
+    /// An unset of a target in either form, setting it in neither, unsets
+    /// both, and a slot onto either form writes both.
+    #[test]
+    fn an_unset_or_a_slot_write_keeps_the_forms_in_agreement() {
+        let (store, x) = agreeing_store();
+        let (slash, underscore) = (target(&x, POSITION), underscored_target(&x, POSITION));
+        write(&*store, &[(&slash, Some(0.5))]);
+        write(&*store, &[(&underscore, None)]);
+        assert_eq!(read(&*store, &slash), None);
+        assert_eq!(read(&*store, &underscore), None);
+
+        store
+            .slot(&Key::from(underscore.as_str()))
+            .set(Some(float(0.4)))
+            .expect("set");
+        assert_eq!(read(&*store, &slash), Some(float(0.4)));
+        assert_eq!(
+            store.clone_box().slot(&Key::from(slash.as_str())).get(),
+            Some(float(0.4)),
+            "a sibling handle keeps the forms too"
+        );
+    }
+
+    /// The legacy value is a key of its own: writing it sets no target.
+    #[test]
+    fn the_legacy_value_sets_no_target() {
+        let (store, x) = agreeing_store();
+        let legacy = format!("{x}.{LEGACY_VALUE}");
+        write(&*store, &[(&legacy, Some(0.3))]);
+        assert_eq!(read(&*store, &legacy), Some(float(0.3)));
+        assert_eq!(read(&*store, &target(&x, POSITION)), None);
+        assert_eq!(read(&*store, &underscored_target(&x, POSITION)), None);
+    }
+
+    /// The device's rest module writes through the device's store: a
+    /// `reset_keys` naming one form of a target rests both, and the face
+    /// follows.
+    #[test]
+    fn reset_keys_naming_one_form_rests_both() {
+        use crate::modules::rest::{rest::ids::reset_keys, MODULE_ID};
+        use arora_types::call::Call;
+        use arora_types::value::StructureField;
+
+        let (meta, x, _) = studio_face();
+        let spec = vizij_arora_host::compose_sources(&[studio_source(&meta, &HashSet::new())])
+            .expect("compose the profile")
+            .to_string();
+        let store = BlackboardStore::new();
+        crate::face::declare_keys(&store, &spec, &[], &[]);
+        let mut arora =
+            crate::face::builder_for(&spec, vizij_arora_hal::RigHal::new(), store, &[], None)
+                .expect("build the device over the profile")
+                .build()
+                .expect("build arora");
+        let x = x.to_string();
+        let (slash, underscore) = (target(&x, POSITION), underscored_target(&x, POSITION));
+        write(arora.store(), &[(&slash, Some(0.25))]);
+        arora
+            .call(Call {
+                module_id: Some(MODULE_ID),
+                id: reset_keys::FUNCTION,
+                args: vec![StructureField {
+                    id: reset_keys::KEYS,
+                    value: Box::new(Value::ArrayString(vec![underscore.clone()])),
+                }],
+            })
+            .expect("reset_keys");
+        // The profile's rest for `x` is its RobotData default, 0.5.
+        for form in [&underscore, &slash] {
+            let rested = read(arora.store(), form);
+            assert_eq!(rested.as_ref().and_then(as_float), Some(0.5), "{form}");
+        }
+    }
+
+    /// Without the profile in the spec, the store is the store: a key named
+    /// like a target is a key like any other.
+    #[test]
+    fn a_spec_without_the_profile_keeps_no_forms() {
+        let spec = json!({ "nodes": [
+            { "id": "i", "type": "input", "params": { "path": "a/target.position", "value": 0.0 } },
+            { "id": "j", "type": "input", "params": { "path": "a.target_position", "value": 0.0 } },
+        ] });
+        let store = TargetForms::over(Box::new(BlackboardStore::new()), &spec);
+        write(&*store, &[("a.target_position", Some(0.5))]);
+        assert_eq!(read(&*store, "a/target.position"), None);
     }
 }

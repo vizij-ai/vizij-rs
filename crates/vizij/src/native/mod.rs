@@ -22,7 +22,6 @@ use crate::face::{
     builder_for, declare_keys, load_animations, load_face, spawn_program, stage_neutral_pose,
     FaceConfig, LoadedFace, ProgramSelect,
 };
-use crate::modules::rest;
 use crate::view::meta::FaceMeta;
 use crate::view::ViewEvent;
 
@@ -34,6 +33,8 @@ pub const FACE: &str = "face";
 pub struct Runtime {
     pub rig: RigHal,
     /// Sibling store handle; unused until input staging/UI lands (VIZ-47 UI stage).
+    /// A write through it skips the device's agreement of Studio's target
+    /// forms (`studio::TargetForms`), which only the device's own store keeps.
     #[allow(dead_code)]
     pub store: BlackboardStore,
     /// The face the device booted on.
@@ -393,7 +394,6 @@ fn supervise(
         else {
             return;
         };
-        let builder = builder.with_host_module(rest::host_module(Box::new(store.clone())));
         let reload = tokio_rt.block_on(async {
             let operator = frontend.as_ref().map(|frontend| frontend.operator.clone());
             let builder =

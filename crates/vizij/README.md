@@ -194,10 +194,9 @@ local bridge:
 
 Under `--studio` the face serves **Studio's keys** (`vizij::studio`, the
 Studio-key profile), so a Studio user who claims the device drives the
-animatables its view draws. Studio's update for an entity —
-`<id>.target_position`, with `<id>.studio_value` and, while Studio's
-timeline plays, `<id>.target_velocity` beside it, for each animatable — is
-accepted; each target lands under the animatable id the view indexes and
+animatables its view draws. Studio's update for an entity carries, for each
+animatable, its target and, while Studio's timeline plays, its target
+velocity; each target lands under the animatable id the view indexes and
 `<id>.position` reports it back. `<id>` is the animatable's id for a number;
 a vector, euler or colour is written per component, `<uuid>.<axis>`, and
 lands joined under `<uuid>`. Each target rests at the animatable's RobotData
@@ -205,6 +204,21 @@ default. Studio's keys for an animatable a rig graph writes, or one the view
 binds to nothing (a joint's value, a stroke), are accepted too, so the rest
 of the update lands, and move nothing: the rig keeps its animatable, and
 neither reports feedback.
+
+A target is taken in either form, and the device keeps the two in
+agreement, so the latest write wins whichever form it took:
+
+| Form | Keys |
+|---|---|
+| a field of `<id>/target` | `<id>/target.position`, `<id>/target.velocity` |
+| the form Studio writes today | `<id>.target_position`, `<id>.target_velocity` |
+
+An update carrying both forms of one target takes the `<id>/target.position`
+form's value. `<id>.studio_value` — the target again, which Studio sends
+beside `<id>.target_position` — is legacy: an `f64` input that drives
+nothing, kept until Studio no longer sends it. Velocities, in both forms,
+are accepted, rest at 0 and move nothing. Every animatable the face draws is
+numeric, so the device takes no `<id>/target.value`.
 
 The device does not serve its face's GLB to Studio: nothing on the device
 answers the Studio client's `retrieveGlb` (`GET_MODEL_GLB`).
