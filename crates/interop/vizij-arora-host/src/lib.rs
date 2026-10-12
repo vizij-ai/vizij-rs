@@ -19,7 +19,10 @@
 //! This is only the logic both hosts would otherwise write twice, once in Rust
 //! and once in TypeScript.
 
+pub mod captions;
 pub mod contents;
+#[cfg(feature = "publish-diagnostics")]
+pub mod diagnostics;
 #[cfg(feature = "publish-frames")]
 pub mod frames;
 mod graph_builder;
@@ -294,6 +297,21 @@ impl Bundle {
         with_animations: bool,
         mappings: &[(String, Json)],
     ) -> Result<Json> {
+        compose_sources(&self.sources(wanted, select, with_animations, mappings))
+    }
+
+    /// The graph sources [`compose`](Bundle::compose) unions, `(source id,
+    /// spec)` in composition order: the base graphs of the `wanted` kinds,
+    /// the face's embedded mappings, the built-in `mappings` it does not
+    /// embed, the animation source, and the `select`ed program. What
+    /// [`contended_outputs`] reads.
+    pub fn sources(
+        &self,
+        wanted: &[&str],
+        select: &ProgramSelect,
+        with_animations: bool,
+        mappings: &[(String, Json)],
+    ) -> Vec<(String, Json)> {
         let mut sources: Vec<(String, Json)> = self
             .graphs
             .iter()
@@ -320,7 +338,32 @@ impl Bundle {
             log::info!("autoplaying program {id}");
             sources.push((format!("program::{id}"), spec.clone()));
         }
-        compose_sources(&sources)
+        sources
+    }
+
+    /// Every store path the bundle's graphs read (their `input` nodes) — its
+    /// base graphs, programs, embedded mappings and skills — with the rig
+    /// prefix stripped: the face's input surface in the standard's terms,
+    /// what [`profile::coverage`] grades.
+    pub fn input_paths(&self) -> Vec<String> {
+        let prefix = self.rig_prefix();
+        let mut paths: Vec<String> = self
+            .graphs
+            .iter()
+            .chain(&self.standard_mappings)
+            .chain(&self.skills)
+            .flat_map(|(_, spec)| nodes_of(spec))
+            .filter(|node| {
+                node.get("type")
+                    .and_then(Json::as_str)
+                    .is_some_and(|t| t.eq_ignore_ascii_case("input"))
+            })
+            .filter_map(|node| node.pointer("/params/path").and_then(Json::as_str))
+            .map(|path| path.strip_prefix(&prefix).unwrap_or(path).to_string())
+            .collect();
+        paths.sort();
+        paths.dedup();
+        paths
     }
 
     /// The store writes that stage the face's neutral pose: each `neutralInputs`
@@ -484,32 +527,19 @@ pub fn animations_source() -> (String, Json) {
 /// is normalized first (legacy input-connection forms become edges) so id
 /// rewriting sees the canonical `nodes`/`edges` shape.
 ///
-/// Output-path collisions across sources (two `output` nodes writing one path)
-/// are warned and resolved last-writer-wins by source order — the same tolerance
-/// as the web's `composeGraphSpecs`; current bundles don't collide.
+/// Output-path collisions across sources (two `output` nodes writing one path,
+/// [`contended_outputs`]) are warned and resolved last-writer-wins by source
+/// order — the same tolerance as the web's `composeGraphSpecs`.
 pub fn compose_sources(sources: &[(String, Json)]) -> Result<Json> {
+    for contention in contended_outputs(sources) {
+        log::warn!("{contention}");
+    }
     let mut nodes = Vec::new();
     let mut edges = Vec::new();
-    let mut output_owner: HashMap<String, String> = HashMap::new();
     for (source_id, spec) in sources {
         let mut normalized = spec.clone();
         normalize_graph_spec_value(&mut normalized)
             .map_err(|e| anyhow!("source {source_id:?} does not normalize: {e:?}"))?;
-
-        for node in nodes_of(&normalized) {
-            let Some(path) = output_path(node) else {
-                continue;
-            };
-            if let Some(owner) = output_owner.get(&path) {
-                if owner != source_id {
-                    log::warn!(
-                        "output path {path:?} is written by both {owner:?} and {source_id:?}; \
-                         last writer wins ({source_id:?})"
-                    );
-                }
-            }
-            output_owner.insert(path, source_id.clone());
-        }
 
         let prefix = format!("{source_id}::");
         for node in nodes_of(&normalized) {
@@ -534,6 +564,51 @@ pub fn compose_sources(sources: &[(String, Json)]) -> Result<Json> {
         }
     }
     Ok(json!({ "nodes": nodes, "edges": edges }))
+}
+
+/// A store path written by more than one source of a composition: only the
+/// last source's write lands, so the others' motion on it never shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Contention {
+    pub path: String,
+    /// The sources writing it, in composition order: the last one wins.
+    pub sources: Vec<String>,
+}
+
+impl std::fmt::Display for Contention {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let winner = self.sources.last().map(String::as_str).unwrap_or_default();
+        write!(
+            f,
+            "output path {:?} is written by {}; last writer wins ({winner:?})",
+            self.path,
+            self.sources
+                .iter()
+                .map(|source| format!("{source:?}"))
+                .collect::<Vec<_>>()
+                .join(" and ")
+        )
+    }
+}
+
+/// The paths more than one of `sources` writes (its `output` nodes), by path,
+/// each with its writers in composition order — what [`compose_sources`]
+/// resolves last-writer-wins.
+pub fn contended_outputs(sources: &[(String, Json)]) -> Vec<Contention> {
+    let mut writers: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+    for (source_id, spec) in sources {
+        for path in nodes_of(spec).filter_map(output_path) {
+            let sources = writers.entry(path).or_default();
+            if !sources.contains(source_id) {
+                sources.push(source_id.clone());
+            }
+        }
+    }
+    writers
+        .into_iter()
+        .filter(|(_, sources)| sources.len() > 1)
+        .map(|(path, sources)| Contention { path, sources })
+        .collect()
 }
 
 fn nodes_of(spec: &Json) -> impl Iterator<Item = &Json> {
@@ -618,6 +693,63 @@ mod tests {
 
     fn graph(nodes: Json, edges: Json) -> Json {
         json!({ "nodes": nodes, "edges": edges })
+    }
+
+    /// A path two sources write is contended, its writers in composition
+    /// order; a path one source writes twice, or one source writes and
+    /// another reads, is not.
+    #[test]
+    fn contended_outputs_name_each_path_and_its_writers() {
+        let output = |id: &str, path: &str| json!({ "id": id, "type": "output", "params": { "path": path } });
+        let a = graph(
+            json!([
+                output("x", "rig/x"),
+                output("y", "rig/y"),
+                output("y2", "rig/y")
+            ]),
+            json!([]),
+        );
+        let b = graph(
+            json!([
+                output("x", "rig/x"),
+                { "id": "y", "type": "input", "params": { "path": "rig/y" } }
+            ]),
+            json!([]),
+        );
+        let c = graph(json!([output("x", "rig/x")]), json!([]));
+        let contended = contended_outputs(&[("a".into(), a), ("b".into(), b), ("c".into(), c)]);
+        assert_eq!(
+            contended,
+            [Contention {
+                path: "rig/x".into(),
+                sources: vec!["a".into(), "b".into(), "c".into()],
+            }]
+        );
+        assert_eq!(
+            contended[0].to_string(),
+            r#"output path "rig/x" is written by "a" and "b" and "c"; last writer wins ("c")"#
+        );
+    }
+
+    /// A face's input surface is every path its graphs read, embedded
+    /// mappings and skills included, with its rig prefix stripped.
+    #[test]
+    fn a_bundle_s_input_paths_are_its_graphs_reads_unprefixed() {
+        let input = |path: &str| json!({ "id": path, "type": "input", "params": { "path": path } });
+        let bundle = Bundle::from_bundle_json(&json!({
+            "metadata": { "faceId": "f" },
+            "graphs": [
+                { "kind": "rig", "spec": graph(json!([input("rig/f/standard/vizij/blink")]), json!([])) },
+                { "kind": "standard-profile", "id": "standard::ros4hri",
+                  "spec": graph(json!([input("standard/ros4hri/viseme")]), json!([])) },
+                { "kind": "skill", "id": "skill::look_at",
+                  "spec": graph(json!([input("rig/f/standard/vizij/blink")]), json!([])) },
+            ],
+        }));
+        assert_eq!(
+            bundle.input_paths(),
+            ["standard/ros4hri/viseme", "standard/vizij/blink"]
+        );
     }
 
     #[test]

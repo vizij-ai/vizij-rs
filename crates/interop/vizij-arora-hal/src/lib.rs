@@ -116,6 +116,14 @@ impl RigHal {
             .collect()
     }
 
+    /// The value the rig was last driven to at `path`, if any — what a
+    /// renderer reads of a key that is no pose (a caption, say) without
+    /// copying the whole [`pose`](RigHal::pose).
+    pub fn value(&self, path: &str) -> Option<Value> {
+        let inner = self.inner.lock().unwrap();
+        inner.state.get(&Key::from(path)).cloned().flatten()
+    }
+
     /// Apply a write synchronously: store it and echo it to subscribers.
     /// Shared by [`Hal::write`] and [`Hal::try_send`] — the rig is in-memory,
     /// so applying never blocks.

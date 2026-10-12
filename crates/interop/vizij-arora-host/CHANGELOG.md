@@ -4,6 +4,40 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [7.3.0] - 2026-10-12
+
+### Added
+
+- `standard::CAPTION_TEXT` and `standard::CAPTION_SPEAKER`
+  (`standard/vizij/caption/{text,speaker}`): the caption a host shows over
+  the face, empty at rest, and who says it — `standard::CAPTION_SPEAKER_SELF`
+  (`__system__`, ROS4HRI's id for the robot) for the face itself. A command
+  of the face's display, in no tier; the `vizij-face` profile declares both
+  as string inputs and has 96 keys.
+- `captions`: how a host shows a caption, as the incumbent ROS4HRI face
+  does — eight-word chunks held for their words at 200 words a minute, at
+  least 2 s, the last 1.5 s longer, queued behind the caption showing, blue
+  for the face's own speech and white otherwise (`CaptionQueue`, `chunks`,
+  `speaker_color`).
+- The `ros4hri` profile declares `standard/ros4hri/caption/{text,speaker}`
+  (`ros4hri::CAPTION_TEXT_KEY`, `ros4hri::CAPTION_SPEAKER_KEY`), which a ROS
+  bridge writes from `hri_actions_msgs/ClosedCaption`, and the ROS4HRI
+  mapping relays them as is to the face's caption.
+- `diagnostics` (feature `publish-diagnostics`): the device's health as the
+  `diagnostic_msgs/DiagnosticArray` the ROS4HRI exposure profile publishes
+  on `/diagnostics` from the key `diagnostics` — a status for the view's
+  frame rate, and one per face with its id, its compliance level and the
+  paths its composition contends. Requires arora-msgs-ros2 2.2.
+- `contended_outputs` and `Contention`: the paths more than one source of a
+  composition writes, with their writers in composition order;
+  `compose_sources` logs each, as it did.
+- `Bundle::sources`, the graph sources `Bundle::compose` unions, and
+  `Bundle::input_paths`, the paths a face's graphs read with its rig prefix
+  stripped.
+- `profile::coverage`, `profile::Coverage` and `profile::TierCoverage`: a
+  face's compliance with the face standard, graded from its input paths —
+  what `vizij-bundle validate` reports.
+
 ## [7.2.0] - 2026-10-12
 
 ### Added

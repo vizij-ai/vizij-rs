@@ -1,6 +1,6 @@
 [package]
 name = "vizij-arora-host"
-version = "7.2.0"
+version = "7.3.0"
 edition.workspace = true
 license = "MIT OR Apache-2.0"
 description = "Portable Vizij host glue: compose the device behavior from graph sources, read the face bundle, pick the program to autoplay, and stage the neutral pose. Shared by the native app and the browser module (both in the vizij crate)."
@@ -23,10 +23,12 @@ arora-behavior = "9"
 arora-module = "2.1"
 uuid = "1"
 # The `sensor_msgs` definitions the `frames` module encodes the rendered face
-# into. Optional because the browser runtime builds this crate too and has no
-# frame to publish.
-arora-msgs-ros2 = { version = "2", optional = true }
+# into, and the `diagnostic_msgs` ones the `diagnostics` report is (2.2).
+# Optional because the browser runtime builds this crate too and publishes
+# neither.
+arora-msgs-ros2 = { version = "2.2", optional = true }
 
 [features]
 default = []
 publish-frames = ["dep:arora-msgs-ros2"]
+publish-diagnostics = ["dep:arora-msgs-ros2"]

@@ -22,7 +22,7 @@
 
 use arora_types::value::{Type, Value};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value as Json};
+use serde_json::{json, Map, Value as Json};
 
 use crate::ros4hri;
 use crate::skills;
@@ -277,6 +277,11 @@ pub fn vizij_face_profile() -> Profile {
         default_value: Some(Value::F32(1.0)),
         ..ProfileKey::input(standard::LIPSYNC_GAIN, Type::F32)
     });
+    // The caption the host shows over the face, and who says it: a command
+    // of the face's display, read by the host rather than the face's graphs.
+    // No tier.
+    keys.push(ProfileKey::text(standard::CAPTION_TEXT));
+    keys.push(ProfileKey::text(standard::CAPTION_SPEAKER));
     // What the face reports rather than takes: the lipsync state the viseme
     // players write. No tier, for the same reason.
     keys.push(ProfileKey::state(standard::VISEME, skills::SILENCE_VISEME));
@@ -290,9 +295,9 @@ pub fn vizij_face_profile() -> Profile {
                       target with its weight, 27 named expressions, 15 visemes, 36 muscle controls keyed \
                       to FACS action units and ARKit blendshapes (35 named per \
                       FACS/ARKit, plus the de-facto jaw-open path), and the conversation \
-                      state (speaking, user speaking, thinking); its lipsync gain; and \
-                      the speech state the face reports, its current viseme and the \
-                      utterance being spoken."
+                      state (speaking, user speaking, thinking); its lipsync gain; the \
+                      caption shown over it and who says it; and the speech state the \
+                      face reports, its current viseme and the utterance being spoken."
             .into(),
         scope: Scope::Face,
         keys,
@@ -309,9 +314,10 @@ pub fn vizij_face_profile() -> Profile {
 /// exposure preset feeds. ROS4HRI publishes facial action units only as
 /// perception output (`hri_msgs/FacialActionUnits` per detected face) and
 /// defines no command for them, so the profile carries none; a FACS-granular
-/// pose is the `vizij-face` muscle tier's. The speech state is the output:
-/// what the face is saying, for subtitles, and the lip shape it is saying it
-/// with.
+/// pose is the `vizij-face` muscle tier's. A closed caption — its text and
+/// its speaker — is an input too, which the mapping relays to the face's
+/// caption. The speech state is the output: what the face is saying, for
+/// subtitles, and the lip shape it is saying it with.
 pub fn ros4hri_profile() -> Profile {
     let keys = vec![
         ProfileKey::text(ros4hri::EXPRESSION_NAME_KEY),
@@ -341,6 +347,10 @@ pub fn ros4hri_profile() -> Profile {
             default_value: Some(Value::F32(0.0)),
             ..ProfileKey::input(ros4hri::VISEME_DURATION_KEY, Type::F32)
         },
+        // A closed caption: its text and who says it, as the ROS4HRI message
+        // carries them.
+        ProfileKey::text(ros4hri::CAPTION_TEXT_KEY),
+        ProfileKey::text(ros4hri::CAPTION_SPEAKER_KEY),
         ProfileKey::state(ros4hri::SPEECH_TEXT_KEY, ""),
         ProfileKey::state(ros4hri::SPEECH_VISEME_KEY, skills::SILENCE_VISEME),
     ];
@@ -349,12 +359,122 @@ pub fn ros4hri_profile() -> Profile {
         version: "v1".into(),
         title: "ROS4HRI face command".into(),
         description: "The ROS4HRI face interface: expression name with valence and \
-                      arousal, a gaze target and its frame, and the streamed viseme \
-                      commanded; the utterance being spoken and its current viseme \
-                      reported."
+                      arousal, a gaze target and its frame, the streamed viseme and the \
+                      closed caption commanded; the utterance being spoken and its \
+                      current viseme reported."
             .into(),
         scope: Scope::Device,
         keys,
+    }
+}
+
+// --- Coverage ---------------------------------------------------------------
+
+/// One tier of the standard-coverage report.
+pub struct TierCoverage {
+    pub tier: String,
+    pub covered: Vec<String>,
+    pub missing: Vec<String>,
+}
+
+/// The tiers the compliance level climbs, coarse to fine: L0 gaze & lids, L1
+/// expressions, L2 visemes, L3 the muscle tier. The profile's other tiers —
+/// the conversation state — are reported but not climbed: they say what a
+/// face reacts to, not how finely it can be posed.
+const LEVEL_TIERS: [&str; 4] = ["gaze", "expression", "viseme", "muscle"];
+
+/// The paths a tier reports without requiring them for its level: the gaze
+/// target and its weight, which say where the eyes point in terms of the eye
+/// positions the gaze tier already grades — every gaze they direct, the eye
+/// positions reach.
+const UNGRADED: [&str; 3] = [
+    standard::GAZE_TARGET_X,
+    standard::GAZE_TARGET_Y,
+    standard::GAZE_TARGET_WEIGHT,
+];
+
+/// A face's coverage of the Vizij standard: which paths of each tier of the
+/// `vizij-face` profile its graphs listen on. `level` is the highest tier of
+/// [`LEVEL_TIERS`] the face fully covers, in order (half is enough for the
+/// muscle tier: faces rig the muscles they have), [`UNGRADED`] paths aside.
+pub struct Coverage {
+    pub face_id: Option<String>,
+    pub level: u8,
+    pub tiers: Vec<TierCoverage>,
+}
+
+/// A face's standard coverage from its input surface — the standard paths its
+/// graphs read, rig prefix stripped ([`crate::Bundle::input_paths`]) — tier
+/// by tier of the `vizij-face` profile.
+pub fn coverage(face_id: Option<String>, inputs: &[String]) -> Coverage {
+    let has = |path: &str| inputs.iter().any(|p| p == path);
+
+    let standard = vizij_face_profile();
+    let tiers: Vec<TierCoverage> = standard
+        .tiers()
+        .into_iter()
+        .map(|tier| {
+            let (covered, missing) = standard
+                .keys
+                .iter()
+                .filter(|k| k.tier() == Some(tier))
+                .map(|k| k.path.clone())
+                .partition(|p| has(p));
+            TierCoverage {
+                tier: tier.to_string(),
+                covered,
+                missing,
+            }
+        })
+        .collect();
+
+    // Each level requires every tier before it in full, and its own tier in
+    // full — or, for the muscle tier, at least half — but for the paths it
+    // reports ungraded.
+    let mut level = 0;
+    let ladder = tiers
+        .iter()
+        .filter(|t| LEVEL_TIERS.contains(&t.tier.as_str()));
+    for (i, tier) in ladder.enumerate() {
+        let missing = tier
+            .missing
+            .iter()
+            .filter(|p| !UNGRADED.contains(&p.as_str()))
+            .count();
+        let full = missing == 0;
+        let enough = tier.tier == "muscle" && tier.covered.len() >= missing;
+        if !(full || enough) {
+            break;
+        }
+        level = i as u8;
+    }
+
+    Coverage {
+        face_id,
+        level,
+        tiers,
+    }
+}
+
+impl Coverage {
+    /// The report as JSON (the machine-readable `validate` output).
+    pub fn to_json(&self) -> Json {
+        let mut tiers = Map::new();
+        for t in &self.tiers {
+            tiers.insert(
+                t.tier.clone(),
+                json!({
+                    "covered": t.covered.len(),
+                    "of": t.covered.len() + t.missing.len(),
+                    "missing": t.missing,
+                }),
+            );
+        }
+        json!({
+            "faceId": self.face_id,
+            "level": format!("L{}", self.level),
+            "tiers": tiers,
+        })
     }
 }
 
@@ -542,7 +662,7 @@ mod tests {
         assert_eq!(tier("viseme"), 15);
         assert_eq!(tier("muscle"), 36);
         assert_eq!(tier("conversation"), 3);
-        assert_eq!(face.keys.len(), 94);
+        assert_eq!(face.keys.len(), 96);
         assert_eq!(
             face.tiers(),
             ["gaze", "expression", "viseme", "muscle", "conversation"]
@@ -558,6 +678,14 @@ mod tests {
             .find(|k| k.path == standard::LIPSYNC_GAIN)
             .expect("the face's lipsync gain");
         assert_eq!(gain.kind.as_deref(), Some("input"));
+        // The caption is a command of the face's display: a string input, in
+        // no tier.
+        for path in [standard::CAPTION_TEXT, standard::CAPTION_SPEAKER] {
+            let caption = face.keys.iter().find(|k| k.path == path).unwrap();
+            assert_eq!(caption.kind.as_deref(), Some("input"), "{path}");
+            assert_eq!(caption.value_type, Some(Type::String), "{path}");
+            assert_eq!(caption.tier(), None, "{path}");
+        }
         assert_eq!(gain.tier(), None, "a setting, outside the control tiers");
         assert_eq!(gain.default_value, Some(Value::F32(1.0)));
         assert_eq!(face.scope, Scope::Face);
@@ -639,13 +767,13 @@ mod tests {
         assert_eq!(without_au, 2, "only the two jaw-shift controls lack an AU");
     }
 
-    /// The ROS4HRI profile is the mapping's contract: 8 named input keys and
+    /// The ROS4HRI profile is the mapping's contract: 10 named input keys and
     /// the speech state it reports (the utterance and its current viseme) —
     /// device-global, and no action-unit keys, which ROS4HRI does not command.
     #[test]
     fn the_ros4hri_profile_matches_its_key_contract() {
         let ros = ros4hri_profile();
-        assert_eq!(ros.keys.len(), 8 + 2);
+        assert_eq!(ros.keys.len(), 10 + 2);
         assert!(ros.keys.iter().all(|k| k.meta.is_none()));
         assert_eq!(ros.scope, Scope::Device);
         assert!(ros.paths().contains(&ros4hri::EXPRESSION_NAME_KEY));
@@ -750,29 +878,32 @@ mod tests {
         // in space), the expressions ROS4HRI does not name, the lipsync
         // surface (the viseme players own it), the muscle tier (ROS4HRI
         // commands no action units), the conversation state, and the face's
-        // lipsync gain (a setting of the face, not a command).
+        // lipsync gain (a setting of the face, not a command). The caption,
+        // in no tier, is written: a closed caption relays to it.
         let beyond_ros4hri: Vec<String> = standard::VIZIJ_EXPRESSION_NAMES
             .iter()
             .map(|n| standard::expression_path(n))
             .collect();
-        let expected: Vec<&str> = face
-            .keys
-            .iter()
-            .filter(|k| k.kind.as_deref() == Some("input"))
-            .filter(|k| match k.tier() {
-                Some("gaze") => [
-                    standard::BLINK,
-                    standard::GAZE_TARGET_X,
-                    standard::GAZE_TARGET_Y,
-                    standard::GAZE_TARGET_WEIGHT,
-                ]
-                .contains(&k.path.as_str()),
-                Some("expression") => beyond_ros4hri.contains(&k.path),
-                Some("viseme" | "muscle" | "conversation") | None => true,
-                Some(other) => panic!("unexpected tier {other}"),
-            })
-            .map(|k| k.path.as_str())
-            .collect();
+        let expected: Vec<&str> =
+            face.keys
+                .iter()
+                .filter(|k| k.kind.as_deref() == Some("input"))
+                .filter(|k| match k.tier() {
+                    Some("gaze") => [
+                        standard::BLINK,
+                        standard::GAZE_TARGET_X,
+                        standard::GAZE_TARGET_Y,
+                        standard::GAZE_TARGET_WEIGHT,
+                    ]
+                    .contains(&k.path.as_str()),
+                    Some("expression") => beyond_ros4hri.contains(&k.path),
+                    Some("viseme" | "muscle" | "conversation") => true,
+                    None => ![standard::CAPTION_TEXT, standard::CAPTION_SPEAKER]
+                        .contains(&k.path.as_str()),
+                    Some(other) => panic!("unexpected tier {other}"),
+                })
+                .map(|k| k.path.as_str())
+                .collect();
         assert_eq!(unwritten, expected);
         assert_eq!(
             ros.paths_of("output")

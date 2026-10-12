@@ -40,6 +40,9 @@
 //!   name) to `speech/viseme`, for anything that follows the lips. The face's
 //!   keys are per face; the ROS4HRI keys are the device's, which is what a
 //!   static bridge profile can name.
+//! - **Captions** — a closed caption's `caption/text` and `caption/speaker`
+//!   are relayed as is to the face's caption (`standard/vizij/caption/*`),
+//!   which the host shows over the face.
 //!
 //! All continuous channels pass through a ~200 ms exponential smoother (the
 //! incumbent ROS4HRI face's dynamics). The graph is generated data: it
@@ -77,6 +80,13 @@ pub const VISEME_TIME_KEY: &str = "standard/ros4hri/viseme/time";
 /// How long the streamed viseme's shape is held, seconds
 /// (`hri_msgs/Viseme.duration`); `0` when the stream gives none.
 pub const VISEME_DURATION_KEY: &str = "standard/ros4hri/viseme/duration";
+
+/// A closed caption's text and who says it
+/// (`hri_actions_msgs/ClosedCaption.text` and `.speaker_id`, `__system__`
+/// for the robot itself), written together; relayed as is to the face's
+/// caption ([`standard::CAPTION_TEXT`], [`standard::CAPTION_SPEAKER`]).
+pub const CAPTION_TEXT_KEY: &str = "standard/ros4hri/caption/text";
+pub const CAPTION_SPEAKER_KEY: &str = "standard/ros4hri/caption/speaker";
 
 /// The output key, as a ROS bridge publishes it: the utterance being spoken,
 /// empty at rest — the face's speech state ([`standard::SPEECH`]) relayed to
@@ -460,6 +470,17 @@ fn build(rig_prefix: &str) -> (String, Json) {
     g.edge(&full, &spawn, "args_1");
     g.edge(&duration, &spawn, "args_2");
     g.edge(&time, &spawn, "when");
+
+    // --- Captions: a closed caption, relayed as is to the face's caption,
+    // which the host shows. ----------------------------------------------
+    for (key, control) in [
+        (CAPTION_TEXT_KEY, standard::CAPTION_TEXT),
+        (CAPTION_SPEAKER_KEY, standard::CAPTION_SPEAKER),
+    ] {
+        let id = out_id(control);
+        let caption = g.input(&id.replacen("out/", "in/", 1), key, json!(""));
+        g.output(&id, &caption, out(control.to_string()));
+    }
 
     // --- Speech: the face's speech state, relayed as is to the ROS4HRI
     // speech keys a bridge publishes. -----------------------------------
