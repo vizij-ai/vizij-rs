@@ -93,7 +93,10 @@ serves it); this table summarizes it.
   `set_facial_action_units` run, and a later call of either takes it back.
   Quick successive writes of the three keys (a bridge landing a message's
   fields one by one) each start a run; each continues from where the face
-  is, so the face only ever moves toward the latest.
+  is, so the face only ever moves toward the latest. Since a setter run
+  writes the face's expression every step, the face standard's expression,
+  muscle-tier and jaw keys are no inputs while the mapping is composed: the
+  device does not declare them and refuses a remote write to them.
 - **Gaze** — `gaze/target` maps to per-eye positions with vergence, the
   incumbent ±0.78 rad → ±1 normalization, and a center fallback for targets at
   or behind the face plane (x ≤ 0.1 m).

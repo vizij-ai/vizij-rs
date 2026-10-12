@@ -117,8 +117,11 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
 }
 
 /// The composed graph's free inputs — input paths no graph in the composition
-/// writes (the ones a remote may drive) — with the type the store states for
-/// each ([`declare_keys`]):
+/// writes and no expression setter's run holds (the face's named
+/// expressions, muscle tier and de-facto jaw, when the graph spawns
+/// set_expression on its first evaluation, as the ROS4HRI mapping does):
+/// the ones a remote may drive — with the type the store states for each
+/// ([`declare_keys`]):
 /// the input's default value decides (string → String, bool → Boolean, a
 /// number → its own numeric type, `f32` for the graph's numbers; absent →
 /// F32, the graph's number), except for a key a shipped profile
@@ -245,6 +248,7 @@ fn walk_free_inputs(
     profiled: &ProfileKeys,
 ) -> Vec<(String, arora_types::value::Type, Option<Value>)> {
     use arora_types::value::Type;
+    let rig_prefix = rig_prefix_of(spec);
     let Ok(spec) = serde_json::from_str::<serde_json::Value>(spec) else {
         return Vec::new();
     };
@@ -265,11 +269,12 @@ fn walk_free_inputs(
             .map(str::to_ascii_lowercase)
             .unwrap_or_default()
     };
-    let written: std::collections::HashSet<String> = nodes
+    let mut written: std::collections::HashSet<String> = nodes
         .iter()
         .filter(|n| kind_of(n) == "output")
         .filter_map(path_of)
         .collect();
+    written.extend(held_by_setters(&nodes, &rig_prefix));
     let mut seen = std::collections::HashSet::new();
     let mut inputs = Vec::new();
     for node in nodes.iter().filter(|n| kind_of(n) == "input") {
@@ -340,6 +345,39 @@ fn caption_inputs(
                 key.default_value.clone(),
             ))
         })
+        .collect()
+}
+
+/// The paths an expression setter's run holds for as long as the device
+/// runs: the face's expression surface — its named expressions, muscle tier
+/// and de-facto jaw ([`vizij_arora_host::skills::expression_surface`]), under
+/// the face's rig prefix — when the graph spawns set_expression on its first
+/// evaluation, as the ROS4HRI mapping does so that the face boots at neutral.
+/// From then on a setter run owns the expression: each later command, a
+/// set_expression or set_facial_action_units call or a ROS4HRI expression key
+/// write, takes it over with another setter run, which writes the whole
+/// surface every tick. A remote write there would be overwritten on the next
+/// tick, so these paths are the device's outputs, not inputs; the expression
+/// is set through the setters.
+fn held_by_setters(nodes: &[serde_json::Value], rig_prefix: &str) -> Vec<String> {
+    let set_expression =
+        vizij_arora_host::skills::set_expression::ids::set_expression::FUNCTION.to_string();
+    let spawned_at_load = nodes.iter().any(|node| {
+        node.get("type")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|kind| kind.eq_ignore_ascii_case("spawn"))
+            && node
+                .pointer("/params/function")
+                .and_then(serde_json::Value::as_str)
+                == Some(set_expression.as_str())
+            && node.pointer("/params/spawn_initial") == Some(&serde_json::Value::Bool(true))
+    });
+    if !spawned_at_load {
+        return Vec::new();
+    }
+    vizij_arora_host::skills::expression_surface()
+        .into_iter()
+        .map(|path| format!("{rig_prefix}{path}"))
         .collect()
 }
 
@@ -855,6 +893,53 @@ mod tests {
                 Some(number().resting_at(float(0.25))),
                 Some(number().resting_at(float(0.5))),
             ]
+        );
+    }
+
+    /// While the ROS4HRI mapping is composed, a setter run holds the face's
+    /// expression from the first tick, so the face standard's expression,
+    /// muscle-tier and de-facto jaw keys are no inputs: undeclared, closed
+    /// to remote writers. The face's other inputs stay open. The same face
+    /// composed without the mapping opens them all.
+    #[test]
+    fn the_expression_a_setter_holds_is_no_input() {
+        use vizij_arora_host::{ros4hri::ros4hri_source, standard};
+        let held = [
+            standard::expression_path("happy"),
+            standard::face_path(standard::FACE_CONTROLS[0].name),
+            standard::MOUTH_JAW_OPEN.to_string(),
+        ];
+        let rig = serde_json::json!({"nodes": held
+            .iter()
+            .map(String::as_str)
+            .chain([standard::GAZE_TARGET_X])
+            .enumerate()
+            .map(|(i, path)| serde_json::json!({
+                "id": format!("in{i}"), "type": "input",
+                "params": {"path": format!("rig/f/{path}"), "value": 0.0}
+            }))
+            .collect::<Vec<_>>(), "edges": []});
+        let open = |sources: &[(String, serde_json::Value)]| -> Vec<bool> {
+            let spec = compose_sources(sources).expect("compose").to_string();
+            let store = BlackboardStore::new();
+            declare_keys(&store, &spec, &[], &[]);
+            let keys: Vec<Key> = held
+                .iter()
+                .map(String::as_str)
+                .chain([standard::GAZE_TARGET_X])
+                .map(|path| Key::new(format!("rig/f/{path}")))
+                .collect();
+            store
+                .meta(&keys)
+                .into_iter()
+                .map(|meta| meta.is_some_and(|meta| meta.editable))
+                .collect()
+        };
+        let face = ("rig".to_string(), rig);
+        assert_eq!(open(std::slice::from_ref(&face)), [true, true, true, true]);
+        assert_eq!(
+            open(&[face, ros4hri_source("rig/f/")]),
+            [false, false, false, true]
         );
     }
 

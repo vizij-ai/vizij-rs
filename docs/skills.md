@@ -100,11 +100,13 @@ loaded, so the face boots at what the keys hold at rest — neutral. The
 mapping writes no expression weight itself, so a run always owns the face's
 expression while the mapping is composed: the latest command, whether a key
 write, a `set_expression` call or a `set_facial_action_units` call. A halted
-setter run leaves the face where it was until the next command. The face
-standard's expression and muscle-tier keys stay free inputs, but on a device
-composing the mapping a setter run writes them every tick, so they are
-commanded through the setters. The mapping's blink reads the face's own
-`asleep` weight, so `asleep` closes the lids whoever sets it.
+setter run leaves the face where it was until the next command. Since a
+setter run writes the face's expression every tick, the face standard's
+expression keys, its muscle-tier keys and the de-facto jaw are no inputs
+while the mapping is composed: the device does not declare them, refuses a
+remote write to them, and its expression is set through the setters or the
+ROS4HRI keys. The mapping's blink reads the face's own `asleep` weight, so
+`asleep` closes the lids whoever sets it.
 
 ## The viseme players
 

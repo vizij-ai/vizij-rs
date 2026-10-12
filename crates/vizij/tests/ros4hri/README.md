@@ -36,8 +36,8 @@ crates/vizij/tests/ros4hri/captions-diagnostics.sh # captions in, diagnostics ou
 ```
 
 - **The image** builds `std_skills`, `communication_skills`,
-  `interaction_skills` and `hri_msgs` as real interface packages from the `.msg` / `.action`
-  files `arora-msgs-ros2` vendors (found through `cargo metadata`), so the
+  `interaction_skills`, `hri_msgs` and Vizij's `vizij_face_msgs` as real
+  interface packages from the `.msg` / `.action` files `arora-msgs-ros2` vendors (found through `cargo metadata`), so the
   client speaks exactly what the bridge serves — Vizij's viseme feedback
   extension included. It is also what makes `ros2 action send_goal` complete
   and accept the skill types: without the packages installed, the CLI has no

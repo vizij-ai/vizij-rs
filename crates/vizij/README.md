@@ -158,8 +158,10 @@ Every run serves arora's open local bridge
 `http://127.0.0.1:9000/`. The bridge relays the device as its store and
 modules describe it, so the app declares nothing to it. `list_keys` gives each
 key with its `__meta`: the face's **free inputs** — the input paths no graph in
-the composition writes — are the keys a client may write, each typed, numbers
-in `[0, 1]`, with the value it rests at: the authored default, the rig's under
+the composition writes and no expression setter holds (the face's
+expression, while the ROS4HRI mapping is composed: see
+[skills](../../docs/skills.md#the-expression-setters)) — are the keys a client
+may write, each typed, numbers in `[0, 1]`, with the value it rests at: the authored default, the rig's under
 the bundle's neutral pose. The device refuses a write to any other key.
 `reset`, the rest module's function, returns every key to its rest.
 
@@ -172,6 +174,10 @@ signatures their modules describe, so `list_methods` carries them beside
 | `look_at` | the gaze skill: `policy` (`track`/`glance`/`reset`), `target` (meters), `frame` |
 | `play_viseme` | one viseme `shape` at a `weight` through the lipsync envelope |
 | `say` | speak `text` in `voice` (only when the build has a speech provider) |
+| `set_expression` | hold the face's expression: a named `expression`, or a `valence`/`arousal` point when the name is empty |
+| `set_facial_action_units` | hold the face's expression as FACS action units: `codes` and their `intensities`, over the neutral expression |
+| `set_viseme` | hold one mouth shape, by its `viseme` code |
+| `play_visemes` | play a viseme timeline — `visemes`, their `starts` and `durations` in seconds — and end |
 
 Each is a **run** (`"task": true`): the `invoke` answers as soon as it starts,
 with the run's id and the key that says how it ends, and
@@ -248,6 +254,11 @@ with its ROS4HRI exposure preset:
   from the viseme players' signatures ([skills](../../docs/skills.md));
 - the **`/skill/look_at`** action server (`interaction_skills/LookAt`):
   track / glance / reset policies, priority preemption, standard error codes;
+- the face's setters on topics — `/skill/set_expression`
+  (`interaction_skills/SetExpression`), `/skill/set_facial_action_units` and
+  `/skill/set_viseme` (`vizij_face_msgs`) — each message running the skill,
+  the latest one holding; and the **`/skill/play_visemes`** action server
+  (`vizij_face_msgs/PlayVisemes`), its feedback the shape being shown;
 - the **face image** on the `image_transport` pair PAL OS documents:
   `display/face/compressed` as a `sensor_msgs/CompressedImage` on
   `/robot_face/image_raw/compressed` (`--frame-format png`, the default), or
@@ -267,7 +278,11 @@ with its ROS4HRI exposure preset:
   Studio's keys, as Studio writes them; `String`/`Bool` by the input's
   default; `ros2 topic info -v` shows each).
   Keys a graph writes every step (the ROS4HRI profile's `standard/vizij/*`
-  outputs) are not inputs: drive them through the ROS4HRI topics. A program
+  outputs) are not inputs: drive them through the ROS4HRI topics. Nor,
+  while the ROS4HRI mapping is composed, are the face standard's expression,
+  muscle-tier and jaw keys: a `set_expression` or `set_facial_action_units`
+  run holds them from the first step, so the expression is set through those
+  skills ([skills](../../docs/skills.md#the-expression-setters)). A program
   runs beside the graph as a task run, so the keys it writes stay inputs; a
   running program writes over them every step.
 
