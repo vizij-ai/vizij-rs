@@ -59,8 +59,9 @@ Each operation that reaches the device is enqueued before it returns and
 applied at the device's next step, which its promise waits for: under
 `run()` just `await` it; a page that drives the device with `step` steps
 after issuing it. What the face does, it does through the methods its
-modules and its interpreter declare: `say`, `look_at` and `play_viseme`
-(the skills), `run_behavior` (programs), the animation module's functions,
+modules and its interpreter declare: `say`, `look_at` (ROS4HRI's gaze, see
+[Profiles and mappings](#profiles-and-mappings)) and `play_viseme` (the
+skills), `run_behavior` (programs), the animation module's functions,
 and the rest module's `reset` — every key back to the value it rests at
 (each free input of the face's graphs and programs to its authored default,
 each input the bundle's neutral pose names to its neutral) — and
@@ -256,13 +257,17 @@ const graph = mapping("ros4hri", "rig/<faceId>/"); // the mapping graph as an ob
 ```
 
 A loaded Vizij speaks the vizij standard: its `standard/vizij/*` controls,
-through the bundle's `standard-adaptation`. The ROS4HRI mapping is for a page
-that drives the face as a ROS robot does, and composes only when asked for —
-`loadVizij(id, glb, { ros4hri: true })` (or `composeVizij`'s option of the same
-name) — so the device-scoped `standard/ros4hri/*` keys drive it too. The
-mapping carries the idle blink, so a face without it blinks only when its
-program or a client blinks it. A face that embeds its own `standard::ros4hri`
-copy runs that copy either way.
+through the bundle's `standard-adaptation`. Its program and its clients
+blink it through `standard/vizij/blink` and move its eyes through
+`standard/vizij/{left,right}_eye/pos/{x,y}`.
+
+The ROS4HRI mapping is for a page that drives the face as a ROS robot does.
+It composes when asked for — `loadVizij(id, glb, { ros4hri: true })` (or
+`composeVizij`'s option of the same name) — and the device-scoped
+`standard/ros4hri/*` keys then drive the face too. The mapping brings two
+behaviours of its own: an idle blink, and the gaze of the `look_at` skill,
+whose ROS4HRI gaze target it turns into eye positions. A face that embeds its
+own `standard::ros4hri` copy runs that copy either way.
 
 `profile(id, rigPrefix)` prefixes only a `face`-scoped profile; a `device`
 profile such as `ros4hri` comes back unchanged. `mapping(id, rigPrefix)`
