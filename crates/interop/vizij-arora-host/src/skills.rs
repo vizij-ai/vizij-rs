@@ -891,8 +891,9 @@ pub fn generate_say() -> Json {
 /// The face's expression, as a run owning it writes it: every named
 /// expression's weight ([`standard::expression_names`]), every muscle-tier
 /// control ([`standard::FACE_CONTROLS`]) and the de-facto jaw
-/// ([`standard::MOUTH_JAW_OPEN`]), by path.
-fn expression_surface() -> Vec<String> {
+/// ([`standard::MOUTH_JAW_OPEN`]), by path, unprefixed. Both expression
+/// setters write all of it.
+pub fn expression_surface() -> Vec<String> {
     standard::expression_names()
         .map(standard::expression_path)
         .chain(
