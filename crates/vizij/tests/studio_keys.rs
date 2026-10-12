@@ -261,13 +261,14 @@ async fn studio_s_update_drives_a_studio_exported_face() {
         .and_then(|(_, value)| as_float(&value));
     assert_eq!(held, Some(0.75));
 
-    // Studio's feedback reads back on the wire, and the target reads the
-    // same in both forms.
+    // Studio's feedback reads back on the wire, a component's under both
+    // spellings of its axis, and the target reads the same in both forms.
     let read_keys = [
         format!("{x}.position"),
         format!("{color}.b.position"),
         format!("{y}.position"),
         format!("{x}/target.position"),
+        format!("{color}.position.b"),
     ];
     let read = request(
         &mut socket,
@@ -279,6 +280,7 @@ async fn studio_s_update_drives_a_studio_exported_face() {
     assert_eq!(number(&read["values"][&read_keys[1]]), Some(0.5), "{read}");
     assert_eq!(number(&read["values"][&read_keys[2]]), None, "{read}");
     assert_eq!(number(&read["values"][&read_keys[3]]), Some(0.25), "{read}");
+    assert_eq!(number(&read["values"][&read_keys[4]]), Some(0.5), "{read}");
 
     // An update naming a key the device never opened is refused whole, by
     // name: a target for an animatable the face does not have.
@@ -300,7 +302,13 @@ async fn an_update_in_the_slash_form_drives_the_face() {
         pose_once(&device, update_landed(&face)).await.is_some(),
         "the targets never reached the rig"
     );
-    let read_keys = [format!("{x}.position"), format!("{x}.target_position")];
+    let read_keys = [
+        format!("{x}.position"),
+        format!("{x}.target_position"),
+        format!("{color}.r.position"),
+        format!("{color}.position.r"),
+        format!("{color}.r.target_position"),
+    ];
     let read = request(
         &mut socket,
         json!({"type": "read_values", "keys": read_keys}),
@@ -309,6 +317,11 @@ async fn an_update_in_the_slash_form_drives_the_face() {
     .await;
     assert_eq!(number(&read["values"][&read_keys[0]]), Some(0.25), "{read}");
     assert_eq!(number(&read["values"][&read_keys[1]]), Some(0.25), "{read}");
+    // A component's feedback under both spellings of its axis, and its
+    // target in Studio's per-axis form.
+    for key in &read_keys[2..] {
+        assert_eq!(number(&read["values"][key]), Some(1.0), "{key}: {read}");
+    }
 }
 
 /// An update carrying a target in both forms lands the

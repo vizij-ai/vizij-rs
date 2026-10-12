@@ -197,9 +197,11 @@ Studio-key profile), so a Studio user who claims the device drives the
 animatables its view draws. Studio's update for an entity carries, for each
 animatable, its target and, while Studio's timeline plays, its target
 velocity; each target lands under the animatable id the view indexes and
-`<id>.position` reports it back. `<id>` is the animatable's id for a number;
-a vector, euler or colour is written per component, `<uuid>.<axis>`, and
-lands joined under `<uuid>`. Each target rests at the animatable's RobotData
+its feedback reports it back. `<id>` is the animatable's id for a number,
+whose feedback is `<id>.position`; a vector, euler or colour is written per
+component, `<id>.<axis>`, and lands joined under `<id>`, its feedback
+published under both spellings of the axis, `<id>.position.<axis>` and
+`<id>.<axis>.position`, which always agree. Each target rests at the animatable's RobotData
 default. Studio's keys for an animatable a rig graph writes, or one the view
 binds to nothing (a joint's value, a stroke), are accepted too, so the rest
 of the update lands, and move nothing: the rig keeps its animatable, and
@@ -211,13 +213,17 @@ agreement, so the latest write wins whichever form it took:
 | Form | A number `<id>` | A component `<id>.<axis>` |
 |---|---|---|
 | `k/target.c`, as [`arora_hal::set_targets`](https://docs.rs/arora-hal) reads it | `<id>/target.position`, `<id>/target.velocity` | `<id>/target.position.<axis>`, `<id>/target.velocity.<axis>` |
-| the form Studio writes today | `<id>.target_position`, `<id>.target_velocity` | `<id>.<axis>.target_position`, `<id>.<axis>.target_velocity` |
+| Studio's current spelling | `<id>.target_position`, `<id>.target_velocity` | `<id>.<axis>.target_position`, `<id>.<axis>.target_velocity` |
+
+Studio's production line writes the current spelling for a whole number
+only: it sends no per-axis target. The per-axis spelling is the one the
+Studio-on-Arora line writes.
 
 An update carrying both forms of one target takes the `k/target.c` form's
 value, as `set_targets` does
 ([proposal](https://github.com/semio-ai/arora-sdk/pull/333)).
-`<id>.studio_value` (`<id>.<axis>.studio_value`) — the target again, which
-Studio sends beside `.target_position` — is legacy: an `f64` input that
+`<id>.studio_value` — the target again, which Studio sends beside
+`.target_position` — and its per-axis `<id>.<axis>.studio_value` are legacy: an `f64` input that
 drives nothing, kept until Studio no longer sends it. Velocities, in both
 forms, are accepted, rest at 0 and move nothing. Every animatable the face
 draws is numeric, so the device takes no `<id>/target.value`.
