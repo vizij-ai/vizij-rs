@@ -66,9 +66,8 @@ pub fn prefix_controls(spec: &mut serde_json::Value, rig_prefix: &str) {
 
 // --- Gaze & lids ------------------------------------------------------------
 
-/// Eye position controls, normalized [-1, 1]: `pos/x` runs left to right as
-/// the viewer sees the face (+1 toward the viewer's right, the face's own
-/// left), `pos/y` down to up.
+/// Eye position controls, normalized [-1, 1]: `pos/x` is the wearer's
+/// left-to-right, `pos/y` is down-to-up.
 pub const LEFT_EYE_POS_X: &str = "standard/vizij/left_eye/pos/x";
 pub const LEFT_EYE_POS_Y: &str = "standard/vizij/left_eye/pos/y";
 pub const RIGHT_EYE_POS_X: &str = "standard/vizij/right_eye/pos/x";
