@@ -42,12 +42,26 @@ run continues from where the face is, so the handover is a crossfade, never
 a snap.
 
 - **The expression**: `set_expression` and `set_facial_action_units`.
-- **The lips**: `play_viseme`, `set_viseme`, `play_visemes` and `say`. A
-  viseme streamed into the ROS4HRI mapping plays through `play_viseme`, so it
-  takes the lips over from a speaking `say` like any other command.
+- **The lips**: `play_viseme`, `set_viseme` and `play_visemes`. A viseme
+  streamed into the ROS4HRI mapping plays through `play_viseme`, so it takes
+  the lips over from any of them.
 
 A domain is a name the device gives a fragment when it registers it
-(`TaskFragment::exclusive_in`); the interpreter halts by domain at spawn.
+(`TaskFragment::exclusive_in`); the interpreter halts by domain at spawn. A
+skill can instead be exclusive among its own runs only
+(`TaskFragment::exclusive`): `say`, whose new utterance takes over from the
+one speaking.
+
+`say` is outside the lips' domain because a lips command must not cut speech
+short: the audio would stop mid-sentence for a mouth shape. The lips are
+**layered** over it instead. The interpreter evaluates the runs in spawn
+order, after the main behavior, and the later writer of a key wins, so a
+lips player spawned while `say` speaks writes the viseme weights and the
+current-viseme state after `say` and shows over it.
+`say` keeps speaking and ends with its own status; once the player ends, its
+lips pick up again from where the face is — the driver's smoothers read the
+face's weights back — so the handback is a crossfade too. A `say` run's
+feedback keeps reporting the provider's viseme while it is overlaid.
 
 ## The expression setters
 

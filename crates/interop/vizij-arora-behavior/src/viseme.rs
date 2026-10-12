@@ -7,10 +7,12 @@
 //! the methods — what a bridge discovers (DescribeMethods) and exposes — and
 //! a remote spawns them through the interpreter module.
 //!
-//! Every player of the lips — these three and the say skill — is exclusive
-//! in one domain, [`LIPS`]: one run owns the lips at a time, and a new
-//! command of any of them takes over from the run before it, which ends
-//! preempted.
+//! The three players are exclusive in one domain, [`LIPS`]: one of their
+//! runs owns the lips at a time, and a new command of any of them takes over
+//! from the run before it, which ends preempted. The say skill stays outside
+//! it: a player spawned while a say run speaks writes after it — runs write
+//! in spawn order — so its shape shows over the speech, and say's lips pick
+//! up again from where the face is once the player ends.
 
 use std::collections::HashMap;
 
@@ -24,7 +26,7 @@ pub use vizij_arora_host::skills::{
     play_viseme, play_visemes, set_viseme, PlayViseme, PlayVisemes, SetViseme,
 };
 
-/// The exclusivity domain of the lips: one player owns them at a time.
+/// The exclusivity domain of the lips' players: one owns them at a time.
 pub const LIPS: &str = "lips";
 
 /// play_viseme as the contract describes it.
