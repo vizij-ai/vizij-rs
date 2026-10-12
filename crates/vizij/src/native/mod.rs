@@ -268,7 +268,11 @@ pub async fn attach_bridges(
 /// handles cross the thread boundary. The face is loaded here first so
 /// composition errors surface to the caller, not in a log.
 pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) -> Result<Runtime> {
-    let LoadedFace { meta, spec } = load_face(glb, &config)?;
+    let LoadedFace {
+        meta,
+        spec,
+        contended,
+    } = load_face(glb, &config)?;
     // The rig holds the face it shows: the model the device states and serves
     // (Semio Studio's `retrieveModels` / `retrieveModelGlb`).
     let rig = RigHal::new();
@@ -281,6 +285,10 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
         meta: Box::new(meta.clone()),
         glb: glb.to_vec(),
         rig: rig.clone(),
+    });
+    let _ = events_tx.send(ViewEvent::Composed {
+        face_id: FACE.to_string(),
+        contended,
     });
 
     let thread = {
@@ -362,8 +370,10 @@ fn supervise(
     // reload's face swap is announced only after the new front end is up, so
     // the view's swap (and everything it logs) lands in the live pane.
     let mut fresh = Some((rig, store));
-    // Set on a reload so the next generation announces the new face to the view.
+    // Set on a reload so the next generation announces the new face to the
+    // view, with what its composition contends.
     let mut pending_glb: Option<Vec<u8>> = None;
+    let mut contended = Vec::new();
     loop {
         let (rig, store) = fresh
             .take()
@@ -376,6 +386,10 @@ fn supervise(
                 meta: Box::new(meta.clone()),
                 glb,
                 rig: rig.clone(),
+            });
+            let _ = events.send(ViewEvent::Composed {
+                face_id: FACE.to_string(),
+                contended: std::mem::take(&mut contended),
             });
         }
         if config.stage_neutral {
@@ -416,6 +430,7 @@ fn supervise(
         };
         spec = loaded.spec;
         meta = loaded.meta;
+        contended = loaded.contended;
         pending_glb = Some(glb);
     }
 }
@@ -591,6 +606,32 @@ mod ros4hri_profile_tests {
     use arora_types::record::module::frozen::ExportKind;
     use uuid::Uuid;
     use vizij_arora_host::skills::{look_at, play_viseme, say};
+
+    /// The closed caption the profile takes lands on the keys the `ros4hri`
+    /// profile declares for it — the ones the mapping relays to the face's
+    /// caption.
+    #[test]
+    fn the_ros4hri_profile_lands_a_caption_on_the_mapping_s_keys() {
+        use vizij_arora_host::ros4hri::{CAPTION_SPEAKER_KEY, CAPTION_TEXT_KEY};
+        let profile = arora_bridge_ros2::ExposureProfile::ros4hri();
+        let endpoint = profile
+            .endpoints
+            .iter()
+            .find(|e| e.ros_type == "hri_actions_msgs/ClosedCaption")
+            .expect("the profile takes captions");
+        let routes: Vec<(&str, &str)> = endpoint
+            .routes
+            .iter()
+            .map(|r| (r.field.as_str(), r.key.as_str()))
+            .collect();
+        assert_eq!(
+            routes,
+            [
+                ("text", CAPTION_TEXT_KEY),
+                ("speaker_id", CAPTION_SPEAKER_KEY)
+            ]
+        );
+    }
 
     #[test]
     fn every_skill_the_ros4hri_profile_binds_is_a_declared_contract() {

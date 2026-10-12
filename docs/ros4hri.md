@@ -10,9 +10,10 @@ any compliant Vizij face.
 
 Support spans both ROS4HRI planes:
 
-- **Topics** — the face-command vocabulary (expressions, gaze, visemes)
-  lands on the `ros4hri` profile's `standard/ros4hri/*` keys through typed
-  topic endpoints.
+- **Topics** — the face-command vocabulary (expressions, gaze, visemes,
+  closed captions) lands on the `ros4hri` profile's `standard/ros4hri/*`
+  keys through typed topic endpoints, and the device reports its health on
+  [`/diagnostics`](#diagnostics).
 - **The skill plane** — the device serves ROS4HRI's gaze skill as a native
   ROS 2 action server, [`/skill/look_at`](#the-look_at-skill)
   (`interaction_skills/LookAt` — the standard's only action; `set_expression`
@@ -46,7 +47,9 @@ stays with the face.
 > publishes the [face image](#driving-a-key-from-ros-2) on
 > `/robot_face/image_raw[/compressed]` and [what the face is
 > saying](#speaking-through-the-standard-skill) on `/robot_face/speech`
-> and the lip shape it is saying it with on `/robot_face/viseme`, and binds the [`/skill/look_at`](#the-look_at-skill) action. The `vizij`
+> and the lip shape it is saying it with on `/robot_face/viseme`, takes
+> [closed captions](#captions) on `/closed_captions`, publishes the device's
+> [health](#diagnostics) on `/diagnostics`, and binds the [`/skill/look_at`](#the-look_at-skill) action. The `vizij`
 > binary wires the preset when run with `--ros2` (`--no-ros4hri` leaves it
 > out). The message
 > vocabulary (`hri_msgs`, `geometry_msgs`, `interaction_skills`, …) ships as
@@ -71,6 +74,8 @@ serves it); this table summarizes it.
 | `standard/ros4hri/gaze/target` | vec3 (m) | a look-at point (face frame: x forward, y left, z up) | per-eye gaze with vergence |
 | `standard/ros4hri/gaze/frame` | string | the look-at point's frame id | consumed by the `look_at` skill, not the mapping |
 | `standard/ros4hri/viseme` | u8 `[0,14]` | `hri_msgs/Viseme.value`, from `/tts/viseme` or `/tts/visemes` | the lip shape at the audio playhead — each new code plays through `play_viseme` (see Lips below) |
+| `standard/ros4hri/caption/text` | string | `hri_actions_msgs/ClosedCaption.text`, from `/closed_captions` | the caption to show — relayed to the face's caption (see Captions below) |
+| `standard/ros4hri/caption/speaker` | string | `hri_actions_msgs/ClosedCaption.speaker_id` | who says it, `__system__` for the robot itself |
 | `standard/ros4hri/speech/text` | string | *published* as `/robot_face/speech` (`std_msgs/String`) | the utterance being spoken, empty at rest — relayed from the face's speech state (see Speech below) |
 | `standard/ros4hri/speech/viseme` | string | *published* as `/robot_face/viseme` (`std_msgs/String`) | the lip shape being spoken, a Vizij standard shape name, `sil` at rest — relayed from the face's current viseme (see Speech below) |
 
@@ -110,6 +115,9 @@ serves it); this table summarizes it.
     of the whole robot, without knowing the face id. It is the standard's
     shape name rather than an `hri_msgs/Viseme`: the face reports the shape,
     and a stream's time and duration are not part of its state.
+- **Captions** — relayed as is: `caption/text` and `caption/speaker` go to
+  the face's caption (`standard/vizij/caption/{text,speaker}`), which the
+  view shows over the face (see [Captions](#captions)).
 - **Blink** — an idle generator (≈8 s cycle, deterministically jittered, 0.2 s
   parabolic pulse) drives the eyelids. The `asleep` expression closes them and
   inhibits the blink in proportion to its weight.
@@ -152,6 +160,68 @@ What follows from a key-driven channel:
   `hri_msgs/Visemes` lands its first viseme only.
 - **The first viseme a device reads only sets the baseline.** A face loaded
   mid-utterance starts lipsyncing at the next one.
+
+## Captions
+
+A closed caption on `/closed_captions` (`hri_actions_msgs/ClosedCaption`,
+reliable like every command topic) lands its `text` and `speaker_id` on
+`standard/ros4hri/caption/{text,speaker}` in one change, and the mapping
+relays them to the [face standard's caption](face-standard.md#caption), which
+the view draws over the face: in chunks of eight words, each held long
+enough to read and queued behind the caption showing, blue when the speaker
+is `__system__` (the robot itself) and white for anyone else — the incumbent
+ROS4HRI face's rules. The caption is in every frame the view publishes, so
+it shows on `/robot_face/image_raw[/compressed]` too.
+
+```bash
+ros2 topic pub --once /closed_captions hri_actions_msgs/msg/ClosedCaption \
+  "{speaker_id: '__system__', text: 'Hello, I am a talking face.', locale: 'en_GB'}"
+```
+
+A caption is a value, not an event: the same caption sent twice in a row
+shows once. `locale` is not read.
+
+## Diagnostics
+
+Exposed as ROS4HRI, the device publishes its health once a second on
+`/diagnostics` (`diagnostic_msgs/DiagnosticArray`, reliable, as the ROS
+diagnostics tooling subscribes): a `vizij: view` status with the rate the
+view renders at, and a `vizij: face <id>` status per face with its id, its
+[compliance level](#progressive-compliance) and every path its composition
+writes from more than one source — a warning, since only the last writer's
+motion shows. The view writes the report under the `diagnostics` key, the
+whole message, and the ROS4HRI profile publishes it.
+
+```bash
+ros2 topic echo /diagnostics
+```
+
+reads, for the Quori demo face run headless:
+
+```
+header:
+  stamp:
+    sec: 1791807176
+    nanosec: 222161000
+  frame_id: ''
+status:
+- level: "\0"
+  name: 'vizij: view'
+  message: rendering at 8.8 Hz
+  hardware_id: ''
+  values:
+  - key: frame_rate
+    value: '8.8'
+- level: "\0"
+  name: 'vizij: face quori_latest'
+  message: compliance L0
+  hardware_id: quori_latest
+  values:
+  - key: face_id
+    value: quori_latest
+  - key: compliance_level
+    value: L0
+```
 
 ## Speaking through the standard skill
 
@@ -315,13 +385,16 @@ ZENOH_CONFIG_OVERRIDE='mode="client";connect/endpoints=["tcp/127.0.0.1:7447"]' \
 `rclcpp` node, or `rqt` needs the ROS4HRI skill interfaces
 (`std_skills`, `communication_skills`, `interaction_skills`, `hri_msgs`)
 installed to resolve `/skill/look_at`, `/skill/say` and the face image's
-types — without them, `ros2 action send_goal` has nothing to autocomplete
+types — and `hri_actions_msgs` and `diagnostic_msgs` for `/closed_captions`
+and `/diagnostics`, which Jazzy ships as `ros-jazzy-hri-actions-msgs` and
+`ros-jazzy-diagnostic-msgs` — without them, `ros2 action send_goal` has nothing to autocomplete
 and no message to encode the goal with. Build them from the same vendored
 definitions the bridge serves (so the two sides never drift), once:
 
 ```bash
 sudo apt install ros-jazzy-rmw-zenoh-cpp ros-jazzy-rosidl-default-generators \
-  ros-jazzy-action-msgs ros-jazzy-geometry-msgs python3-colcon-common-extensions
+  ros-jazzy-action-msgs ros-jazzy-geometry-msgs python3-colcon-common-extensions \
+  ros-jazzy-hri-actions-msgs ros-jazzy-diagnostic-msgs
 
 crates/vizij/tests/ros4hri/build-workspace.sh ~/ros4hri_ws
 source ~/ros4hri_ws/install/setup.bash
@@ -475,8 +548,8 @@ is a diff of the behavior.
   `mapping("ros4hri", rigPrefix)` returns the graph as an object for an
   authoring app to embed.
 - **Reconcile it against the profiles** with `vizij-bundle surface`: the
-  mapping reads 7 of the profile's 8 command keys (`gaze/frame` belongs to
-  the `look_at` skill) and writes 31 of the face standard's 92 inputs (the 15
+  mapping reads 9 of the profile's 10 command keys (`gaze/frame` belongs to
+  the `look_at` skill) and writes 33 of the face standard's 94 inputs (the 15
   viseme weights are written by the `play_viseme` runs it spawns; the muscle
   tier, the blink, the standard's gaze target (a point on the face's frame)
   and its weight, the expressions beyond ROS4HRI's and the conversation state

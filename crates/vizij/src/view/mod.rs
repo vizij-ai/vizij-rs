@@ -15,7 +15,10 @@
 //! ([`FaceAssets`]), so the view never touches a file system — the same path
 //! on desktop, in the browser and on Android. [`snapshot`] renders offscreen
 //! and reads the pixels back; [`frames`] publishes what is rendered into the
-//! device's store.
+//! device's store, and [`diagnostics`] the device's health.
+//!
+//! With the `captions` feature, each face shows the face standard's caption
+//! over it ([`captions`]).
 //!
 //! What an authoring front end asks of the view beyond the device's pose:
 //! a press resolved to the element under it or to a miss ([`pick`]), a glow
@@ -23,6 +26,9 @@
 //! device ([`hold`]), and a static feature set in place
 //! ([`ViewEvent::SetStaticFeature`]).
 
+#[cfg(feature = "captions")]
+pub mod captions;
+pub mod diagnostics;
 pub mod frames;
 mod glow;
 pub mod hold;
@@ -244,6 +250,14 @@ pub enum ViewEvent {
         face_id: String,
         targets: Option<Vec<HoldTarget>>,
     },
+    /// What the device composed for the face under `face_id`: the paths its
+    /// composition writes from more than one source, which the face's
+    /// diagnostics report ([`diagnostics`]). Kept across the face's reloads
+    /// until the next one says otherwise.
+    Composed {
+        face_id: String,
+        contended: Vec<vizij_arora_host::Contention>,
+    },
     /// Set one feature of an element in place — a static feature, which no
     /// device output drives — by its RobotData name (`translation`,
     /// `color`, a per-axis `translation.x`, a morph target's name, …).
@@ -312,6 +326,11 @@ impl Framing {
         }
     }
 }
+
+/// Each face's composition as its device reported it
+/// ([`ViewEvent::Composed`]): the contended paths, by face id.
+#[derive(Resource, Default)]
+pub struct Compositions(pub HashMap<String, Vec<vizij_arora_host::Contention>>);
 
 /// The front ends' requests, drained each frame ([`ViewEvent`]).
 #[derive(Resource)]
@@ -601,6 +620,7 @@ impl Plugin for ViewPlugin {
             .init_resource::<Picks>()
             .init_resource::<PendingStatics>()
             .init_resource::<Holds>()
+            .init_resource::<Compositions>()
             .add_plugins(glow::GlowPlugin)
             .add_observer(pick::on_press)
             .add_systems(
@@ -619,6 +639,8 @@ impl Plugin for ViewPlugin {
                 )
                     .chain(),
             );
+        #[cfg(feature = "captions")]
+        app.add_plugins(captions::CaptionsPlugin);
     }
 }
 
@@ -640,6 +662,7 @@ fn apply_view_events(
     mut selections: ResMut<glow::Selections>,
     mut holds: ResMut<Holds>,
     mut statics: ResMut<PendingStatics>,
+    mut compositions: ResMut<Compositions>,
     mut commands: Commands,
     faces: Query<(Entity, &Face)>,
     asset_server: Res<AssetServer>,
@@ -734,6 +757,7 @@ fn apply_view_events(
                 selections.0.remove(&face_id);
                 holds.clear(&face_id);
                 statics.0.remove(&face_id);
+                compositions.0.remove(&face_id);
             }
             ViewEvent::PlaceFace { face_id, rect } => {
                 placements.0.insert(face_id, rect);
@@ -747,6 +771,9 @@ fn apply_view_events(
                 } else {
                     selections.0.insert(face_id, elements);
                 }
+            }
+            ViewEvent::Composed { face_id, contended } => {
+                compositions.0.insert(face_id, contended);
             }
             ViewEvent::Hold { face_id, targets } => holds.hold(&face_id, targets),
             ViewEvent::Release { face_id, targets } => holds.release(&face_id, targets),

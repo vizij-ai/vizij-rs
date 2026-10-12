@@ -8,6 +8,13 @@ a server no native node can reach; these are the tests that are not.
 - **`say-feedback.sh`** — a goal on `/skill/say`
   (`communication_skills/action/Say`) is accepted, its feedback streams the
   visemes as the face speaks, and it ends `SUCCEEDED`.
+- **`captions-diagnostics.sh`** — an `hri_actions_msgs/ClosedCaption` from
+  `rclpy` on `/closed_captions` lands on the ROS4HRI caption keys and,
+  relayed by the mapping, on the face's own — read back over the device's
+  local bridge — and keeps the face frame taken after it (`frame.png`), for
+  a look at the overlay; `ros2 topic echo /diagnostics` receives the
+  device's report, with the view's frame rate and the face's compliance
+  level.
 - **`look-at.sh`** — the gaze skill's goal lifecycle on `/skill/look_at`
   (`interaction_skills/action/LookAt`): a tracking goal is accepted and keeps
   running; a second goal at the same priority replaces it (the first ends
@@ -25,6 +32,7 @@ crates/vizij/tests/ros4hri/build-image.sh          # once: Jazzy + rmw_zenoh + t
 cargo build -p vizij --features ros2-zenoh --bins  # the device
 crates/vizij/tests/ros4hri/say-feedback.sh         # the speech test
 crates/vizij/tests/ros4hri/look-at.sh              # the gaze test
+crates/vizij/tests/ros4hri/captions-diagnostics.sh # captions in, diagnostics out
 ```
 
 - **The image** builds `std_skills`, `communication_skills`,
@@ -33,10 +41,11 @@ crates/vizij/tests/ros4hri/look-at.sh              # the gaze test
   client speaks exactly what the bridge serves — Vizij's viseme feedback
   extension included. It is also what makes `ros2 action send_goal` complete
   and accept the skill types: without the packages installed, the CLI has no
-  definition to speak.
+  definition to speak. `hri_actions_msgs` and `diagnostic_msgs`, vendored
+  unmodified, come from Jazzy's own packages instead.
 - **Each test** starts `rmw_zenohd` in the container (port `ROUTER_PORT` — 7451
-  for `say`, 7452 for `look_at` — so a router you already run is neither joined
-  nor collided with), the device on its own namespace (`VIZIJ_NAMESPACE`)
+  for `say`, 7452 for `look_at`, 7453 for captions — so a router you already
+  run is neither joined nor collided with), the device on its own namespace (`VIZIJ_NAMESPACE`)
   joining it in Zenoh client mode, waits for the skill to be discovered, sends
   its goals with the CLI, and judges the client's own transcripts.
 

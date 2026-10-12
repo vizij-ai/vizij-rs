@@ -8,7 +8,26 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ## [Unreleased]
 
+### Added
+
+- Captions over the face (feature `captions`, on by default): the face
+  standard's `standard/vizij/caption/{text,speaker}` shows at the bottom of
+  each face's rectangle, in eight-word chunks held long enough to read and
+  queued behind the caption showing, blue for the face's own speech
+  (`__system__`) and white otherwise, in the embedded Inter font. It is in
+  every frame the view publishes. Under `--ros2` a closed caption on
+  `/closed_captions` (`hri_actions_msgs/ClosedCaption`) captions the face
+  through the ROS4HRI mapping; a face whose composition writes neither key
+  has both open to any client.
+- Under `--ros2` with the ROS4HRI profile, the device's health on
+  `/diagnostics` once a second: the view's frame rate, and the face's id,
+  its compliance level with the face standard and every path its
+  composition writes from more than one source, a warning.
+
 ### Changed
+
+- `--ros2` requires `arora-bridge-ros2` 10.4, whose ROS4HRI preset takes
+  `/closed_captions` and publishes `/diagnostics`.
 
 - `--ros2` requires `arora-bridge-ros2` 10.3, which escapes a key path into
   valid ROS 2 name tokens: a Studio-exported face's keys, named by UUID, get
