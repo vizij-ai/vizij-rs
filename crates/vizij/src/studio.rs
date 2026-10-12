@@ -6,7 +6,7 @@
 //! vector, euler or colour `<id>`, which Studio splits per axis on load into
 //! a number of its own. For each number it writes, in one update, the
 //! target — the value to show — and, while its timeline plays, the target
-//! velocity; it reads `<studio id>.position` back as the device's feedback.
+//! velocity; it reads the number's feedback back.
 //!
 //! A target is accepted in each form a client writes it in:
 //!
@@ -14,9 +14,11 @@
 //!   `<id>/target.position.<axis>` and `<id>/target.velocity.<axis>`: the
 //!   target as `arora_hal::set_targets` reads it (`k/target.c`), the same for
 //!   every value type;
-//! - `<studio id>.target_position` and `<studio id>.target_velocity`: the
-//!   form Studio writes today (`<id>.target_position`,
-//!   `<id>.<axis>.target_position`);
+//! - `<studio id>.target_position` and `<studio id>.target_velocity`:
+//!   Studio's current spelling — `<id>.target_position`, which Studio's
+//!   production line writes for a whole number, and a component's
+//!   `<id>.<axis>.target_position`, which the Studio-on-Arora line writes
+//!   (the production line sends no per-axis target);
 //! - `<studio id>.studio_value`: the target again, which Studio writes
 //!   untyped beside `.target_position` for every number, and the device
 //!   declares `f64` like the target. It is legacy, an input only so that
@@ -43,8 +45,11 @@
 //! - a number reads `<id>/target.position` and writes `<id>`;
 //! - a compound reads `<id>/target.position.<axis>` per component and
 //!   writes the three joined under `<id>`;
-//! - each target is echoed to its Studio feedback key,
-//!   `<studio id>.position`;
+//! - each target is echoed to its feedback: a number's `<id>.position`, a
+//!   component's under both spellings of the axis, `<id>.position.<axis>`
+//!   (the axis after the component, as `set_targets` measures it) and
+//!   `<id>.<axis>.position` (the axis first, as Studio reads it today) —
+//!   one output of the target, so the two always agree;
 //! - the other keys — the target's other form, which agrees with it, the
 //!   velocity in both forms and `.studio_value` — are read and go nowhere:
 //!   they are inputs so that an update carrying them beside the target is
@@ -135,9 +140,21 @@ impl<'a> Number<'a> {
     }
 
     /// Studio's feedback key for it: `<studio id>.position`, the target it
-    /// last took.
+    /// last took — for a component, the axis first, `<id>.<axis>.position`.
     pub(crate) fn feedback(&self) -> String {
         format!("{}.{POSITION}", self.studio_id())
+    }
+
+    /// The keys its feedback is published under: [`Self::feedback`], and
+    /// for a component the axis after the component too,
+    /// `<id>.position.<axis>`, the measured key its `k/target.c` form
+    /// targets.
+    pub(crate) fn feedbacks(&self) -> Vec<String> {
+        let mut keys = vec![self.feedback()];
+        if let Some(axis) = self.axis {
+            keys.push(format!("{}.{POSITION}.{axis}", self.id));
+        }
+        keys
     }
 
     /// The legacy key Studio writes the target to again:
@@ -294,7 +311,9 @@ impl Graph {
     /// node.
     fn studio_key(&mut self, number: &Number, rest: f32) -> String {
         let position = self.input(&number.target(POSITION), rest);
-        self.output(&number.feedback(), &position);
+        for feedback in number.feedbacks() {
+            self.output(&feedback, &position);
+        }
         self.input(&number.studio_target(POSITION), rest);
         self.left(number, rest);
         position
@@ -575,8 +594,9 @@ mod tests {
     }
 
     /// A number takes its target, a compound one target per component; each
-    /// target is echoed to its feedback, and the other keys Studio sends
-    /// beside it are read and go nowhere.
+    /// target is echoed to its feedback, a component's under both spellings
+    /// of its axis, and the other keys Studio sends beside it are read and go
+    /// nowhere.
     #[test]
     fn the_profile_reads_studio_s_keys_and_writes_the_view_s() {
         let (meta, x, color) = studio_face();
@@ -593,8 +613,8 @@ mod tests {
             Number::of(&x.to_string()).feedback(),
             color.to_string(),
         ];
-        outputs
-            .extend(["r", "g", "b"].map(|axis| Number::of(&format!("{color}.{axis}")).feedback()));
+        outputs.extend(["r", "g", "b"].map(|axis| format!("{color}.{axis}.position")));
+        outputs.extend(["r", "g", "b"].map(|axis| format!("{color}.position.{axis}")));
         outputs.sort();
         assert_eq!(paths(&spec, "output"), outputs);
         // The animatable and its feedback follow the `/target.position` form.
