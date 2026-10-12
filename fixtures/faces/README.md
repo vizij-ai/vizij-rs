@@ -20,20 +20,23 @@ Quoris and Hugos are rigged differently from file to file.
 | Sidecar | GLB in vizij-web | Standard controls left unmapped |
 |---|---|---|
 | `quori/standard-adaptation.json` | `apps/vizij-authoring/public/assets/Quori_Current_Extended.glb` | none |
-| `quori/Quori_Current.standard-adaptation.json` | `apps/vizij-authoring/public/assets/Quori_Current.glb` | top eyelids, conversation |
+| `quori/Quori_Current.standard-adaptation.json` | `apps/vizij-authoring/public/assets/Quori_Current.glb` | top eyelids, gaze target, conversation |
 | `quori/quori_temp.standard-adaptation.json` | `apps/vizij-authoring/public/assets/quori_temp.glb` | every expression and viseme |
-| `quori/Quori_Live.standard-adaptation.json` | `apps/tutorial-agent-face/public/assets/Quori_Live.glb` | top eyelids, conversation |
-| `quori/Quori_Latest_Rigged.standard-adaptation.json` | `apps/vizij-showcase/public/assets/Quori_Latest_Rigged.glb` | top eyelids, conversation |
-| `quori/Quori_Speaks.standard-adaptation.json` | `apps/vizij-showcase/public/assets/Quori_Speaks.glb` | top eyelids, conversation |
-| `quori/Quori_Std_Rigged.standard-adaptation.json` | `apps/vizij-showcase/public/assets/Quori_Std_Rigged.glb` | blink, conversation |
-| `hugo/Hugo_Current.standard-adaptation.json` | `apps/vizij-authoring/public/assets/Hugo_Current.glb` | top eyelids, conversation |
-| `hugo/Hugo_Current_Extended.standard-adaptation.json` | `apps/vizij-authoring/public/assets/Hugo_Current_Extended.glb` | top eyelids, conversation |
-| `hugo/Hugo_Latest_Rigged.standard-adaptation.json` | `apps/vizij-showcase/public/assets/Hugo_Latest_Rigged.glb` | top eyelids, conversation |
-| `hugo/hugo_rigged.standard-adaptation.json` | `apps/vizij-showcase/public/assets/hugo_rigged.glb` | top eyelids, blink, conversation |
+| `quori/Quori_Live.standard-adaptation.json` | `apps/tutorial-agent-face/public/assets/Quori_Live.glb` | top eyelids, gaze target, conversation |
+| `quori/Quori_Latest_Rigged.standard-adaptation.json` | `apps/vizij-showcase/public/assets/Quori_Latest_Rigged.glb` | top eyelids, gaze target, conversation |
+| `quori/Quori_Speaks.standard-adaptation.json` | `apps/vizij-showcase/public/assets/Quori_Speaks.glb` | top eyelids, gaze target, conversation |
+| `quori/Quori_Std_Rigged.standard-adaptation.json` | `apps/vizij-showcase/public/assets/Quori_Std_Rigged.glb` | blink, gaze target, conversation |
+| `hugo/Hugo_Current.standard-adaptation.json` | `apps/vizij-authoring/public/assets/Hugo_Current.glb` | top eyelids, gaze target, conversation |
+| `hugo/Hugo_Current_Extended.standard-adaptation.json` | `apps/vizij-authoring/public/assets/Hugo_Current_Extended.glb` | top eyelids, gaze target, conversation |
+| `hugo/Hugo_Latest_Rigged.standard-adaptation.json` | `apps/vizij-showcase/public/assets/Hugo_Latest_Rigged.glb` | top eyelids, gaze target, conversation |
+| `hugo/hugo_rigged.standard-adaptation.json` | `apps/vizij-showcase/public/assets/hugo_rigged.glb` | top eyelids, blink, gaze target, conversation |
 
 A control is left unmapped when the face has nothing that reads it: no pose,
 or an input no edge of its graphs leaves. Mapping a standard control onto such
-an input would make `validate` count it as covered while it moves nothing.
+an input would make `validate` count it as covered while it moves nothing. The
+two faces whose active program is "Speaks", `Quori_Current_Extended.glb` and
+`quori_temp.glb`, read the conversation state and the gaze target in that
+program; their adaptations map neither.
 `Toasty_Current.glb` and `@vizij/render`'s `example.glb` have no adaptation:
 neither rig has a pose or an eye control the profile's controls could drive.
 

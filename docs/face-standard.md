@@ -11,7 +11,7 @@ module](../crates/interop/vizij-arora-host/src/standard.rs), which is the
 authoritative source; this page mirrors it. As data, the same vocabulary is
 the **`vizij-face` profile**
 ([`profiles/vizij-face.json`](../crates/interop/vizij-arora-host/profiles/vizij-face.json)):
-an interface of 88 typed paths, face-scoped — every face carries its own copy
+an interface of 93 typed paths, face-scoped — every face carries its own copy
 under its rig prefix — with each key's tier, FACS action unit, and ARKit
 blendshape as metadata. See [profiles and mappings](profiles-and-mappings.md).
 
@@ -23,7 +23,8 @@ The pose vocabulary runs coarse to fine. A face implements what it implements,
 and a standard mapping (like [ROS4HRI](ros4hri.md)) degrades to the tiers a
 face covers.
 
-1. **Gaze & lids** — where the eyes point, how open they are, and the blink.
+1. **Gaze & lids** — where the eyes point, how open they are, the blink, and
+   the gaze target.
 2. **Semantic** — one weight per named expression and per viseme shape.
 3. **Muscle** — fine-grained controls, one per FACS action unit / ARKit
    blendshape.
@@ -34,19 +35,22 @@ takes part in is doing — state it may react to, not a pose.
 In the profile, each key's `tier` is one of `gaze`, `expression`, `viseme`,
 `muscle` and `conversation`. `vizij-bundle validate` grades a face's
 compliance L0–L3 on the first four, in that order; it reports the
-conversation state without grading it.
+conversation state, and the gaze target within the gaze tier, without
+grading them.
 
 ## Gaze & lids
 
 | Control path | Range | Meaning |
 |---|---|---|
-| `standard/vizij/left_eye/pos/x` | `[-1, 1]` | eye left→right (subject's own left is negative) |
+| `standard/vizij/left_eye/pos/x` | `[-1, 1]` | eye left→right as the viewer sees the face (+1 toward the viewer's right, the face's own left) |
 | `standard/vizij/left_eye/pos/y` | `[-1, 1]` | eye down→up |
 | `standard/vizij/right_eye/pos/x` | `[-1, 1]` | as above, right eye |
 | `standard/vizij/right_eye/pos/y` | `[-1, 1]` | as above, right eye |
 | `standard/vizij/left_eye_top_eyelid/pos/y` | `[0, 1]` | 0 open, 1 closed |
 | `standard/vizij/right_eye_top_eyelid/pos/y` | `[0, 1]` | 0 open, 1 closed |
 | `standard/vizij/blink` | `[0, 1]` | both eyes: 0 open, 1 closed |
+| `standard/vizij/gaze/target/x` | `[0, 1]` | where the eyes look, across the face's frame: 0 its left edge, 1 its right edge; rests at 0.5 |
+| `standard/vizij/gaze/target/y` | `[0, 1]` | where the eyes look, down the face's frame: 0 its top edge, 1 its bottom edge; rests at 0.5 |
 
 Per-eye positions (rather than a single gaze vector) let a mapping command
 vergence; the ROS4HRI mapping computes them from a face-frame target.
@@ -59,6 +63,31 @@ the eyelid positions, which keep their meaning: a face closes each lid at least
 as far as the stronger of the two, so a blink passes over lids held
 half-closed and returns them there. The ROS4HRI mapping does not write it; its
 idle blink drives the eyelid positions.
+
+The **gaze target** is a point on the face's frame, in screen conventions: the
+origin at the frame's top-left corner, `x` to the right and `y` downward, each
+a fraction of the frame as the viewer sees the face. It rests at the centre,
+(0.5, 0.5): the face looks straight ahead. A caller directs the gaze with it
+without knowing how the face moves its eyes; toward the edges of the frame
+the eyes reach the ends of their range.
+
+A face implements the target as its author chooses, like any control, in one
+of two places:
+
+- **its program**, when a program drives the eyes: the program blends the
+  target with its own eye motion — Quori's conversational program aims its
+  idle exploration and jitter around the target. On such a face the eye
+  positions are the program's output, and the target is how a caller
+  directs the gaze;
+- **its standard adaptation**, for a face without such a program: the
+  adaptation maps the target onto the eyes statelessly — adding the
+  target's offset from the centre to the eye positions, for instance.
+
+Never both in one face: both would write the eyes, and a key has one writer.
+`validate` reports whether the face's graphs read the target, in the gaze
+tier, without grading it: the eye positions the tier grades already reach
+every gaze the target directs. The ROS4HRI mapping does not write it; it
+drives the eye positions from ROS4HRI's own target, a point in space.
 
 ## Semantic tier
 
@@ -189,7 +218,8 @@ counterpart the mapping reads.
 
 ## Reaching the vocabulary in code
 
-`vizij-arora-host`'s `standard` module exposes the constants and the path
+`vizij-arora-host`'s `standard` module exposes the constants (the gaze
+target's among them, `GAZE_TARGET_X` and `GAZE_TARGET_Y`) and the path
 helpers (`expression_path`, `viseme_path`, `face_path`, `conversation_path`),
 the name sets (`expression_names()` — `ROS4HRI_EXPRESSION_NAMES` then
 `VIZIJ_EXPRESSION_NAMES` — `VISEME_SHAPES`, `CONVERSATION_STATES`), plus

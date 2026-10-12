@@ -8,7 +8,8 @@
 //! doing. The same vocabulary is declared as data — the `vizij-face` profile
 //! in [`crate::profile`] — and a test holds the two equal:
 //!
-//! - **Gaze & lids** — per-eye position and eyelid controls, and the blink.
+//! - **Gaze & lids** — per-eye position and eyelid controls, the blink, and
+//!   the gaze target: the point on the face's frame the eyes look toward.
 //! - **Semantic** — one weight per named expression and per viseme shape. The
 //!   expression names are ROS4HRI's set plus the ones faces implement beyond
 //!   it; the viseme shapes are the industry 15-shape set (the Oculus/Meta
@@ -65,8 +66,9 @@ pub fn prefix_controls(spec: &mut serde_json::Value, rig_prefix: &str) {
 
 // --- Gaze & lids ------------------------------------------------------------
 
-/// Eye position controls, normalized [-1, 1]: `pos/x` is the wearer's
-/// left-to-right, `pos/y` is down-to-up.
+/// Eye position controls, normalized [-1, 1]: `pos/x` runs left to right as
+/// the viewer sees the face (+1 toward the viewer's right, the face's own
+/// left), `pos/y` down to up.
 pub const LEFT_EYE_POS_X: &str = "standard/vizij/left_eye/pos/x";
 pub const LEFT_EYE_POS_Y: &str = "standard/vizij/left_eye/pos/y";
 pub const RIGHT_EYE_POS_X: &str = "standard/vizij/right_eye/pos/x";
@@ -84,6 +86,21 @@ pub const RIGHT_EYE_TOP_EYELID_POS_Y: &str = "standard/vizij/right_eye_top_eyeli
 /// meaning: a face closes each lid at least as far as the stronger of the
 /// two, so a blink passes over lids held half-closed and returns them there.
 pub const BLINK: &str = "standard/vizij/blink";
+
+/// The gaze target, a point on the face's frame in screen conventions: `x`
+/// from its left edge (0) to its right edge (1), `y` from its top edge (0) to
+/// its bottom edge (1), as the viewer sees the face. Rests at the centre,
+/// (0.5, 0.5): straight ahead.
+///
+/// It says where the eyes point, so a caller directs the gaze of a face
+/// without knowing how the face moves its eyes. The face implements it as its
+/// author chooses, like any control — its program blends the target with its
+/// own eye motion, or its standard adaptation adds the target's offset to the
+/// eye positions, statelessly — but never both, so that the eye positions
+/// keep one writer. Toward the edges of the frame the eyes reach the ends of
+/// their range.
+pub const GAZE_TARGET_X: &str = "standard/vizij/gaze/target/x";
+pub const GAZE_TARGET_Y: &str = "standard/vizij/gaze/target/y";
 
 // --- Semantic tier: expressions --------------------------------------------
 

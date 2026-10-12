@@ -202,11 +202,11 @@ impl Profile {
 
 // --- The Vizij face standard ------------------------------------------------
 
-/// The `vizij-face` profile: the standard's own interface — gaze, lids and
-/// blink, the named expressions, the visemes, the muscle tier, and the
-/// conversation state — generated from [`crate::standard`]. The keys run in
-/// tier order, so [`Profile::tiers`] lists `gaze`, `expression`, `viseme`,
-/// `muscle`, `conversation`.
+/// The `vizij-face` profile: the standard's own interface — gaze, lids,
+/// blink and the gaze target, the named expressions, the visemes, the muscle
+/// tier, and the conversation state — generated from [`crate::standard`].
+/// The keys run in tier order, so [`Profile::tiers`] lists `gaze`,
+/// `expression`, `viseme`, `muscle`, `conversation`.
 ///
 /// This is the full standard, not the subset any one mapping happens to reach.
 /// The ROS4HRI mapping writes none of the muscle tier, since ROS4HRI defines
@@ -231,6 +231,16 @@ pub fn vizij_face_profile() -> Profile {
         keys.push(ProfileKey::weight(path).with_tier("gaze"));
     }
     keys.push(ProfileKey::weight(standard::BLINK).with_tier("gaze"));
+    // The gaze target: a point on the face's frame, resting at its centre.
+    for path in [standard::GAZE_TARGET_X, standard::GAZE_TARGET_Y] {
+        keys.push(
+            ProfileKey {
+                default_value: Some(Value::F32(0.5)),
+                ..ProfileKey::weight(path)
+            }
+            .with_tier("gaze"),
+        );
+    }
     for name in standard::expression_names() {
         keys.push(ProfileKey::weight(standard::expression_path(name)).with_tier("expression"));
     }
@@ -274,13 +284,13 @@ pub fn vizij_face_profile() -> Profile {
         id: "vizij-face".into(),
         version: "v1".into(),
         title: "Vizij face standard".into(),
-        description: "The portable face interface: gaze, lids and blink, 27 named \
-                      expressions, 15 visemes, 36 muscle controls keyed to FACS action \
-                      units and ARKit blendshapes (35 named per FACS/ARKit, plus the \
-                      de-facto jaw-open path), and the conversation state (speaking, \
-                      user speaking, thinking); its lipsync gain; and the speech state \
-                      the face reports, its current viseme and the utterance being \
-                      spoken."
+        description: "The portable face interface: gaze, lids, blink and the gaze \
+                      target, 27 named expressions, 15 visemes, 36 muscle controls keyed \
+                      to FACS action units and ARKit blendshapes (35 named per \
+                      FACS/ARKit, plus the de-facto jaw-open path), and the conversation \
+                      state (speaking, user speaking, thinking); its lipsync gain; and \
+                      the speech state the face reports, its current viseme and the \
+                      utterance being spoken."
             .into(),
         scope: Scope::Face,
         keys,
@@ -525,12 +535,12 @@ mod tests {
     fn the_vizij_face_profile_covers_every_tier_in_full() {
         let face = vizij_face_profile();
         let tier = |name: &str| face.keys.iter().filter(|k| k.tier() == Some(name)).count();
-        assert_eq!(tier("gaze"), 7);
+        assert_eq!(tier("gaze"), 9);
         assert_eq!(tier("expression"), 27);
         assert_eq!(tier("viseme"), 15);
         assert_eq!(tier("muscle"), 36);
         assert_eq!(tier("conversation"), 3);
-        assert_eq!(face.keys.len(), 91);
+        assert_eq!(face.keys.len(), 93);
         assert_eq!(
             face.tiers(),
             ["gaze", "expression", "viseme", "muscle", "conversation"]
@@ -580,6 +590,25 @@ mod tests {
             assert_eq!(k.value_type, Some(Type::F32), "{path}");
             assert_eq!((k.min, k.max), (Some(0.0), Some(1.0)), "{path}");
             assert_eq!(k.default_value, Some(Value::F32(0.0)), "{path}");
+        }
+    }
+
+    /// The gaze target is a point on the face's frame, each coordinate in
+    /// `[0, 1]`, resting at the centre: a face nobody directs looks ahead.
+    #[test]
+    fn the_gaze_target_rests_at_the_centre_of_the_frame() {
+        let face = vizij_face_profile();
+        for path in [standard::GAZE_TARGET_X, standard::GAZE_TARGET_Y] {
+            let k = face
+                .keys
+                .iter()
+                .find(|k| k.path == path)
+                .unwrap_or_else(|| panic!("{path} is declared"));
+            assert_eq!(k.tier(), Some("gaze"), "{path}");
+            assert_eq!(k.kind.as_deref(), Some("input"), "{path}");
+            assert_eq!(k.value_type, Some(Type::F32), "{path}");
+            assert_eq!((k.min, k.max), (Some(0.0), Some(1.0)), "{path}");
+            assert_eq!(k.default_value, Some(Value::F32(0.5)), "{path}");
         }
     }
 
@@ -710,10 +739,12 @@ mod tests {
             .filter(|p| !produced.paths().contains(p))
             .collect();
         // Unwritten, in profile order: the caller's blink (the mapping's
-        // idle blink drives the lids), the expressions ROS4HRI does not name,
-        // the lipsync surface (the viseme players own it), the muscle tier
-        // (ROS4HRI commands no action units), the conversation state, and the
-        // face's lipsync gain (a setting of the face, not a command).
+        // idle blink drives the lids), the gaze target (the mapping drives
+        // the eye positions from ROS4HRI's own target, a point in space), the
+        // expressions ROS4HRI does not name, the lipsync surface (the viseme
+        // players own it), the muscle tier (ROS4HRI commands no action
+        // units), the conversation state, and the face's lipsync gain (a
+        // setting of the face, not a command).
         let beyond_ros4hri: Vec<String> = standard::VIZIJ_EXPRESSION_NAMES
             .iter()
             .map(|n| standard::expression_path(n))
@@ -723,7 +754,12 @@ mod tests {
             .iter()
             .filter(|k| k.kind.as_deref() == Some("input"))
             .filter(|k| match k.tier() {
-                Some("gaze") => k.path == standard::BLINK,
+                Some("gaze") => [
+                    standard::BLINK,
+                    standard::GAZE_TARGET_X,
+                    standard::GAZE_TARGET_Y,
+                ]
+                .contains(&k.path.as_str()),
                 Some("expression") => beyond_ros4hri.contains(&k.path),
                 Some("viseme" | "muscle" | "conversation") | None => true,
                 Some(other) => panic!("unexpected tier {other}"),

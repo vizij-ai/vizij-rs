@@ -11,7 +11,7 @@ import {
   standardProfiles,
 } from "../dist/runtime/src/index.js";
 
-// The shipped profiles, summarized: the face standard (face-scoped — 88
+// The shipped profiles, summarized: the face standard (face-scoped — 90
 // controls, the lipsync gain, and the two speech state keys it reports) and
 // the ROS4HRI interface (device-scoped — 8 named command keys, the streamed
 // viseme among them as one code rather than a weight per shape, with its time
@@ -21,7 +21,7 @@ const listed = await profiles();
 assert.deepEqual(
   listed.map((p) => [p.id, p.scope, p.keys]),
   [
-    ["vizij-face", "face", 91],
+    ["vizij-face", "face", 93],
     ["ros4hri", "device", 10],
   ],
 );
@@ -63,6 +63,16 @@ for (const [suffix, tier] of [
   assert.deepEqual(
     [key.kind, key.value_type, key.min, key.max, key.default_value, key.meta],
     ["input", "f32", 0, 1, { f32: 0 }, { tier }],
+  );
+}
+
+// The gaze target is a point on the face's frame, resting at its centre.
+for (const axis of ["x", "y"]) {
+  const key = face.keys.find((k) => k.path === `rig/quori/standard/vizij/gaze/target/${axis}`);
+  assert.ok(key, `vizij-face declares the gaze target's ${axis}`);
+  assert.deepEqual(
+    [key.kind, key.value_type, key.min, key.max, key.default_value, key.meta],
+    ["input", "f32", 0, 1, { f32: 0.5 }, { tier: "gaze" }],
   );
 }
 
