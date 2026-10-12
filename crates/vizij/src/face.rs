@@ -111,8 +111,9 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
 /// The composed graph's free inputs — input paths no graph in the composition
 /// writes (the ones a remote may drive) — with the type the store states for
 /// each ([`declare_keys`]):
-/// the input's default value decides (string → String, bool → Boolean,
-/// anything numeric or absent → F64), except for a key a shipped profile
+/// the input's default value decides (string → String, bool → Boolean, a
+/// number → its own numeric type, `f32` for the graph's numbers; absent →
+/// F32, the graph's number), except for a key a shipped profile
 /// types — the face standard's (`f32`) or ROS4HRI's, typed as the `hri_msgs`
 /// field a ROS 2 bridge writes it from — which takes the type and rest its
 /// profile states;
@@ -198,7 +199,7 @@ pub fn declare_keys(
                         input = input.range(min, max);
                     }
                 }
-                None if ty == Type::F64 && !unranged.contains(&path) => {
+                None if matches!(ty, Type::F32 | Type::F64) && !unranged.contains(&path) => {
                     input = input.range(0.0, 1.0);
                 }
                 None => {}
@@ -261,12 +262,12 @@ fn walk_free_inputs(
             continue;
         }
         let (ty, default) = match node.get("params").and_then(|p| p.get("value")).cloned() {
-            None | Some(serde_json::Value::Null) => (Type::F64, None),
+            None | Some(serde_json::Value::Null) => (Type::F32, None),
             Some(json) => match vizij_api_core::json::parse_value(json) {
                 Ok(value @ Value::String(_)) => (Type::String, Some(value)),
                 Ok(value @ Value::Boolean(_)) => (Type::Boolean, Some(value)),
                 Ok(value) if vizij_api_core::value::as_float(&value).is_some() => {
-                    (Type::F64, Some(value))
+                    (value.kind(), Some(value))
                 }
                 _ => continue,
             },
@@ -591,7 +592,7 @@ mod tests {
         assert_eq!(
             super::free_inputs(spec),
             vec![
-                ("face/mouth/open".to_string(), Type::F64),
+                ("face/mouth/open".to_string(), Type::F32),
                 ("flags/awake".to_string(), Type::Boolean),
                 ("standard/ros4hri/expression/name".to_string(), Type::String),
             ]
@@ -617,7 +618,7 @@ mod tests {
         assert_eq!(
             super::free_inputs(&composed.to_string()),
             vec![
-                ("face/mouth/open".to_string(), Type::F64),
+                ("face/mouth/open".to_string(), Type::F32),
                 ("flags/awake".to_string(), Type::Boolean),
                 ("standard/ros4hri/expression/name".to_string(), Type::String),
             ]
@@ -682,7 +683,7 @@ mod tests {
             &[],
             &[("face/brow".to_string(), 0.5), ("rig/jaw".to_string(), 0.1)],
         );
-        let number = || KeyMeta::new().editable().of_type(Type::F64).range(0.0, 1.0);
+        let number = || KeyMeta::new().editable().of_type(Type::F32).range(0.0, 1.0);
         assert_eq!(
             store.meta(&[
                 Key::from("face/mouth/open"),
@@ -728,7 +729,7 @@ mod tests {
         ]});
         let store = BlackboardStore::new();
         declare_keys(&store, spec, &[("p".to_string(), program)], &[]);
-        let number = || KeyMeta::new().editable().of_type(Type::F64).range(0.0, 1.0);
+        let number = || KeyMeta::new().editable().of_type(Type::F32).range(0.0, 1.0);
         assert_eq!(
             store.meta(&[Key::from("rig/f/x"), Key::from("program/speed")]),
             vec![

@@ -125,6 +125,11 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 - `face::builder_for` and `face::builder_with_guests` load the rest module
   themselves, over the device's store, so `reset_keys` naming either form of
   a Studio target rests both; a caller no longer adds it.
+- A free input is typed as its default declares, so its ROS 2 topic matches
+  the face: a number is `f32`, the graph's number type (a rig input like
+  `mouth/smile` is subscribed as `std_msgs/Float32`, as are inputs with no
+  default), and Studio's keys are `f64`, as Studio writes them. A numeric
+  input outside the shipped profiles was `f64` whatever its default said.
 - The browser module composes the built-in ROS4HRI mapping when a page asks
   for it: `loadVizij` and `composeVizij` take `ros4hri`, default `false`, and
   a page's face speaks the vizij standard (`standard/vizij/*`). With the
