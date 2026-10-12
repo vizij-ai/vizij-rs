@@ -28,7 +28,7 @@ assert.deepEqual(
 
 // A face-scoped profile is addressed to the face: every path takes the prefix.
 const face = await profile("vizij-face", "rig/quori/");
-assert.equal(face.keys.length, 91);
+assert.equal(face.keys.length, 93);
 assert.ok(face.keys.every((k) => k.path.startsWith("rig/quori/standard/vizij/")));
 // What the face reports rather than takes: the current viseme and the
 // utterance being spoken, output keys outside the control tiers.
