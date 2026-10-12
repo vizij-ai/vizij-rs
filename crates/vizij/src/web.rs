@@ -222,6 +222,7 @@ pub fn load_vizij(
         &spec,
         &meta.bundle.programs,
         &meta.bundle.neutral_stage_writes(),
+        &face::rig_ranges(&meta.bundle),
     );
     let speech = config.speech.as_ref().map(|build| build());
     let guests = parse_modules(modules)?;
@@ -612,7 +613,7 @@ impl VizijRuntime {
         };
         parse_spec(&spec).map_err(|e| JsValue::from_str(&e))?;
         let store = BlackboardStore::new();
-        face::declare_keys(&store, &spec, &[], &[]);
+        face::declare_keys(&store, &spec, &[], &[], &face::InputRanges::default());
         let guests = parse_modules(modules)?;
         let builder =
             face::builder_with_guests(&spec, RigHal::new(), store.clone(), &[], None, guests)

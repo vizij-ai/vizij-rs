@@ -168,9 +168,11 @@ modules describe it, so the app declares nothing to it. `list_keys` gives each
 key with its `__meta`: the face's **free inputs** — the input paths no graph in
 the composition writes — are the keys a client may write, each typed, with
 the value it rests at: the authored default, the rig's under the bundle's
-neutral pose. A number is ranged `[0, 1]`, or as its input node authors it:
-`params.min` and `params.max`, both optional, together give the range when
-`max` exceeds `min`. A key a shipped profile declares takes that profile's
+neutral pose. A number takes its range from, in order: its input node's
+`params.min` and `params.max`, both optional, when both are there and `max`
+exceeds `min`; the `range` the rig declares for the input in its
+`metadata.vizij.inputs`, which the authoring app writes for every rig input;
+otherwise `[0, 1]`. A key a shipped profile declares takes that profile's
 type, range and rest. The device refuses a write to any other key.
 `reset`, the rest module's function, returns every key to its rest.
 

@@ -50,9 +50,10 @@ an Arora device has — a page here, a remote on a bridge, Semio Studio:
 - `spawn(call)` and `halt(runId)` are the interpreter's SPAWN and HALT;
 - `listKeys(prefix?)` and `describeMethods(prefix?)` list the keys the
   device holds, with their meta, and the methods it describes. A face's free
-  input states its type, range and rest there: a number is ranged `[0, 1]`,
-  or as its input node authors it (`params.min` and `params.max`, optional,
-  together when `max` exceeds `min`), and a key a shipped profile declares
+  input states its type, range and rest there. A number's range is its
+  input node's `params.min` and `params.max` (optional, used when both are
+  there and `max` exceeds `min`), else the `range` the rig declares for it in
+  `metadata.vizij.inputs`, else `[0, 1]`; a key a shipped profile declares
   takes that profile's;
 - `readValues`, `writeValues`, `setValue`, `snapshot` and `drainChanges`
   read and write its store;

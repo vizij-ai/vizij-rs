@@ -19,8 +19,8 @@ use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
 use crate::face::{
-    builder_for, declare_keys, load_animations, load_face, spawn_program, stage_neutral_pose,
-    FaceConfig, LoadedFace, ProgramSelect,
+    builder_for, declare_keys, load_animations, load_face, rig_ranges, spawn_program,
+    stage_neutral_pose, FaceConfig, LoadedFace, ProgramSelect,
 };
 use crate::view::meta::FaceMeta;
 use crate::view::ViewEvent;
@@ -402,6 +402,7 @@ fn supervise(
             &spec,
             &meta.bundle.programs,
             &meta.bundle.neutral_stage_writes(),
+            &rig_ranges(&meta.bundle),
         );
         let speech = config.speech.as_ref().map(|build| build());
         let Some(builder) = builder_for(&spec, rig, store.clone(), &meta.bundle.skills, speech)
