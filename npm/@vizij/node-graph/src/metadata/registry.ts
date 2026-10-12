@@ -3188,7 +3188,7 @@ const registry: Registry = {
       "type_id": "spawn",
       "name": "Spawn",
       "category": "Functions",
-      "doc": "Spawns a task run of its function (module and function are params) each time its arguments or its `when` input change; the first evaluation only records them. The call's args are the `value` param's fields, then the keyed `args` inputs, one per key in params.record_keys (a parameter id), which win for a parameter both name. The host starts the run after the evaluation and owns it: the graph keeps no handle.",
+      "doc": "Spawns a task run of its function (module and function are params) each time its arguments or its `when` input change; the first evaluation only records them, unless params.spawn_initial is true and it spawns with them too. The call's args are the `value` param's fields, then the keyed `args` inputs, one per key in params.record_keys (a parameter id), which win for a parameter both name. The host starts the run after the evaluation and owns it: the graph keeps no handle.",
       "inputs": [
         {
           "id": "when",

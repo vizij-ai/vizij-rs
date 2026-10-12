@@ -1236,15 +1236,19 @@ mod tests {
 
     /// A device running only the ROS4HRI mapping (unprefixed controls) — the
     /// headless harness for the mapping's math: stage `standard/
-    /// ros4hri/*` keys, tick, read `standard/vizij/*` controls back.
+    /// ros4hri/*` keys, tick, read `standard/vizij/*` controls back. Booted:
+    /// its first tick has run, so the mapping's resting set_expression run
+    /// is live and a run a test spawns comes after it.
     fn ros4hri_device() -> arora::Arora {
         let spec = compose_sources(&[ros4hri_source("")])
             .expect("compose the ros4hri mapping")
             .to_string();
-        builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
             .expect("build the device over the mapping")
             .build()
-            .expect("build arora")
+            .expect("build arora");
+        arora.step(Duration::from_millis(16)).expect("boot");
+        arora
     }
 
     fn stage(arora: &arora::Arora, path: &str, value: Value) {
@@ -1321,10 +1325,25 @@ mod tests {
         );
     }
 
+    /// The face boots at neutral: the mapping spawns set_expression from the
+    /// keys as loaded, which rest at no name and the circumplex's origin.
     #[test]
     fn ros4hri_mapping_rests_neutral() {
         let mut arora = ros4hri_device();
         settle(&mut arora);
+        // The graph's own runs are addressed to no module.
+        let runs = format!(
+            "arora/tasks/none/{}/",
+            expression::set_expression::ids::set_expression::FUNCTION
+        );
+        let live = arora
+            .store()
+            .snapshot()
+            .storage
+            .into_keys()
+            .filter(|key| key.path.starts_with(&runs) && key.path.ends_with("/status"))
+            .count();
+        assert_eq!(live, 1, "one set_expression run holds the face");
         assert!(read_f32(&arora, &standard::expression_path("neutral")) > 0.95);
         assert!(read_f32(&arora, &standard::expression_path("happy")) < 0.01);
         assert!(read_f32(&arora, &standard::expression_path("skeptical")) < 0.01);
@@ -1786,6 +1805,7 @@ mod tests {
         );
 
         // The device by hand: the profile as the base graph, the say fragment
+        // and the set_expression fragment the profile's expression keys run
         // registered, the say call routed to the scripted provider.
         let spec = compose_sources(&[ros4hri_source("")])
             .expect("compose the ros4hri profile")
@@ -1794,6 +1814,10 @@ mod tests {
             ProcessingGraph::from_spec(parse_spec(&spec).expect("parse")).expect("encode");
         graph.set_function_modules(HashMap::from([(ids::FUNCTION, PROVIDER)]));
         graph.set_task_fragment(ids::FUNCTION, speech::say_fragment(""));
+        graph.set_task_fragment(
+            expression::set_expression::ids::set_expression::FUNCTION,
+            expression::set_expression_fragment(""),
+        );
         let mut arora = arora::Arora::builder()
             .with_data_store(Box::new(BlackboardStore::new()))
             .with_behavior_interpreter(Box::new(graph))
@@ -2111,14 +2135,14 @@ mod tests {
     }
 
     /// A set_expression run holds the named expression at the arousal as its
-    /// intensity, smoothed like the mapping, and keeps running: the ROS4HRI
-    /// keys do not move the face while it lives. Halted, it hands the
-    /// expression back to the mapping, which continues from where the run
-    /// left it — no snap — and settles on what the keys command. A
+    /// intensity, smoothed like the mapping, and keeps running until a later
+    /// command takes the face over. A ROS4HRI key write is one: the mapping
+    /// spawns set_expression from the keys, and that run preempts the one
+    /// before it, the face crossfading from where it is — no snap. A
     /// valence/arousal point blends as the mapping blends it, and `asleep`
     /// closes the lids whoever sets it.
     #[test]
-    fn a_set_expression_run_holds_the_expression_until_halted() {
+    fn a_set_expression_run_and_the_keys_take_the_face_over_from_each_other() {
         use vizij_arora_behavior::task;
         let mut arora = ros4hri_device();
         settle(&mut arora);
@@ -2137,16 +2161,15 @@ mod tests {
             Some(task::running())
         );
 
-        // The keys command another expression: the run still owns the face.
+        // The keys command another expression: it takes the face over.
         stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("sad"));
         stage(&arora, ros4hri::EXPRESSION_AROUSAL_KEY, float(1.0));
-        settle(&mut arora);
-        assert!(expression(&arora, "happy") > 0.95);
-        assert!(expression(&arora, "sad") < 0.01);
-
-        // Halted: the mapping takes the expression back from where it is.
-        arora.call(handle.stop.clone()).expect("halt");
         step_for(&mut arora, 0.048);
+        assert_eq!(
+            read_value(&arora, &handle.status.path),
+            Some(task::failure()),
+            "preempted by the keys"
+        );
         let fading = expression(&arora, "happy");
         assert!(
             fading > 0.5 && fading < 0.99,
@@ -2156,13 +2179,13 @@ mod tests {
         assert!(expression(&arora, "happy") < 0.01);
         assert!(expression(&arora, "sad") > 0.95);
 
-        // A valence/arousal point: the mapping's blend.
-        let blend = spawn(&mut arora, &set_expression_call("", 0.8, 0.4));
+        // A valence/arousal point takes it back from the keys: the
+        // mapping's blend.
+        spawn(&mut arora, &set_expression_call("", 0.8, 0.4));
         settle(&mut arora);
         assert!(expression(&arora, "happy") > 0.4);
         assert!(expression(&arora, "sad") < 0.01);
         assert!(expression(&arora, "angry") < 0.01);
-        arora.call(blend.stop.clone()).expect("halt");
 
         // Asleep closes the lids.
         spawn(&mut arora, &set_expression_call("asleep", 0.0, 1.0));
@@ -2172,6 +2195,42 @@ mod tests {
             let lid = read_f32(&arora, standard::LEFT_EYE_TOP_EYELID_POS_Y);
             assert!(lid > 0.9, "lid opened while asleep ({lid})");
         }
+    }
+
+    /// The keys and set_facial_action_units take the face over from each
+    /// other: a key write preempts a run holding action units, the units
+    /// resting as the commanded expression comes up, and a new
+    /// set_facial_action_units run takes the face back from the keys.
+    #[test]
+    fn the_keys_and_the_action_units_take_the_face_over_from_each_other() {
+        use vizij_arora_behavior::task;
+        let mut arora = ros4hri_device();
+        let units = spawn(&mut arora, &action_units_call(&[12], &[0.8]));
+        settle(&mut arora);
+        assert!((muscle(&arora, "mouth_smile_left") - 0.8).abs() < 0.02);
+        assert!(expression(&arora, "neutral") > 0.99);
+
+        stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("angry"));
+        stage(&arora, ros4hri::EXPRESSION_AROUSAL_KEY, float(1.0));
+        settle(&mut arora);
+        assert_eq!(
+            read_value(&arora, &units.status.path),
+            Some(task::failure()),
+            "preempted by the keys"
+        );
+        assert!(expression(&arora, "angry") > 0.95);
+        assert!(expression(&arora, "neutral") < 0.01);
+        assert!(muscle(&arora, "mouth_smile_left") < 0.01);
+
+        let again = spawn(&mut arora, &action_units_call(&[12], &[0.8]));
+        settle(&mut arora);
+        assert_eq!(
+            read_value(&arora, &again.status.path),
+            Some(task::running())
+        );
+        assert!(expression(&arora, "angry") < 0.01);
+        assert!(expression(&arora, "neutral") > 0.99);
+        assert!((muscle(&arora, "mouth_smile_left") - 0.8).abs() < 0.02);
     }
 
     /// set_facial_action_units drives the muscle tier: each listed unit's
@@ -2416,7 +2475,8 @@ mod tests {
     /// sidecar grafted into `Quori_Current_Extended.glb` under `fixtures`
     /// with the bundler, composed like the binary's defaults (standard
     /// graphs + the ROS4HRI mapping, no autoplay — the idle program would
-    /// contend on gaze paths), its neutral pose staged.
+    /// contend on gaze paths), its neutral pose staged, booted like
+    /// [`ros4hri_device`].
     fn adapted_quori(fixtures: &str) -> arora::Arora {
         adapted_quori_with(fixtures, quori_adaptation())
     }
@@ -2461,10 +2521,12 @@ mod tests {
             load_face(&adapted, &config).expect("load the adapted face");
         let store = BlackboardStore::new();
         stage_neutral_pose(&store, &meta);
-        builder_for(&spec, RigHal::new(), store, &[], None)
+        let mut arora = builder_for(&spec, RigHal::new(), store, &[], None)
             .expect("build the device")
             .build()
-            .expect("build arora")
+            .expect("build arora");
+        arora.step(Duration::from_millis(16)).expect("boot");
+        arora
     }
 
     /// End-to-end over the real demo face ([`adapted_quori`]): drive the
@@ -2478,6 +2540,12 @@ mod tests {
             return;
         };
         let mut arora = adapted_quori(&fixtures);
+
+        // Quori boots at its neutral pose: the mapping's resting
+        // set_expression run holds `neutral`.
+        settle(&mut arora);
+        let pose = read_f32(&arora, "rig/quori_latest/poses/pose_d_neutral_d.weight");
+        assert!(pose > 0.95, "Quori boots at neutral (pose = {pose})");
 
         // A ROS4HRI expression command reaches Quori's emotion-pose plane.
         stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("happy"));
@@ -2520,27 +2588,28 @@ mod tests {
         );
         step_for(&mut arora, 0.45);
 
-        // The keys beyond ROS4HRI, written directly: an expression it does
-        // not name and the blink each reach the input Quori's adaptation maps
-        // them onto. (Quori's program reads the conversation state itself.)
-        for (control, rig_input) in [
-            (
-                standard::expression_path("concerned"),
-                "rig/quori_latest/poses/pose_d_concerned_d.weight",
-            ),
-            (standard::BLINK.to_string(), "rig/quori_latest/lids/blink"),
+        // Beyond ROS4HRI: an expression it does not name, through
+        // set_expression (an expression setter's run holds the face's
+        // expression weights), and the caller's blink, written directly, each
+        // reach the input Quori's adaptation maps them onto. (Quori's program
+        // reads the conversation state itself.)
+        spawn(&mut arora, &set_expression_call("concerned", 0.0, 1.0));
+        stage(
+            &arora,
+            &format!("rig/quori_latest/{}", standard::BLINK),
+            float(1.0),
+        );
+        settle(&mut arora);
+        for rig_input in [
+            "rig/quori_latest/poses/pose_d_concerned_d.weight",
+            "rig/quori_latest/lids/blink",
         ] {
-            stage(&arora, &format!("rig/quori_latest/{control}"), float(1.0));
-            settle(&mut arora);
             let value = read_f32(&arora, rig_input);
-            assert!(
-                value > 0.95,
-                "{control} does not reach {rig_input} ({value})"
-            );
+            assert!(value > 0.95, "{rig_input} = {value}");
         }
 
-        // A set_expression run reaches the emotion-pose plane like the
-        // mapping: the run writes the face's prefixed expression weights.
+        // The keys rest the face, and a set_expression run reaches the
+        // emotion-pose plane from there.
         stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text(""));
         stage(&arora, ros4hri::EXPRESSION_AROUSAL_KEY, float(0.0));
         settle(&mut arora);

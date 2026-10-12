@@ -8,7 +8,9 @@
 //! takes the face over, crossfading from where it is. No module implements
 //! them: the fragments carry the contracts' descriptions, so the interpreter
 //! describes the methods and a remote spawns them through the interpreter
-//! module.
+//! module. The ROS4HRI mapping's expression keys command set_expression too:
+//! the mapping spawns a run of it on each change, so a key write is one more
+//! command in the domain.
 
 use std::collections::HashMap;
 
