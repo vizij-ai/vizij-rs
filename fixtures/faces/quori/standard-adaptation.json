@@ -1429,6 +1429,94 @@
       "id": "scale_blink_eye_closed_right",
       "type": "multiply",
       "params": {}
+    },
+    {
+      "id": "c_top_lid_rest",
+      "type": "constant",
+      "params": {
+        "value": 2.2244815826416016
+      }
+    },
+    {
+      "id": "c0_75",
+      "type": "constant",
+      "params": {
+        "value": 0.75
+      }
+    },
+    {
+      "id": "cm0_4",
+      "type": "constant",
+      "params": {
+        "value": -0.4
+      }
+    },
+    {
+      "id": "c3",
+      "type": "constant",
+      "params": {
+        "value": 3.0
+      }
+    },
+    {
+      "id": "in_face_eye_wide_left",
+      "type": "input",
+      "params": {
+        "path": "rig/quori_latest/standard/vizij/face/eye_wide_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "scale_lid_l_top_eye_wide_left",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "sum_lid_l_top",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "clamp_lid_l_top",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "out_lid_l_top",
+      "type": "output",
+      "params": {
+        "path": "rig/quori_latest/propsrig/ltlid/translation/y"
+      }
+    },
+    {
+      "id": "in_face_eye_wide_right",
+      "type": "input",
+      "params": {
+        "path": "rig/quori_latest/standard/vizij/face/eye_wide_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "scale_lid_r_top_eye_wide_right",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "sum_lid_r_top",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "clamp_lid_r_top",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "out_lid_r_top",
+      "type": "output",
+      "params": {
+        "path": "rig/quori_latest/propsrig/rtlid/translation/y"
+      }
     }
   ],
   "edges": [
@@ -4202,6 +4290,150 @@
       "to": {
         "node_id": "sum_blink",
         "input": "operand_2"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_face_eye_wide_left"
+      },
+      "to": {
+        "node_id": "scale_lid_l_top_eye_wide_left",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c0_75"
+      },
+      "to": {
+        "node_id": "scale_lid_l_top_eye_wide_left",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c_top_lid_rest"
+      },
+      "to": {
+        "node_id": "sum_lid_l_top",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "scale_lid_l_top_eye_wide_left"
+      },
+      "to": {
+        "node_id": "sum_lid_l_top",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sum_lid_l_top"
+      },
+      "to": {
+        "node_id": "clamp_lid_l_top",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "cm0_4"
+      },
+      "to": {
+        "node_id": "clamp_lid_l_top",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c3"
+      },
+      "to": {
+        "node_id": "clamp_lid_l_top",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "clamp_lid_l_top"
+      },
+      "to": {
+        "node_id": "out_lid_l_top",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_face_eye_wide_right"
+      },
+      "to": {
+        "node_id": "scale_lid_r_top_eye_wide_right",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c0_75"
+      },
+      "to": {
+        "node_id": "scale_lid_r_top_eye_wide_right",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c_top_lid_rest"
+      },
+      "to": {
+        "node_id": "sum_lid_r_top",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "scale_lid_r_top_eye_wide_right"
+      },
+      "to": {
+        "node_id": "sum_lid_r_top",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sum_lid_r_top"
+      },
+      "to": {
+        "node_id": "clamp_lid_r_top",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "cm0_4"
+      },
+      "to": {
+        "node_id": "clamp_lid_r_top",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c3"
+      },
+      "to": {
+        "node_id": "clamp_lid_r_top",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "clamp_lid_r_top"
+      },
+      "to": {
+        "node_id": "out_lid_r_top",
+        "input": "in"
       }
     }
   ]

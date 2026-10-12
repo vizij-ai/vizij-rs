@@ -2440,7 +2440,8 @@ mod tests {
     /// brow, lid and mouth inputs. A set_facial_action_units run holding AU 12
     /// (lip corner puller) and AU 4 (brow lowerer) pulls the mouth's corners
     /// up and wide and the brows down and toward the centre, and the face's
-    /// render follows; the units it does not hold rest. At rest the muscle
+    /// render follows; the units it does not hold rest. AU 5 (upper lid
+    /// raiser) opens the top lids past their rest. At rest the muscle
     /// tier leaves the face as the adaptation without it renders it, the
     /// mapped inputs at the rig's own rest. Needs `VIZIJ_FIXTURES`.
     #[test]
@@ -2505,8 +2506,39 @@ mod tests {
             .collect();
         assert!(!rendered.is_empty(), "AU 12 and AU 4 move no rig output");
 
-        // The adaptation without the outputs onto the rig's own standard
-        // inputs — what the muscle tier adds — renders the face the same.
+        // AU 5 opens the top lids past their rest: the lids' translation, the
+        // rig's output, rises by the adaptation's 0.75 over the same unit
+        // held at rest — on top of whatever the blink and the lids' own
+        // inputs drive.
+        let lids = |codes: &[u8], intensity: f32| {
+            let mut arora = adapted_quori(&fixtures);
+            spawn(
+                &mut arora,
+                &action_units_call(codes, &vec![intensity; codes.len()]),
+            );
+            settle(&mut arora);
+            // The rig's translation outputs of the left and right top lids.
+            [
+                "97820eb4-12a5-41b8-a390-80d04f6f5a82",
+                "ec5ad8f9-08e1-4401-839d-e8d431661994",
+            ]
+            .map(|output| match read_value(&arora, output) {
+                Some(Value::ArrayF32(t)) => t[1],
+                Some(Value::ArrayF64(t)) => t[1] as f32,
+                other => panic!("{output} is no translation: {other:?}"),
+            })
+        };
+        let (wide, at_rest) = (lids(&[5], 1.0), lids(&[5], 0.0));
+        for (wide, at_rest) in wide.into_iter().zip(at_rest) {
+            assert!(
+                (wide - at_rest - 0.75).abs() < 0.02,
+                "AU 5 opens a top lid by 0.75: {at_rest} → {wide}"
+            );
+        }
+
+        // The adaptation without the outputs the muscle tier adds — onto
+        // the rig's own standard inputs and the lids' translation — renders
+        // the face the same.
         let mut before = quori_adaptation();
         let muscle: std::collections::HashSet<String> = before["nodes"]
             .as_array()
@@ -2514,9 +2546,9 @@ mod tests {
             .iter()
             .filter(|node| {
                 node["type"] == "output"
-                    && node["params"]["path"]
-                        .as_str()
-                        .is_some_and(|path| path.contains("/standard/vizij/"))
+                    && node["params"]["path"].as_str().is_some_and(|path| {
+                        path.contains("/standard/vizij/") || path.contains("/propsrig/")
+                    })
             })
             .filter_map(|node| node["id"].as_str().map(String::from))
             .collect();
@@ -2559,6 +2591,11 @@ mod tests {
         }
         assert_eq!(untouched.get(&rig("mouth/morph/corner_puller")), Some(&0.0));
         assert_eq!(untouched.get("rig/quori_latest/lids/blink"), Some(&0.0));
+        for lid in ["ltlid", "rtlid"] {
+            let path = format!("rig/quori_latest/propsrig/{lid}/translation/y");
+            let rest = untouched[&path];
+            assert!((rest - 2.224_481_6).abs() < 1e-6, "{path} = {rest} at rest");
+        }
     }
 
     /// Faces whose rigs predate the standard, each with the adaptation

@@ -65,9 +65,9 @@ which applies the same mapping to whatever controls the rig has:
 The reference sidecar alone also maps the **muscle tier**
 (`standard/vizij/face/<control>`, each a `[0, 1]` weight) onto Quori's own
 brow, lid and mouth inputs, which the script does not generate. Each rig
-input is the weighted sum of the controls that drive it, clamped to the
-input's authored range; a lateralized control drives its own side, a pair
-onto one input averages. The signs follow the rig: a brow's `*_up_down` is up
+input is the weighted sum of the controls that drive it, from the input's
+rest, clamped to its authored range; a lateralized control drives its own
+side, a pair onto one input averages. The signs follow the rig: a brow's `*_up_down` is up
 when positive, its `in_left_right` toward the centre, the lower lid's
 `pos/y` up, `corner_puller` the corners up, `stretch` the mouth wider, a top
 sneer the upper lip up and a bottom sneer the lower lip down.
@@ -85,6 +85,13 @@ sneer the upper lip up and a bottom sneer the lower lip down.
 | `mouth/morph/<side>_top_sneer` | [-1, 1] | `mouth_upper_up_<side>` + ½ `nose_sneer_<side>` |
 | `mouth/morph/<side>_bottom_sneer` | [-1, 1] | `mouth_lower_down_<side>` |
 | `lids/blink` (not `standard/`) | [0, 1] | `blink` + ½ `eye_closed_*`, both sides |
+| `propsrig/<l\|r>tlid/translation/y` (not `standard/`) | [-0.4, 3] | the lid's rest, 2.2245, + 0.75 `eye_wide_<side>` |
+
+The top lids open past their rest only through their own translation: the
+rig adds that input's offset from its rest to what the blink and
+`<side>_eye_top_eyelid/pos/y` drive, both of which only close the lid, so
+`eye_wide` lifts the lid by 0.75 wherever they hold it — wide open at rest,
+a blink closing short of shut while it is held.
 
 A smile is the corners up and the mouth wider, the two components of Quori's
 own `mouth/smile` input; the adaptation drives the components because Quori's
@@ -92,7 +99,6 @@ animations write `mouth/smile` itself. The eyes closed join the blink rather
 than the top lids' `pos/y`, which the ROS4HRI mapping's blink writes. The jaw
 (`jaw_open`) reaches the rig through the de-facto `mouth/morph/jaw_open`,
 which the setter writes, so the sidecar does not map it again. Unmapped:
-`eye_wide_*` (no rig input opens the top lids past their rest),
 `cheek_puff`, `mouth_press_*`, `jaw_left`, `jaw_right`, `jaw_forward` and
 `tongue_out`. Quori's "Speaks" program writes the same brow, lid and mouth
 inputs and composes after the adaptation, so while it runs it owns them.
