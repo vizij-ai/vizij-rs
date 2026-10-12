@@ -11,7 +11,7 @@ import {
   standardProfiles,
 } from "../dist/runtime/src/index.js";
 
-// The shipped profiles, summarized: the face standard (face-scoped — 90
+// The shipped profiles, summarized: the face standard (face-scoped — 91
 // controls, the lipsync gain, and the two speech state keys it reports) and
 // the ROS4HRI interface (device-scoped — 8 named command keys, the streamed
 // viseme among them as one code rather than a weight per shape, with its time
@@ -21,14 +21,14 @@ const listed = await profiles();
 assert.deepEqual(
   listed.map((p) => [p.id, p.scope, p.keys]),
   [
-    ["vizij-face", "face", 93],
+    ["vizij-face", "face", 94],
     ["ros4hri", "device", 10],
   ],
 );
 
 // A face-scoped profile is addressed to the face: every path takes the prefix.
 const face = await profile("vizij-face", "rig/quori/");
-assert.equal(face.keys.length, 93);
+assert.equal(face.keys.length, 94);
 assert.ok(face.keys.every((k) => k.path.startsWith("rig/quori/standard/vizij/")));
 // What the face reports rather than takes: the current viseme and the
 // utterance being spoken, output keys outside the control tiers.
@@ -48,10 +48,11 @@ assert.deepEqual(jaw.meta, { au: 26, arkit: "jawOpen", tier: "muscle" });
 assert.equal(jaw.value_type, "f32");
 assert.deepEqual(jaw.default_value, { f32: 0 });
 
-// The blink, the expressions beyond ROS4HRI's and the conversation state are
-// weights resting at zero, in their tiers.
+// The blink, the gaze target's weight, the expressions beyond ROS4HRI's and
+// the conversation state are weights resting at zero, in their tiers.
 for (const [suffix, tier] of [
   ["/blink", "gaze"],
+  ["/gaze/target/weight", "gaze"],
   ["/expression/concerned", "expression"],
   ["/expression/sleepy", "expression"],
   ["/conversation/speaking", "conversation"],

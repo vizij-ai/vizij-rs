@@ -9,7 +9,8 @@
 //! in [`crate::profile`] — and a test holds the two equal:
 //!
 //! - **Gaze & lids** — per-eye position and eyelid controls, the blink, and
-//!   the gaze target: the point on the face's frame the eyes look toward.
+//!   the gaze target: the point on the face's frame the eyes look toward, and
+//!   how strongly they hold it.
 //! - **Semantic** — one weight per named expression and per viseme shape. The
 //!   expression names are ROS4HRI's set plus the ones faces implement beyond
 //!   it; the viseme shapes are the industry 15-shape set (the Oculus/Meta
@@ -101,6 +102,15 @@ pub const BLINK: &str = "standard/vizij/blink";
 /// their range.
 pub const GAZE_TARGET_X: &str = "standard/vizij/gaze/target/x";
 pub const GAZE_TARGET_Y: &str = "standard/vizij/gaze/target/y";
+
+/// How strongly the eyes hold the gaze target, [0, 1], resting at 0: at 0 the
+/// eyes do what the face itself does — its program's motion, or its rest —
+/// whatever the target says; at 1 they hold the target, with no more than
+/// micro-motion; in between, a blend of the two. Since the target rests at
+/// the centre, the weight is what tells "no target" from "look ahead". A face
+/// applies it wherever it implements the target, in its program or in its
+/// standard adaptation.
+pub const GAZE_TARGET_WEIGHT: &str = "standard/vizij/gaze/target/weight";
 
 // --- Semantic tier: expressions --------------------------------------------
 

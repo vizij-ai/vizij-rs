@@ -11,7 +11,7 @@ module](../crates/interop/vizij-arora-host/src/standard.rs), which is the
 authoritative source; this page mirrors it. As data, the same vocabulary is
 the **`vizij-face` profile**
 ([`profiles/vizij-face.json`](../crates/interop/vizij-arora-host/profiles/vizij-face.json)):
-an interface of 93 typed paths, face-scoped — every face carries its own copy
+an interface of 94 typed paths, face-scoped — every face carries its own copy
 under its rig prefix — with each key's tier, FACS action unit, and ARKit
 blendshape as metadata. See [profiles and mappings](profiles-and-mappings.md).
 
@@ -24,7 +24,7 @@ and a standard mapping (like [ROS4HRI](ros4hri.md)) degrades to the tiers a
 face covers.
 
 1. **Gaze & lids** — where the eyes point, how open they are, the blink, and
-   the gaze target.
+   the gaze target with its weight.
 2. **Semantic** — one weight per named expression and per viseme shape.
 3. **Muscle** — fine-grained controls, one per FACS action unit / ARKit
    blendshape.
@@ -35,8 +35,8 @@ takes part in is doing — state it may react to, not a pose.
 In the profile, each key's `tier` is one of `gaze`, `expression`, `viseme`,
 `muscle` and `conversation`. `vizij-bundle validate` grades a face's
 compliance L0–L3 on the first four, in that order; it reports the
-conversation state, and the gaze target within the gaze tier, without
-grading them.
+conversation state, and the gaze target and its weight within the gaze
+tier, without grading them.
 
 ## Gaze & lids
 
@@ -51,6 +51,7 @@ grading them.
 | `standard/vizij/blink` | `[0, 1]` | both eyes: 0 open, 1 closed |
 | `standard/vizij/gaze/target/x` | `[0, 1]` | where the eyes look, across the face's frame: 0 its left edge, 1 its right edge; rests at 0.5 |
 | `standard/vizij/gaze/target/y` | `[0, 1]` | where the eyes look, down the face's frame: 0 its top edge, 1 its bottom edge; rests at 0.5 |
+| `standard/vizij/gaze/target/weight` | `[0, 1]` | how strongly the eyes hold the target: 0 not at all, 1 fully; rests at 0 |
 
 Per-eye positions (rather than a single gaze vector) let a mapping command
 vergence; the ROS4HRI mapping computes them from a face-frame target.
@@ -71,23 +72,37 @@ a fraction of the frame as the viewer sees the face. It rests at the centre,
 without knowing how the face moves its eyes; toward the edges of the frame
 the eyes reach the ends of their range.
 
+The target's **weight** says how strongly the eyes hold it:
+
+- at 0, the eyes do what the face itself does — its program's motion, or its
+  rest — whatever the target says;
+- at 1, the eyes hold the target, with no more than micro-motion;
+- in between, a blend of the two.
+
+The weight rests at 0. Since the target rests at the centre, the weight is
+what tells "no target" from "look straight ahead": a caller sets the target,
+then raises the weight.
+
 A face implements the target as its author chooses, like any control, in one
 of two places:
 
 - **its program**, when a program drives the eyes: the program blends the
-  target with its own eye motion — Quori's conversational program aims its
-  idle exploration and jitter around the target. On such a face the eye
+  target with its own eye motion by the weight — Quori's conversational
+  program moves the centre of its gaze toward the target and fades its slow
+  wander as the weight rises, keeping its jitter. On such a face the eye
   positions are the program's output, and the target is how a caller
   directs the gaze;
 - **its standard adaptation**, for a face without such a program: the
   adaptation maps the target onto the eyes statelessly — adding the
-  target's offset from the centre to the eye positions, for instance.
+  target's offset from the centre, scaled by the weight, to the eye
+  positions, for instance.
 
 Never both in one face: both would write the eyes, and a key has one writer.
-`validate` reports whether the face's graphs read the target, in the gaze
-tier, without grading it: the eye positions the tier grades already reach
-every gaze the target directs. The ROS4HRI mapping does not write it; it
-drives the eye positions from ROS4HRI's own target, a point in space.
+`validate` reports whether the face's graphs read the target and its
+weight, in the gaze tier, without grading them: the eye positions the tier
+grades already reach every gaze the target directs. The ROS4HRI mapping
+writes neither; it drives the eye positions from ROS4HRI's own target, a
+point in space.
 
 ## Semantic tier
 

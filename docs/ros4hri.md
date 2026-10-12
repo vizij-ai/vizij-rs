@@ -475,12 +475,12 @@ is a diff of the behavior.
   authoring app to embed.
 - **Reconcile it against the profiles** with `vizij-bundle surface`: the
   mapping reads 7 of the profile's 8 command keys (`gaze/frame` belongs to
-  the `look_at` skill) and writes 31 of the face standard's 91 inputs (the 15
+  the `look_at` skill) and writes 31 of the face standard's 92 inputs (the 15
   viseme weights are written by the `play_viseme` runs it spawns; the muscle
-  tier, the blink, the standard's gaze target (a point on the face's frame),
-  the expressions beyond ROS4HRI's and the conversation state have no
-  ROS4HRI command the mapping reads; and the lipsync gain is a setting of the
-  face).
+  tier, the blink, the standard's gaze target (a point on the face's frame)
+  and its weight, the expressions beyond ROS4HRI's and the conversation state
+  have no ROS4HRI command the mapping reads; and the lipsync gain is a setting
+  of the face).
 
 ## Progressive compliance
 
@@ -490,7 +490,7 @@ the gaze and expression tiers and spawns the runs that play visemes, degrades
 to them.
 `vizij-bundle validate --min-level <n>` reports and gates a face's coverage of
 the `vizij-face` profile; it reports the conversation state and the
-standard's gaze target without grading them.
+standard's gaze target and its weight without grading them.
 
 ## See also
 
