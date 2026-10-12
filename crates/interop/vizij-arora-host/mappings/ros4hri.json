@@ -2367,6 +2367,36 @@
       }
     },
     {
+      "id": "in/caption/text",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/caption/text",
+        "value": ""
+      }
+    },
+    {
+      "id": "out/caption/text",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/caption/text"
+      }
+    },
+    {
+      "id": "in/caption/speaker",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/caption/speaker",
+        "value": ""
+      }
+    },
+    {
+      "id": "out/caption/speaker",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/caption/speaker"
+      }
+    },
+    {
       "id": "in/speech",
       "type": "input",
       "params": {
@@ -8732,6 +8762,24 @@
       "to": {
         "node_id": "viseme/play",
         "input": "when"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/caption/text"
+      },
+      "to": {
+        "node_id": "out/caption/text",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/caption/speaker"
+      },
+      "to": {
+        "node_id": "out/caption/speaker",
+        "input": "in"
       }
     },
     {

@@ -11,7 +11,7 @@ module](../crates/interop/vizij-arora-host/src/standard.rs), which is the
 authoritative source; this page mirrors it. As data, the same vocabulary is
 the **`vizij-face` profile**
 ([`profiles/vizij-face.json`](../crates/interop/vizij-arora-host/profiles/vizij-face.json)):
-an interface of 94 typed paths, face-scoped — every face carries its own copy
+an interface of 96 typed paths, face-scoped — every face carries its own copy
 under its rig prefix — with each key's tier, FACS action unit, and ARKit
 blendshape as metadata. See [profiles and mappings](profiles-and-mappings.md).
 
@@ -231,13 +231,45 @@ its author chooses (a listening pose, an averted gaze while thinking) or not at
 all, and nothing in the standard writes them on its own. ROS4HRI has no
 counterpart the mapping reads.
 
+## Caption
+
+| Path | Type | Meaning |
+|---|---|---|
+| `standard/vizij/caption/text` | string | the caption the face shows, empty at rest |
+| `standard/vizij/caption/speaker` | string | who says it: `__system__` for the face itself, any other id for someone else, empty when unknown |
+
+The caption is text the host draws over the face — a command of the face's
+display, not of its rig, so it is in no tier and no face's graphs read it.
+Each new value of the pair is a new caption; writing the same caption again
+does not show it again. The host shows it at the bottom of the face's own
+rectangle, the way the incumbent ROS4HRI face does:
+
+- in chunks of eight words, each held for its words at 200 words a minute
+  but at least 2 s, the last one of a caption 1.5 s longer;
+- after the chunks still queued, so a caption arriving while another shows
+  waits its turn;
+- in blue (sRGB `#0066B3`) when the face itself speaks, in white otherwise,
+  over a black drop shadow;
+- a line one fifteenth of the rectangle's height, centred in a band a fifth
+  of the height tall, whose bottom stands a thirtieth of the height above
+  the rectangle's.
+
+`__system__` is the id ROS4HRI's `ClosedCaption` gives the robot itself,
+taken as is, so the [ROS4HRI mapping](ros4hri.md) relays a closed caption
+without translating its speaker. A face whose composition writes neither
+key has both open to remote writers, so any client captions it; with the
+ROS4HRI mapping composed, the mapping writes them, from `/closed_captions`.
+The native view draws captions (the `vizij` crate's `captions` feature, on
+by default); the browser module does not.
+
 ## Reaching the vocabulary in code
 
 `vizij-arora-host`'s `standard` module exposes the constants (the gaze
 target's among them, `GAZE_TARGET_X` and `GAZE_TARGET_Y`) and the path
 helpers (`expression_path`, `viseme_path`, `face_path`, `conversation_path`),
 the name sets (`expression_names()` — `ROS4HRI_EXPRESSION_NAMES` then
-`VIZIJ_EXPRESSION_NAMES` — `VISEME_SHAPES`, `CONVERSATION_STATES`), plus
+`VIZIJ_EXPRESSION_NAMES` — `VISEME_SHAPES`, `CONVERSATION_STATES`), the
+caption's (`CAPTION_TEXT`, `CAPTION_SPEAKER`, `CAPTION_SPEAKER_SELF`), plus
 `controls_for_au(code)` (the lateralized pair or single control an AU drives)
 and `control_for_arkit(name)`. Callers should build paths through these rather
 than hand-format strings.

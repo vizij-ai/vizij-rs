@@ -28,6 +28,9 @@
 //! - **Conversation** — whether the face is speaking, its interlocutor is
 //!   speaking, or it is thinking: state a face may react to, not a pose.
 //!
+//! Beside the face's own vocabulary, the **caption** is text the host shows
+//! over the face — a command of its display, not of its rig.
+//!
 //! Everything is an `f32` weight in [0, 1] unless a constant says otherwise.
 
 /// Prefix of every control path in the Vizij face standard.
@@ -214,6 +217,26 @@ pub const LIPSYNC_GAIN: &str = "standard/vizij/lipsync/gain";
 /// speech topic). Not a command: speaking is the `say` skill; this is what
 /// it reports.
 pub const SPEECH: &str = "standard/vizij/speech";
+
+// --- Captions ----------------------------------------------------------------
+
+/// The caption the face shows: text overlaid at the bottom of the face's own
+/// rectangle, empty at rest. Each new value is a new caption, shown in
+/// chunks after the ones before it ([`crate::captions`]); the same caption
+/// written again is not shown again. A command of the face's display rather
+/// than of its rig: the host draws it over the face, so it is no tier's and
+/// no face's graphs read it.
+pub const CAPTION_TEXT: &str = "standard/vizij/caption/text";
+
+/// Who says the caption at [`CAPTION_TEXT`], written with it:
+/// [`CAPTION_SPEAKER_SELF`] when the face itself speaks, any other id for
+/// someone else, empty when unknown. The host colours the caption by it.
+pub const CAPTION_SPEAKER: &str = "standard/vizij/caption/speaker";
+
+/// The [`CAPTION_SPEAKER`] of the face's own speech: `__system__`, the id
+/// ROS4HRI's `hri_actions_msgs/ClosedCaption` gives the robot itself, taken
+/// as is so the ROS4HRI mapping relays a caption's speaker unchanged.
+pub const CAPTION_SPEAKER_SELF: &str = "__system__";
 
 // --- Muscle tier: face controls ---------------------------------------------
 

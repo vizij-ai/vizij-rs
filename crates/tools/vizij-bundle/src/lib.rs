@@ -9,8 +9,8 @@
 //! stay meaningful.
 
 use anyhow::{anyhow, bail, Context, Result};
-use serde_json::{json, Map, Value as Json};
-use vizij_arora_host::{mappings, profile, standard};
+use serde_json::{json, Value as Json};
+use vizij_arora_host::{mappings, profile};
 use vizij_glb_migrate::glb::Glb;
 
 /// A GLB with its parsed JSON chunk, ready for bundle surgery.
@@ -202,116 +202,17 @@ impl Face {
     }
 }
 
-/// One tier of the standard-coverage report.
-pub struct TierCoverage {
-    pub tier: String,
-    pub covered: Vec<String>,
-    pub missing: Vec<String>,
-}
+pub use profile::{Coverage, TierCoverage};
 
-/// The tiers the compliance level climbs, coarse to fine: L0 gaze & lids, L1
-/// expressions, L2 visemes, L3 the muscle tier. The profile's other tiers —
-/// the conversation state — are reported but not climbed: they say what a
-/// face reacts to, not how finely it can be posed.
-const LEVEL_TIERS: [&str; 4] = ["gaze", "expression", "viseme", "muscle"];
-
-/// The paths a tier reports without requiring them for its level: the gaze
-/// target and its weight, which say where the eyes point in terms of the eye
-/// positions the gaze tier already grades — every gaze they direct, the eye
-/// positions reach.
-const UNGRADED: [&str; 3] = [
-    standard::GAZE_TARGET_X,
-    standard::GAZE_TARGET_Y,
-    standard::GAZE_TARGET_WEIGHT,
-];
-
-/// A face's coverage of the Vizij standard: which paths of each tier of the
-/// `vizij-face` profile its graphs listen on. `level` is the highest tier of
-/// [`LEVEL_TIERS`] the face fully covers, in order (half is enough for the
-/// muscle tier: faces rig the muscles they have), [`UNGRADED`] paths aside.
-pub struct Coverage {
-    pub face_id: Option<String>,
-    pub level: u8,
-    pub tiers: Vec<TierCoverage>,
-}
-
-/// Compute a face's standard coverage from its input surface, tier by tier of
-/// the `vizij-face` profile.
+/// A face's coverage of the Vizij standard ([`profile::coverage`]) from its
+/// input surface, tier by tier of the `vizij-face` profile.
 pub fn coverage(face: &Face) -> Coverage {
-    let inputs = face.input_paths();
-    let has = |path: &str| inputs.iter().any(|p| p == path);
-
-    let standard = profile::vizij_face_profile();
-    let tiers: Vec<TierCoverage> = standard
-        .tiers()
-        .into_iter()
-        .map(|tier| {
-            let (covered, missing) = standard
-                .keys
-                .iter()
-                .filter(|k| k.tier() == Some(tier))
-                .map(|k| k.path.clone())
-                .partition(|p| has(p));
-            TierCoverage {
-                tier: tier.to_string(),
-                covered,
-                missing,
-            }
-        })
-        .collect();
-
-    // Each level requires every tier before it in full, and its own tier in
-    // full — or, for the muscle tier, at least half — but for the paths it
-    // reports ungraded.
-    let mut level = 0;
-    let ladder = tiers
-        .iter()
-        .filter(|t| LEVEL_TIERS.contains(&t.tier.as_str()));
-    for (i, tier) in ladder.enumerate() {
-        let missing = tier
-            .missing
-            .iter()
-            .filter(|p| !UNGRADED.contains(&p.as_str()))
-            .count();
-        let full = missing == 0;
-        let enough = tier.tier == "muscle" && tier.covered.len() >= missing;
-        if !(full || enough) {
-            break;
-        }
-        level = i as u8;
-    }
-
-    Coverage {
-        face_id: face
-            .bundle()
-            .and_then(|b| b.pointer("/metadata/faceId"))
-            .and_then(Json::as_str)
-            .map(str::to_string),
-        level,
-        tiers,
-    }
-}
-
-impl Coverage {
-    /// The report as JSON (the machine-readable `validate` output).
-    pub fn to_json(&self) -> Json {
-        let mut tiers = Map::new();
-        for t in &self.tiers {
-            tiers.insert(
-                t.tier.clone(),
-                json!({
-                    "covered": t.covered.len(),
-                    "of": t.covered.len() + t.missing.len(),
-                    "missing": t.missing,
-                }),
-            );
-        }
-        json!({
-            "faceId": self.face_id,
-            "level": format!("L{}", self.level),
-            "tiers": tiers,
-        })
-    }
+    let face_id = face
+        .bundle()
+        .and_then(|b| b.pointer("/metadata/faceId"))
+        .and_then(Json::as_str)
+        .map(str::to_string);
+    profile::coverage(face_id, &face.input_paths())
 }
 
 /// A compact inspection summary of a face GLB (the `inspect` output).
@@ -385,6 +286,7 @@ pub fn from_sidecar(text: &str) -> Result<Json> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vizij_arora_host::standard;
 
     /// A minimal GLB carrying a bundle with one rig graph.
     fn face_bytes(input_paths: &[&str]) -> Vec<u8> {

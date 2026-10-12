@@ -12,23 +12,24 @@ import {
 } from "../dist/runtime/src/index.js";
 
 // The shipped profiles, summarized: the face standard (face-scoped — 91
-// controls, the lipsync gain, and the two speech state keys it reports) and
-// the ROS4HRI interface (device-scoped — 8 named command keys, the streamed
+// controls, the lipsync gain, the caption and its speaker, and the two speech
+// state keys it reports) and
+// the ROS4HRI interface (device-scoped — 10 named command keys, the streamed
 // viseme among them as one code rather than a weight per shape, with its time
-// and duration; and the speech state it reports, the utterance and its current
-// viseme).
+// and duration, and the closed caption's text and speaker; and the speech
+// state it reports, the utterance and its current viseme).
 const listed = await profiles();
 assert.deepEqual(
   listed.map((p) => [p.id, p.scope, p.keys]),
   [
-    ["vizij-face", "face", 94],
-    ["ros4hri", "device", 10],
+    ["vizij-face", "face", 96],
+    ["ros4hri", "device", 12],
   ],
 );
 
 // A face-scoped profile is addressed to the face: every path takes the prefix.
 const face = await profile("vizij-face", "rig/quori/");
-assert.equal(face.keys.length, 94);
+assert.equal(face.keys.length, 96);
 assert.ok(face.keys.every((k) => k.path.startsWith("rig/quori/standard/vizij/")));
 // What the face reports rather than takes: the current viseme and the
 // utterance being spoken, output keys outside the control tiers.
