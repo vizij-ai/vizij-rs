@@ -40,3 +40,15 @@ serde-wasm-bindgen = "0.6"
 opt-level = "s"
 lto = true
 codegen-units = 1
+
+# The face-interfaces spike: the arora-sdk worktree serving the face skills
+# over ROS 2. Every crate whose types cross between vizij and the bridge comes
+# from it, so one copy of each is in the graph.
+[patch.crates-io]
+arora-types = { path = "../../arora-sdk-wt/face-interfaces/crates/arora-types" }
+arora-types-derive = { path = "../../arora-sdk-wt/face-interfaces/crates/arora-types-derive" }
+arora-behavior = { path = "../../arora-sdk-wt/face-interfaces/crates/arora-behavior" }
+arora-bridge = { path = "../../arora-sdk-wt/face-interfaces/crates/arora-bridge" }
+arora-behavior-tree-types = { path = "../../arora-sdk-wt/face-interfaces/crates/arora-behavior-tree-types" }
+arora-msgs-ros2 = { path = "../../arora-sdk-wt/face-interfaces/crates/arora-msgs-ros2" }
+arora-bridge-ros2 = { path = "../../arora-sdk-wt/face-interfaces/crates/arora-bridge-ros2" }
