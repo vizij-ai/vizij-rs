@@ -1,6 +1,6 @@
 [package]
 name = "vizij"
-version = "0.1.0"
+version = "0.2.0"
 edition = { workspace = true }
 publish = false
 description = "Vizij: an arora with a head. One crate: the Bevy view rendering a GLB face and the arora device driving it, as a library on every target (desktop, browser, Android) and as the `vizij` binary on desktop."
