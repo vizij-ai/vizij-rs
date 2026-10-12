@@ -9,20 +9,18 @@
 //! control paths; what an expression or a viseme *looks like* stays with the
 //! face (its rig and adaptation graphs). Per channel:
 //!
-//! - **Expression** — a non-empty `expression/name` selects the named
-//!   expression at the commanded `arousal` as its intensity; otherwise
-//!   `valence`/`arousal` blend the named weights by proximity to
-//!   each expression's circumplex anchor ([`expression_targets`]). Weights
-//!   are smoothed and written to `standard/vizij/expression/<name>` for
-//!   ROS4HRI's names ([`ROS4HRI_EXPRESSION_NAMES`]). The standard's
-//!   expressions beyond them have no ROS4HRI name, so the mapping leaves
-//!   them to other writers. This is the face's expression while no
-//!   expression setter runs: a `set_expression` or `set_facial_action_units`
-//!   run, grafted after this graph, writes the same weights last and so
-//!   holds the face while it lives. Each weight's smoother continues from
-//!   the face's own weight, read back from the store, so when the run is
-//!   halted the mapping takes the expression back from where the run left
-//!   it, with no snap.
+//! - **Expression** — the keys command the `set_expression` skill: each
+//!   change of `expression/name`, `valence` or `arousal` spawns a run of it
+//!   with the three, and the first evaluation spawns one with the keys as
+//!   loaded, so the face rests at neutral from boot. A run, never this
+//!   graph, writes the face's expression; the skill computes it with this
+//!   module's math ([`expression_targets`]: a non-empty name selects its
+//!   expression at the arousal as its intensity, otherwise valence/arousal
+//!   blend the named weights by proximity to each expression's circumplex
+//!   anchor). The run is exclusive with the expression's setters, so a key
+//!   write, a `set_expression` call and a `set_facial_action_units` call
+//!   take the face over from one another — the latest command wins, by
+//!   whichever path it came — crossfading from where the face is.
 //! - **Gaze** — `gaze/target` (vec3, meters, face frame: x forward, y left,
 //!   z up) maps to per-eye positions with vergence, the incumbent ±0.78 rad →
 //!   ±1 normalization, and a center fallback for targets at or behind the
@@ -49,7 +47,8 @@
 //!   static bridge profile can name.
 //!
 //! All continuous channels pass through a ~200 ms exponential smoother (the
-//! incumbent ROS4HRI face's dynamics). The graph is generated data: it
+//! incumbent ROS4HRI face's dynamics), the expression setters' runs
+//! included. The graph is generated data: it
 //! composes exactly like [`crate::animations_source`], after the face's own
 //! graphs and before any playing program, so a performance overrides it,
 //! last-writer-wins.
@@ -57,7 +56,7 @@
 use serde_json::{json, Value as Json};
 
 use crate::graph_builder::GraphBuilder;
-use crate::skills::{follow, play_viseme, smoothing_gain, viseme_shape_of, SILENCE_VISEME};
+use crate::skills::{play_viseme, set_expression, viseme_shape_of, SILENCE_VISEME};
 use crate::standard::{self, ROS4HRI_EXPRESSION_NAMES};
 
 /// Source id of the composed mapping (node ids get `ros4hri::` prefixes).
@@ -329,22 +328,31 @@ fn build(rig_prefix: &str) -> (String, Json) {
     let zero = g.constant(0.0);
     let one = g.constant(1.0);
 
-    // --- Expression: a commanded name selects its expression, at the
-    // commanded arousal as its intensity; otherwise valence/arousal blend the
-    // named weights by proximity to each expression's circumplex anchor.
-    // Each weight follows its target from the face's own weight, so the
-    // mapping takes the expression back from a setter's run where the run
-    // left it. ---
+    // --- Expression: the keys command set_expression. Each change spawns a
+    // run of it with the three keys, which takes the face over from the
+    // expression setter's run before it, whichever command started that one;
+    // the first evaluation spawns one too, so the face rests at what the keys
+    // hold as loaded — neutral, at their defaults. The run, not this graph,
+    // writes the expression. ---
     let name = g.input("in/expression/name", EXPRESSION_NAME_KEY, json!(""));
     let valence = g.input("in/expression/valence", EXPRESSION_VALENCE_KEY, json!(0.0));
     let arousal = g.input("in/expression/arousal", EXPRESSION_AROUSAL_KEY, json!(0.0));
-    let targets = expression_targets(g, &ROS4HRI_EXPRESSION_NAMES, &name, &valence, &arousal);
-    let gain = smoothing_gain(g, "expression/smoothing", HALF_LIFE);
-    for (expr, target) in ROS4HRI_EXPRESSION_NAMES.iter().zip(&targets) {
-        let path = standard::expression_path(expr);
-        let weight = follow(g, &format!("expression/{expr}"), &path, target, &gain);
-        g.output(&out_id(&path), &weight, out(path));
-    }
+    let set = g.node(
+        "expression/set",
+        "spawn",
+        json!({
+            "function": set_expression::ids::set_expression::FUNCTION.to_string(),
+            "record_keys": [
+                set_expression::ids::set_expression::EXPRESSION.to_string(),
+                set_expression::ids::set_expression::VALENCE.to_string(),
+                set_expression::ids::set_expression::AROUSAL.to_string(),
+            ],
+            "spawn_initial": true,
+        }),
+    );
+    g.edge(&name, &set, "args_0");
+    g.edge(&valence, &set, "args_1");
+    g.edge(&arousal, &set, "args_2");
 
     // --- Gaze: target vec3 → per-eye positions with vergence ---------------
     // The resting target sits far ahead so the unverged eyes read straight.
@@ -451,7 +459,11 @@ fn build(rig_prefix: &str) -> (String, Json) {
     // Asleep is the one commanded close: it inhibits the blink in proportion
     // to its weight, and the lids follow the stronger of the two. The weight
     // is the face's own, read back — whoever set the expression.
-    let asleep = "in/expression/asleep".to_string();
+    let asleep = g.input(
+        "in/expression/asleep",
+        &out(standard::expression_path("asleep")),
+        json!(0.0),
+    );
     let open_share = g.sub("blink/open_share", &one, &asleep);
     let idle = g.mul("blink/idle", &pulse, &open_share);
     let lid = g.max("blink/lid", &idle, &asleep);
@@ -535,10 +547,9 @@ mod tests {
             .filter(|n| n["type"] == "output")
             .filter_map(|n| n["params"]["path"].as_str())
             .collect();
-        for expr in ROS4HRI_EXPRESSION_NAMES {
-            let path = format!("rig/test_face/standard/vizij/expression/{expr}");
-            assert!(paths.contains(&path.as_str()), "missing {path}");
-        }
+        // The expression is the set_expression runs': the mapping spawns
+        // them, and writes none of its weights.
+        assert!(!paths.iter().any(|p| p.contains("/expression/")));
         // Visemes are not the profile's: ROS4HRI has no viseme channel, and the
         // face's lipsync is the viseme players' (the play_viseme and say skills).
         assert!(!paths.iter().any(|p| p.contains("/viseme/")));
@@ -557,8 +568,8 @@ mod tests {
     /// controls; the speech channel runs the other way, reading the face's
     /// speech state (per face, under the rig prefix) and writing the
     /// device-scoped ROS4HRI speech keys — and nothing else crosses over but
-    /// the expression's own weights, which its smoothing reads back, and the
-    /// step's duration.
+    /// the face's `asleep` weight, which inhibits the blink, and the step's
+    /// duration.
     #[test]
     fn source_reads_ros4hri_keys_and_relays_the_speech_state() {
         let spec = spec();
@@ -566,13 +577,9 @@ mod tests {
             format!("rig/test_face/{}", standard::SPEECH),
             format!("rig/test_face/{}", standard::VISEME),
             "arora/dt".to_string(),
+            format!("rig/test_face/{}", standard::expression_path("asleep")),
         ]
         .into_iter()
-        .chain(
-            ROS4HRI_EXPRESSION_NAMES
-                .iter()
-                .map(|expr| format!("rig/test_face/{}", standard::expression_path(expr))),
-        )
         .collect();
         for node in spec["nodes"].as_array().unwrap() {
             let path = node["params"]["path"].as_str();
@@ -622,16 +629,7 @@ mod tests {
     #[test]
     fn the_viseme_channel_spawns_play_viseme() {
         let spec = spec();
-        let spawn = spec["nodes"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|n| n["type"] == "spawn")
-            .expect("the mapping holds a spawn node");
-        assert_eq!(
-            spawn["params"]["function"],
-            play_viseme::ids::play_viseme::FUNCTION.to_string()
-        );
+        let spawn = spawn_of(&spec, play_viseme::ids::play_viseme::FUNCTION);
         assert_eq!(
             spawn["params"]["record_keys"],
             json!([
@@ -653,6 +651,55 @@ mod tests {
             .find(|n| n["id"] == when["from"]["node_id"])
             .unwrap();
         assert_eq!(source["params"]["path"], VISEME_TIME_KEY);
+    }
+
+    /// The spawn node of `function`.
+    fn spawn_of(spec: &Json, function: uuid::Uuid) -> Json {
+        spec["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["type"] == "spawn" && n["params"]["function"] == function.to_string())
+            .unwrap_or_else(|| panic!("the mapping spawns {function}"))
+            .clone()
+    }
+
+    /// The expression channel writes nothing itself: it spawns
+    /// set_expression with the three expression keys, by the contract's
+    /// parameter ids — on every change, and once as loaded.
+    #[test]
+    fn the_expression_channel_spawns_set_expression() {
+        use set_expression::ids::set_expression as ids;
+        let spec = spec();
+        let spawn = spawn_of(&spec, ids::FUNCTION);
+        assert_eq!(
+            spawn["params"]["record_keys"],
+            json!([
+                ids::EXPRESSION.to_string(),
+                ids::VALENCE.to_string(),
+                ids::AROUSAL.to_string(),
+            ])
+        );
+        assert_eq!(spawn["params"]["spawn_initial"], true);
+        for (slot, key) in [
+            ("args_0", EXPRESSION_NAME_KEY),
+            ("args_1", EXPRESSION_VALENCE_KEY),
+            ("args_2", EXPRESSION_AROUSAL_KEY),
+        ] {
+            let edge = spec["edges"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|e| e["to"]["node_id"] == spawn["id"] && e["to"]["input"] == slot)
+                .unwrap_or_else(|| panic!("{slot} is wired"));
+            let source = spec["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|n| n["id"] == edge["from"]["node_id"])
+                .unwrap();
+            assert_eq!(source["params"]["path"], key, "{slot}");
+        }
     }
 
     #[test]

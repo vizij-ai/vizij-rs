@@ -41,7 +41,10 @@ at a time, and a new run of any skill of the domain halts the live ones first
 run continues from where the face is, so the handover is a crossfade, never
 a snap.
 
-- **The expression**: `set_expression` and `set_facial_action_units`.
+- **The expression**: `set_expression` and `set_facial_action_units`. The
+  ROS4HRI mapping's expression keys are a third path to `set_expression`
+  (the mapping spawns a run of it on each change), so a key write takes the
+  face over from either setter, and either takes it back.
 - **The lips**: `play_viseme`, `set_viseme` and `play_visemes`. A viseme
   streamed into the ROS4HRI mapping plays through `play_viseme`, so it takes
   the lips over from any of them.
@@ -93,12 +96,18 @@ lids, eye closure, lip corners, width and sneers onto its rig (see
 other shipped adaptations map none of the muscle tier, so on those faces only
 AU 26, through the de-facto jaw, moves the face.
 
-**The ROS4HRI mapping's expression channel** writes the same weights from the
-`standard/ros4hri/expression/*` keys. It runs in the face's graph, before the
-runs, so a live setter run writes last and owns the face; once the run is
-halted, the mapping takes the expression back from where the run left it (its
-smoothers read the face's weights back too). The mapping's blink reads the
-face's own `asleep` weight, so `asleep` closes the lids whoever sets it.
+**The ROS4HRI mapping's expression channel** commands `set_expression` from
+the `standard/ros4hri/expression/*` keys: a spawn node with the three keys as
+its arguments spawns a run on every change, and once when the mapping is
+loaded, so the face boots at what the keys hold at rest — neutral. The
+mapping writes no expression weight itself, so a run always owns the face's
+expression while the mapping is composed: the latest command, whether a key
+write, a `set_expression` call or a `set_facial_action_units` call. A halted
+setter run leaves the face where it was until the next command. The face
+standard's expression and muscle-tier keys stay free inputs, but on a device
+composing the mapping a setter run writes them every tick, so they are
+commanded through the setters. The mapping's blink reads the face's own
+`asleep` weight, so `asleep` closes the lids whoever sets it.
 
 ## The viseme players
 

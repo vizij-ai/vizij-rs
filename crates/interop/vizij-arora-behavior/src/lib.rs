@@ -491,6 +491,15 @@ impl ProcessingGraph {
                 }
                 fragment_graft(fragment, task, &prefix, &call)?
             }
+            // A call no fragment implements is dispatched to a module: its
+            // own, or the one its function is routed to. With neither it
+            // could never run — its node would fail every evaluation, and the
+            // whole graph with it — so it is refused here.
+            None if call.module_id.is_none() && !self.function_modules.contains_key(&call.id) => {
+                return Err(BehaviorError {
+                    message: format!("no fragment or module implements function {}", call.id),
+                });
+            }
             None => wrapper_graft(task, &prefix, &call)?,
         };
         let owned_keys = if owned {
@@ -2060,6 +2069,41 @@ mod tests {
         graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
         assert_eq!(vizij_nodes(&graph), nodes_before);
         assert_eq!(bridge.calls.len(), 2, "an ended run is never invoked again");
+    }
+
+    /// A run of a function no fragment and no module implements is refused
+    /// at spawn, whoever asks: a spawn node's request starts nothing and the
+    /// graph keeps evaluating, its other writes landing.
+    #[test]
+    fn a_run_nothing_implements_is_refused() {
+        let unknown = Uuid::from_u128(0x0dd);
+        assert!(shared_writers()
+            .spawn(run_of(unknown), RunPolicy::Concurrent)
+            .is_err());
+
+        let behavior = parse_spec(
+            &serde_json::json!({
+                "nodes": [
+                    { "id": "v", "type": "constant", "params": { "value": 1.0 } },
+                    { "id": "out", "type": "output", "params": { "path": "shared/x" } },
+                    { "id": "spawn", "type": "spawn",
+                      "params": { "function": unknown.to_string(), "spawn_initial": true } },
+                ],
+                "edges": [
+                    { "from": { "node_id": "v" }, "to": { "node_id": "out", "input": "in" } },
+                ],
+            })
+            .to_string(),
+        )
+        .expect("the spec parses");
+        let store = SimpleDataStore::new();
+        let mut graph = ProcessingGraph::from_spec(behavior).expect("from_spec");
+        let mut bridge = RunBridge::new(Vec::new());
+        for _ in 0..3 {
+            graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        }
+        assert!(graph.runs.is_empty(), "nothing started");
+        assert_eq!(read(&store, "shared/x"), Some(float(1.0)));
     }
 
     /// SPAWN grafts a run as graph structure: the fragment is visible through
