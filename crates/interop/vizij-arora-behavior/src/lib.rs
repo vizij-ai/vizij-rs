@@ -195,10 +195,11 @@ pub struct TaskFragment {
     pub(crate) spec: GraphSpec,
     /// The function's parameters: id → the placeholder input name each feeds.
     parameters: HashMap<Uuid, String>,
-    /// Whether a new run of the function takes over from the one before it:
-    /// spawning halts every live run of the same function first, so the
-    /// newest run is the only one writing (a viseme player's lips).
-    exclusive: bool,
+    /// Which live runs a new run of the function takes over from: spawning
+    /// halts every live run of its domain first, so the newest run is the
+    /// only one writing (a viseme player's lips). `None` for a function whose
+    /// runs coexist.
+    exclusive: Option<Exclusive>,
     /// The function the fragment implements, named and signed, when no
     /// module implements it: the interpreter describes it, and the device
     /// lists it under the interpreter module.
@@ -218,7 +219,7 @@ impl TaskFragment {
         Ok(Self {
             spec,
             parameters,
-            exclusive: false,
+            exclusive: None,
             description: None,
         })
     }
@@ -239,7 +240,18 @@ impl TaskFragment {
     /// preempted), so the newest run alone writes — for a player whose
     /// writes must not compete with an earlier call's.
     pub fn exclusive(mut self) -> Self {
-        self.exclusive = true;
+        self.exclusive = Some(Exclusive::Own);
+        self
+    }
+
+    /// Make new runs of the function take over from every live run in
+    /// `domain`: spawning one halts each live run of a function registered
+    /// in the same domain first, its own included — for functions that
+    /// command one part of the face in different ways (the lips' players,
+    /// the expression's setters), where the latest command wins whichever
+    /// function it calls.
+    pub fn exclusive_in(mut self, domain: &str) -> Self {
+        self.exclusive = Some(Exclusive::Domain(domain.to_string()));
         self
     }
 
@@ -257,6 +269,15 @@ impl TaskFragment {
         vizij_arora_host::standard::prefix_controls(&mut spec, rig_prefix);
         Self::parse(&spec.to_string(), parameters)
     }
+}
+
+/// The domain a function's runs are exclusive in.
+#[derive(Clone)]
+enum Exclusive {
+    /// The function's own runs.
+    Own,
+    /// Every run of the functions registered in the named domain.
+    Domain(String),
 }
 
 /// A Vizij node graph as an Arora behavior interpreter.
@@ -401,6 +422,16 @@ impl ProcessingGraph {
         ));
     }
 
+    /// The exclusivity domain of `function`'s runs, if its fragment declares
+    /// one: the function itself for [`TaskFragment::exclusive`], the named
+    /// domain for [`TaskFragment::exclusive_in`].
+    fn domain_of(&self, function: Uuid) -> Option<String> {
+        match self.fragments.get(&function)?.exclusive.as_ref()? {
+            Exclusive::Own => Some(function.to_string()),
+            Exclusive::Domain(domain) => Some(format!("domain:{domain}")),
+        }
+    }
+
     /// Register the skill fragment SPAWN grafts for `function` — asset
     /// content implementing the method, in place of the generic module-call
     /// wrapper.
@@ -444,15 +475,15 @@ impl ProcessingGraph {
 
         let (diff, update) = match self.fragments.get(&call.id) {
             Some(fragment) => {
-                // An exclusive function's live runs yield to the new one:
-                // halted on the next tick, which prunes them with their
-                // terminal status written — the run that takes over is then
-                // the only writer.
-                if fragment.exclusive {
+                // The live runs of an exclusive function's domain yield to
+                // the new one: halted on the next tick, which prunes them
+                // with their terminal status written — the run that takes
+                // over is then the only writer.
+                if let Some(domain) = self.domain_of(call.id) {
                     let live: Vec<TaskId> = self
                         .runs
                         .iter()
-                        .filter(|(_, run)| run.function == call.id)
+                        .filter(|(_, run)| self.domain_of(run.function).as_ref() == Some(&domain))
                         .map(|(id, _)| *id)
                         .collect();
                     self.pending_halts.extend(live);
@@ -1753,6 +1784,39 @@ mod tests {
         // With the early run gone, the late one still writes last.
         graph.halt(early.id).unwrap();
         assert_eq!(tick(&mut graph, &mut bridge), Some(float(3.0)));
+    }
+
+    /// Functions exclusive in one domain take over from each other: a run of
+    /// either halts the live runs of both, which end preempted, and a
+    /// function outside the domain keeps its runs.
+    #[test]
+    fn a_run_takes_over_from_its_domain_across_functions() {
+        const OUTSIDE: Uuid = Uuid::from_u128(0x0975);
+        let store = SimpleDataStore::new();
+        let mut bridge = RunBridge::new(Vec::new());
+        let mut graph = shared_writers();
+        graph.set_task_fragment(EARLY, writer_fragment(2.0).exclusive_in("face"));
+        graph.set_task_fragment(LATE, writer_fragment(3.0).exclusive_in("face"));
+        graph.set_task_fragment(OUTSIDE, writer_fragment(4.0));
+        let status = |handle: &TaskHandle| read_key(&store, &handle.status);
+
+        let outside = graph.spawn(run_of(OUTSIDE), RunPolicy::Concurrent).unwrap();
+        let early = graph.spawn(run_of(EARLY), RunPolicy::Concurrent).unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(status(&early), Some(task::running()));
+
+        let late = graph.spawn(run_of(LATE), RunPolicy::Concurrent).unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(status(&early), Some(task::failure()), "preempted");
+        assert_eq!(status(&late), Some(task::running()));
+        assert_eq!(status(&outside), Some(task::running()));
+
+        let again = graph.spawn(run_of(EARLY), RunPolicy::Concurrent).unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(status(&late), Some(task::failure()), "preempted");
+        assert_eq!(status(&again), Some(task::running()));
+        assert_eq!(status(&outside), Some(task::running()));
+        assert_eq!(read(&store, "shared/x"), Some(float(2.0)));
     }
 
     /// The order a plan follows and what it binds, in comparable form.
