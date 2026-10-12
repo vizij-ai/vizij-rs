@@ -12,6 +12,15 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Added
 
+- Under `--studio` a target is taken in either of two forms: as a field of
+  `<id>/target` — `<id>/target.position`, `<id>/target.velocity` — or as
+  Studio writes it today, `<id>.target_position`, `<id>.target_velocity`.
+  Both are listed as open `f64` inputs — a position resting at the
+  animatable's default, a velocity at 0 — and the device keeps them in
+  agreement: a write in either form lands in both,
+  so the latest write wins; an update carrying both forms of one target
+  takes the `<id>/target.position` form's value. `<id>.studio_value` stays
+  an input that drives nothing, until Studio no longer sends it.
 - A ROS4HRI viseme stream plays each viseme for its `duration`, and a
   repeated shape at a new `time` plays again, from the `time` and `duration`
   arora-bridge-ros2 10.1's ROS4HRI preset lands with each viseme. The ROS 2
@@ -109,6 +118,9 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- `face::builder_for` and `face::builder_with_guests` load the rest module
+  themselves, over the device's store, so `reset_keys` naming either form of
+  a Studio target rests both; a caller no longer adds it.
 - The browser module composes the built-in ROS4HRI mapping when a page asks
   for it: `loadVizij` and `composeVizij` take `ros4hri`, default `false`, and
   a page's face speaks the vizij standard (`standard/vizij/*`). With the

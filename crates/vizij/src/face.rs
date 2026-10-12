@@ -17,7 +17,7 @@ use vizij_arora_store::BlackboardStore;
 
 use crate::view::meta::FaceMeta;
 
-use crate::modules::animation;
+use crate::modules::{animation, rest};
 
 /// Builds this device's speech provider — the host module behind the say
 /// skill's hosted `say` call, one per device generation: the cloud provider
@@ -49,9 +49,9 @@ pub struct FaceConfig {
     /// nothing on the ROS4HRI names.
     pub ros4hri: bool,
     /// Serve Semio Studio's keys: compose the Studio-key profile
-    /// ([`crate::studio`]), so Studio's `<id>.target_position` writes drive
-    /// the face's animatables and their `<id>.position` reports back. The
-    /// binary sets it with `--studio`.
+    /// ([`crate::studio`]), so Studio's targets — `<id>/target.position` or
+    /// `<id>.target_position` — drive the face's animatables and their
+    /// `<id>.position` reports back. The binary sets it with `--studio`.
     #[cfg(feature = "studio")]
     pub studio: bool,
     /// The speech provider, built per generation; `None` for a device that
@@ -346,9 +346,11 @@ pub type GuestModule = (arora_types::module::low::Header, Vec<u8>);
 
 /// The device builder over the Vizij seams: the composed graph as the behavior,
 /// with the animation module loaded so the composed animation source's
-/// `ExternalFunction` nodes dispatch and its transport is callable, and
-/// `speech` as the say skill's provider when there is one. `None` (logged)
-/// when the spec does not encode.
+/// `ExternalFunction` nodes dispatch and its transport is callable, the rest
+/// module over the device's store, and `speech` as the say skill's provider
+/// when there is one. The device's store is `store` keeping the forms of each
+/// Studio target the spec reads in agreement (`studio::TargetForms`). `None`
+/// (logged) when the spec does not encode.
 pub fn builder_for(
     spec: &str,
     rig: RigHal,
@@ -371,6 +373,14 @@ pub fn builder_with_guests(
     guests: Vec<GuestModule>,
 ) -> Option<arora::AroraBuilder> {
     let rig_prefix = rig_prefix_of(spec);
+    // Studio's targets land in both of their forms (`studio::TargetForms`).
+    #[cfg(feature = "studio")]
+    let store = crate::studio::TargetForms::over(
+        Box::new(store),
+        &serde_json::from_str(spec).unwrap_or_default(),
+    );
+    #[cfg(not(feature = "studio"))]
+    let store: Box<dyn DataStore> = Box::new(store);
     let spec = match parse_spec(spec) {
         Ok(spec) => spec,
         Err(e) => {
@@ -421,7 +431,8 @@ pub fn builder_with_guests(
     );
     let builder = arora::Arora::builder()
         .with_hal(Box::new(rig))
-        .with_data_store(Box::new(store))
+        .with_host_module(rest::host_module(store.clone_box()))
+        .with_data_store(store)
         .with_behavior_interpreter(Box::new(graph))
         .with_host_module(animation::host_module());
     // The speech provider: the `say` behind the say skill (poll-on-tick,

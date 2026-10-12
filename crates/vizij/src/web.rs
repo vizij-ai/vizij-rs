@@ -45,7 +45,6 @@ use vizij_arora_store::BlackboardStore;
 use wasm_bindgen::prelude::*;
 
 use crate::face::{self, FaceConfig, LoadedFace};
-use crate::modules::rest;
 use crate::view::hold::HoldTarget;
 use crate::view::meta::FaceMeta;
 use crate::view::{
@@ -239,7 +238,6 @@ pub fn load_vizij(
     )
     .ok_or_else(|| JsValue::from_str("the composed graph does not encode (see the console)"))?;
     let mut arora = builder
-        .with_host_module(rest::host_module(Box::new(store.clone())))
         .build()
         .map_err(|e| JsValue::from_str(&format!("arora build failed: {e:?}")))?;
     if loads_animations(options_json.as_deref()) {
@@ -623,7 +621,6 @@ impl VizijRuntime {
             face::builder_with_guests(&spec, RigHal::new(), store.clone(), &[], None, guests)
                 .ok_or_else(|| JsValue::from_str("the graph does not encode (see the console)"))?;
         let arora = builder
-            .with_host_module(rest::host_module(Box::new(store.clone())))
             .build()
             .map_err(|e| JsValue::from_str(&format!("arora build failed: {e:?}")))?;
         let caller = arora.caller();

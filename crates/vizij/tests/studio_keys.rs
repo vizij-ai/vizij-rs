@@ -3,14 +3,17 @@
 //! entity — every key it sends at once — and lands each target under the
 //! animatable id the view indexes, a compound animatable's components joined,
 //! with Studio's feedback keys reporting back; an animatable the face's rig
-//! drives takes Studio's keys and stays the rig's. The update goes through the
-//! open local bridge, the same inbound path as the Studio bridge's: one
-//! that names a key the device never opened is refused whole.
+//! drives takes Studio's keys and stays the rig's. A target is taken in
+//! either form, `<id>/target.position` or `<id>.target_position`, the first
+//! when an update carries both. The update goes through the open local
+//! bridge, the same inbound path as the Studio bridge's: one that names a
+//! key the device never opened is refused whole.
 
 #![cfg(feature = "studio")]
 
 mod common;
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
@@ -18,8 +21,8 @@ use serde_json::{json, Value as Json};
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 use vizij::face::{FaceConfig, ProgramSelect};
-use vizij::native::{start, BridgeConfig, Mode};
-use vizij_api_core::value::{as_float, as_vector};
+use vizij::native::{start, BridgeConfig, Mode, Runtime};
+use vizij_api_core::value::{as_float, as_vector, Value};
 
 use common::studio_face_glb;
 
@@ -57,11 +60,24 @@ async fn request(socket: &mut Socket, message: Json, response_type: &str) -> Jso
     }
 }
 
-/// Studio's update for one entity: a number's target with the two keys it
-/// sends beside it, another number's, and a colour's targets per component.
+fn number(value: &Json) -> Option<f64> {
+    value.get("f64").or_else(|| value.get("f32"))?.as_f64()
+}
+
+/// A write of `values`, each a number, as one update.
+fn write_values(values: &[(String, f64)]) -> Json {
+    let values: serde_json::Map<String, Json> = values
+        .iter()
+        .map(|(key, value)| (key.clone(), json!({ "f64": value })))
+        .collect();
+    json!({ "type": "write_values", "values": values })
+}
+
+/// Studio's update for one entity, as Studio writes it today: a number's
+/// target with the legacy value and the velocity beside it, another
+/// number's with the legacy value, and a colour's targets per component.
 fn studio_update(x: Uuid, y: Uuid, color: Uuid) -> Json {
-    let mut values = serde_json::Map::new();
-    for (key, value) in [
+    write_values(&[
         (format!("{x}.target_position"), 0.25),
         (format!("{x}.studio_value"), 0.25),
         (format!("{x}.target_velocity"), 0.0),
@@ -70,14 +86,31 @@ fn studio_update(x: Uuid, y: Uuid, color: Uuid) -> Json {
         (format!("{color}.r.target_position"), 1.0),
         (format!("{color}.g.target_position"), 0.0),
         (format!("{color}.b.target_position"), 0.5),
-    ] {
-        values.insert(key, json!({ "f64": value }));
-    }
-    json!({ "type": "write_values", "values": values })
+    ])
 }
 
-#[tokio::test]
-async fn studio_s_update_drives_a_studio_exported_face() {
+/// The same update with each target as a field of `<id>/target`.
+fn slash_update(x: Uuid, y: Uuid, color: Uuid) -> Json {
+    write_values(&[
+        (format!("{x}/target.position"), 0.25),
+        (format!("{x}/target.velocity"), 0.0),
+        (format!("{y}/target.position"), -0.5),
+        (format!("{color}.r/target.position"), 1.0),
+        (format!("{color}.g/target.position"), 0.0),
+        (format!("{color}.b/target.position"), 0.5),
+    ])
+}
+
+/// A Studio-exported face's animatables: two numbers, a yaw, a colour.
+struct Face {
+    x: Uuid,
+    y: Uuid,
+    color: Uuid,
+}
+
+/// A device serving a Studio-exported face's keys, whose rig drives `y`,
+/// and a client on its open local bridge.
+async fn serve() -> (Runtime, Socket, Face) {
     let (x, y, yaw, color) = (
         Uuid::new_v4(),
         Uuid::new_v4(),
@@ -122,67 +155,92 @@ async fn studio_s_update_drives_a_studio_exported_face() {
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    let mut socket = socket.expect("the local bridge listens within 10 s");
+    let socket = socket.expect("the local bridge listens within 10 s");
+    (device, socket, Face { x, y, color })
+}
 
-    let number = |value: &Json| value.get("f64").or_else(|| value.get("f32"))?.as_f64();
-
-    // Studio's keys are open, numbers in the units of the feature they
-    // drive: no `[0, 1]` range on a translation.
-    let keys = request(&mut socket, json!({"type": "list_keys"}), "list_keys_resp").await;
-    let keys = keys["keys"].as_array().expect("keys");
-    let target = keys
-        .iter()
-        .find(|key| key["path"] == format!("{x}.target_position"))
-        .map(|key| key["__meta"].clone())
-        .expect("the target is listed");
-    assert_eq!(target["editable"], true, "{target}");
-    assert_eq!(target["ty"], "f64", "{target}");
-    assert!(
-        target.get("min").is_none() && target.get("max").is_none(),
-        "{target}"
-    );
-    assert_eq!(number(&target["default"]), Some(0.0), "{target}");
-
-    // Until Studio writes, the face holds its RobotData defaults: the
-    // colour rests at the components' defaults, joined.
-    let mut rested = None;
+/// The view's keys, read off the rig the view draws from once `landed`
+/// holds of them, within 2 s.
+async fn pose_once(
+    device: &Runtime,
+    landed: impl Fn(&HashMap<String, Value>) -> bool,
+) -> Option<HashMap<String, Value>> {
     for _ in 0..100 {
-        let current = device
-            .rig
-            .pose()
-            .into_iter()
-            .find(|(path, _)| path.to_string() == color.to_string());
-        if let Some((_, value)) = current {
-            rested = as_vector(&value).map(<[f32]>::to_vec);
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-    assert_eq!(rested, Some(vec![0.0, 0.0, 0.0]));
-
-    let written = request(&mut socket, studio_update(x, y, color), "write_values_resp").await;
-    assert_eq!(written["success"], true, "{written}");
-
-    // The view's keys: the bare animatable ids, read off the rig the view
-    // draws from.
-    let mut pose = None;
-    for _ in 0..100 {
-        let current: std::collections::HashMap<String, _> = device
+        let current: HashMap<String, Value> = device
             .rig
             .pose()
             .into_iter()
             .map(|(path, value)| (path.to_string(), value))
             .collect();
-        let landed = current.get(&x.to_string()).and_then(as_float) == Some(0.25)
-            && current.get(&y.to_string()).and_then(as_float) == Some(0.75)
-            && current.get(&color.to_string()).and_then(as_vector) == Some(&[1.0, 0.0, 0.5][..]);
-        if landed {
-            pose = Some(current);
-            break;
+        if landed(&current) {
+            return Some(current);
         }
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
-    assert!(pose.is_some(), "Studio's targets never reached the rig");
+    None
+}
+
+/// Whether `pose` holds the targets of [`studio_update`] and
+/// [`slash_update`], `y` at the rig's value.
+fn update_landed(face: &Face) -> impl Fn(&HashMap<String, Value>) -> bool + '_ {
+    |pose| {
+        pose.get(&face.x.to_string()).and_then(as_float) == Some(0.25)
+            && pose.get(&face.y.to_string()).and_then(as_float) == Some(0.75)
+            && pose.get(&face.color.to_string()).and_then(as_vector) == Some(&[1.0, 0.0, 0.5][..])
+    }
+}
+
+/// Every form of Studio's keys is open, a number in the units of the
+/// feature it drives: no `[0, 1]` range on a translation.
+#[tokio::test]
+async fn the_device_lists_every_form_of_studio_s_keys_as_inputs() {
+    let (_device, mut socket, Face { x, y, color }) = serve().await;
+    let keys = request(&mut socket, json!({"type": "list_keys"}), "list_keys_resp").await;
+    let keys = keys["keys"].as_array().expect("keys");
+    let mut forms = Vec::new();
+    for key in [x.to_string(), y.to_string(), format!("{color}.r")] {
+        forms.extend([
+            format!("{key}/target.position"),
+            format!("{key}.target_position"),
+            format!("{key}.studio_value"),
+            format!("{key}/target.velocity"),
+            format!("{key}.target_velocity"),
+        ]);
+    }
+    for form in forms {
+        let meta = keys
+            .iter()
+            .find(|key| key["path"] == form.as_str())
+            .map(|key| key["__meta"].clone())
+            .unwrap_or_else(|| panic!("{form} is listed"));
+        assert_eq!(meta["editable"], true, "{form}: {meta}");
+        assert_eq!(meta["ty"], "f64", "{form}: {meta}");
+        assert!(
+            meta.get("min").is_none() && meta.get("max").is_none(),
+            "{form}: {meta}"
+        );
+        assert_eq!(number(&meta["default"]), Some(0.0), "{form}: {meta}");
+    }
+}
+
+#[tokio::test]
+async fn studio_s_update_drives_a_studio_exported_face() {
+    let (device, mut socket, face) = serve().await;
+    let Face { x, y, color } = face;
+
+    // Until Studio writes, the face holds its RobotData defaults: the
+    // colour rests at the components' defaults, joined.
+    let rested = pose_once(&device, |pose| pose.contains_key(&color.to_string()))
+        .await
+        .and_then(|pose| as_vector(&pose[&color.to_string()]).map(<[f32]>::to_vec));
+    assert_eq!(rested, Some(vec![0.0, 0.0, 0.0]));
+
+    let written = request(&mut socket, studio_update(x, y, color), "write_values_resp").await;
+    assert_eq!(written["success"], true, "{written}");
+    assert!(
+        pose_once(&device, update_landed(&face)).await.is_some(),
+        "Studio's targets never reached the rig"
+    );
     // The rig keeps `y` past the update, and no feedback claims Studio moved it.
     tokio::time::sleep(Duration::from_millis(200)).await;
     let held = device
@@ -193,21 +251,24 @@ async fn studio_s_update_drives_a_studio_exported_face() {
         .and_then(|(_, value)| as_float(&value));
     assert_eq!(held, Some(0.75));
 
-    // Studio's feedback reads back on the wire.
-    let feedback = [
+    // Studio's feedback reads back on the wire, and the target reads the
+    // same in both forms.
+    let read_keys = [
         format!("{x}.position"),
         format!("{color}.b.position"),
         format!("{y}.position"),
+        format!("{x}/target.position"),
     ];
     let read = request(
         &mut socket,
-        json!({"type": "read_values", "keys": feedback}),
+        json!({"type": "read_values", "keys": read_keys}),
         "read_values_resp",
     )
     .await;
-    assert_eq!(number(&read["values"][&feedback[0]]), Some(0.25), "{read}");
-    assert_eq!(number(&read["values"][&feedback[1]]), Some(0.5), "{read}");
-    assert_eq!(number(&read["values"][&feedback[2]]), None, "{read}");
+    assert_eq!(number(&read["values"][&read_keys[0]]), Some(0.25), "{read}");
+    assert_eq!(number(&read["values"][&read_keys[1]]), Some(0.5), "{read}");
+    assert_eq!(number(&read["values"][&read_keys[2]]), None, "{read}");
+    assert_eq!(number(&read["values"][&read_keys[3]]), Some(0.25), "{read}");
 
     // An update naming a key the device never opened is refused whole, by
     // name: a target for an animatable the face does not have.
@@ -215,4 +276,63 @@ async fn studio_s_update_drives_a_studio_exported_face() {
     stray["values"][format!("{}.target_position", Uuid::new_v4())] = json!({ "f64": 1.0 });
     let refused = request(&mut socket, stray, "write_values_resp").await;
     assert_eq!(refused["success"], false, "{refused}");
+}
+
+/// The same update with each target as a field of `<id>/target` drives the
+/// face the same way.
+#[tokio::test]
+async fn an_update_in_the_slash_form_drives_the_face() {
+    let (device, mut socket, face) = serve().await;
+    let Face { x, y, color } = face;
+    let written = request(&mut socket, slash_update(x, y, color), "write_values_resp").await;
+    assert_eq!(written["success"], true, "{written}");
+    assert!(
+        pose_once(&device, update_landed(&face)).await.is_some(),
+        "the targets never reached the rig"
+    );
+    let read_keys = [format!("{x}.position"), format!("{x}.target_position")];
+    let read = request(
+        &mut socket,
+        json!({"type": "read_values", "keys": read_keys}),
+        "read_values_resp",
+    )
+    .await;
+    assert_eq!(number(&read["values"][&read_keys[0]]), Some(0.25), "{read}");
+    assert_eq!(number(&read["values"][&read_keys[1]]), Some(0.25), "{read}");
+}
+
+/// An update carrying a target in both forms lands the
+/// `<id>/target.position` form's value; a later update in either form
+/// moves it again.
+#[tokio::test]
+async fn an_update_carrying_both_forms_takes_the_slash_form() {
+    let (device, mut socket, Face { x, .. }) = serve().await;
+    let at = |value: f32| {
+        move |pose: &HashMap<String, Value>| {
+            pose.get(&x.to_string()).and_then(as_float) == Some(value)
+        }
+    };
+    for (slash, underscored, landed) in [
+        (Some(0.125), Some(0.875), 0.125),
+        (None, Some(0.375), 0.375),
+        (Some(0.625), None, 0.625),
+    ] {
+        let mut values = Vec::new();
+        values.extend(slash.map(|value| (format!("{x}/target.position"), value)));
+        values.extend(underscored.map(|value| (format!("{x}.target_position"), value)));
+        let written = request(&mut socket, write_values(&values), "write_values_resp").await;
+        assert_eq!(written["success"], true, "{written}");
+        assert!(
+            pose_once(&device, at(landed as f32)).await.is_some(),
+            "{values:?} lands {landed}"
+        );
+        let feedback = format!("{x}.position");
+        let read = request(
+            &mut socket,
+            json!({"type": "read_values", "keys": [&feedback]}),
+            "read_values_resp",
+        )
+        .await;
+        assert_eq!(number(&read["values"][&feedback]), Some(landed), "{read}");
+    }
 }
