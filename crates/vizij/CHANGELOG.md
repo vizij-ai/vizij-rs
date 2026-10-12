@@ -66,6 +66,13 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   animation track channel drives on the Vizij whose glTF JSON document is
   `gltf`, without loading it — one key per channel, resolved through the
   bundle's rig as the loaded Vizij's `moduleAnimation` keys the track.
+- The face skills `set_expression`, `set_facial_action_units`, `set_viseme`
+  and `play_visemes` (see `docs/skills.md`), registered with the device's
+  interpreter, which describes them, so a client calls them by name. Under
+  `--ros2` with the ROS4HRI profile, `/skill/set_expression`,
+  `/skill/set_facial_action_units` and `/skill/set_viseme` are topics whose
+  every message runs the skill, and `/skill/play_visemes` is an action whose
+  feedback is the shape being shown.
 
 ### Changed
 
@@ -117,12 +124,22 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 - The view's cameras cluster no lights — the faces are lit by the ambient
   term alone — so the renderer builds one cluster per view instead of a
   grid each frame: 8 % fewer instructions to render a frame.
-- `--ros2` requires `arora-bridge-ros2` 10.4, whose ROS4HRI preset takes
-  `/closed_captions` and publishes `/diagnostics`.
-
-- `--ros2` requires `arora-bridge-ros2` 10.3, which escapes a key path into
-  valid ROS 2 name tokens: a Studio-exported face's keys, named by UUID, get
-  topics (an id starting with a digit gains a leading `_`).
+- The ROS4HRI mapping's expression keys run `set_expression`, so a key write
+  is one more command in the expression's domain: it takes the face over
+  from a `set_expression` or `set_facial_action_units` run, and a later call
+  of either takes it back. The face boots at neutral from a setter run.
+- While the ROS4HRI mapping is composed, the face standard's expression,
+  muscle-tier and de-facto jaw keys are no inputs: a setter run writes them
+  every step, so the device does not declare them and refuses a remote write
+  to them. The expression is set through the setters or the ROS4HRI keys.
+- A lips command (`play_viseme`, `set_viseme`, `play_visemes`, or a viseme
+  the ROS4HRI stream plays) spawned while `say` speaks shows over it; `say`
+  keeps speaking.
+- `--ros2` requires `arora-bridge-ros2` 11, which escapes a key path into
+  valid ROS 2 name tokens — a Studio-exported face's keys, named by UUID, get
+  topics (an id starting with a digit gains a leading `_`) — whose ROS4HRI
+  preset takes `/closed_captions` and publishes `/diagnostics`, and which
+  serves the face skills on the ROS4HRI profile.
 
 ### Fixed
 
