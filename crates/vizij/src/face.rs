@@ -2062,7 +2062,8 @@ mod tests {
 
     /// set_facial_action_units drives the muscle tier: each listed unit's
     /// controls at its intensity (AU 26 also the de-facto jaw), every other
-    /// control at rest. It takes the face over from a set_expression run,
+    /// control at rest, over the neutral expression. It takes the face over
+    /// from a set_expression run,
     /// which ends preempted, and the face crossfades — the expression fading
     /// out from where it was as the units fade in — and a set_expression run
     /// takes it back the same way.
@@ -2098,7 +2099,11 @@ mod tests {
         settle(&mut arora);
         for name in standard::expression_names() {
             let weight = expression(&arora, name);
-            assert!(weight < 0.01, "{name} = {weight} under the units");
+            let neutral = if name == "neutral" { 1.0 } else { 0.0 };
+            assert!(
+                (weight - neutral).abs() < 0.01,
+                "{name} = {weight} under the units"
+            );
         }
         for (control, intensity) in [
             ("mouth_smile_left", 0.8),
@@ -2440,10 +2445,11 @@ mod tests {
     /// brow, lid and mouth inputs. A set_facial_action_units run holding AU 12
     /// (lip corner puller) and AU 4 (brow lowerer) pulls the mouth's corners
     /// up and wide and the brows down and toward the centre, and the face's
-    /// render follows; the units it does not hold rest. AU 5 (upper lid
-    /// raiser) opens the top lids past their rest. At rest the muscle
-    /// tier leaves the face as the adaptation without it renders it, the
-    /// mapped inputs at the rig's own rest. Needs `VIZIJ_FIXTURES`.
+    /// render follows over Quori's neutral pose, which holds; the units it
+    /// does not hold rest. AU 5 (upper lid raiser) opens the top lids past
+    /// their rest. At rest the muscle tier leaves the face as the adaptation
+    /// without it renders it, the mapped inputs at the rig's own rest. Needs
+    /// `VIZIJ_FIXTURES`.
     #[test]
     fn quori_s_adaptation_maps_the_action_units() {
         let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
@@ -2469,6 +2475,9 @@ mod tests {
         let mut held = adapted_quori(&fixtures);
         spawn(&mut held, &action_units_call(&[12, 4], &[1.0, 1.0]));
         settle(&mut held);
+        // The units move the face from its neutral pose, which holds.
+        let neutral = read_f32(&held, "rig/quori_latest/poses/pose_d_neutral_d.weight");
+        assert!(neutral > 0.95, "Quori's neutral pose holds ({neutral})");
         for (input, expected) in [
             ("mouth/morph/corner_puller", 1.0),
             ("mouth/morph/stretch", 1.0),
@@ -2489,7 +2498,7 @@ mod tests {
             );
         }
         // The render follows: against the same units held at rest, the rig's
-        // outputs move (the setter rests the named expressions either way).
+        // outputs move.
         let mut resting = adapted_quori(&fixtures);
         spawn(&mut resting, &action_units_call(&[12, 4], &[0.0, 0.0]));
         settle(&mut resting);

@@ -425,10 +425,11 @@ impl Message for PlayVisemesFeedback {}
 
 /// The face skills over ROS 2, end to end on the real device (the ROS4HRI
 /// mapping composed, every skill fragment registered): a peer publishes
-/// `/skill/set_facial_action_units` and the muscle tier takes the units;
-/// `/skill/set_expression` then takes the face over, the units resting;
-/// `/skill/play_visemes` plays a timeline, its feedback reporting the
-/// current viseme's code, and succeeds; `/skill/set_viseme` holds a shape.
+/// `/skill/set_facial_action_units` and the muscle tier takes the units over
+/// the neutral expression; `/skill/set_expression` then takes the face over,
+/// the units resting; `/skill/play_visemes` plays a timeline, its feedback
+/// reporting the current viseme's code, and succeeds; `/skill/set_viseme`
+/// holds a shape.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[cfg_attr(
     target_os = "macos",
@@ -546,7 +547,7 @@ async fn the_face_skills_serve_over_ros2() {
             },
             (read(&standard::face_path("mouth_smile_left")) - 0.8).abs() < 0.02
                 && (read(standard::MOUTH_JAW_OPEN) - 0.5).abs() < 0.02
-                && read(&standard::expression_path("neutral")) < 0.02
+                && read(&standard::expression_path("neutral")) > 0.98
         );
 
         command_until!(
