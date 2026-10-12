@@ -4,6 +4,34 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [7.0.0] - 2026-10-12
+
+### Added
+
+- `TaskFragment::exclusive_in(domain)`: spawning a run halts every live run
+  of any function registered in the same domain, its own included — for
+  functions that command one part of the face in different ways, where the
+  latest command wins whichever function it calls. `exclusive()` keeps
+  meaning the function's own runs.
+- The `expression` module: the `set_expression` and
+  `set_facial_action_units` fragments (`set_expression_fragment`,
+  `set_facial_action_units_fragment`, with their parameter maps), exclusive
+  in `expression::EXPRESSION`. No module implements them: the fragments
+  carry the contracts' descriptions, so the interpreter describes them.
+- `viseme::set_viseme_fragment` and `viseme::play_visemes_fragment`.
+  `play_viseme`, `set_viseme` and `play_visemes` are exclusive in
+  `viseme::LIPS`.
+
+### Changed
+
+- **Breaking:** built on vizij-arora-host 8 and vizij-graph-core 2.5. The
+  skill contracts re-exported here are vizij-arora-host 8's types, so they
+  do not unify with those of a crate built on vizij-arora-host 7.
+- `say` is exclusive among its own runs and outside `viseme::LIPS`: a lips
+  command spawned while it speaks writes after it and shows over it, and
+  `say` keeps speaking, its lips back from where the face is once that
+  command ends.
+
 ## [6.0.1] - 2026-10-12
 
 ### Fixed

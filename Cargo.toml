@@ -41,14 +41,16 @@ opt-level = "s"
 lto = true
 codegen-units = 1
 
-# The face-interfaces spike: the arora-sdk worktree serving the face skills
-# over ROS 2. Every crate whose types cross between vizij and the bridge comes
-# from it, so one copy of each is in the graph.
+# The face skills over ROS 2 come from arora-sdk's face-interfaces branch
+# (semio-ai/arora-sdk#344) until its releases are published; then this table
+# goes, and the requirements name the released versions. Every arora crate
+# whose types cross between vizij and the ROS 2 bridge is patched together,
+# so one copy of each is in the graph.
 [patch.crates-io]
-arora-types = { path = "../../arora-sdk-wt/face-interfaces/crates/arora-types" }
-arora-types-derive = { path = "../../arora-sdk-wt/face-interfaces/crates/arora-types-derive" }
-arora-behavior = { path = "../../arora-sdk-wt/face-interfaces/crates/arora-behavior" }
-arora-bridge = { path = "../../arora-sdk-wt/face-interfaces/crates/arora-bridge" }
-arora-behavior-tree-types = { path = "../../arora-sdk-wt/face-interfaces/crates/arora-behavior-tree-types" }
-arora-msgs-ros2 = { path = "../../arora-sdk-wt/face-interfaces/crates/arora-msgs-ros2" }
-arora-bridge-ros2 = { path = "../../arora-sdk-wt/face-interfaces/crates/arora-bridge-ros2" }
+arora-types = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/face-interfaces" }
+arora-types-derive = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/face-interfaces" }
+arora-behavior = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/face-interfaces" }
+arora-bridge = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/face-interfaces" }
+arora-behavior-tree-types = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/face-interfaces" }
+arora-msgs-ros2 = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/face-interfaces" }
+arora-bridge-ros2 = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/face-interfaces" }
