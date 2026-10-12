@@ -90,8 +90,11 @@ expression does. Codes the muscle tier does not express are ignored, and
 lists of mismatched lengths drive nothing. The named expressions hold at
 `neutral` (its weight 1, the others 0): the units move the face from its
 neutral pose, the base its poses are authored over. A face shows what its
-adaptation maps: no shipped adaptation maps the muscle tier, and Quori's rig
-reads only the de-facto jaw, so on Quori only AU 26 moves the face.
+adaptation maps: Quori's reference adaptation maps the brows, lids, eye
+closure, lip corners, width and sneers onto its rig (see
+[Face adaptations](../fixtures/faces/README.md#how-a-sidecar-maps)), and the
+other shipped adaptations map none of the muscle tier, so on those faces only
+AU 26, through the de-facto jaw, moves the face.
 
 **The ROS4HRI mapping's expression channel** commands `set_expression` from
 the `standard/ros4hri/expression/*` keys: a spawn node with the three keys as

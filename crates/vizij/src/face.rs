@@ -2712,8 +2712,9 @@ mod tests {
     /// On Quori, the reference adaptation maps the muscle tier onto the rig's
     /// brow, lid and mouth inputs. AU 12 (lip corner puller) and AU 4 (brow
     /// lowerer) at full intensity pull the mouth's corners up and wide and
-    /// the brows down and toward the centre, and the face's render follows;
-    /// the controls they do not name rest. AU 5 (upper lid raiser) opens the
+    /// the brows down and toward the centre, and the face's render follows
+    /// over Quori's neutral pose, which holds; the controls they do not name
+    /// rest. AU 5 (upper lid raiser) opens the
     /// top lids past their rest. At rest the muscle tier leaves the face as
     /// the adaptation without it renders it, the mapped inputs at the rig's
     /// own rest. A set_facial_action_units run holds the units, as a client
@@ -2752,6 +2753,9 @@ mod tests {
         let untouched = floats(&untouched);
 
         let held = holding(&[12, 4], 1.0);
+        // The units move the face from its neutral pose, which holds.
+        let neutral = read_f32(&held, "rig/quori_latest/poses/pose_d_neutral_d.weight");
+        assert!(neutral > 0.95, "Quori's neutral pose holds ({neutral})");
         for (input, expected) in [
             ("mouth/morph/corner_puller", 1.0),
             ("mouth/morph/stretch", 1.0),
