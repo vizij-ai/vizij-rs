@@ -223,6 +223,27 @@ pub fn flatten_numeric(value: &Value) -> Option<FlatValue> {
                 data,
             })
         }
+        // An integer or f64 array from the store (a call's `Vec<u8>`
+        // argument) is a numeric vector to the graph's arithmetic, as an
+        // integer scalar is a number.
+        VizijKind::Other => match value {
+            Value::ArrayF64(_)
+            | Value::ArrayU8(_)
+            | Value::ArrayU16(_)
+            | Value::ArrayU32(_)
+            | Value::ArrayU64(_)
+            | Value::ArrayI8(_)
+            | Value::ArrayI16(_)
+            | Value::ArrayI32(_)
+            | Value::ArrayI64(_) => {
+                let data = vizij_api_core::coercion::to_vector(value);
+                Some(FlatValue {
+                    layout: ValueLayout::Vector(data.len()),
+                    data,
+                })
+            }
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -254,5 +275,18 @@ pub fn align_flattened(
         Err(a.layout.clone())
     } else {
         Err(b.layout.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_integer_array_flattens_as_a_numeric_vector() {
+        let flat = flatten_numeric(&Value::ArrayU8(vec![4, 26])).expect("numeric");
+        assert_eq!(flat.layout, ValueLayout::Vector(2));
+        assert_eq!(flat.data, [4.0, 26.0]);
+        assert!(flatten_numeric(&Value::ArrayU8(Vec::new())).is_some());
     }
 }
