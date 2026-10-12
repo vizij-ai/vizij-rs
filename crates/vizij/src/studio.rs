@@ -371,16 +371,20 @@ impl TargetForms {
             }
         }
         let mut targets = Targets::default();
-        for (measured, mut forms) in by_measured {
-            if let [what, axis] = measured.get_attributes()[..] {
+        for mut forms in by_measured.into_values() {
+            // A component's `<id>/target.<what>.<axis>` names its number,
+            // which Studio's form spells `<id>.<axis>.target_<what>`.
+            let studio = forms.iter().find_map(|form| {
+                let (id, target) = form.path.rsplit_once("/target.")?;
+                let (what, axis) = target.split_once('.')?;
                 let number = Number {
-                    id: measured.get_entity(),
+                    id,
                     axis: Some(axis),
                 };
-                let studio = number.studio_target(what);
-                if inputs.contains(&studio) {
-                    forms.push(Key::from(studio));
-                }
+                Some(number.studio_target(what))
+            });
+            if let Some(studio) = studio.filter(|studio| inputs.contains(studio)) {
+                forms.push(Key::from(studio));
             }
             if forms.len() < 2 {
                 continue;
@@ -812,6 +816,26 @@ mod tests {
         for form in [&underscore, &slash] {
             let rested = read(arora.store(), form);
             assert_eq!(rested.as_ref().and_then(as_float), Some(0.5), "{form}");
+        }
+    }
+
+    /// A component of an animatable bound to nothing the view draws pairs
+    /// its forms whatever its id spells: a `/` in the id, a `.` in the axis.
+    #[test]
+    fn an_unbound_component_pairs_its_forms_whatever_its_id() {
+        let (mut meta, _, _) = studio_face();
+        meta.unbound = vec!["face/plate.r".to_string(), "u.x.x".to_string()];
+        let spec = vizij_arora_host::compose_sources(&[studio_source(&meta, &HashSet::new())])
+            .expect("compose the profile");
+        let store = TargetForms::over(Box::new(BlackboardStore::new()), &spec);
+        for key in &meta.unbound {
+            let number = Number::of(key);
+            write(&*store, &[(&number.studio_target(POSITION), Some(0.5))]);
+            assert_eq!(
+                read(&*store, &number.target(POSITION)),
+                Some(float(0.5)),
+                "{key}"
+            );
         }
     }
 
