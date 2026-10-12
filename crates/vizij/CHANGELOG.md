@@ -8,6 +8,8 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-12
+
 ### Added
 
 - A ROS4HRI viseme stream plays each viseme for its `duration`, and a
