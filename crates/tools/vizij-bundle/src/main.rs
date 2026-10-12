@@ -171,6 +171,10 @@ fn run_assets(args: &Args) -> Result<Option<ExitCode>> {
                 "look_at" => skills::generate_look_at(),
                 "play_viseme" => skills::generate_play_viseme(),
                 "say" => skills::generate_say(),
+                "set_expression" => skills::generate_set_expression(),
+                "set_facial_action_units" => skills::generate_set_facial_action_units(),
+                "set_viseme" => skills::generate_set_viseme(),
+                "play_visemes" => skills::generate_play_visemes(),
                 _ => bail!("unknown skill {id}"),
             };
             emit(&spec, &args.output)?;

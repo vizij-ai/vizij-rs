@@ -12,18 +12,25 @@
 //! - **Expression** — a non-empty `expression/name` selects the named
 //!   expression at the commanded `arousal` as its intensity; otherwise
 //!   `valence`/`arousal` blend the named weights by proximity to
-//!   each expression's circumplex anchor. Weights are smoothed and written to
-//!   `standard/vizij/expression/<name>` for ROS4HRI's names
-//!   ([`ROS4HRI_EXPRESSION_NAMES`]). The standard's expressions beyond them
-//!   have no ROS4HRI name, so the mapping leaves them to other writers.
+//!   each expression's circumplex anchor ([`expression_targets`]). Weights
+//!   are smoothed and written to `standard/vizij/expression/<name>` for
+//!   ROS4HRI's names ([`ROS4HRI_EXPRESSION_NAMES`]). The standard's
+//!   expressions beyond them have no ROS4HRI name, so the mapping leaves
+//!   them to other writers. This is the face's expression while no
+//!   expression setter runs: a `set_expression` or `set_facial_action_units`
+//!   run, grafted after this graph, writes the same weights last and so
+//!   holds the face while it lives. Each weight's smoother continues from
+//!   the face's own weight, read back from the store, so when the run is
+//!   halted the mapping takes the expression back from where the run left
+//!   it, with no snap.
 //! - **Gaze** — `gaze/target` (vec3, meters, face frame: x forward, y left,
 //!   z up) maps to per-eye positions with vergence, the incumbent ±0.78 rad →
 //!   ±1 normalization, and a center fallback for targets at or behind the
 //!   face plane (x ≤ 0.1).
 //! - **Blink** — an idle generator (≈8 s cycle, deterministically jittered,
 //!   0.2 s parabolic pulse) drives the eyelids; the `asleep` expression
-//!   closes them and inhibits the blink in proportion to its weight. The
-//!   standard's
+//!   — the face's own weight, whoever sets it — closes them and inhibits
+//!   the blink in proportion to its weight. The standard's
 //!   `standard/vizij/blink` is not written: that key is for a caller's
 //!   blinks, which the face layers over these lids.
 //! - **Viseme** — `viseme`, the ROS4HRI code of the lip shape at the audio
@@ -53,8 +60,8 @@
 use serde_json::{json, Value as Json};
 
 use crate::graph_builder::GraphBuilder;
-use crate::skills::{play_viseme, SILENCE_VISEME};
-use crate::standard::{self, ROS4HRI_EXPRESSION_NAMES, VISEME_SHAPES};
+use crate::skills::{follow, play_viseme, smoothing_gain, viseme_shape_of, SILENCE_VISEME};
+use crate::standard::{self, ROS4HRI_EXPRESSION_NAMES};
 
 /// Source id of the composed mapping (node ids get `ros4hri::` prefixes).
 pub const ROS4HRI_SOURCE_ID: &str = "ros4hri";
@@ -131,7 +138,9 @@ pub const EXPRESSION_ANCHORS: [(f64, f64); 25] = [
 ];
 
 /// Smoothing half-life, seconds — ≈200 ms time constant, the incumbent's.
-const HALF_LIFE: f64 = 0.14;
+/// The expression setters' runs smooth at it too, so whichever writes the
+/// face's expression moves it alike.
+pub(crate) const HALF_LIFE: f64 = 0.14;
 /// Circumplex kernel radius: anchors farther than this get zero weight.
 const ANCHOR_RADIUS: f64 = 0.6;
 /// Blink cycle length / pulse width, seconds.
@@ -188,42 +197,32 @@ fn gaze_angle(g: &mut GraphBuilder, prefix: &str, num: &str, den: &str) -> Strin
     g.clamp(&id("angle"), &normalized, -1.0, 1.0)
 }
 
-/// The mapping, section by section. Node ids are hierarchical — `in/…` the
-/// consumed profile, `out/…` the produced one, and `expression/…`,
-/// `gaze/…`, `blink/…`, `viseme/…` the channel that computes each
-/// output — so the asset reads by channel and every node says what it holds.
-fn build(rig_prefix: &str) -> (String, Json) {
-    let g = &mut GraphBuilder::new();
-    let out = |path: String| format!("{rig_prefix}{path}");
-    // Output node ids name the standard control they write, prefix dropped.
-    let out_id = |path: &str| {
-        format!(
-            "out/{}",
-            path.strip_prefix(standard::VIZIJ_PREFIX)
-                .and_then(|p| p.strip_prefix('/'))
-                .unwrap_or(path)
-        )
-    };
-
+/// The expression's target weights for `names` (expressions of the
+/// standard, [`standard::expression_names`]), in their order, from the
+/// `name`, `valence` and `arousal` nodes: a non-empty name selects its
+/// expression alone at the arousal as its intensity — its negative half
+/// (calm) reading as no intensity rather than an inverted pose — and an
+/// empty one blends the ROS4HRI names by proximity of the (valence, arousal)
+/// point to each one's circumplex anchor ([`EXPRESSION_ANCHORS`]), resting
+/// exactly neutral near the origin. A name without an anchor takes no share
+/// of the blend. Nodes under `expression/`.
+pub(crate) fn expression_targets(
+    g: &mut GraphBuilder,
+    names: &[&str],
+    name: &str,
+    valence: &str,
+    arousal: &str,
+) -> Vec<String> {
     let zero = g.constant(0.0);
     let one = g.constant(1.0);
-
-    // --- Expression: a commanded name selects its expression, at the
-    // commanded arousal as its intensity; otherwise valence/arousal blend the
-    // named weights by proximity to each expression's circumplex anchor. ---
-    let name = g.input("in/expression/name", EXPRESSION_NAME_KEY, json!(""));
-    let valence = g.input("in/expression/valence", EXPRESSION_VALENCE_KEY, json!(0.0));
-    let arousal = g.input("in/expression/arousal", EXPRESSION_AROUSAL_KEY, json!(0.0));
-    // A named expression's intensity: the arousal, its negative half (calm)
-    // reading as no intensity rather than an inverted pose.
-    let intensity = g.clamp("expression/intensity", &arousal, 0.0, 1.0);
+    let intensity = g.clamp("expression/intensity", arousal, 0.0, 1.0);
 
     // The commanded affect as a point (valence, arousal) on the circumplex.
     let affect = g.op(
         "expression/affect",
         "join",
         json!({}),
-        &[("operand_0", &valence), ("operand_1", &arousal)],
+        &[("operand_0", valence), ("operand_1", arousal)],
     );
     // Dead zone: near-zero affect rests exactly neutral instead of a blend of
     // every origin-adjacent anchor; commanded affect fades the blend in over
@@ -282,36 +281,79 @@ fn build(rig_prefix: &str) -> (String, Json) {
     let eps = g.constant(1e-6);
     let denominator = g.max("expression/kernel/denominator", &sum, &eps);
 
-    let mut asleep_weight = None;
-    for (expr, kernel) in ROS4HRI_EXPRESSION_NAMES.iter().zip(&kernels) {
-        let id = |step: &str| format!("expression/{expr}/{step}");
-        let share = g.div(&id("share"), kernel, &denominator);
-        let blend = if *expr == "neutral" {
-            // Neutral also absorbs the dead zone's rest share.
-            let affect_blend = g.mul(&id("affect_blend"), &active, &share);
-            g.add(&id("blend"), &affect_blend, &rest)
-        } else {
-            g.mul(&id("blend"), &active, &share)
-        };
-        // The commanded name selects: this expression → its intensity, no
-        // name → the circumplex blend, another name → 0.
-        let weight = g.op(
-            &id("weight"),
-            "case",
-            json!({ "case_labels": [expr, ""] }),
-            &[
-                ("selector", &name),
-                ("operand_0", &intensity),
-                ("operand_1", &blend),
-                ("default", &zero),
-            ],
-        );
-        let smooth = g.damp(&id("smooth"), &weight, HALF_LIFE);
-        if *expr == "asleep" {
-            asleep_weight = Some(smooth.clone());
-        }
+    names
+        .iter()
+        .map(|expr| {
+            let id = |step: &str| format!("expression/{expr}/{step}");
+            let kernel = ROS4HRI_EXPRESSION_NAMES
+                .iter()
+                .position(|anchored| anchored == expr)
+                .map(|i| kernels[i].clone());
+            let blend = match kernel {
+                Some(kernel) => {
+                    let share = g.div(&id("share"), &kernel, &denominator);
+                    if *expr == "neutral" {
+                        // Neutral also absorbs the dead zone's rest share.
+                        let affect_blend = g.mul(&id("affect_blend"), &active, &share);
+                        g.add(&id("blend"), &affect_blend, &rest)
+                    } else {
+                        g.mul(&id("blend"), &active, &share)
+                    }
+                }
+                None => zero.clone(),
+            };
+            // The commanded name selects: this expression → its intensity,
+            // no name → the circumplex blend, another name → 0.
+            g.op(
+                &id("target"),
+                "case",
+                json!({ "case_labels": [expr, ""] }),
+                &[
+                    ("selector", name),
+                    ("operand_0", &intensity),
+                    ("operand_1", &blend),
+                    ("default", &zero),
+                ],
+            )
+        })
+        .collect()
+}
+
+/// The mapping, section by section. Node ids are hierarchical — `in/…` the
+/// consumed profile, `out/…` the produced one, and `expression/…`,
+/// `gaze/…`, `blink/…`, `viseme/…` the channel that computes each
+/// output — so the asset reads by channel and every node says what it holds.
+fn build(rig_prefix: &str) -> (String, Json) {
+    let g = &mut GraphBuilder::new();
+    let out = |path: String| format!("{rig_prefix}{path}");
+    // Output node ids name the standard control they write, prefix dropped.
+    let out_id = |path: &str| {
+        format!(
+            "out/{}",
+            path.strip_prefix(standard::VIZIJ_PREFIX)
+                .and_then(|p| p.strip_prefix('/'))
+                .unwrap_or(path)
+        )
+    };
+
+    let zero = g.constant(0.0);
+    let one = g.constant(1.0);
+
+    // --- Expression: a commanded name selects its expression, at the
+    // commanded arousal as its intensity; otherwise valence/arousal blend the
+    // named weights by proximity to each expression's circumplex anchor.
+    // Each weight follows its target from the face's own weight, so the
+    // mapping takes the expression back from a setter's run where the run
+    // left it. ---
+    let name = g.input("in/expression/name", EXPRESSION_NAME_KEY, json!(""));
+    let valence = g.input("in/expression/valence", EXPRESSION_VALENCE_KEY, json!(0.0));
+    let arousal = g.input("in/expression/arousal", EXPRESSION_AROUSAL_KEY, json!(0.0));
+    let targets = expression_targets(g, &ROS4HRI_EXPRESSION_NAMES, &name, &valence, &arousal);
+    let gain = smoothing_gain(g, "expression/smoothing", HALF_LIFE);
+    for (expr, target) in ROS4HRI_EXPRESSION_NAMES.iter().zip(&targets) {
         let path = standard::expression_path(expr);
-        g.output(&out_id(&path), &smooth, out(path));
+        let weight = follow(g, &format!("expression/{expr}"), &path, target, &gain);
+        g.output(&out_id(&path), &weight, out(path));
     }
 
     // --- Gaze: target vec3 → per-eye positions with vergence ---------------
@@ -417,8 +459,9 @@ fn build(rig_prefix: &str) -> (String, Json) {
     let gated = g.select("blink/pulse/gated", &in_window, &parabola, &zero);
     let pulse = g.clamp("blink/pulse", &gated, 0.0, 1.0);
     // Asleep is the one commanded close: it inhibits the blink in proportion
-    // to its weight, and the lids follow the stronger of the two.
-    let asleep = asleep_weight.expect("asleep is in ROS4HRI_EXPRESSION_NAMES");
+    // to its weight, and the lids follow the stronger of the two. The weight
+    // is the face's own, read back — whoever set the expression.
+    let asleep = "in/expression/asleep".to_string();
     let open_share = g.sub("blink/open_share", &one, &asleep);
     let idle = g.mul("blink/idle", &pulse, &open_share);
     let lid = g.max("blink/lid", &idle, &asleep);
@@ -430,23 +473,8 @@ fn build(rig_prefix: &str) -> (String, Json) {
     }
 
     // --- Viseme: each new code spawns a play_viseme run of its shape -------
-    // The code indexes the standard's shapes: ROS4HRI numbers them in the
-    // order the 15-shape set lists them, so the two tables are one (a test
-    // holds them equal), and a code past the end rests like `sil`.
     let code = g.input("in/viseme", VISEME_KEY, json!(0.0));
-    let mut shape = g.text(SILENCE_VISEME);
-    for (index, name) in VISEME_SHAPES.iter().enumerate().skip(1) {
-        let id = |step: &str| format!("viseme/{name}/{step}");
-        let wanted = g.constant(index as f64);
-        let is = g.op(
-            &id("is"),
-            "equal",
-            json!({}),
-            &[("lhs", &code), ("rhs", &wanted)],
-        );
-        let text = g.text(name);
-        shape = g.select(&id("shape"), &is, &text, &shape);
-    }
+    let shape = viseme_shape_of(g, &code);
     // Full weight, held as long as the stream says: the stream names the
     // shape, and its timing is the stream's. A new time is a new viseme, so a
     // repeated shape plays again. The run, not this graph, writes the lips —
@@ -502,6 +530,7 @@ fn build(rig_prefix: &str) -> (String, Json) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::standard::VISEME_SHAPES;
 
     fn spec() -> Json {
         ros4hri_source("rig/test_face/").1
@@ -548,14 +577,24 @@ mod tests {
     /// The mapping reads the ROS4HRI command keys and writes the face's
     /// controls; the speech channel runs the other way, reading the face's
     /// speech state (per face, under the rig prefix) and writing the
-    /// device-scoped ROS4HRI speech keys — and nothing else crosses over.
+    /// device-scoped ROS4HRI speech keys — and nothing else crosses over but
+    /// the expression's own weights, which its smoothing reads back, and the
+    /// step's duration.
     #[test]
     fn source_reads_ros4hri_keys_and_relays_the_speech_state() {
         let spec = spec();
-        let speech_in = [
+        let speech_in: Vec<String> = [
             format!("rig/test_face/{}", standard::SPEECH),
             format!("rig/test_face/{}", standard::VISEME),
-        ];
+            "arora/dt".to_string(),
+        ]
+        .into_iter()
+        .chain(
+            ROS4HRI_EXPRESSION_NAMES
+                .iter()
+                .map(|expr| format!("rig/test_face/{}", standard::expression_path(expr))),
+        )
+        .collect();
         for node in spec["nodes"].as_array().unwrap() {
             let path = node["params"]["path"].as_str();
             match node["type"].as_str() {

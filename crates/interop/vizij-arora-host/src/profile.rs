@@ -838,7 +838,8 @@ mod tests {
 
     /// The shipped mapping reads the whole `ros4hri` command surface but
     /// `gaze/frame` (the look_at skill consumes it), plus the face's speech
-    /// state, and
+    /// state, the expression weights it writes (its smoothers continue from
+    /// the face's own weight) and the runtime's step duration, and
     /// writes the whole `vizij-face` control surface but what ROS4HRI has no
     /// channel for, plus the ROS4HRI speech state — and nothing either profile
     /// does not declare on that side. Which keys are declared and unmapped is
@@ -857,7 +858,14 @@ mod tests {
             .filter(|p| !consumed.paths().contains(p))
             .collect();
         assert_eq!(unread, [ros4hri::GAZE_FRAME_KEY]);
-        let readable = [ros.paths_of("input"), face.paths_of("output")].concat();
+        let produced = surface(&spec, Side::Output, "vizij-face", Scope::Face);
+        let readable = [
+            ros.paths_of("input"),
+            face.paths_of("output"),
+            produced.paths(),
+            vec!["arora/dt"],
+        ]
+        .concat();
         let unreadable: Vec<&str> = consumed
             .paths()
             .into_iter()
@@ -866,7 +874,6 @@ mod tests {
         assert!(unreadable.is_empty(), "undeclared inputs: {unreadable:?}");
 
         // What the mapping writes: the face's inputs and the ROS4HRI outputs.
-        let produced = surface(&spec, Side::Output, "vizij-face", Scope::Face);
         let unwritten: Vec<&str> = face
             .paths_of("input")
             .into_iter()
