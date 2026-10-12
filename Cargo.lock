@@ -10484,7 +10484,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-behavior"
-version = "6.0.0"
+version = "6.0.1"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",

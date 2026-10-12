@@ -4,6 +4,15 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [6.0.1] - 2026-10-12
+
+### Fixed
+
+- A run of a function no fragment and no module implements is refused at
+  spawn, whoever spawns it: SPAWN answers an error, and a spawn node's request
+  starts nothing (logged). Grafted, such a run's node could never call
+  anything and failed every evaluation, stopping the whole graph.
+
 ## [6.0.0] - 2026-10-12
 
 ### Changed
