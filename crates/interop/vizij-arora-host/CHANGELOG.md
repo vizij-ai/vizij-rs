@@ -4,6 +4,20 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [7.1.0] - 2026-10-12
+
+### Added
+
+- `standard::GAZE_TARGET_X` and `standard::GAZE_TARGET_Y`
+  (`standard/vizij/gaze/target/{x,y}`): the gaze target, a point on the
+  face's frame in screen conventions — origin top-left, `x` to the right, `y`
+  downward, each in `[0, 1]` — resting at the centre, (0.5, 0.5). A face
+  implements it in its program, blended with the program's own eye motion,
+  or in its standard adaptation, mapped onto the eye positions statelessly;
+  never both. The `vizij-face` profile declares both in the gaze tier,
+  resting at 0.5; the profile has 93 keys. The ROS4HRI mapping does not
+  write them.
+
 ## [7.0.0] - 2026-10-12
 
 ### Removed

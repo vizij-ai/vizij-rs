@@ -10,7 +10,7 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Map, Value as Json};
-use vizij_arora_host::{mappings, profile};
+use vizij_arora_host::{mappings, profile, standard};
 use vizij_glb_migrate::glb::Glb;
 
 /// A GLB with its parsed JSON chunk, ready for bundle surgery.
@@ -215,10 +215,15 @@ pub struct TierCoverage {
 /// face reacts to, not how finely it can be posed.
 const LEVEL_TIERS: [&str; 4] = ["gaze", "expression", "viseme", "muscle"];
 
+/// The paths a tier reports without requiring them for its level: the gaze
+/// target, which says where the eyes point in terms of the eye positions the
+/// gaze tier already grades — every gaze it directs, the eye positions reach.
+const UNGRADED: [&str; 2] = [standard::GAZE_TARGET_X, standard::GAZE_TARGET_Y];
+
 /// A face's coverage of the Vizij standard: which paths of each tier of the
 /// `vizij-face` profile its graphs listen on. `level` is the highest tier of
 /// [`LEVEL_TIERS`] the face fully covers, in order (half is enough for the
-/// muscle tier: faces rig the muscles they have).
+/// muscle tier: faces rig the muscles they have), [`UNGRADED`] paths aside.
 pub struct Coverage {
     pub face_id: Option<String>,
     pub level: u8,
@@ -251,14 +256,20 @@ pub fn coverage(face: &Face) -> Coverage {
         .collect();
 
     // Each level requires every tier before it in full, and its own tier in
-    // full — or, for the muscle tier, at least half.
+    // full — or, for the muscle tier, at least half — but for the paths it
+    // reports ungraded.
     let mut level = 0;
     let ladder = tiers
         .iter()
         .filter(|t| LEVEL_TIERS.contains(&t.tier.as_str()));
     for (i, tier) in ladder.enumerate() {
-        let full = tier.missing.is_empty();
-        let enough = tier.tier == "muscle" && tier.covered.len() >= tier.missing.len();
+        let missing = tier
+            .missing
+            .iter()
+            .filter(|p| !UNGRADED.contains(&p.as_str()))
+            .count();
+        let full = missing == 0;
+        let enough = tier.tier == "muscle" && tier.covered.len() >= missing;
         if !(full || enough) {
             break;
         }
@@ -369,7 +380,6 @@ pub fn from_sidecar(text: &str) -> Result<Json> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vizij_arora_host::standard;
 
     /// A minimal GLB carrying a bundle with one rig graph.
     fn face_bytes(input_paths: &[&str]) -> Vec<u8> {
@@ -558,9 +568,20 @@ mod tests {
         let cov = coverage(&Face::parse(&face_bytes(&refs)).unwrap());
         assert_eq!(cov.level, 2);
         assert_eq!(cov.face_id.as_deref(), Some("test_face"));
+        // The gaze target is reported in the gaze tier, missing here, and
+        // does not hold the level back.
+        assert_eq!(
+            cov.to_json()["tiers"]["gaze"]["missing"],
+            json!([standard::GAZE_TARGET_X, standard::GAZE_TARGET_Y])
+        );
 
-        // Plus the muscle tier: L3. The conversation state is reported, all
-        // of it missing, without holding the level back.
+        // Plus the gaze target and the muscle tier: L3, the gaze tier covered
+        // whole. The conversation state is reported, all of it missing,
+        // without holding the level back.
+        paths.extend([
+            standard::GAZE_TARGET_X.into(),
+            standard::GAZE_TARGET_Y.into(),
+        ]);
         paths.extend(
             standard::FACE_CONTROLS
                 .iter()
@@ -573,6 +594,8 @@ mod tests {
         assert_eq!(cov.level, 3);
         let report = cov.to_json();
         assert_eq!(report["level"], "L3");
+        assert_eq!(report["tiers"]["gaze"]["covered"], 9);
+        assert_eq!(report["tiers"]["gaze"]["missing"], json!([]));
         assert_eq!(report["tiers"]["conversation"]["covered"], 0);
         assert_eq!(report["tiers"]["conversation"]["of"], 3);
     }

@@ -622,23 +622,30 @@ mod tests {
         use arora_types::value::Type;
         let spec = r#"{"nodes": [
             {"id": "a", "type": "input", "params": {"path": "rig/f/standard/vizij/left_eye/pos/x", "value": 0.0}},
-            {"id": "b", "type": "input", "params": {"path": "rig/f/standard/vizij/expression/happy", "value": 0.0}}
+            {"id": "b", "type": "input", "params": {"path": "rig/f/standard/vizij/expression/happy", "value": 0.0}},
+            {"id": "c", "type": "input", "params": {"path": "rig/f/standard/vizij/gaze/target/x", "value": 0.0}}
         ], "edges": []}"#;
         let store = BlackboardStore::new();
         declare_keys(&store, spec, &[], &[]);
-        let f32_key = |min, max| {
+        let f32_key = |min, max, rest| {
             KeyMeta::new()
                 .editable()
                 .of_type(Type::F32)
                 .range(min, max)
-                .resting_at(Value::F32(0.0))
+                .resting_at(Value::F32(rest))
         };
+        // Each at the profile's rest, whatever default the graph authored.
         assert_eq!(
             store.meta(&[
                 Key::from("rig/f/standard/vizij/left_eye/pos/x"),
                 Key::from("rig/f/standard/vizij/expression/happy"),
+                Key::from("rig/f/standard/vizij/gaze/target/x"),
             ]),
-            vec![Some(f32_key(-1.0, 1.0)), Some(f32_key(0.0, 1.0))]
+            vec![
+                Some(f32_key(-1.0, 1.0, 0.0)),
+                Some(f32_key(0.0, 1.0, 0.0)),
+                Some(f32_key(0.0, 1.0, 0.5)),
+            ]
         );
     }
 
@@ -1840,18 +1847,14 @@ mod tests {
         step_for(&mut arora, 0.45);
 
         // The keys beyond ROS4HRI, written directly: an expression it does
-        // not name, the blink, and a conversation state each reach the input
-        // Quori's adaptation maps them onto.
+        // not name and the blink each reach the input Quori's adaptation maps
+        // them onto. (Quori's program reads the conversation state itself.)
         for (control, rig_input) in [
             (
                 standard::expression_path("concerned"),
                 "rig/quori_latest/poses/pose_d_concerned_d.weight",
             ),
             (standard::BLINK.to_string(), "rig/quori_latest/lids/blink"),
-            (
-                standard::conversation_path("speaking"),
-                "rig/quori_latest/speech/speaking",
-            ),
         ] {
             stage(&arora, &format!("rig/quori_latest/{control}"), float(1.0));
             settle(&mut arora);
