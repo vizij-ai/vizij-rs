@@ -50,9 +50,10 @@ vizij-bundle export-skill   look_at -o look_at.json
   the `vizij-face` profile (gaze & lids, expressions, visemes, muscle,
   conversation) the face's graphs listen on, the compliance level L0–L3, and
   what is missing. The level climbs the first four tiers in order; the
-  conversation state, and the gaze target within the gaze tier, are reported
-  without being graded. `--min-level` turns it into a CI gate.
-- **profiles** — the profiles Vizij ships, as JSON: `vizij-face` (93 paths,
+  conversation state, and the gaze target and its weight within the gaze
+  tier, are reported without being graded. `--min-level` turns it into a CI
+  gate.
+- **profiles** — the profiles Vizij ships, as JSON: `vizij-face` (94 paths,
   face-scoped) and `ros4hri` (10 paths, device-scoped).
 - **mappings** — the standard mappings Vizij ships, as JSON: the opt-in menu
   `add-standard` and the web's `mappings()` draw from.

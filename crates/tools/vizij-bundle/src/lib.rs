@@ -216,9 +216,14 @@ pub struct TierCoverage {
 const LEVEL_TIERS: [&str; 4] = ["gaze", "expression", "viseme", "muscle"];
 
 /// The paths a tier reports without requiring them for its level: the gaze
-/// target, which says where the eyes point in terms of the eye positions the
-/// gaze tier already grades — every gaze it directs, the eye positions reach.
-const UNGRADED: [&str; 2] = [standard::GAZE_TARGET_X, standard::GAZE_TARGET_Y];
+/// target and its weight, which say where the eyes point in terms of the eye
+/// positions the gaze tier already grades — every gaze they direct, the eye
+/// positions reach.
+const UNGRADED: [&str; 3] = [
+    standard::GAZE_TARGET_X,
+    standard::GAZE_TARGET_Y,
+    standard::GAZE_TARGET_WEIGHT,
+];
 
 /// A face's coverage of the Vizij standard: which paths of each tier of the
 /// `vizij-face` profile its graphs listen on. `level` is the highest tier of
@@ -568,19 +573,24 @@ mod tests {
         let cov = coverage(&Face::parse(&face_bytes(&refs)).unwrap());
         assert_eq!(cov.level, 2);
         assert_eq!(cov.face_id.as_deref(), Some("test_face"));
-        // The gaze target is reported in the gaze tier, missing here, and
-        // does not hold the level back.
+        // The gaze target and its weight are reported in the gaze tier,
+        // missing here, and do not hold the level back.
         assert_eq!(
             cov.to_json()["tiers"]["gaze"]["missing"],
-            json!([standard::GAZE_TARGET_X, standard::GAZE_TARGET_Y])
+            json!([
+                standard::GAZE_TARGET_X,
+                standard::GAZE_TARGET_Y,
+                standard::GAZE_TARGET_WEIGHT
+            ])
         );
 
-        // Plus the gaze target and the muscle tier: L3, the gaze tier covered
-        // whole. The conversation state is reported, all of it missing,
-        // without holding the level back.
+        // Plus the gaze target with its weight, and the muscle tier: L3, the
+        // gaze tier covered whole. The conversation state is reported, all of
+        // it missing, without holding the level back.
         paths.extend([
             standard::GAZE_TARGET_X.into(),
             standard::GAZE_TARGET_Y.into(),
+            standard::GAZE_TARGET_WEIGHT.into(),
         ]);
         paths.extend(
             standard::FACE_CONTROLS
@@ -594,7 +604,7 @@ mod tests {
         assert_eq!(cov.level, 3);
         let report = cov.to_json();
         assert_eq!(report["level"], "L3");
-        assert_eq!(report["tiers"]["gaze"]["covered"], 9);
+        assert_eq!(report["tiers"]["gaze"]["covered"], 10);
         assert_eq!(report["tiers"]["gaze"]["missing"], json!([]));
         assert_eq!(report["tiers"]["conversation"]["covered"], 0);
         assert_eq!(report["tiers"]["conversation"]["of"], 3);

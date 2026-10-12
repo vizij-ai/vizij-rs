@@ -623,7 +623,8 @@ mod tests {
         let spec = r#"{"nodes": [
             {"id": "a", "type": "input", "params": {"path": "rig/f/standard/vizij/left_eye/pos/x", "value": 0.0}},
             {"id": "b", "type": "input", "params": {"path": "rig/f/standard/vizij/expression/happy", "value": 0.0}},
-            {"id": "c", "type": "input", "params": {"path": "rig/f/standard/vizij/gaze/target/x", "value": 0.0}}
+            {"id": "c", "type": "input", "params": {"path": "rig/f/standard/vizij/gaze/target/x", "value": 0.0}},
+            {"id": "d", "type": "input", "params": {"path": "rig/f/standard/vizij/gaze/target/weight", "value": 1.0}}
         ], "edges": []}"#;
         let store = BlackboardStore::new();
         declare_keys(&store, spec, &[], &[]);
@@ -640,11 +641,13 @@ mod tests {
                 Key::from("rig/f/standard/vizij/left_eye/pos/x"),
                 Key::from("rig/f/standard/vizij/expression/happy"),
                 Key::from("rig/f/standard/vizij/gaze/target/x"),
+                Key::from("rig/f/standard/vizij/gaze/target/weight"),
             ]),
             vec![
                 Some(f32_key(-1.0, 1.0, 0.0)),
                 Some(f32_key(0.0, 1.0, 0.0)),
                 Some(f32_key(0.0, 1.0, 0.5)),
+                Some(f32_key(0.0, 1.0, 0.0)),
             ]
         );
     }

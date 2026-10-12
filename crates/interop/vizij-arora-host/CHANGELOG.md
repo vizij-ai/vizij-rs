@@ -4,6 +4,18 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [7.2.0] - 2026-10-12
+
+### Added
+
+- `standard::GAZE_TARGET_WEIGHT` (`standard/vizij/gaze/target/weight`): how
+  strongly the eyes hold the gaze target, in `[0, 1]`, resting at 0. At 0 the
+  eyes do what the face itself does, whatever the target says; at 1 they hold
+  the target, with no more than micro-motion; in between, a blend. A face
+  applies it wherever it implements the target. The `vizij-face` profile
+  declares it in the gaze tier, resting at 0; the profile has 94 keys.
+  `vizij-bundle validate` reports it with the target, ungraded.
+
 ## [7.1.0] - 2026-10-12
 
 ### Added

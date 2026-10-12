@@ -63,7 +63,7 @@ Vizij ships two:
 
 | profile | scope | keys | declared by |
 |---|---|---|---|
-| `vizij-face` | face | 93 — gaze, lids & blink, the gaze target on the face's frame, 27 expressions, 15 visemes, 36 muscle-tier controls, 3 conversation states, the lipsync gain; and the 2 speech-state keys it reports (the current viseme, the utterance) | the [face standard](face-standard.md) |
+| `vizij-face` | face | 94 — gaze, lids & blink, the gaze target on the face's frame and its weight, 27 expressions, 15 visemes, 36 muscle-tier controls, 3 conversation states, the lipsync gain; and the 2 speech-state keys it reports (the current viseme, the utterance) | the [face standard](face-standard.md) |
 | `ros4hri` | device | 10 — expression name/valence/arousal, gaze target and frame, the streamed viseme with its time and duration; and the 2 speech-state keys it reports (the utterance, its current viseme) | the [ROS4HRI key contract](ros4hri.md#the-standardros4hri-key-contract) |
 
 Both are generated from the Rust constants
@@ -119,7 +119,7 @@ the declared profiles, the shipped ROS4HRI mapping shows:
 | profile | declares | mapping touches | |
 |---|---|---|---|
 | `ros4hri` | 8 | 7 | `gaze/frame` is consumed by the `look_at` skill, not the mapping |
-| `vizij-face` | 91 | 31 | the 15 viseme weights belong to the viseme players; the 36 muscle-tier controls, the blink, the gaze target on the face's frame, `concerned`, `sleepy` and the 3 conversation states have no ROS4HRI command the mapping reads; the lipsync gain is a setting of the face |
+| `vizij-face` | 92 | 31 | the 15 viseme weights belong to the viseme players; the 36 muscle-tier controls, the blink, the gaze target on the face's frame and its weight, `concerned`, `sleepy` and the 3 conversation states have no ROS4HRI command the mapping reads; the lipsync gain is a setting of the face |
 
 Every path the mapping writes is declared.
 
