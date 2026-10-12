@@ -15,14 +15,14 @@ import {
 // controls, the lipsync gain, and the two speech state keys it reports) and
 // the ROS4HRI interface (device-scoped — 8 named command keys, the streamed
 // viseme among them as one code rather than a weight per shape, with its time
-// and duration; one per action unit; and the speech state it reports, the
-// utterance and its current viseme).
+// and duration; and the speech state it reports, the utterance and its current
+// viseme).
 const listed = await profiles();
 assert.deepEqual(
   listed.map((p) => [p.id, p.scope, p.keys]),
   [
     ["vizij-face", "face", 91],
-    ["ros4hri", "device", 30],
+    ["ros4hri", "device", 10],
   ],
 );
 

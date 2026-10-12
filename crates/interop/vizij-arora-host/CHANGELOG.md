@@ -4,6 +4,24 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [7.0.0] - 2026-10-12
+
+### Removed
+
+- **Breaking:** `ros4hri::au_key` and the `ros4hri` profile's 20
+  `standard/ros4hri/au/<code>` keys. ROS4HRI publishes facial action units
+  only as perception output (`hri_msgs/FacialActionUnits` on
+  `/humans/faces/<faceID>/facs`) and defines no command for them; the profile
+  has 10 keys, the expression, gaze and viseme inputs and the speech state
+  outputs. A FACS-granular pose is the `vizij-face` muscle tier's,
+  `standard/vizij/face/<control>`, which is unchanged.
+
+### Changed
+
+- The ROS4HRI mapping writes none of the muscle tier nor
+  `standard/vizij/mouth/morph/jaw_open`. Its idle blink is inhibited by the
+  `asleep` expression alone, which also holds the lids shut.
+
 ## [6.6.0] - 2026-10-10
 
 ### Added

@@ -1347,23 +1347,6 @@ mod tests {
         assert!(read_f32(&arora, standard::LEFT_EYE_POS_X).abs() < 0.01);
     }
 
-    #[test]
-    fn ros4hri_action_units_route_to_muscles() {
-        let mut arora = ros4hri_device();
-        stage(&arora, &ros4hri::au_key(12), float(1.0));
-        stage(&arora, &ros4hri::au_key(26), float(0.8));
-        settle(&mut arora);
-        // AU 12 (lip corner puller) drives the lateralized smile pair.
-        assert!(read_f32(&arora, &standard::face_path("mouth_smile_left")) > 0.95);
-        assert!(read_f32(&arora, &standard::face_path("mouth_smile_right")) > 0.95);
-        assert!(read_f32(&arora, &standard::face_path("mouth_frown_left")) < 0.01);
-        // AU 26 (jaw drop) drives the muscle control and the de-facto mouth morph.
-        let jaw = read_f32(&arora, &standard::face_path("jaw_open"));
-        assert!((0.75..=0.85).contains(&jaw), "jaw = {jaw}");
-        let defacto = read_f32(&arora, "standard/vizij/mouth/morph/jaw_open");
-        assert!((0.75..=0.85).contains(&defacto), "de-facto jaw = {defacto}");
-    }
-
     /// The shape a viseme player's feedback record names.
     fn fed_back_viseme(arora: &arora::Arora, path: &str) -> Option<String> {
         match read_value(arora, path)? {
@@ -1737,7 +1720,7 @@ mod tests {
     }
 
     #[test]
-    fn ros4hri_blink_pulses_and_commanded_close_wins() {
+    fn ros4hri_blink_pulses_and_asleep_holds_the_lids_shut() {
         let mut arora = ros4hri_device();
         // Over 10 s the jittered 8 s cycle blinks at least once; between
         // blinks the lids rest open.
@@ -1752,13 +1735,14 @@ mod tests {
         assert!(max_lid > 0.5, "no blink in 10 s (max lid {max_lid})");
         assert!(min_lid < 0.05, "lids never rest open (min lid {min_lid})");
 
-        // Commanded eyes-closed holds the lids shut and inhibits the pulse.
-        stage(&arora, &ros4hri::au_key(43), float(1.0));
+        // Asleep holds the lids shut and inhibits the pulse.
+        stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("asleep"));
+        stage(&arora, ros4hri::EXPRESSION_AROUSAL_KEY, float(1.0));
         settle(&mut arora);
         for _ in 0..300 {
             arora.step(Duration::from_millis(16)).expect("step");
             let lid = read_f32(&arora, standard::LEFT_EYE_TOP_EYELID_POS_Y);
-            assert!(lid > 0.9, "lid opened while commanded closed ({lid})");
+            assert!(lid > 0.9, "lid opened while asleep ({lid})");
         }
     }
 
