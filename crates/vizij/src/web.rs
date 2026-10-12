@@ -213,7 +213,7 @@ pub fn load_vizij(
         });
         provider
     });
-    let LoadedFace { meta, spec } =
+    let LoadedFace { meta, spec, .. } =
         face::load_face(&glb, &config).map_err(|e| JsValue::from_str(&format!("{e:#}")))?;
     let rig = RigHal::new();
     let store = BlackboardStore::new();

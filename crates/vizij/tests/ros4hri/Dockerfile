@@ -1,9 +1,13 @@
 # ROS 2 Jazzy with rmw_zenoh and the ROS4HRI skill interfaces built from the
 # definitions arora-msgs-ros2 vendors — the peer a native client needs to speak
 # /skill/say and /skill/look_at. Built by build-image.sh, which stages the interface packages.
+# hri_actions_msgs (ClosedCaption) and diagnostic_msgs, which arora-msgs-ros2
+# vendors unmodified, are Jazzy's own packages, so a client speaks the
+# upstream definitions of /closed_captions and /diagnostics.
 FROM ros:jazzy-ros-base
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-rmw-zenoh-cpp ros-jazzy-rosidl-default-generators ros-jazzy-action-msgs ros-jazzy-geometry-msgs \
+    ros-jazzy-hri-actions-msgs ros-jazzy-diagnostic-msgs \
     python3-colcon-common-extensions python3-numpy build-essential \
     && rm -rf /var/lib/apt/lists/*
 COPY ros4hri_ws/src /ros4hri_ws/src

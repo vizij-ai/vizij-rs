@@ -47,14 +47,16 @@ piece of it, not a second device.
 
 | Module | What it is | Where it builds |
 |---|---|---|
-| `view` | the Bevy rendering of a face from its GLB bytes, applying a device's pose each frame; `view::meta` (the bindings and the bundle read from the GLB), `view::snapshot` (offscreen rendering and readback), `view::frames` (rendered frames into the store) | everywhere |
+| `view` | the Bevy rendering of a face from its GLB bytes, applying a device's pose each frame; `view::meta` (the bindings and the bundle read from the GLB), `view::snapshot` (offscreen rendering and readback), `view::frames` (rendered frames into the store), `view::diagnostics` (the device's health report into the store), `view::captions` (the face standard's caption over each face; feature `captions`) | everywhere |
 | `face` | the composition: the GLB's bindings and bundle into one graph spec, folded with `RigHal` + `BlackboardStore` and the modules into an `AroraBuilder` a host may extend (`builder_for`); the bundle's animations loaded into the built device through the animation module's declared functions (`load_animations`); the program that runs from load, spawned beside the graph as a run of the interpreter's `run_behavior` (`spawn_program`); the free inputs and what the store says of them (`declare_keys`), the neutral pose, the skills' fragments | everywhere |
 | `modules` | the host modules any Arora loads: `animation`, `rest` (`reset`, `reset_keys`), `tts_piper` (feature) | everywhere (Piper native) |
 | `native` | the stand-alone device: the face's Arora on a worker thread under arora's operator flow, the bridges the build adds, the `RuntimeHandle` front ends speak through | every target but the browser |
 | `web` | the browser module behind [`@vizij/runtime`](../../npm/@vizij/runtime/README.md): one App per page (`mount`), a JS-paced Arora per Vizij (`loadVizij`, a `VizijRuntime`), Vizijs as rectangles of the canvas (`placeVizij`), picks, `describe` | `wasm32` |
 | `main.rs`, `open.rs` | the CLI, the window, the terminal operator UI, opening a face by drop or dialog | feature `desktop` (default) |
 
-Features: `desktop` (default) is the CLI and the terminal UI; `studio`,
+Features: `desktop` (default) is the CLI and the terminal UI; `captions`
+(default) draws the face standard's caption over the face, with Bevy's UI
+text and an embedded Inter font; `studio`,
 `ros2-dds` / `ros2-zenoh` and `tts-piper` add the bridges and the local
 speech provider to any native build. Without `desktop`, `cargo check --lib
 --no-default-features` gives the library the browser (`--target
@@ -250,6 +252,13 @@ with its ROS4HRI exposure preset:
   `display/face/compressed` as a `sensor_msgs/CompressedImage` on
   `/robot_face/image_raw/compressed` (`--frame-format png`, the default), or
   `display/face` as a `sensor_msgs/Image` on `/robot_face/image_raw` (`raw`);
+- **closed captions** on `/closed_captions` (`hri_actions_msgs/ClosedCaption`),
+  shown over the face — and so in its published image — in eight-word
+  chunks, blue for the robot's own speech and white for anyone else's;
+- the device's **health** on `/diagnostics` (`diagnostic_msgs/DiagnosticArray`,
+  once a second): the view's frame rate, and per face its id, its compliance
+  level with the face standard and any path its composition writes from more
+  than one source;
 - data topics under `/<namespace>/keys/<path>`: every store key **published**,
   and the keys the store opens to remote writers — the face's **free inputs**,
   input paths no graph in the composition writes, and the inputs its

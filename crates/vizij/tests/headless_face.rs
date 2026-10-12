@@ -626,3 +626,99 @@ fn a_face_draws_only_once_indexed() {
         frames_until_swapped(&mut app, &format!("reload {reload}"));
     }
 }
+
+/// A caption written to the face standard's caption keys shows over the
+/// face, at the bottom of its rectangle: someone else's in white, the face's
+/// own (`__system__`) in its blue once the first has had its time.
+#[cfg(feature = "captions")]
+#[test]
+#[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job"]
+fn a_caption_shows_over_the_face() {
+    use arora_hal::Hal;
+    use arora_types::data::{Key, StateChange};
+    use vizij::view::ViewEvent;
+    use vizij_api_core::Value;
+    use vizij_arora_host::standard::{CAPTION_SPEAKER, CAPTION_TEXT};
+
+    const W: u32 = 640;
+    const H: u32 = 400;
+    let ids = [(); 4].map(|_| Uuid::new_v4());
+    let glb = studio_face_glb(ids[0], ids[1], ids[2], ids[3], None);
+    let meta = vizij::view::meta::FaceMeta::from_glb_bytes(&glb).expect("reads");
+    let rig = vizij_arora_hal::RigHal::new();
+    let (events_tx, events_rx) = std::sync::mpsc::channel();
+    events_tx
+        .send(ViewEvent::LoadFace {
+            face_id: "captioned".into(),
+            meta: Box::new(meta),
+            glb,
+            rig: rig.clone(),
+        })
+        .unwrap();
+    let mut app = App::new();
+    FaceAssets::register(&mut app);
+    app.add_plugins(SnapshotPlugin {
+        width: W,
+        height: H,
+    })
+    .insert_resource(ViewEvents(std::sync::Mutex::new(events_rx)))
+    .insert_resource(ViewOptions {
+        background: Color::BLACK,
+        fit: view::Fit::Contain,
+        zoom: Vec2::ONE,
+        ambient: std::f32::consts::FRAC_PI_2,
+        unlit: false,
+    })
+    .add_plugins(ViewPlugin);
+
+    // The pixels of the caption band (the bottom quarter) close to `rgb`.
+    let in_band = |image: &image::RgbaImage, rgb: [u8; 3]| {
+        image
+            .enumerate_pixels()
+            .filter(|(_, y, p)| *y > H * 3 / 4 && (0..3).all(|c| p.0[c].abs_diff(rgb[c]) <= 24))
+            .count()
+    };
+    let caption = |text: &str, speaker: &str| {
+        let mut change = StateChange::new();
+        change
+            .set
+            .insert(Key::from(CAPTION_TEXT), Some(Value::String(text.into())));
+        change.set.insert(
+            Key::from(CAPTION_SPEAKER),
+            Some(Value::String(speaker.into())),
+        );
+        rig.try_send(&change);
+    };
+    const WHITE: [u8; 3] = [255, 255, 255];
+    const BLUE: [u8; 3] = [0, 102, 179];
+
+    let bare = capture(&mut app, W, H, 10, view::all_faces_ready).expect("a frame");
+    assert_eq!(in_band(&bare, WHITE), 0, "no caption yet");
+
+    caption("Hello, face.", "person_1");
+    let shown = capture(&mut app, W, H, 10, view::all_faces_ready).expect("a frame");
+    let white = in_band(&shown, WHITE);
+    assert!(
+        white > 50,
+        "the caption is not drawn ({white} white pixels)"
+    );
+    let above: usize = shown
+        .enumerate_pixels()
+        .filter(|(_, y, p)| *y <= H * 3 / 4 && p.0[..3] == WHITE)
+        .count();
+    assert_eq!(above, 0, "the caption stays in its band");
+
+    // Queued behind the first, which holds for 2 s plus its last-chunk 1.5 s.
+    caption("And hello back.", "__system__");
+    let start = std::time::Instant::now();
+    while start.elapsed() < Duration::from_millis(3700) {
+        app.update();
+    }
+    let own = capture(&mut app, W, H, 2, view::all_faces_ready).expect("a frame");
+    let blue = in_band(&own, BLUE);
+    assert!(
+        blue > 50,
+        "the face's own caption is not blue ({blue} pixels)"
+    );
+    assert_eq!(in_band(&own, WHITE), 0, "the first caption is gone");
+}

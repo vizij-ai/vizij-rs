@@ -65,6 +65,9 @@ pub struct LoadedFace {
     pub meta: FaceMeta,
     /// The composed spec, as the interpreter parses it.
     pub spec: String,
+    /// The paths more than one of the composed sources writes: only the last
+    /// one's write lands. What the face's diagnostics report.
+    pub contended: Vec<vizij_arora_host::Contention>,
 }
 
 /// Load a face for the device from its GLB bytes: parse the metadata, compose
@@ -100,12 +103,17 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
     // `builder_for`), so the animation source it dispatches to is always
     // composed — inert until an animation plays (an animation loads silent,
     // see `load_animations`).
-    let spec = meta
+    let sources = meta
         .bundle
-        .compose(&wanted, &ProgramSelect::None, true, &mappings)?
-        .to_string();
+        .sources(&wanted, &ProgramSelect::None, true, &mappings);
+    let contended = vizij_arora_host::contended_outputs(&sources);
+    let spec = vizij_arora_host::compose_sources(&sources)?.to_string();
     parse_spec(&spec).map_err(|e| anyhow!("composed spec does not parse: {e}"))?;
-    Ok(LoadedFace { meta, spec })
+    Ok(LoadedFace {
+        meta,
+        spec,
+        contended,
+    })
 }
 
 /// The composed graph's free inputs — input paths no graph in the composition
@@ -150,7 +158,16 @@ pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
 /// the standard inputs feed the rig through the adaptation, so a reset that
 /// left the rig out would be undone on the next tick.
 ///
+///
+/// The face standard's caption ([`standard::CAPTION_TEXT`] and
+/// [`standard::CAPTION_SPEAKER`], under the face's prefix) is declared too,
+/// as its profile types it, unless the composition writes it (the ROS4HRI
+/// mapping relays a closed caption there): no graph reads it — the view
+/// shows it — so a remote is what captions a face.
+///
 /// [`Bundle::neutral_stage_writes`]: vizij_arora_host::Bundle::neutral_stage_writes
+/// [`standard::CAPTION_TEXT`]: vizij_arora_host::standard::CAPTION_TEXT
+/// [`standard::CAPTION_SPEAKER`]: vizij_arora_host::standard::CAPTION_SPEAKER
 pub fn declare_keys(
     store: &dyn DataStore,
     spec: &str,
@@ -159,8 +176,10 @@ pub fn declare_keys(
 ) {
     use arora_types::data::KeyMeta;
     use arora_types::value::Type;
-    let profiled = profile_keys(&rig_prefix_of(spec));
+    let rig_prefix = rig_prefix_of(spec);
+    let profiled = profile_keys(&rig_prefix);
     let mut inputs = walk_free_inputs(spec, &profiled);
+    inputs.extend(caption_inputs(spec, &rig_prefix, &profiled));
     // A program's inputs over the graph: the free inputs of the two composed,
     // which the graph's own already hold but for the program's.
     match serde_json::from_str::<serde_json::Value>(spec) {
@@ -283,6 +302,45 @@ fn walk_free_inputs(
     }
     inputs.sort_by(|a, b| a.0.cmp(&b.0));
     inputs
+}
+
+/// The face standard's caption keys under `rig_prefix` that no output of
+/// `spec` writes, typed and resting as the `vizij-face` profile states.
+fn caption_inputs(
+    spec: &str,
+    rig_prefix: &str,
+    profiled: &ProfileKeys,
+) -> Vec<(String, arora_types::value::Type, Option<Value>)> {
+    use vizij_arora_host::standard::{CAPTION_SPEAKER, CAPTION_TEXT};
+    let spec: serde_json::Value = serde_json::from_str(spec).unwrap_or_default();
+    let written = |path: &str| {
+        spec.get("nodes")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|node| {
+                node.get("type")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|kind| kind.eq_ignore_ascii_case("output"))
+                    && node
+                        .pointer("/params/path")
+                        .and_then(serde_json::Value::as_str)
+                        == Some(path)
+            })
+    };
+    [CAPTION_TEXT, CAPTION_SPEAKER]
+        .into_iter()
+        .map(|control| format!("{rig_prefix}{control}"))
+        .filter(|path| !written(path))
+        .filter_map(|path| {
+            let key = profiled.get(&path)?;
+            Some((
+                path.clone(),
+                key.value_type.clone()?,
+                key.default_value.clone(),
+            ))
+        })
+        .collect()
 }
 
 /// Keys a shipped profile types, by path.
@@ -661,6 +719,47 @@ mod tests {
                 Some(f32_key(0.0, 1.0, 0.5)),
                 Some(f32_key(0.0, 1.0, 0.0)),
             ]
+        );
+    }
+
+    /// The face's caption is open to a remote writer, a string resting
+    /// empty, unless the composition writes it — the ROS4HRI mapping relays
+    /// a closed caption there, and its own keys are then the open ones.
+    #[test]
+    fn the_caption_is_open_unless_the_composition_writes_it() {
+        use arora_types::data::KeyMeta;
+        use arora_types::value::Type;
+        use vizij_arora_host::ros4hri::{ros4hri_source, CAPTION_TEXT_KEY};
+        let text = KeyMeta::new()
+            .editable()
+            .of_type(Type::String)
+            .resting_at(Value::String(String::new()));
+        let caption = Key::from("rig/f/standard/vizij/caption/text");
+        let speaker = Key::from("rig/f/standard/vizij/caption/speaker");
+
+        let bare = r#"{"nodes": [
+            {"id": "a", "type": "input", "params": {"path": "rig/f/standard/vizij/blink", "value": 0.0}}
+        ], "edges": []}"#;
+        let store = BlackboardStore::new();
+        declare_keys(&store, bare, &[], &[]);
+        assert_eq!(
+            store.meta(&[caption.clone(), speaker.clone()]),
+            vec![Some(text.clone()), Some(text.clone())]
+        );
+
+        let mapped = compose_sources(&[
+            ("rig".to_string(), serde_json::from_str(bare).unwrap()),
+            ros4hri_source("rig/f/"),
+        ])
+        .unwrap()
+        .to_string();
+        let store = BlackboardStore::new();
+        declare_keys(&store, &mapped, &[], &[]);
+        assert_eq!(store.meta(&[caption, speaker]), vec![None, None]);
+        assert_eq!(
+            store.meta(&[Key::from(CAPTION_TEXT_KEY)]),
+            vec![Some(text)],
+            "the closed caption the mapping relays is the open key"
         );
     }
 
@@ -1813,7 +1912,7 @@ mod tests {
             studio: false,
             speech: None,
         };
-        let LoadedFace { meta, spec } =
+        let LoadedFace { meta, spec, .. } =
             load_face(&adapted, &config).expect("load the adapted face");
         let store = BlackboardStore::new();
         stage_neutral_pose(&store, &meta);
@@ -2137,7 +2236,8 @@ mod tests {
             .expect("graft the adaptation");
             let adapted = face.to_bytes().expect("repack the GLB");
 
-            let LoadedFace { meta, spec } = load_face(&adapted, &config).expect("load the face");
+            let LoadedFace { meta, spec, .. } =
+                load_face(&adapted, &config).expect("load the face");
             let store = BlackboardStore::new();
             stage_neutral_pose(&store, &meta);
             let mut arora = builder_for(&spec, RigHal::new(), store, &[], None)
@@ -2373,7 +2473,7 @@ mod animation_tests {
             studio: false,
             speech: None,
         };
-        let LoadedFace { meta, spec } = load_face(&glb, &config).expect("load Quori");
+        let LoadedFace { meta, spec, .. } = load_face(&glb, &config).expect("load Quori");
         let store = BlackboardStore::new();
         stage_neutral_pose(&store, &meta);
         let mut arora = builder_for(&spec, RigHal::new(), store, &meta.bundle.skills, None)

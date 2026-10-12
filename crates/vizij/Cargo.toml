@@ -115,8 +115,9 @@ arora = { version = "12.2", default-features = false }
 # clients) and run feedback may be a record (the say skill's viseme/intensity).
 # 6.3 is where that profile publishes the face image, so the view declares
 # nothing itself. 10.3 is where a key path escapes into valid ROS 2 name
-# tokens, which a Studio-exported face's UUID keys need.
-arora-bridge-ros2 = { version = "10.3", optional = true, default-features = false }
+# tokens, which a Studio-exported face's UUID keys need; 10.4 is where the
+# profile takes /closed_captions and publishes /diagnostics.
+arora-bridge-ros2 = { version = "10.4", optional = true, default-features = false }
 # The Status enumeration ids the gaze and tts contracts mark their action shapes with.
 arora-behavior-tree-types = "2"
 # The built-in key prefix the ROS 2 input declaration leaves out.
@@ -152,8 +153,9 @@ vizij-api-core = { path = "../api/vizij-api-core" }
 vizij-graph-core = { path = "../node-graph/vizij-graph-core" }
 vizij-arora = { path = "../interop/vizij-arora" }
 # `frames`: the rendered face as its `sensor_msgs` image value, the shape the
-# browser runtime would build too if it published frames.
-vizij-arora-host = { path = "../interop/vizij-arora-host", features = ["publish-frames"] }
+# browser runtime would build too if it published frames; `diagnostics`: the
+# device's health as its `diagnostic_msgs` report.
+vizij-arora-host = { path = "../interop/vizij-arora-host", features = ["publish-frames", "publish-diagnostics"] }
 vizij-arora-store = { path = "../interop/vizij-arora-store" }
 vizij-arora-hal = { path = "../interop/vizij-arora-hal" }
 vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
@@ -208,9 +210,10 @@ console_log = "1"
 getrandom = { version = "0.4", features = ["wasm_js"] }
 
 [dev-dependencies]
-# The image messages a published frame is read back as, so a field landing in
-# the wrong place fails in a unit test rather than at a ROS subscriber.
-arora-msgs-ros2 = "2"
+# The image and diagnostics messages a published frame and report are read
+# back as, so a field landing in the wrong place fails in a unit test rather
+# than at a ROS subscriber.
+arora-msgs-ros2 = "2.2"
 # The bundler, for the Quori integration test (grafts the standard-adaptation
 # sidecar into the demo GLB before driving it over the ROS4HRI keys).
 vizij-bundle = { path = "../tools/vizij-bundle" }
@@ -229,7 +232,12 @@ reqwest = "0.13"
 async-trait = "0.1"
 
 [features]
-default = ["desktop"]
+default = ["desktop", "captions"]
+# Captions over the face (`standard/vizij/caption/*`): the view's text overlay,
+# drawn with Bevy's UI text in the embedded Inter font. Off, the view draws no
+# text and the build carries no text shaping — the browser module, whose
+# download pays for every engine crate, leaves it out.
+captions = ["bevy/bevy_text", "bevy/bevy_ui", "bevy/bevy_ui_render"]
 # The desktop app: the CLI and the terminal operator UI. Off, the library is
 # the view, the composition and the native driver with a headless front end
 # — what the Android activity builds on; the browser module builds on the

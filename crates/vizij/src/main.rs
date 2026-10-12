@@ -239,6 +239,10 @@ fn main() -> Result<()> {
     #[cfg(not(any(feature = "ros2-dds", feature = "ros2-zenoh")))]
     let ros2 = false;
     let rate_hz = frames::publish_rate(cli.frame_rate, ros2, !cli.no_ros4hri)?;
+    // The health report is the ROS4HRI profile's `/diagnostics`, so it
+    // follows that exposure: without the profile to type it, it would ride
+    // the bridge's JSON scalar plane.
+    let diagnostics = ros2 && !cli.no_ros4hri;
     let source = match cli.glb.clone() {
         Some(source) => source,
         None => remembered_face().ok_or_else(|| {
@@ -278,8 +282,16 @@ fn main() -> Result<()> {
 
     match (&cli.snapshot, cli.headless) {
         (Some(out), _) => run_snapshot(&cli, events, options, out),
-        (None, true) => run_headless(&cli.size, events, options, frame_config),
-        (None, false) => run_window(&cli, &meta, events, handle, options, frame_config),
+        (None, true) => run_headless(&cli.size, events, options, frame_config, diagnostics),
+        (None, false) => run_window(
+            &cli,
+            &meta,
+            events,
+            handle,
+            options,
+            frame_config,
+            diagnostics,
+        ),
     }
 }
 
@@ -404,6 +416,7 @@ fn run_window(
     handle: native::RuntimeHandle,
     options: view::ViewOptions,
     frame_config: frames::FrameConfig,
+    diagnostics: bool,
 ) -> Result<()> {
     use bevy::window::{MonitorSelection, WindowLevel, WindowMode, WindowPosition};
 
@@ -453,6 +466,9 @@ fn run_window(
         app.insert_resource(frame_config)
             .add_plugins(frames::FramesPlugin);
     }
+    if diagnostics {
+        app.add_plugins(view::diagnostics::DiagnosticsPlugin);
+    }
     app.run();
     native::restore_terminal();
     Ok(())
@@ -467,6 +483,7 @@ fn run_headless(
     events: std::sync::mpsc::Receiver<view::ViewEvent>,
     options: view::ViewOptions,
     frame_config: frames::FrameConfig,
+    diagnostics: bool,
 ) -> Result<()> {
     use bevy::app::ScheduleRunnerPlugin;
     use bevy::render::render_resource::TextureUsages;
@@ -512,6 +529,9 @@ fn run_headless(
             "--headless renders but publishes no frames: expose the device as ROS4HRI (--ros2) or \
              give a --frame-rate"
         );
+    }
+    if diagnostics {
+        app.add_plugins(view::diagnostics::DiagnosticsPlugin);
     }
     app.run();
     native::restore_terminal();
