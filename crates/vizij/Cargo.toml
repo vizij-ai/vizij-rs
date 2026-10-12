@@ -110,8 +110,9 @@ arora = { version = "13", default-features = false }
 # 6.3 is where that profile publishes the face image, so the view declares
 # nothing itself. 10.3 is where a key path escapes into valid ROS 2 name
 # tokens, which a Studio-exported face's UUID keys need; 10.4 is where the
-# profile takes /closed_captions and publishes /diagnostics.
-arora-bridge-ros2 = { version = "10.4", optional = true, default-features = false }
+# profile takes /closed_captions and publishes /diagnostics. 11 serves the face
+# skills in that profile.
+arora-bridge-ros2 = { version = "11", optional = true, default-features = false }
 # The Status enumeration ids the gaze and tts contracts mark their action shapes with.
 arora-behavior-tree-types = "2"
 # The built-in key prefix the ROS 2 input declaration leaves out.

@@ -606,7 +606,10 @@ pub fn restore_terminal() {
 mod ros4hri_profile_tests {
     use arora_types::record::module::frozen::ExportKind;
     use uuid::Uuid;
-    use vizij_arora_host::skills::{look_at, play_viseme, say};
+    use vizij_arora_host::skills::{
+        look_at, play_viseme, play_visemes, say, set_expression, set_facial_action_units,
+        set_viseme,
+    };
 
     /// The closed caption the profile takes lands on the keys the `ros4hri`
     /// profile declares for it — the ones the mapping relays to the face's
@@ -640,32 +643,46 @@ mod ros4hri_profile_tests {
             look_at::record(Uuid::nil()),
             play_viseme::record(Uuid::nil()),
             say::record(Uuid::nil()),
+            set_expression::record(Uuid::nil()),
+            set_facial_action_units::record(Uuid::nil()),
+            set_viseme::record(Uuid::nil()),
+            play_visemes::record(Uuid::nil()),
         ];
         let profile = arora_bridge_ros2::ExposureProfile::ros4hri();
         assert!(!profile.actions.is_empty(), "the profile binds skills");
-        for binding in &profile.actions {
+        assert!(
+            !profile.topic_skills.is_empty(),
+            "the profile binds topic skills"
+        );
+        // (the ROS name, the bound function, the routed parameters)
+        let bindings = profile
+            .actions
+            .iter()
+            .map(|b| (&b.action, &b.function, &b.goal_routes))
+            .chain(
+                profile
+                    .topic_skills
+                    .iter()
+                    .map(|b| (&b.topic, &b.function, &b.routes)),
+            );
+        for (name, function, routes) in bindings {
             let signature = contracts
                 .iter()
                 .flat_map(|contract| contract.exports.values())
-                .find(|export| export.name == binding.function)
+                .find(|export| export.name == *function)
                 .map(|export| {
                     let ExportKind::Function(signature) = &export.kind;
                     signature
                 })
                 .unwrap_or_else(|| {
-                    panic!(
-                        "{} binds `{}`, which no skill contract declares",
-                        binding.action, binding.function
-                    )
+                    panic!("{name} binds `{function}`, which no skill contract declares")
                 });
-            for route in &binding.goal_routes {
+            for route in routes {
                 assert!(
                     signature.parameters.values().any(|p| p.name == route.key),
-                    "{} routes `{}` to `{}`, which `{}` does not take",
-                    binding.action,
+                    "{name} routes `{}` to `{}`, which `{function}` does not take",
                     route.field,
                     route.key,
-                    binding.function
                 );
             }
         }

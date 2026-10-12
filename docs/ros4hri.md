@@ -17,7 +17,8 @@ Support spans both ROS4HRI planes:
 - **The skill plane** — the device serves ROS4HRI's gaze skill as a native
   ROS 2 action server, [`/skill/look_at`](#the-look_at-skill)
   (`interaction_skills/LookAt` — the standard's only action; `set_expression`
-  is, per the standard, a topic).
+  is, per the standard, a topic), and the [face skills](skills.md#calling-a-skill)
+  beside it.
 
 ## How it fits together
 
@@ -49,7 +50,10 @@ stays with the face.
 > saying](#speaking-through-the-standard-skill) on `/robot_face/speech`
 > and the lip shape it is saying it with on `/robot_face/viseme`, takes
 > [closed captions](#captions) on `/closed_captions`, publishes the device's
-> [health](#diagnostics) on `/diagnostics`, and binds the [`/skill/look_at`](#the-look_at-skill) action. The `vizij`
+> [health](#diagnostics) on `/diagnostics`, binds the [`/skill/look_at`](#the-look_at-skill) action, and serves the
+> [face skills](skills.md#calling-a-skill) on `/skill/set_expression`,
+> `/skill/set_facial_action_units`, `/skill/set_viseme` and
+> `/skill/play_visemes`. The `vizij`
 > binary wires the preset when run with `--ros2` (`--no-ros4hri` leaves it
 > out). The message
 > vocabulary (`hri_msgs`, `geometry_msgs`, `interaction_skills`, …) ships as
