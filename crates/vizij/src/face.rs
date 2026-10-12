@@ -8,7 +8,7 @@
 use anyhow::{anyhow, Result};
 use arora_types::data::{DataStore, Key, StateChange};
 use vizij_api_core::value::{float, Value};
-use vizij_arora_behavior::{gaze, speech, viseme};
+use vizij_arora_behavior::{expression, gaze, speech, viseme};
 use vizij_arora_behavior::{parse_spec, KeyHolds, ProcessingGraph};
 use vizij_arora_hal::RigHal;
 use vizij_arora_host::Bundle;
@@ -551,11 +551,14 @@ pub fn builder_with_guests(
     }
     graph.set_function_modules(function_modules);
     // The skills: the fragments the interpreter grafts per run — the shipped
-    // ones, or the face's embedded overrides. No module implements look_at
-    // or play_viseme: their fragments carry the contracts' descriptions, so
-    // the interpreter describes them. say's fragment wraps the provider's
-    // call, which the provider describes. The viseme players write the
-    // face's standard controls, so they take its rig prefix.
+    // ones, or the face's embedded overrides (look_at, play_viseme, say). No
+    // module implements look_at, the expression setters or the viseme
+    // players: their fragments carry the contracts' descriptions, so the
+    // interpreter describes them. say's fragment wraps the provider's call,
+    // which the provider describes. The players and setters write the face's
+    // standard controls, so they take its rig prefix; the lips' players
+    // (play_viseme, set_viseme, play_visemes, say) share one exclusivity
+    // domain, the expression's setters another.
     graph.set_task_fragment(
         gaze::look_at::ids::look_at::FUNCTION,
         gaze::look_at_fragment_from(embedded_skills),
@@ -567,6 +570,22 @@ pub fn builder_with_guests(
     graph.set_task_fragment(
         speech::say::ids::say::FUNCTION,
         speech::say_fragment_from(embedded_skills, &rig_prefix),
+    );
+    graph.set_task_fragment(
+        viseme::set_viseme::ids::set_viseme::FUNCTION,
+        viseme::set_viseme_fragment(&rig_prefix),
+    );
+    graph.set_task_fragment(
+        viseme::play_visemes::ids::play_visemes::FUNCTION,
+        viseme::play_visemes_fragment(&rig_prefix),
+    );
+    graph.set_task_fragment(
+        expression::set_expression::ids::set_expression::FUNCTION,
+        expression::set_expression_fragment(&rig_prefix),
+    );
+    graph.set_task_fragment(
+        expression::set_facial_action_units::ids::set_facial_action_units::FUNCTION,
+        expression::set_facial_action_units_fragment(&rig_prefix),
     );
     let holds = graph.key_holds();
     let builder = arora::Arora::builder()
@@ -1818,6 +1837,14 @@ mod tests {
         }
     }
 
+    /// The shape's code a code-addressed player's feedback record carries.
+    fn fed_back_code(arora: &arora::Arora, path: &str) -> Option<Value> {
+        match read_value(arora, path)? {
+            Value::KeyValue(report) => report.get_field("value")?.value.as_deref().cloned(),
+            _ => None,
+        }
+    }
+
     /// How hard the feedback record says its shape is driven.
     fn fed_back_intensity(arora: &arora::Arora, path: &str) -> f32 {
         let Some(Value::KeyValue(report)) = read_value(arora, path) else {
@@ -2179,6 +2206,377 @@ mod tests {
         );
     }
 
+    /// A call of a skill the interpreter describes, as a bridge would build
+    /// it from the described signature: `args` by parameter name.
+    fn skill_call(
+        function: uuid::Uuid,
+        parameters: std::collections::HashMap<uuid::Uuid, String>,
+        args: Vec<(&str, Value)>,
+    ) -> arora_types::call::Call {
+        use arora_types::value::StructureField;
+        arora_types::call::Call {
+            module_id: Some(arora_behavior::interpreter_module::ID),
+            id: function,
+            args: args
+                .into_iter()
+                .map(|(name, value)| StructureField {
+                    id: *parameters
+                        .iter()
+                        .find(|(_, n)| *n == name)
+                        .unwrap_or_else(|| panic!("{name} is not a declared parameter"))
+                        .0,
+                    value: Box::new(value),
+                })
+                .collect(),
+        }
+    }
+
+    fn set_expression_call(name: &str, valence: f32, arousal: f32) -> arora_types::call::Call {
+        skill_call(
+            expression::set_expression::ids::set_expression::FUNCTION,
+            expression::set_expression_parameters(),
+            vec![
+                ("expression", Value::String(name.to_string())),
+                ("valence", Value::F32(valence)),
+                ("arousal", Value::F32(arousal)),
+            ],
+        )
+    }
+
+    fn action_units_call(codes: &[u8], intensities: &[f32]) -> arora_types::call::Call {
+        skill_call(
+            expression::set_facial_action_units::ids::set_facial_action_units::FUNCTION,
+            expression::set_facial_action_units_parameters(),
+            vec![
+                ("codes", Value::ArrayU8(codes.to_vec())),
+                ("intensities", Value::ArrayF32(intensities.to_vec())),
+            ],
+        )
+    }
+
+    fn set_viseme_call(code: u8) -> arora_types::call::Call {
+        skill_call(
+            viseme::set_viseme::ids::set_viseme::FUNCTION,
+            viseme::set_viseme_parameters(),
+            vec![("viseme", Value::U8(code))],
+        )
+    }
+
+    fn play_visemes_call(
+        visemes: &[u8],
+        starts: &[f32],
+        durations: &[f32],
+    ) -> arora_types::call::Call {
+        skill_call(
+            viseme::play_visemes::ids::play_visemes::FUNCTION,
+            viseme::play_visemes_parameters(),
+            vec![
+                ("visemes", Value::ArrayU8(visemes.to_vec())),
+                ("starts", Value::ArrayF32(starts.to_vec())),
+                ("durations", Value::ArrayF32(durations.to_vec())),
+            ],
+        )
+    }
+
+    fn expression(arora: &arora::Arora, name: &str) -> f32 {
+        read_f32(arora, &standard::expression_path(name))
+    }
+
+    fn muscle(arora: &arora::Arora, control: &str) -> f32 {
+        read_f32(arora, &standard::face_path(control))
+    }
+
+    /// The device describes every skill it implements as graph data, so a
+    /// bridge discovers them and exposes them by name.
+    #[test]
+    fn the_device_describes_the_face_skills() {
+        let mut arora = ros4hri_device();
+        let described = arora.caller().describe_methods(None);
+        arora.step(Duration::from_millis(16)).expect("step");
+        let described = futures::executor::block_on(described).expect("the methods describe");
+        let names: Vec<&str> = described.iter().map(|m| m.name.as_str()).collect();
+        for skill in [
+            "look_at",
+            "play_viseme",
+            "set_expression",
+            "set_facial_action_units",
+            "set_viseme",
+            "play_visemes",
+        ] {
+            assert!(names.contains(&skill), "{skill} undescribed: {names:?}");
+        }
+    }
+
+    /// A set_expression run holds the named expression at the arousal as its
+    /// intensity, smoothed like the mapping, and keeps running: the ROS4HRI
+    /// keys do not move the face while it lives. Halted, it hands the
+    /// expression back to the mapping, which continues from where the run
+    /// left it — no snap — and settles on what the keys command. A
+    /// valence/arousal point blends as the mapping blends it, and `asleep`
+    /// closes the lids whoever sets it.
+    #[test]
+    fn a_set_expression_run_holds_the_expression_until_halted() {
+        use vizij_arora_behavior::task;
+        let mut arora = ros4hri_device();
+        settle(&mut arora);
+        let handle = spawn(&mut arora, &set_expression_call("happy", 0.0, 1.0));
+        step_for(&mut arora, 0.048);
+        let rising = expression(&arora, "happy");
+        assert!(
+            rising > 0.05 && rising < 0.5,
+            "happy fades in, no snap ({rising})"
+        );
+        settle(&mut arora);
+        assert!(expression(&arora, "happy") > 0.95);
+        assert!(expression(&arora, "neutral") < 0.01);
+        assert_eq!(
+            read_value(&arora, &handle.status.path),
+            Some(task::running())
+        );
+
+        // The keys command another expression: the run still owns the face.
+        stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("sad"));
+        stage(&arora, ros4hri::EXPRESSION_AROUSAL_KEY, float(1.0));
+        settle(&mut arora);
+        assert!(expression(&arora, "happy") > 0.95);
+        assert!(expression(&arora, "sad") < 0.01);
+
+        // Halted: the mapping takes the expression back from where it is.
+        arora.call(handle.stop.clone()).expect("halt");
+        step_for(&mut arora, 0.048);
+        let fading = expression(&arora, "happy");
+        assert!(
+            fading > 0.5 && fading < 0.99,
+            "happy fades out, no snap ({fading})"
+        );
+        settle(&mut arora);
+        assert!(expression(&arora, "happy") < 0.01);
+        assert!(expression(&arora, "sad") > 0.95);
+
+        // A valence/arousal point: the mapping's blend.
+        let blend = spawn(&mut arora, &set_expression_call("", 0.8, 0.4));
+        settle(&mut arora);
+        assert!(expression(&arora, "happy") > 0.4);
+        assert!(expression(&arora, "sad") < 0.01);
+        assert!(expression(&arora, "angry") < 0.01);
+        arora.call(blend.stop.clone()).expect("halt");
+
+        // Asleep closes the lids.
+        spawn(&mut arora, &set_expression_call("asleep", 0.0, 1.0));
+        settle(&mut arora);
+        for _ in 0..300 {
+            arora.step(Duration::from_millis(16)).expect("step");
+            let lid = read_f32(&arora, standard::LEFT_EYE_TOP_EYELID_POS_Y);
+            assert!(lid > 0.9, "lid opened while asleep ({lid})");
+        }
+    }
+
+    /// set_facial_action_units drives the muscle tier: each listed unit's
+    /// controls at its intensity (AU 26 also the de-facto jaw), every other
+    /// control at rest. It takes the face over from a set_expression run,
+    /// which ends preempted, and the face crossfades — the expression fading
+    /// out from where it was as the units fade in — and a set_expression run
+    /// takes it back the same way.
+    #[test]
+    fn the_expression_setters_take_the_face_over_from_each_other() {
+        use vizij_arora_behavior::task;
+        let mut arora = ros4hri_device();
+        let expressed = spawn(&mut arora, &set_expression_call("happy", 0.0, 1.0));
+        settle(&mut arora);
+        assert!(expression(&arora, "happy") > 0.95);
+
+        let units = spawn(
+            &mut arora,
+            &action_units_call(&[12, 26, 4], &[0.8, 0.5, 2.0]),
+        );
+        step_for(&mut arora, 0.048);
+        assert_eq!(
+            read_value(&arora, &expressed.status.path),
+            Some(task::failure()),
+            "preempted"
+        );
+        let fading = expression(&arora, "happy");
+        assert!(
+            fading > 0.5 && fading < 0.99,
+            "happy fades, no snap ({fading})"
+        );
+        let smiling = muscle(&arora, "mouth_smile_left");
+        assert!(
+            smiling > 0.05 && smiling < 0.6,
+            "the smile fades in ({smiling})"
+        );
+
+        settle(&mut arora);
+        for name in standard::expression_names() {
+            let weight = expression(&arora, name);
+            assert!(weight < 0.01, "{name} = {weight} under the units");
+        }
+        for (control, intensity) in [
+            ("mouth_smile_left", 0.8),
+            ("mouth_smile_right", 0.8),
+            ("jaw_open", 0.5),
+            // An intensity past 1 is clamped.
+            ("brow_down_left", 1.0),
+            ("brow_down_right", 1.0),
+            // Sparse: what the command does not list rests.
+            ("brow_inner_up", 0.0),
+            ("eye_wide_left", 0.0),
+        ] {
+            let weight = muscle(&arora, control);
+            assert!(
+                (weight - intensity).abs() < 0.02,
+                "{control} = {weight}, expected {intensity}"
+            );
+        }
+        let jaw = read_f32(&arora, standard::MOUTH_JAW_OPEN);
+        assert!(
+            (jaw - 0.5).abs() < 0.02,
+            "the de-facto jaw follows AU 26 ({jaw})"
+        );
+        assert_eq!(
+            read_value(&arora, &units.status.path),
+            Some(task::running())
+        );
+
+        // A blink (AU 45) closes the eyes' controls, as AU 43.
+        spawn(&mut arora, &action_units_call(&[45], &[1.0]));
+        settle(&mut arora);
+        assert!(muscle(&arora, "eye_closed_left") > 0.98);
+        assert!(muscle(&arora, "mouth_smile_left") < 0.01);
+
+        // set_expression takes the face back: the units rest.
+        spawn(&mut arora, &set_expression_call("sad", 0.0, 1.0));
+        settle(&mut arora);
+        assert!(expression(&arora, "sad") > 0.95);
+        assert!(muscle(&arora, "eye_closed_left") < 0.01);
+        assert!(read_f32(&arora, standard::MOUTH_JAW_OPEN) < 0.01);
+    }
+
+    /// play_visemes plays its timeline — each shape from its start for its
+    /// duration, rest in a gap — reports the current viseme as its feedback
+    /// and the face's state, and succeeds after the last span once the lips
+    /// have settled.
+    #[test]
+    fn a_play_visemes_run_plays_its_timeline_and_ends() {
+        use vizij_arora_behavior::task;
+        let mut arora = ros4hri_device();
+        // aa over [0, 0.3), oh over [0.3, 0.6), a gap, PP over [0.9, 1.1).
+        let handle = spawn(
+            &mut arora,
+            &play_visemes_call(&[10, 13, 1], &[0.0, 0.3, 0.9], &[0.3, 0.3, 0.2]),
+        );
+        step_for(&mut arora, 0.2);
+        assert!(read_f32(&arora, &standard::viseme_path("aa")) > 0.8);
+        assert_eq!(
+            fed_back_viseme(&arora, &handle.feedback[0].path).as_deref(),
+            Some("aa")
+        );
+        assert_eq!(
+            fed_back_code(&arora, &handle.feedback[0].path),
+            Some(Value::U8(10))
+        );
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("aa")));
+
+        step_for(&mut arora, 0.256);
+        assert!(read_f32(&arora, &standard::viseme_path("oh")) > 0.8);
+        assert!(read_f32(&arora, &standard::viseme_path("aa")) < 0.05);
+        assert_eq!(
+            fed_back_viseme(&arora, &handle.feedback[0].path).as_deref(),
+            Some("oh")
+        );
+
+        // The gap rests.
+        step_for(&mut arora, 0.3);
+        for shape in standard::VISEME_SHAPES {
+            let weight = read_f32(&arora, &standard::viseme_path(shape));
+            assert!(weight < 0.05, "{shape} = {weight} in the gap");
+        }
+        assert_eq!(
+            fed_back_viseme(&arora, &handle.feedback[0].path).as_deref(),
+            Some("sil")
+        );
+        assert_eq!(
+            fed_back_code(&arora, &handle.feedback[0].path),
+            Some(Value::U8(0))
+        );
+        assert_eq!(
+            read_value(&arora, &handle.status.path),
+            Some(task::running())
+        );
+
+        step_for(&mut arora, 0.25);
+        assert!(read_f32(&arora, &standard::viseme_path("PP")) > 0.8);
+
+        // Past the last span and the settling: done, at rest.
+        step_for(&mut arora, 0.4);
+        assert_eq!(
+            read_value(&arora, &handle.status.path),
+            Some(task::success())
+        );
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("sil")));
+        assert!(read_f32(&arora, &standard::viseme_path("PP")) < 0.02);
+    }
+
+    /// set_viseme holds its shape until the next lips command: it takes the
+    /// lips over from a play_visemes run, which ends preempted, crossfading
+    /// from where they were, and holds while nothing else commands them; a
+    /// viseme the ROS4HRI stream plays takes them over from it in turn, and
+    /// `sil` rests them.
+    #[test]
+    fn the_lips_players_take_over_from_each_other() {
+        use vizij_arora_behavior::task;
+        let mut arora = ros4hri_device();
+        let timeline = spawn(&mut arora, &play_visemes_call(&[10], &[0.0], &[2.0]));
+        step_for(&mut arora, 0.2);
+        let aa = read_f32(&arora, &standard::viseme_path("aa"));
+        assert!(aa > 0.8, "aa = {aa}");
+
+        let held = spawn(&mut arora, &set_viseme_call(1));
+        step_for(&mut arora, 0.032);
+        assert_eq!(
+            read_value(&arora, &timeline.status.path),
+            Some(task::failure()),
+            "preempted"
+        );
+        let fading = read_f32(&arora, &standard::viseme_path("aa"));
+        assert!(
+            fading < aa && fading > 0.1,
+            "aa fades, no snap: {aa} → {fading}"
+        );
+        step_for(&mut arora, 2.0);
+        assert!(read_f32(&arora, &standard::viseme_path("PP")) > 0.98);
+        assert!(read_f32(&arora, &standard::viseme_path("aa")) < 0.02);
+        assert_eq!(
+            fed_back_viseme(&arora, &held.feedback[0].path).as_deref(),
+            Some("PP")
+        );
+        assert_eq!(
+            fed_back_code(&arora, &held.feedback[0].path),
+            Some(Value::U8(1))
+        );
+        assert_eq!(read_value(&arora, &held.status.path), Some(task::running()));
+
+        // The stream's viseme is a play_viseme run: it takes the lips over.
+        stage(&arora, ros4hri::VISEME_KEY, Value::U8(13));
+        step_for(&mut arora, 0.2);
+        assert_eq!(
+            read_value(&arora, &held.status.path),
+            Some(task::failure()),
+            "preempted by the stream"
+        );
+        assert!(read_f32(&arora, &standard::viseme_path("oh")) > 0.8);
+        assert!(read_f32(&arora, &standard::viseme_path("PP")) < 0.02);
+
+        // `sil` holds rest.
+        let rest = spawn(&mut arora, &set_viseme_call(0));
+        step_for(&mut arora, 0.6);
+        for shape in standard::VISEME_SHAPES {
+            let weight = read_f32(&arora, &standard::viseme_path(shape));
+            assert!(weight < 0.02, "{shape} = {weight} at rest");
+        }
+        assert_eq!(read_value(&arora, &rest.status.path), Some(task::running()));
+    }
+
     #[test]
     fn ros4hri_blink_pulses_and_asleep_holds_the_lids_shut() {
         let mut arora = ros4hri_device();
@@ -2349,6 +2747,21 @@ mod tests {
                 "{control} does not reach {rig_input} ({value})"
             );
         }
+
+        // A set_expression run reaches the emotion-pose plane like the
+        // mapping: the run writes the face's prefixed expression weights.
+        stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text(""));
+        stage(&arora, ros4hri::EXPRESSION_AROUSAL_KEY, float(0.0));
+        settle(&mut arora);
+        let pose = read_f32(&arora, "rig/quori_latest/poses/pose_d_happy_d.weight");
+        assert!(pose < 0.05, "the keys rest the face (pose = {pose})");
+        spawn(&mut arora, &set_expression_call("happy", 0.0, 1.0));
+        settle(&mut arora);
+        let pose = read_f32(&arora, "rig/quori_latest/poses/pose_d_happy_d.weight");
+        assert!(
+            pose > 0.95,
+            "set_expression misses the pose (pose = {pose})"
+        );
     }
 
     /// On Quori, the reference adaptation maps the muscle tier onto the rig's
@@ -2358,8 +2771,8 @@ mod tests {
     /// the controls they do not name rest. AU 5 (upper lid raiser) opens the
     /// top lids past their rest. At rest the muscle tier leaves the face as
     /// the adaptation without it renders it, the mapped inputs at the rig's
-    /// own rest. The controls are written as a client writes them, under the
-    /// face's prefix. Needs `VIZIJ_FIXTURES`.
+    /// own rest. A set_facial_action_units run holds the units, as a client
+    /// commands them. Needs `VIZIJ_FIXTURES`.
     #[test]
     fn quori_s_adaptation_maps_the_action_units() {
         let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
@@ -2378,20 +2791,14 @@ mod tests {
                 .filter_map(|(key, value)| Some((key.path.clone(), as_float(value.as_ref()?)?)))
                 .collect()
         }
-        // Quori, settled with the muscle-tier controls of the action units
-        // `codes` at `intensity`.
+        // Quori, settled with a set_facial_action_units run holding the
+        // action units `codes` at `intensity`.
         let holding = |codes: &[u8], intensity: f32| {
             let mut arora = adapted_quori(&fixtures);
-            for control in standard::FACE_CONTROLS
-                .iter()
-                .filter(|control| control.au.is_some_and(|au| codes.contains(&au)))
-            {
-                stage(
-                    &arora,
-                    &format!("rig/quori_latest/{}", standard::face_path(control.name)),
-                    float(intensity),
-                );
-            }
+            spawn(
+                &mut arora,
+                &action_units_call(codes, &vec![intensity; codes.len()]),
+            );
             settle(&mut arora);
             arora
         };
