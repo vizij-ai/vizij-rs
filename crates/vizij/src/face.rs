@@ -2515,7 +2515,8 @@ mod tests {
 
     /// set_facial_action_units drives the muscle tier: each listed unit's
     /// controls at its intensity (AU 26 also the de-facto jaw), every other
-    /// control at rest. It takes the face over from a set_expression run,
+    /// control at rest, over the neutral expression. It takes the face over
+    /// from a set_expression run,
     /// which ends preempted, and the face crossfades — the expression fading
     /// out from where it was as the units fade in — and a set_expression run
     /// takes it back the same way.
@@ -2551,7 +2552,11 @@ mod tests {
         settle(&mut arora);
         for name in standard::expression_names() {
             let weight = expression(&arora, name);
-            assert!(weight < 0.01, "{name} = {weight} under the units");
+            let neutral = if name == "neutral" { 1.0 } else { 0.0 };
+            assert!(
+                (weight - neutral).abs() < 0.01,
+                "{name} = {weight} under the units"
+            );
         }
         for (control, intensity) in [
             ("mouth_smile_left", 0.8),
