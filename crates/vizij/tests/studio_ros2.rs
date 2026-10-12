@@ -213,8 +213,6 @@ async fn each_form_of_a_studio_target_escapes_to_a_topic_of_its_own() {
 /// feedback resting at another type would keep that topic type and drop
 /// every feedback after it.
 #[tokio::test]
-#[ignore = "Studio's feedback rests at `f32` until Studio's inputs take `f64` defaults \
-            (vizij-rs#200)"]
 async fn a_feedback_holds_its_target_s_type_from_the_rest_on() {
     let (_device, port) = serve(None);
     let feedbacks = feedback_topics().map(|(key, _)| key);
@@ -237,9 +235,12 @@ async fn a_feedback_holds_its_target_s_type_from_the_rest_on() {
 /// the face, and reads the feedback back on its topics, as `std_msgs/Float64`
 /// like the target.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "Studio's feedback topic is typed `Float32` until Studio's inputs take `f64` \
-            defaults (vizij-rs#200); DDS multicast discovery is also unreliable on macOS \
-            loopback: run there with --ignored on a multicast-capable interface"]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "DDS multicast SPDP discovery is unreliable on macOS loopback (rustdds has no \
+              unicast-peer/interface config); this runs on Linux CI. To run locally, ensure an \
+              active multicast-capable interface and use --ignored."
+)]
 async fn a_float_published_on_each_form_s_topic_moves_the_face_and_its_feedback() {
     use arora_bridge_ros2::msg_types::{Float64, MessageType};
     use rand::Rng;
