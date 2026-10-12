@@ -600,6 +600,22 @@ async fn the_face_skills_serve_over_ros2() {
                 qos,
             )
             .expect("the play_visemes client creates");
+        // Wait for the server as rclpy's `wait_for_server` does: its three
+        // services answer and its feedback and status topics have a matched
+        // publisher. Feedback is volatile, so a goal sent before the feedback
+        // subscription matches the server's writer loses what the run reports
+        // until it does.
+        tokio::time::timeout(Duration::from_secs(30), async {
+            futures::join!(
+                client.goal_client().wait_for_service(&node),
+                client.cancel_client().wait_for_service(&node),
+                client.result_client().wait_for_service(&node),
+                client.feedback_subscription().wait_for_publisher(&node),
+                client.status_subscription().wait_for_publisher(&node),
+            )
+        })
+        .await
+        .expect("the play_visemes server becomes available");
         let span = |value: u8, start_ms: u32, duration_ms: u32| TimedViseme {
             viseme: Viseme { value },
             timing: Timing {
@@ -652,7 +668,8 @@ async fn the_face_skills_serve_over_ros2() {
         eprintln!("[client] play_visemes fed back {fed_back:?}");
         assert!(
             fed_back.contains(&10) && fed_back.contains(&13),
-            "the feedback follows the timeline: {fed_back:?}"
+            "the feedback follows the timeline: {fed_back:?} (feedback publishers matched: {})",
+            client.feedback_subscription().get_publisher_count(&node)
         );
         let (status, result) = client
             .async_request_result(goal_id)
