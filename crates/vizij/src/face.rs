@@ -2299,18 +2299,27 @@ mod tests {
     /// graphs + the ROS4HRI mapping, no autoplay — the idle program would
     /// contend on gaze paths), its neutral pose staged.
     fn adapted_quori(fixtures: &str) -> arora::Arora {
-        let glb = std::path::Path::new(fixtures).join("Quori_Current_Extended.glb");
-        let bytes = std::fs::read(&glb).expect("read the Quori GLB");
+        adapted_quori_with(fixtures, quori_adaptation())
+    }
 
-        // The bundler grafts the committed adaptation sidecar into the bundle.
+    /// Quori's committed adaptation sidecar.
+    fn quori_adaptation() -> serde_json::Value {
         let sidecar = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../fixtures/faces/quori/standard-adaptation.json"
         );
-        let spec = vizij_bundle::from_sidecar(
+        vizij_bundle::from_sidecar(
             &std::fs::read_to_string(sidecar).expect("read the adaptation sidecar"),
         )
-        .expect("parse the adaptation sidecar");
+        .expect("parse the adaptation sidecar")
+    }
+
+    /// [`adapted_quori`] with `spec` as the adaptation.
+    fn adapted_quori_with(fixtures: &str, spec: serde_json::Value) -> arora::Arora {
+        let glb = std::path::Path::new(fixtures).join("Quori_Current_Extended.glb");
+        let bytes = std::fs::read(&glb).expect("read the Quori GLB");
+
+        // The bundler grafts the adaptation into the bundle.
         let mut face = vizij_bundle::Face::parse(&bytes).expect("parse the Quori GLB");
         face.add_graph("standard-adaptation", "quori_standard_adaptation", spec)
             .expect("graft the adaptation");
@@ -2427,65 +2436,129 @@ mod tests {
         );
     }
 
-    /// On Quori, set_facial_action_units moves the jaw and nothing else: the
-    /// face's rig reads the de-facto jaw (AU 26), and no shipped adaptation
-    /// maps the rest of the muscle tier. Two identical devices, stepped
-    /// alike, hold the same units at rest and at full intensity; the rig and
-    /// pose keys that differ are what the units move. Needs `VIZIJ_FIXTURES`.
+    /// On Quori, the reference adaptation maps the muscle tier onto the rig's
+    /// brow, lid and mouth inputs. A set_facial_action_units run holding AU 12
+    /// (lip corner puller) and AU 4 (brow lowerer) pulls the mouth's corners
+    /// up and wide and the brows down and toward the centre, and the face's
+    /// render follows; the units it does not hold rest. At rest the muscle
+    /// tier leaves the face as the adaptation without it renders it, the
+    /// mapped inputs at the rig's own rest. Needs `VIZIJ_FIXTURES`.
     #[test]
-    fn on_quori_only_the_jaw_answers_the_action_units() {
+    fn quori_s_adaptation_maps_the_action_units() {
         let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
             eprintln!("VIZIJ_FIXTURES unset — skipping the Quori action-unit test");
             return;
         };
-        let moved_by = |codes: &[u8]| -> Vec<String> {
-            let mut rest = adapted_quori(&fixtures);
-            let mut held = adapted_quori(&fixtures);
-            spawn(
-                &mut rest,
-                &action_units_call(codes, &vec![0.0; codes.len()]),
-            );
-            spawn(
-                &mut held,
-                &action_units_call(codes, &vec![1.0; codes.len()]),
-            );
-            settle(&mut rest);
-            settle(&mut held);
-            let rest = rest.store().snapshot().storage;
-            let mut moved: Vec<String> = held
+        let rig = |input: &str| format!("rig/quori_latest/standard/vizij/{input}");
+        /// The float keys, task runs' keys aside.
+        fn floats(arora: &arora::Arora) -> std::collections::BTreeMap<String, f32> {
+            arora
                 .store()
                 .snapshot()
                 .storage
                 .into_iter()
-                .filter(|(key, _)| {
-                    !key.path.contains("/standard/") && !key.path.starts_with("arora/")
-                })
-                .filter_map(|(key, value)| {
-                    let held = as_float(value.as_ref()?)?;
-                    let at_rest = as_float(rest.get(&key)?.as_ref()?)?;
-                    ((held - at_rest).abs() > 1e-3).then(|| key.path.clone())
-                })
-                .collect();
-            moved.sort();
-            moved
-        };
+                .filter(|(key, _)| !key.path.starts_with("arora/"))
+                .filter_map(|(key, value)| Some((key.path.clone(), as_float(value.as_ref()?)?)))
+                .collect()
+        }
+        let mut untouched = adapted_quori(&fixtures);
+        settle(&mut untouched);
+        let untouched = floats(&untouched);
 
-        let jaw = moved_by(&[26]);
-        eprintln!("AU 26 moves {jaw:?}");
-        assert!(!jaw.is_empty(), "AU 26 moves nothing on Quori");
-
-        let mut others: Vec<u8> = standard::FACE_CONTROLS
-            .iter()
-            .filter_map(|control| control.au)
-            .filter(|au| *au != 26)
+        let mut held = adapted_quori(&fixtures);
+        spawn(&mut held, &action_units_call(&[12, 4], &[1.0, 1.0]));
+        settle(&mut held);
+        for (input, expected) in [
+            ("mouth/morph/corner_puller", 1.0),
+            ("mouth/morph/stretch", 1.0),
+            ("left_eye_brow/morph/in_up_down", -1.0),
+            ("right_eye_brow/morph/in_up_down", -1.0),
+            ("left_eye_brow/morph/mid_up_down", -0.5),
+            ("right_eye_brow/morph/mid_up_down", -0.5),
+            ("left_eye_brow/morph/in_left_right", 1.0),
+            ("right_eye_brow/morph/in_left_right", 1.0),
+            ("left_eye_brow/morph/out_up_down", 0.0),
+            ("left_eye_bottom_eyelid/pos/y", 0.0),
+            ("mouth/morph/left_top_sneer", 0.0),
+        ] {
+            let value = read_f32(&held, &rig(input));
+            assert!(
+                (value - expected).abs() < 0.02,
+                "{input} = {value}, expected {expected}"
+            );
+        }
+        // The render follows: against the same units held at rest, the rig's
+        // outputs move (the setter rests the named expressions either way).
+        let mut resting = adapted_quori(&fixtures);
+        spawn(&mut resting, &action_units_call(&[12, 4], &[0.0, 0.0]));
+        settle(&mut resting);
+        let resting = floats(&resting);
+        let rendered: Vec<String> = floats(&held)
+            .into_iter()
+            .filter(|(path, value)| {
+                !path.contains("/standard/")
+                    && resting
+                        .get(path)
+                        .is_some_and(|at_rest| (value - at_rest).abs() > 1e-3)
+            })
+            .map(|(path, _)| path)
             .collect();
-        others.sort_unstable();
-        others.dedup();
-        let moved = moved_by(&others);
+        assert!(!rendered.is_empty(), "AU 12 and AU 4 move no rig output");
+
+        // The adaptation without the outputs onto the rig's own standard
+        // inputs — what the muscle tier adds — renders the face the same.
+        let mut before = quori_adaptation();
+        let muscle: std::collections::HashSet<String> = before["nodes"]
+            .as_array()
+            .expect("nodes")
+            .iter()
+            .filter(|node| {
+                node["type"] == "output"
+                    && node["params"]["path"]
+                        .as_str()
+                        .is_some_and(|path| path.contains("/standard/vizij/"))
+            })
+            .filter_map(|node| node["id"].as_str().map(String::from))
+            .collect();
+        assert!(!muscle.is_empty(), "the adaptation maps the muscle tier");
+        let kept = |id: &serde_json::Value| id.as_str().is_none_or(|id| !muscle.contains(id));
+        before["nodes"]
+            .as_array_mut()
+            .expect("nodes")
+            .retain(|node| kept(&node["id"]));
+        before["edges"]
+            .as_array_mut()
+            .expect("edges")
+            .retain(|edge| kept(&edge["to"]["node_id"]));
+        let mut before = adapted_quori_with(&fixtures, before);
+        settle(&mut before);
+        let before = floats(&before);
+        let drifted: Vec<(&String, f32, f32)> = before
+            .iter()
+            .filter_map(|(path, was)| {
+                let is = *untouched.get(path)?;
+                ((is - was).abs() > 1e-6).then_some((path, *was, is))
+            })
+            .collect();
         assert!(
-            moved.is_empty(),
-            "the muscle tier beyond the jaw moves {moved:?} on Quori"
+            drifted.is_empty(),
+            "the muscle tier at rest drifts {drifted:?}"
         );
+        for side in ["left", "right"] {
+            for input in [
+                "eye_brow/morph/in_up_down",
+                "eye_brow/morph/mid_up_down",
+                "eye_brow/morph/out_up_down",
+                "eye_brow/morph/in_left_right",
+                "eye_bottom_eyelid/pos/y",
+                "eye_bottom_eyelid/morph/curve",
+            ] {
+                let path = rig(&format!("{side}_{input}"));
+                assert_eq!(untouched.get(&path), Some(&0.0), "{path} at rest");
+            }
+        }
+        assert_eq!(untouched.get(&rig("mouth/morph/corner_puller")), Some(&0.0));
+        assert_eq!(untouched.get("rig/quori_latest/lids/blink"), Some(&0.0));
     }
 
     /// Faces whose rigs predate the standard, each with the adaptation
