@@ -84,10 +84,11 @@ its intensity, clamped to `[0, 1]`; AU 26 also drives the de-facto jaw, and
 AU 45 (blink) counts as AU 43. It is sparse: a unit the command does not list
 rests at zero, since the command describes the whole face as a named
 expression does. Codes the muscle tier does not express are ignored, and
-lists of mismatched lengths drive nothing. The named expressions rest. A face
-shows what its adaptation maps: no shipped adaptation maps the muscle tier,
-and Quori's rig reads only the de-facto jaw, so on Quori only AU 26 moves the
-face.
+lists of mismatched lengths drive nothing. The named expressions hold at
+`neutral` (its weight 1, the others 0): the units move the face from its
+neutral pose, the base its poses are authored over. A face shows what its
+adaptation maps: no shipped adaptation maps the muscle tier, and Quori's rig
+reads only the de-facto jaw, so on Quori only AU 26 moves the face.
 
 **The ROS4HRI mapping's expression channel** writes the same weights from the
 `standard/ros4hri/expression/*` keys. It runs in the face's graph, before the

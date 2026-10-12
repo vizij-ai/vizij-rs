@@ -191,7 +191,9 @@ pub const SET_EXPRESSION_JSON: &str = include_str!("../skills/set_expression.jso
 /// expression's other setter, or a new one, takes over. Sparse: `codes[i]`
 /// is driven at `intensities[i]`, in `[0, 1]`, and an action unit not listed
 /// rests at zero — the command describes the whole face, as a named
-/// expression does. Each code drives the muscle-tier controls expressing it
+/// expression does. The named expressions hold at `neutral` (its weight 1,
+/// the others 0): the action units move the face from its neutral pose, the
+/// base a face's poses are authored over. Each code drives the muscle-tier controls expressing it
 /// ([`standard::controls_for_au`]; AU 26 also the de-facto
 /// [`standard::MOUTH_JAW_OPEN`]); codes the muscle tier does not express are
 /// ignored, and mismatched lengths drive nothing. Its fragment
@@ -962,8 +964,8 @@ pub fn generate_set_expression() -> Json {
 /// codes being integers) and dotted with the intensities — clamped to
 /// `[0, 1]`, so an unlisted unit, or lists of mismatched lengths, read zero.
 /// AU 45 (blink) counts as AU 43 (eyes closed). Each control follows its
-/// unit's intensity, the named expressions rest, and the run holds that
-/// until halted ([`hold_expression`]).
+/// unit's intensity, the named expressions hold at `neutral`, and the run
+/// holds that until halted ([`hold_expression`]).
 pub fn generate_set_facial_action_units() -> Json {
     let g = &mut GraphBuilder::new();
     let codes = g.input("in/codes", "task/codes", json!({ "u8s": [] }));
@@ -1011,6 +1013,7 @@ pub fn generate_set_facial_action_units() -> Json {
         standard::MOUTH_JAW_OPEN.to_string(),
         intensity_of[&26].clone(),
     ));
+    targets.push((standard::expression_path("neutral"), one.clone()));
     hold_expression(g, &targets);
     json!({ "nodes": g.nodes, "edges": g.edges })
 }
@@ -1198,8 +1201,9 @@ pub const SKILLS: [Skill; 7] = [
         id: set_facial_action_units::NAME,
         title: "Set Facial Action Units",
         description: "Sets the face's expression as FACS action units (sparse: an unlisted unit \
-                      rests) on the muscle tier and holds it until changed; the latest of \
-                      set_expression and set_facial_action_units takes the face over.",
+                      rests) on the muscle tier, over the neutral expression, and holds it \
+                      until changed; the latest of set_expression and set_facial_action_units \
+                      takes the face over.",
         parameters: &SET_FACIAL_ACTION_UNITS_PARAMS,
         asset_json: SET_FACIAL_ACTION_UNITS_JSON,
     },
