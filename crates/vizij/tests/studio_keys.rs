@@ -4,10 +4,12 @@
 //! animatable id the view indexes, a compound animatable's components joined,
 //! with Studio's feedback keys reporting back; an animatable the face's rig
 //! drives takes Studio's keys and stays the rig's. A target is taken in
-//! either form, `<id>/target.position` or `<id>.target_position`, the first
-//! when an update carries both. The update goes through the open local
-//! bridge, the same inbound path as the Studio bridge's: one that names a
-//! key the device never opened is refused whole.
+//! either form, `<id>/target.position` (a component's
+//! `<id>/target.position.<axis>`) or Studio's `<id>.target_position`
+//! (`<id>.<axis>.target_position`), the first when an update carries both.
+//! The update goes through the open local bridge, the same inbound path as
+//! the Studio bridge's: one that names a key the device never opened is
+//! refused whole.
 
 #![cfg(feature = "studio")]
 
@@ -89,15 +91,16 @@ fn studio_update(x: Uuid, y: Uuid, color: Uuid) -> Json {
     ])
 }
 
-/// The same update with each target as a field of `<id>/target`.
+/// The same update with each target in the `k/target.c` form: a
+/// component's as `<id>/target.position.<axis>`.
 fn slash_update(x: Uuid, y: Uuid, color: Uuid) -> Json {
     write_values(&[
         (format!("{x}/target.position"), 0.25),
         (format!("{x}/target.velocity"), 0.0),
         (format!("{y}/target.position"), -0.5),
-        (format!("{color}.r/target.position"), 1.0),
-        (format!("{color}.g/target.position"), 0.0),
-        (format!("{color}.b/target.position"), 0.5),
+        (format!("{color}/target.position.r"), 1.0),
+        (format!("{color}/target.position.g"), 0.0),
+        (format!("{color}/target.position.b"), 0.5),
     ])
 }
 
@@ -198,7 +201,7 @@ async fn the_device_lists_every_form_of_studio_s_keys_as_inputs() {
     let keys = request(&mut socket, json!({"type": "list_keys"}), "list_keys_resp").await;
     let keys = keys["keys"].as_array().expect("keys");
     let mut forms = Vec::new();
-    for key in [x.to_string(), y.to_string(), format!("{color}.r")] {
+    for key in [x.to_string(), y.to_string()] {
         forms.extend([
             format!("{key}/target.position"),
             format!("{key}.target_position"),
@@ -207,6 +210,13 @@ async fn the_device_lists_every_form_of_studio_s_keys_as_inputs() {
             format!("{key}.target_velocity"),
         ]);
     }
+    forms.extend([
+        format!("{color}/target.position.r"),
+        format!("{color}.r.target_position"),
+        format!("{color}.r.studio_value"),
+        format!("{color}/target.velocity.r"),
+        format!("{color}.r.target_velocity"),
+    ]);
     for form in forms {
         let meta = keys
             .iter()

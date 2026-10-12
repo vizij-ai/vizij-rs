@@ -1,27 +1,29 @@
 //! The Studio-key profile: how a face takes Semio Studio's writes and
 //! reports back to it.
 //!
-//! Studio addresses a device's animatables by key: `<id>` is the RobotData
-//! animatable id of a number, and `<uuid>.<axis>` for each component of a
-//! vector, euler or colour, which Studio splits per axis on load. For an
-//! animatable it writes, in one update, the target — the value to show —
-//! and, while its timeline plays, the target velocity; it reads
-//! `<id>.position` back as the device's feedback.
+//! Studio addresses a device's animatables by id: `<id>`, the RobotData
+//! animatable id of a number, and `<id>.<axis>` for each component of a
+//! vector, euler or colour `<id>`, which Studio splits per axis on load into
+//! a number of its own. For each number it writes, in one update, the
+//! target — the value to show — and, while its timeline plays, the target
+//! velocity; it reads `<studio id>.position` back as the device's feedback.
 //!
 //! A target is accepted in each form a client writes it in:
 //!
-//! - `<id>/target.position` and `<id>/target.velocity`: the target as a
-//!   field of `<id>/target`, named by what it sets, the same for every value
-//!   type;
-//! - `<id>.target_position` and `<id>.target_velocity`: the form Studio
-//!   writes today;
-//! - `<id>.studio_value`: the target again, which Studio writes untyped
-//!   beside `<id>.target_position` for every animatable, and the device
-//!   declares `f64` like the target. It is legacy, an
-//!   input only so that Studio's update is accepted, and drives nothing:
-//!   every animatable the face draws is a number or a number's component,
-//!   for which Studio's update carries `<id>.target_position` with the same
-//!   value. It goes once Studio no longer sends it.
+//! - `<id>/target.position` and `<id>/target.velocity`, a component's
+//!   `<id>/target.position.<axis>` and `<id>/target.velocity.<axis>`: the
+//!   target as `arora_hal::set_targets` reads it (`k/target.c`), the same for
+//!   every value type;
+//! - `<studio id>.target_position` and `<studio id>.target_velocity`: the
+//!   form Studio writes today (`<id>.target_position`,
+//!   `<id>.<axis>.target_position`);
+//! - `<studio id>.studio_value`: the target again, which Studio writes
+//!   untyped beside `.target_position` for every number, and the device
+//!   declares `f64` like the target. It is legacy, an input only so that
+//!   Studio's update is accepted, and drives nothing: every animatable the
+//!   face draws is a number or a number's component, for which Studio's
+//!   update carries `.target_position` with the same value. It goes once
+//!   Studio no longer sends it.
 //!
 //! Every animatable the profile maps is numeric, so its target is a
 //! `position`; the profile takes no `<id>/target.value`.
@@ -29,8 +31,8 @@
 //! The device keeps a target's two forms in agreement (`TargetForms`): a
 //! change that writes the target in either form writes it in both, so a
 //! client speaking either form drives the face and the latest write wins.
-//! A change that carries both forms of one target takes the
-//! `<id>/target.position` form's value.
+//! A change that carries both forms of one target takes the `k/target.c`
+//! form's value, as `arora_hal::set_targets` does.
 //!
 //! The view indexes a face's pose by bare animatable id — a compound feature
 //! whole, under its `<uuid>` — so the profile is the mapping between the two:
@@ -39,9 +41,10 @@
 //! (its value shape is its [`Rest`]):
 //!
 //! - a number reads `<id>/target.position` and writes `<id>`;
-//! - a compound reads `<uuid>.<axis>/target.position` per component and
-//!   writes the three joined under `<uuid>`;
-//! - each target is echoed to its `.position` key, Studio's feedback;
+//! - a compound reads `<id>/target.position.<axis>` per component and
+//!   writes the three joined under `<id>`;
+//! - each target is echoed to its Studio feedback key,
+//!   `<studio id>.position`;
 //! - the other keys — the target's other form, which agrees with it, the
 //!   velocity in both forms and `.studio_value` — are read and go nowhere:
 //!   they are inputs so that an update carrying them beside the target is
@@ -63,6 +66,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
+use arora_hal::set_targets;
 use arora_types::data::{
     DataError, DataStore, Key, KeyMeta, Slot, State, StateChange, Subscription,
 };
@@ -83,20 +87,64 @@ pub(crate) const VELOCITY: &str = "velocity";
 /// animatable's id: legacy, read and going nowhere.
 pub(crate) const LEGACY_VALUE: &str = "studio_value";
 
-/// The target of `key` setting `what`, in the form `<key>/target.<what>`.
-pub(crate) fn target(key: &str, what: &str) -> String {
-    format!("{key}/target.{what}")
+/// One number Studio addresses: an animatable's id, and the axis of a
+/// component of a vector, euler or colour, which Studio addresses as a
+/// number of its own, `<id>.<axis>`.
+#[derive(Clone, Copy)]
+pub(crate) struct Number<'a> {
+    id: &'a str,
+    axis: Option<&'a str>,
 }
 
-/// The target of `key` setting `what`, in the form Studio writes today,
-/// `<key>.target_<what>`.
-pub(crate) fn underscored_target(key: &str, what: &str) -> String {
-    format!("{key}.target_{what}")
-}
+impl<'a> Number<'a> {
+    /// The number Studio addresses as `studio_id`: `<id>`, or `<id>.<axis>`.
+    pub(crate) fn of(studio_id: &'a str) -> Self {
+        match studio_id.split_once('.') {
+            Some((id, axis)) => Self {
+                id,
+                axis: Some(axis),
+            },
+            None => Self {
+                id: studio_id,
+                axis: None,
+            },
+        }
+    }
 
-/// Studio's feedback key for `key`: the target it last took.
-pub(crate) fn feedback(key: &str) -> String {
-    format!("{key}.{POSITION}")
+    /// Studio's id for it: `<id>`, or `<id>.<axis>`.
+    fn studio_id(&self) -> String {
+        match self.axis {
+            Some(axis) => format!("{}.{axis}", self.id),
+            None => self.id.to_string(),
+        }
+    }
+
+    /// Its target setting `what` in the `k/target.c` form:
+    /// `<id>/target.<what>`, a component's `<id>/target.<what>.<axis>`.
+    pub(crate) fn target(&self, what: &str) -> String {
+        match self.axis {
+            Some(axis) => format!("{}/target.{what}.{axis}", self.id),
+            None => format!("{}/target.{what}", self.id),
+        }
+    }
+
+    /// Its target setting `what` as Studio writes it today:
+    /// `<studio id>.target_<what>`.
+    pub(crate) fn studio_target(&self, what: &str) -> String {
+        format!("{}.target_{what}", self.studio_id())
+    }
+
+    /// Studio's feedback key for it: `<studio id>.position`, the target it
+    /// last took.
+    pub(crate) fn feedback(&self) -> String {
+        format!("{}.{POSITION}", self.studio_id())
+    }
+
+    /// The legacy key Studio writes the target to again:
+    /// `<studio id>.studio_value`.
+    pub(crate) fn legacy(&self) -> String {
+        format!("{}.{LEGACY_VALUE}", self.studio_id())
+    }
 }
 
 /// The Studio-key profile of a face, as a composable graph source. It maps
@@ -114,27 +162,35 @@ pub(crate) fn studio_source(meta: &FaceMeta, written: &HashSet<String>) -> (Stri
         .collect();
     let mut left = 0;
     for (id, binding) in &animatables {
-        // The keys Studio writes the animatable under, each with its rest.
-        let keys: Vec<(String, f32)> = match (binding.rest, binding.feature.axes()) {
+        // The numbers Studio addresses the animatable as, each with its rest.
+        let numbers: Vec<(Number, f32)> = match (binding.rest, binding.feature.axes()) {
             (Rest::Components(rests), Some(axes)) => axes
                 .iter()
                 .zip(rests)
-                .map(|(axis, rest)| (format!("{id}.{axis}"), rest))
+                .map(|(axis, rest)| {
+                    (
+                        Number {
+                            id,
+                            axis: Some(*axis),
+                        },
+                        rest,
+                    )
+                })
                 .collect(),
             (Rest::Scalar(rest), _) | (Rest::Components([rest, ..]), None) => {
-                vec![(id.clone(), rest)]
+                vec![(Number { id, axis: None }, rest)]
             }
         };
         if written.contains(id) {
             left += 1;
-            for (key, rest) in &keys {
-                graph.accepted(key, *rest);
+            for (number, rest) in &numbers {
+                graph.accepted(number, *rest);
             }
             continue;
         }
-        let targets: Vec<String> = keys
+        let targets: Vec<String> = numbers
             .iter()
-            .map(|(key, rest)| graph.studio_key(key, *rest))
+            .map(|(number, rest)| graph.studio_key(number, *rest))
             .collect();
         if let [target] = targets.as_slice() {
             graph.output(id, target);
@@ -148,7 +204,7 @@ pub(crate) fn studio_source(meta: &FaceMeta, written: &HashSet<String>) -> (Stri
         }
     }
     for key in &meta.unbound {
-        graph.accepted(key, 0.0);
+        graph.accepted(&Number::of(key), 0.0);
     }
     if left > 0 || !meta.unbound.is_empty() {
         log::info!(
@@ -233,40 +289,41 @@ impl Graph {
         self.edge(from, &id, "in");
     }
 
-    /// The keys Studio writes and reads for the animatable (or component)
-    /// `key`: its target, echoed to its feedback, and the keys it reads and
-    /// leaves. Returns the target's node.
-    fn studio_key(&mut self, key: &str, rest: f32) -> String {
-        let position = self.input(&target(key, POSITION), rest);
-        self.output(&feedback(key), &position);
-        self.input(&underscored_target(key, POSITION), rest);
-        self.left(key, rest);
+    /// The keys Studio writes and reads for `number`: its target, echoed to
+    /// its feedback, and the keys it reads and leaves. Returns the target's
+    /// node.
+    fn studio_key(&mut self, number: &Number, rest: f32) -> String {
+        let position = self.input(&number.target(POSITION), rest);
+        self.output(&number.feedback(), &position);
+        self.input(&number.studio_target(POSITION), rest);
+        self.left(number, rest);
         position
     }
 
-    /// The keys Studio writes for the animatable (or component) `key`, read
-    /// and going nowhere: Studio's update naming them is accepted, and no
-    /// feedback claims they moved anything.
-    fn accepted(&mut self, key: &str, rest: f32) {
-        self.input(&target(key, POSITION), rest);
-        self.input(&underscored_target(key, POSITION), rest);
-        self.left(key, rest);
+    /// The keys Studio writes for `number`, read and going nowhere: Studio's
+    /// update naming them is accepted, and no feedback claims they moved
+    /// anything.
+    fn accepted(&mut self, number: &Number, rest: f32) {
+        self.input(&number.target(POSITION), rest);
+        self.input(&number.studio_target(POSITION), rest);
+        self.left(number, rest);
     }
 
-    /// The keys of `key` the profile reads and leaves whatever it does with
-    /// the target: the velocity in both forms, and the legacy value.
-    fn left(&mut self, key: &str, rest: f32) {
-        self.input(&target(key, VELOCITY), 0.0);
-        self.input(&underscored_target(key, VELOCITY), 0.0);
-        self.input(&format!("{key}.{LEGACY_VALUE}"), rest);
+    /// The keys of `number` the profile reads and leaves whatever it does
+    /// with the target: the velocity in both forms, and the legacy value.
+    fn left(&mut self, number: &Number, rest: f32) {
+        self.input(&number.target(VELOCITY), 0.0);
+        self.input(&number.studio_target(VELOCITY), 0.0);
+        self.input(&number.legacy(), rest);
     }
 }
 
 /// The device's store, keeping the two forms of each target the profile
-/// reads in agreement — `<key>/target.<what>` and `<key>.target_<what>`:
-/// a change that writes a target in either form writes it in both, the
-/// `<key>/target.<what>` form's value when it carries both. A change that
-/// unsets a target in either form, and sets it in neither, unsets both.
+/// reads in agreement — the `k/target.c` form and Studio's
+/// `<studio id>.target_<what>`: a change that writes a target in either form
+/// writes it in both, the value [`set_targets`] reads for it when the change
+/// carries both, which is the `k/target.c` form's. A change that unsets a
+/// target in either form, and sets it in neither, unsets both.
 ///
 /// The profile reads one form, so a client writing either drives the face,
 /// and the store never holds two values for one target, whichever form a
@@ -279,33 +336,59 @@ pub(crate) struct TargetForms {
 /// Each target with both of its forms among a composed spec's inputs.
 #[derive(Default)]
 struct Targets {
-    /// Each target's forms, `<key>/target.<what>` first.
-    forms: Vec<[Key; 2]>,
+    /// Each target's forms.
+    forms: Vec<Vec<Key>>,
     /// Each form → its target's index in `forms`.
     index: HashMap<Key, usize>,
+}
+
+/// The key of the measured value `key` targets, as [`set_targets`] reads
+/// it; `None` for a key that is no target in its grammar.
+fn measured(key: &Key) -> Option<Key> {
+    let change = StateChange {
+        set: HashMap::from([(key.clone(), None)]),
+        unset: HashSet::new(),
+    };
+    set_targets(&change).pop().map(|target| target.measured)
 }
 
 impl TargetForms {
     /// `store`, keeping in agreement each target the profile composed into
     /// `spec` reads. `store` alone when `spec` carries no profile.
+    ///
+    /// A target is the inputs [`set_targets`] reads as targeting one
+    /// measured key — a number's `<id>/target.<what>` and
+    /// `<id>.target_<what>` — with, for a component's
+    /// `<id>/target.<what>.<axis>`, Studio's `<id>.<axis>.target_<what>`,
+    /// which is no target in that grammar.
     pub(crate) fn over(store: Box<dyn DataStore>, spec: &Json) -> Box<dyn DataStore> {
         let inputs = studio_inputs(spec);
-        let mut targets = Targets::default();
+        let mut by_measured: HashMap<Key, Vec<Key>> = HashMap::new();
         for path in &inputs {
-            for what in [POSITION, VELOCITY] {
-                let Some(key) = path.strip_suffix(&format!("/target.{what}")) else {
-                    continue;
-                };
-                let underscored = underscored_target(key, what);
-                if !inputs.contains(&underscored) {
-                    continue;
-                }
-                let forms = [Key::from(path.as_str()), Key::from(underscored)];
-                for form in &forms {
-                    targets.index.insert(form.clone(), targets.forms.len());
-                }
-                targets.forms.push(forms);
+            let key = Key::from(path.as_str());
+            if let Some(measured) = measured(&key) {
+                by_measured.entry(measured).or_default().push(key);
             }
+        }
+        let mut targets = Targets::default();
+        for (measured, mut forms) in by_measured {
+            if let [what, axis] = measured.get_attributes()[..] {
+                let number = Number {
+                    id: measured.get_entity(),
+                    axis: Some(axis),
+                };
+                let studio = number.studio_target(what);
+                if inputs.contains(&studio) {
+                    forms.push(Key::from(studio));
+                }
+            }
+            if forms.len() < 2 {
+                continue;
+            }
+            for form in &forms {
+                targets.index.insert(form.clone(), targets.forms.len());
+            }
+            targets.forms.push(forms);
         }
         if targets.forms.is_empty() {
             return store;
@@ -318,23 +401,34 @@ impl TargetForms {
 
     /// `change`, each target it writes in either form written in both.
     fn agreed(&self, mut change: StateChange) -> StateChange {
-        let touched: HashSet<usize> = change
-            .set
-            .keys()
-            .chain(&change.unset)
-            .filter_map(|key| self.targets.index.get(key).copied())
+        let index = &self.targets.index;
+        // The value each target takes: the one `set_targets` reads, else the
+        // one Studio's form sets, which that grammar does not read.
+        let mut taken: HashMap<usize, Option<Value>> = set_targets(&change)
+            .into_iter()
+            .filter_map(|target| Some((*index.get(target.key)?, target.value.clone())))
             .collect();
-        for index in touched {
-            let forms = &self.targets.forms[index];
-            match forms.iter().find_map(|form| change.set.get(form).cloned()) {
-                Some(value) => {
-                    for form in forms {
-                        change.unset.remove(form);
-                        change.set.insert(form.clone(), value.clone());
-                    }
-                }
-                None => change.unset.extend(forms.iter().cloned()),
+        for (key, value) in &change.set {
+            if let Some(&target) = index.get(key) {
+                taken.entry(target).or_insert_with(|| value.clone());
             }
+        }
+        let unset: HashSet<usize> = change
+            .unset
+            .iter()
+            .filter_map(|key| index.get(key).copied())
+            .filter(|target| !taken.contains_key(target))
+            .collect();
+        for (target, value) in taken {
+            for form in &self.targets.forms[target] {
+                change.unset.remove(form);
+                change.set.insert(form.clone(), value.clone());
+            }
+        }
+        for target in unset {
+            change
+                .unset
+                .extend(self.targets.forms[target].iter().cloned());
         }
         change
     }
@@ -468,11 +562,11 @@ mod tests {
     /// the target in both forms, the velocity in both, and the legacy value.
     fn read_keys(key: &str) -> [String; 5] {
         [
-            target(key, POSITION),
-            underscored_target(key, POSITION),
-            target(key, VELOCITY),
-            underscored_target(key, VELOCITY),
-            format!("{key}.{LEGACY_VALUE}"),
+            Number::of(key).target(POSITION),
+            Number::of(key).studio_target(POSITION),
+            Number::of(key).target(VELOCITY),
+            Number::of(key).studio_target(VELOCITY),
+            Number::of(key).legacy(),
         ]
     }
 
@@ -490,14 +584,19 @@ mod tests {
         }
         inputs.sort();
         assert_eq!(paths(&spec, "input"), inputs);
-        let mut outputs = vec![x.to_string(), feedback(&x.to_string()), color.to_string()];
-        outputs.extend(["r", "g", "b"].map(|axis| feedback(&format!("{color}.{axis}"))));
+        let mut outputs = vec![
+            x.to_string(),
+            Number::of(&x.to_string()).feedback(),
+            color.to_string(),
+        ];
+        outputs
+            .extend(["r", "g", "b"].map(|axis| Number::of(&format!("{color}.{axis}")).feedback()));
         outputs.sort();
         assert_eq!(paths(&spec, "output"), outputs);
         // The animatable and its feedback follow the `/target.position` form.
         let edges = spec["edges"].as_array().expect("edges");
-        let target_node = format!("in/{}", target(&x.to_string(), POSITION));
-        for out in [x.to_string(), feedback(&x.to_string())] {
+        let target_node = format!("in/{}", Number::of(&x.to_string()).target(POSITION));
+        for out in [x.to_string(), Number::of(&x.to_string()).feedback()] {
             assert!(
                 edges
                     .iter()
@@ -571,7 +670,10 @@ mod tests {
     #[test]
     fn a_target_written_in_either_form_lands_in_both() {
         let (store, x) = agreeing_store();
-        let (slash, underscore) = (target(&x, POSITION), underscored_target(&x, POSITION));
+        let (slash, underscore) = (
+            Number::of(&x).target(POSITION),
+            Number::of(&x).studio_target(POSITION),
+        );
         for (form, value) in [(&underscore, 0.25), (&slash, 0.5), (&underscore, 0.75)] {
             write(&*store, &[(form, Some(value))]);
             for read_form in [&slash, &underscore] {
@@ -582,17 +684,46 @@ mod tests {
                 );
             }
         }
-        let (slash, underscore) = (target(&x, VELOCITY), underscored_target(&x, VELOCITY));
+        let (slash, underscore) = (
+            Number::of(&x).target(VELOCITY),
+            Number::of(&x).studio_target(VELOCITY),
+        );
         write(&*store, &[(&underscore, Some(2.0))]);
         assert_eq!(read(&*store, &slash), Some(float(2.0)), "the velocity too");
     }
 
+    /// A component's target, `<id>/target.position.<axis>` or Studio's
+    /// `<id>.<axis>.target_position`, lands in both, the first when a change
+    /// carries both.
+    #[test]
+    fn a_component_s_target_written_in_either_form_lands_in_both() {
+        let (meta, _, color) = studio_face();
+        let spec = vizij_arora_host::compose_sources(&[studio_source(&meta, &HashSet::new())])
+            .expect("compose the profile");
+        let store = TargetForms::over(Box::new(BlackboardStore::new()), &spec);
+        let green = format!("{color}.g");
+        let number = Number::of(&green);
+        let (slash, studio) = (number.target(POSITION), number.studio_target(POSITION));
+        assert_eq!(slash, format!("{color}/target.position.g"));
+        assert_eq!(studio, format!("{color}.g.target_position"));
+        write(&*store, &[(&studio, Some(0.25))]);
+        assert_eq!(read(&*store, &slash), Some(float(0.25)));
+        write(&*store, &[(&slash, Some(0.5))]);
+        assert_eq!(read(&*store, &studio), Some(float(0.5)));
+        write(&*store, &[(&studio, Some(0.125)), (&slash, Some(0.75))]);
+        assert_eq!(read(&*store, &slash), Some(float(0.75)));
+        assert_eq!(read(&*store, &studio), Some(float(0.75)));
+    }
+
     /// A change carrying both forms of one target takes the
-    /// `<key>/target.position` form's value.
+    /// `k/target.c` form's value.
     #[test]
     fn a_change_carrying_both_forms_takes_the_slash_form() {
         let (store, x) = agreeing_store();
-        let (slash, underscore) = (target(&x, POSITION), underscored_target(&x, POSITION));
+        let (slash, underscore) = (
+            Number::of(&x).target(POSITION),
+            Number::of(&x).studio_target(POSITION),
+        );
         write(&*store, &[(&underscore, Some(0.25)), (&slash, Some(0.5))]);
         assert_eq!(read(&*store, &slash), Some(float(0.5)));
         assert_eq!(read(&*store, &underscore), Some(float(0.5)));
@@ -609,7 +740,10 @@ mod tests {
     #[test]
     fn an_unset_or_a_slot_write_keeps_the_forms_in_agreement() {
         let (store, x) = agreeing_store();
-        let (slash, underscore) = (target(&x, POSITION), underscored_target(&x, POSITION));
+        let (slash, underscore) = (
+            Number::of(&x).target(POSITION),
+            Number::of(&x).studio_target(POSITION),
+        );
         write(&*store, &[(&slash, Some(0.5))]);
         write(&*store, &[(&underscore, None)]);
         assert_eq!(read(&*store, &slash), None);
@@ -631,11 +765,11 @@ mod tests {
     #[test]
     fn the_legacy_value_sets_no_target() {
         let (store, x) = agreeing_store();
-        let legacy = format!("{x}.{LEGACY_VALUE}");
+        let legacy = Number::of(&x).legacy();
         write(&*store, &[(&legacy, Some(0.3))]);
         assert_eq!(read(&*store, &legacy), Some(float(0.3)));
-        assert_eq!(read(&*store, &target(&x, POSITION)), None);
-        assert_eq!(read(&*store, &underscored_target(&x, POSITION)), None);
+        assert_eq!(read(&*store, &Number::of(&x).target(POSITION)), None);
+        assert_eq!(read(&*store, &Number::of(&x).studio_target(POSITION)), None);
     }
 
     /// The device's rest module writes through the device's store: a
@@ -659,7 +793,10 @@ mod tests {
                 .build()
                 .expect("build arora");
         let x = x.to_string();
-        let (slash, underscore) = (target(&x, POSITION), underscored_target(&x, POSITION));
+        let (slash, underscore) = (
+            Number::of(&x).target(POSITION),
+            Number::of(&x).studio_target(POSITION),
+        );
         write(arora.store(), &[(&slash, Some(0.25))]);
         arora
             .call(Call {

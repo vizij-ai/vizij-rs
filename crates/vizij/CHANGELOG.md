@@ -12,15 +12,17 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Added
 
-- Under `--studio` a target is taken in either of two forms: as a field of
-  `<id>/target` — `<id>/target.position`, `<id>/target.velocity` — or as
-  Studio writes it today, `<id>.target_position`, `<id>.target_velocity`.
-  Both are listed as open `f64` inputs — a position resting at the
-  animatable's default, a velocity at 0 — and the device keeps them in
-  agreement: a write in either form lands in both,
-  so the latest write wins; an update carrying both forms of one target
-  takes the `<id>/target.position` form's value. `<id>.studio_value` stays
-  an input that drives nothing, until Studio no longer sends it.
+- Under `--studio` a target is taken in either of two forms: `k/target.c`
+  as `arora_hal::set_targets` reads it — `<id>/target.position`,
+  `<id>/target.velocity`, a component's `<id>/target.position.<axis>` — or
+  as Studio writes it today, `<id>.target_position`, `<id>.target_velocity`,
+  a component's `<id>.<axis>.target_position`. Both are listed as open
+  `f64` inputs — a position resting at the animatable's default, a velocity
+  at 0 — and the device keeps them in agreement: a write in either form
+  lands in both, so the latest write wins; an update carrying both forms of
+  one target takes the `k/target.c` form's value, as `set_targets` does.
+  `<id>.studio_value` stays an input that drives nothing, until Studio no
+  longer sends it. The device depends on arora-hal 4.2.
 - A ROS4HRI viseme stream plays each viseme for its `duration`, and a
   repeated shape at a new `time` plays again, from the `time` and `duration`
   arora-bridge-ros2 10.1's ROS4HRI preset lands with each viseme. The ROS 2

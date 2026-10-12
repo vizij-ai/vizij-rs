@@ -144,6 +144,9 @@ tracing = { version = "0.1", default-features = false, features = ["std", "log"]
 arora-types = "3.1"
 # The `reset` contract the rest module implements.
 arora-module = "2.1"
+# The target-key grammar (`set_targets`) the Studio-key profile reads targets
+# by; the HAL seam a headless test writes a face's pose through.
+arora-hal = "4.2"
 vizij-api-core = { path = "../api/vizij-api-core" }
 vizij-graph-core = { path = "../node-graph/vizij-graph-core" }
 vizij-arora = { path = "../interop/vizij-arora" }
@@ -204,8 +207,6 @@ console_log = "1"
 getrandom = { version = "0.4", features = ["wasm_js"] }
 
 [dev-dependencies]
-# The HAL seam a headless test writes a face's pose through, as a device does.
-arora-hal = "4.1"
 # The image messages a published frame is read back as, so a field landing in
 # the wrong place fails in a unit test rather than at a ROS subscriber.
 arora-msgs-ros2 = "2"

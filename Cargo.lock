@@ -522,9 +522,9 @@ dependencies = [
 
 [[package]]
 name = "arora-hal"
-version = "4.1.0"
+version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d9d5c012d2442c8998c78929750350f4f6583b145977c7d35cf40799b77a373"
+checksum = "86776e3161582e144b602350a995407cd331afcd2058c2ad23ed8c3856f4ca1b"
 dependencies = [
  "arora-types",
  "async-trait",
