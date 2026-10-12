@@ -42,7 +42,7 @@ grading them.
 
 | Control path | Range | Meaning |
 |---|---|---|
-| `standard/vizij/left_eye/pos/x` | `[-1, 1]` | eye left→right as the viewer sees the face (+1 toward the viewer's right, the face's own left) |
+| `standard/vizij/left_eye/pos/x` | `[-1, 1]` | eye left→right (subject's own left is negative) |
 | `standard/vizij/left_eye/pos/y` | `[-1, 1]` | eye down→up |
 | `standard/vizij/right_eye/pos/x` | `[-1, 1]` | as above, right eye |
 | `standard/vizij/right_eye/pos/y` | `[-1, 1]` | as above, right eye |
