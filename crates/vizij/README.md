@@ -208,17 +208,19 @@ neither reports feedback.
 A target is taken in either form, and the device keeps the two in
 agreement, so the latest write wins whichever form it took:
 
-| Form | Keys |
-|---|---|
-| a field of `<id>/target` | `<id>/target.position`, `<id>/target.velocity` |
-| the form Studio writes today | `<id>.target_position`, `<id>.target_velocity` |
+| Form | A number `<id>` | A component `<id>.<axis>` |
+|---|---|---|
+| `k/target.c`, as [`arora_hal::set_targets`](https://docs.rs/arora-hal) reads it | `<id>/target.position`, `<id>/target.velocity` | `<id>/target.position.<axis>`, `<id>/target.velocity.<axis>` |
+| the form Studio writes today | `<id>.target_position`, `<id>.target_velocity` | `<id>.<axis>.target_position`, `<id>.<axis>.target_velocity` |
 
-An update carrying both forms of one target takes the `<id>/target.position`
-form's value. `<id>.studio_value` — the target again, which Studio sends
-beside `<id>.target_position` — is legacy: an `f64` input that drives
-nothing, kept until Studio no longer sends it. Velocities, in both forms,
-are accepted, rest at 0 and move nothing. Every animatable the face draws is
-numeric, so the device takes no `<id>/target.value`.
+An update carrying both forms of one target takes the `k/target.c` form's
+value, as `set_targets` does
+([proposal](https://github.com/semio-ai/arora-sdk/pull/333)).
+`<id>.studio_value` (`<id>.<axis>.studio_value`) — the target again, which
+Studio sends beside `.target_position` — is legacy: an `f64` input that
+drives nothing, kept until Studio no longer sends it. Velocities, in both
+forms, are accepted, rest at 0 and move nothing. Every animatable the face
+draws is numeric, so the device takes no `<id>/target.value`.
 
 The device does not serve its face's GLB to Studio: nothing on the device
 answers the Studio client's `retrieveGlb` (`GET_MODEL_GLB`).
