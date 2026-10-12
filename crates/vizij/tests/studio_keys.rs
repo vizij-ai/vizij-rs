@@ -8,8 +8,9 @@
 //! `<id>/target.position.<axis>`) or Studio's `<id>.target_position`
 //! (`<id>.<axis>.target_position`), the first when an update carries both.
 //! The update goes through the open local bridge, the same inbound path as
-//! the Studio bridge's: one that names a key the device never opened is
-//! refused whole.
+//! the Studio bridge's: one that names a key the device never opened, writes
+//! a feedback key, or sets a target to another type than it declares is
+//! refused whole, with the device's reason.
 
 #![cfg(feature = "studio")]
 
@@ -321,6 +322,93 @@ async fn an_update_in_the_slash_form_drives_the_face() {
     // target in Studio's per-axis form.
     for key in &read_keys[2..] {
         assert_eq!(number(&read["values"][key]), Some(1.0), "{key}: {read}");
+    }
+}
+
+/// Studio's feedback keys are the device's outputs: listed, under both
+/// spellings of a component's axis, and closed to a client. An update writing
+/// one, or a target of another type than the `f64` it declares, in any of its
+/// forms, is refused whole, the device's reason reaching the client: the
+/// valid target beside it moves nothing either.
+#[tokio::test]
+async fn a_write_to_feedback_or_of_another_type_is_refused_with_the_reason() {
+    let (device, mut socket, Face { x, color, .. }) = serve().await;
+    let feedbacks = [
+        format!("{x}.position"),
+        format!("{color}.position.r"),
+        format!("{color}.r.position"),
+    ];
+    // The feedback is listed once the face has stepped and written it.
+    let mut listed = Vec::new();
+    for _ in 0..50 {
+        let keys = request(&mut socket, json!({"type": "list_keys"}), "list_keys_resp").await;
+        listed = keys["keys"].as_array().expect("keys").clone();
+        if feedbacks
+            .iter()
+            .all(|key| listed.iter().any(|listed| listed["path"] == key.as_str()))
+        {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    for key in &feedbacks {
+        let meta = listed
+            .iter()
+            .find(|listed| listed["path"] == key.as_str())
+            .map(|listed| listed["__meta"].clone())
+            .unwrap_or_else(|| panic!("{key} is listed"));
+        assert_eq!(meta["editable"], false, "{key} is closed: {meta}");
+    }
+
+    // Each refused update carries a valid target beside the refused key.
+    let valid = format!("{x}/target.position");
+    for key in &feedbacks {
+        let update = write_values(&[(valid.clone(), 0.5), (key.clone(), 0.5)]);
+        let refused = request(&mut socket, update, "write_values_resp").await;
+        assert_eq!(refused["success"], false, "{key}: {refused}");
+        let reason = refused["message"].as_str().unwrap_or_default();
+        assert!(
+            reason.contains("not an input") && reason.contains(key.as_str()),
+            "{key}: {refused}"
+        );
+    }
+    for key in [
+        format!("{x}/target.position"),
+        format!("{x}.target_position"),
+        format!("{color}/target.position.r"),
+        format!("{color}.r.target_position"),
+    ] {
+        let update = json!({ "type": "write_values", "values": {
+            format!("{color}/target.position.g"): { "f64": 0.5 },
+            &key: { "bool": true },
+        } });
+        let refused = request(&mut socket, update, "write_values_resp").await;
+        assert_eq!(refused["success"], false, "{key}: {refused}");
+        let reason = refused["message"].as_str().unwrap_or_default();
+        assert!(
+            reason.contains("declared type") && reason.contains(key.as_str()),
+            "{key}: {refused}"
+        );
+    }
+
+    // A later valid update lands; the refused ones moved nothing.
+    let sentinel = write_values(&[(format!("{color}/target.position.b"), 0.25)]);
+    let written = request(&mut socket, sentinel, "write_values_resp").await;
+    assert_eq!(written["success"], true, "{written}");
+    let pose = pose_once(&device, |pose| {
+        pose.get(&color.to_string()).and_then(as_vector) == Some(&[0.0, 0.0, 0.25][..])
+    })
+    .await;
+    let pose = pose.expect("the colour's blue lands, its red and green at rest");
+    assert_eq!(pose.get(&x.to_string()).and_then(as_float), Some(0.0));
+    let read = request(
+        &mut socket,
+        json!({"type": "read_values", "keys": feedbacks}),
+        "read_values_resp",
+    )
+    .await;
+    for key in &feedbacks {
+        assert_eq!(number(&read["values"][key]), Some(0.0), "{key}: {read}");
     }
 }
 

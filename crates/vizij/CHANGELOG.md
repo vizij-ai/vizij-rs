@@ -8,6 +8,12 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ## [Unreleased]
 
+### Changed
+
+- `--ros2` requires `arora-bridge-ros2` 10.3, which escapes a key path into
+  valid ROS 2 name tokens: a Studio-exported face's keys, named by UUID, get
+  topics (an id starting with a digit gains a leading `_`).
+
 ## [0.2.0] - 2026-10-12
 
 ### Added
