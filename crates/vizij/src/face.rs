@@ -135,8 +135,17 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
 pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
     walk_free_inputs(spec, &profile_keys(&rig_prefix_of(spec)))
         .into_iter()
-        .map(|(path, ty, _)| (path, ty))
+        .map(|input| (input.path, input.ty))
         .collect()
+}
+
+/// A free input as its input node declares it: its path, the type the store
+/// states, its rest, and the range its node authors, if any.
+struct FreeInput {
+    path: String,
+    ty: arora_types::value::Type,
+    rest: Option<Value>,
+    range: Option<(f64, f64)>,
 }
 
 /// Say in the store what the face's keys are — what every bridge relays, and
@@ -147,12 +156,14 @@ pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
 /// `(id, spec)`) over it — a program runs beside the graph whenever a client
 /// spawns it, so the inputs it reads are the face's too. An input a program
 /// writes stays declared: the program runs only while it runs. Each is open
-/// to remote writers, of its type — a number in `[0, 1]`, unless it is one
-/// of Studio's keys (the `studio` module's), in the units of the feature it
-/// drives, or a key a shipped profile declares (the face standard's, under
-/// the prefix the face's standard controls live under, or ROS4HRI's), of the
-/// type and in the range that profile states — and rests at its authored
-/// default, or a profile key at the profile's. `neutral` (the bundle's
+/// to remote writers, of its type — a number in the range its input node
+/// authors (`params.min` and `params.max`, when both are there and `max`
+/// exceeds `min`), in `[0, 1]` otherwise, unless it is one of Studio's keys
+/// (the `studio` module's), in the units of the feature it drives, or a key
+/// a shipped profile declares (the face standard's, under the prefix the
+/// face's standard controls live under, or ROS4HRI's), of the type and in the
+/// range that profile states — and rests at its authored default, or a
+/// profile key at the profile's. `neutral` (the bundle's
 /// neutral pose, [`Bundle::neutral_stage_writes`]) moves the rest of the
 /// keys it names, and gives a rig key that is no free input its rest alone:
 /// the standard inputs feed the rig through the adaptation, so a reset that
@@ -210,18 +221,27 @@ pub fn declare_keys(
     let unranged = std::collections::HashSet::<String>::new();
     let mut meta: std::collections::HashMap<Key, KeyMeta> = inputs
         .into_iter()
-        .map(|(path, ty, rest)| {
+        .map(|free| {
+            let FreeInput {
+                path,
+                ty,
+                rest,
+                range,
+            } = free;
             let mut input = KeyMeta::new().editable().of_type(ty.clone());
-            match profiled.get(&path) {
-                Some(key) => {
+            match (profiled.get(&path), range) {
+                (Some(key), _) => {
                     if let (Some(min), Some(max)) = (key.min, key.max) {
                         input = input.range(min, max);
                     }
                 }
-                None if matches!(ty, Type::F32 | Type::F64) && !unranged.contains(&path) => {
+                (None, Some((min, max))) if matches!(ty, Type::F32 | Type::F64) => {
+                    input = input.range(min, max);
+                }
+                (None, None) if matches!(ty, Type::F32 | Type::F64) && !unranged.contains(&path) => {
                     input = input.range(0.0, 1.0);
                 }
-                None => {}
+                _ => {}
             }
             if let Some(rest) = rest {
                 input = input.resting_at(rest);
@@ -237,13 +257,10 @@ pub fn declare_keys(
     }
 }
 
-/// Each free input with its type and its authored default, if any (see
-/// [`free_inputs`]) — for a key of `profiled`, the type and default its
-/// profile states.
-fn walk_free_inputs(
-    spec: &str,
-    profiled: &ProfileKeys,
-) -> Vec<(String, arora_types::value::Type, Option<Value>)> {
+/// Each free input with its type, its authored default and its authored
+/// range, if any (see [`free_inputs`]) — for a key of `profiled`, the type
+/// and default its profile states.
+fn walk_free_inputs(spec: &str, profiled: &ProfileKeys) -> Vec<FreeInput> {
     use arora_types::value::Type;
     let Ok(spec) = serde_json::from_str::<serde_json::Value>(spec) else {
         return Vec::new();
@@ -298,19 +315,29 @@ fn walk_free_inputs(
             ),
             None => (ty, default),
         };
-        inputs.push((path, ty, default));
+        // An optional range: both bounds, the upper above the lower.
+        let bound = |name: &str| {
+            node.pointer(&format!("/params/{name}"))
+                .and_then(serde_json::Value::as_f64)
+        };
+        let range = match (bound("min"), bound("max")) {
+            (Some(min), Some(max)) if max > min => Some((min, max)),
+            _ => None,
+        };
+        inputs.push(FreeInput {
+            path,
+            ty,
+            rest: default,
+            range,
+        });
     }
-    inputs.sort_by(|a, b| a.0.cmp(&b.0));
+    inputs.sort_by(|a, b| a.path.cmp(&b.path));
     inputs
 }
 
 /// The face standard's caption keys under `rig_prefix` that no output of
 /// `spec` writes, typed and resting as the `vizij-face` profile states.
-fn caption_inputs(
-    spec: &str,
-    rig_prefix: &str,
-    profiled: &ProfileKeys,
-) -> Vec<(String, arora_types::value::Type, Option<Value>)> {
+fn caption_inputs(spec: &str, rig_prefix: &str, profiled: &ProfileKeys) -> Vec<FreeInput> {
     use vizij_arora_host::standard::{CAPTION_SPEAKER, CAPTION_TEXT};
     let spec: serde_json::Value = serde_json::from_str(spec).unwrap_or_default();
     let written = |path: &str| {
@@ -334,11 +361,12 @@ fn caption_inputs(
         .filter(|path| !written(path))
         .filter_map(|path| {
             let key = profiled.get(&path)?;
-            Some((
-                path.clone(),
-                key.value_type.clone()?,
-                key.default_value.clone(),
-            ))
+            Some(FreeInput {
+                ty: key.value_type.clone()?,
+                rest: key.default_value.clone(),
+                range: None,
+                path,
+            })
         })
         .collect()
 }
@@ -760,6 +788,51 @@ mod tests {
             store.meta(&[Key::from(CAPTION_TEXT_KEY)]),
             vec![Some(text)],
             "the closed caption the mapping relays is the open key"
+        );
+    }
+
+    /// A free input outside the profiles takes the range its input node
+    /// authors, when both bounds are there and the upper exceeds the lower;
+    /// otherwise `[0, 1]`. A profile key keeps its profile's range whatever
+    /// its node says.
+    #[test]
+    fn a_free_input_takes_its_authored_range() {
+        use arora_types::data::KeyMeta;
+        use arora_types::value::Type;
+        let spec = r#"{"nodes": [
+            {"id": "a", "type": "input", "params": {"path": "idle/explore", "value": {"f32": 1.0}, "min": 0.0, "max": 2.0}},
+            {"id": "b", "type": "input", "params": {"path": "idle/half", "value": {"f32": 0.5}, "min": 0.0}},
+            {"id": "c", "type": "input", "params": {"path": "idle/flat", "value": {"f32": 0.5}, "min": 1.0, "max": 1.0}},
+            {"id": "d", "type": "input", "params": {"path": "rig/f/standard/vizij/blink", "value": 0.0, "min": -5.0, "max": 5.0}}
+        ], "edges": []}"#;
+        let store = BlackboardStore::new();
+        declare_keys(&store, spec, &[], &[]);
+        let number = |min, max, rest| {
+            KeyMeta::new()
+                .editable()
+                .of_type(Type::F32)
+                .range(min, max)
+                .resting_at(Value::F32(rest))
+        };
+        assert_eq!(
+            store.meta(&[
+                Key::from("idle/explore"),
+                Key::from("idle/half"),
+                Key::from("idle/flat"),
+                Key::from("rig/f/standard/vizij/blink"),
+            ]),
+            vec![
+                Some(number(0.0, 2.0, 1.0)),
+                Some(number(0.0, 1.0, 0.5)),
+                Some(number(0.0, 1.0, 0.5)),
+                Some(
+                    KeyMeta::new()
+                        .editable()
+                        .of_type(Type::F32)
+                        .range(0.0, 1.0)
+                        .resting_at(Value::F32(0.0))
+                ),
+            ]
         );
     }
 
