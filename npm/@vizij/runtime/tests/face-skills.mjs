@@ -21,6 +21,8 @@ const settle = async (promise) => {
   }
   return promise;
 };
+// Each command below is given 1.5 s: past ten of the setters' 140 ms
+// half-lives, so a weight has settled within 0.1 % of its target.
 const stepFor = (ms) => {
   for (let t = 0; t < ms; t += 16) runtime.step(16);
 };
@@ -35,12 +37,12 @@ for (const skill of ["set_expression", "set_facial_action_units", "set_viseme", 
   assert.ok(described.includes(skill), `the device describes ${skill}`);
 }
 
-stepFor(800);
+stepFor(1500);
 assert.ok(expression("neutral") > 0.95, "the face boots at neutral");
 
 runtime.setValue("standard/ros4hri/expression/name", { text: "happy" });
 runtime.setValue("standard/ros4hri/expression/arousal", { f32: 1 });
-stepFor(800);
+stepFor(1500);
 assert.ok(expression("happy") > 0.95, `the keys show happy (${expression("happy")})`);
 
 await settle(
@@ -49,7 +51,7 @@ await settle(
     intensities: { f32s: [0.8] },
   }),
 );
-stepFor(800);
+stepFor(1500);
 assert.ok(expression("happy") < 0.01, "the action units take the face over");
 assert.ok(expression("neutral") > 0.95, "over the neutral expression");
 assert.ok(Math.abs(read("standard/vizij/face/mouth_smile_left") - 0.8) < 0.02);
@@ -57,7 +59,7 @@ assert.ok(Math.abs(read("standard/vizij/face/mouth_smile_left") - 0.8) < 0.02);
 await settle(
   runtime.invoke("set_expression", { expression: "sad", valence: { f32: 0 }, arousal: { f32: 1 } }),
 );
-stepFor(800);
+stepFor(1500);
 assert.ok(expression("sad") > 0.95, "set_expression takes it back");
 assert.ok(read("standard/vizij/face/mouth_smile_left") < 0.01);
 
