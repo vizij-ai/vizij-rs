@@ -294,9 +294,15 @@ impl Graph {
         }));
     }
 
+    /// An input of a key Studio writes: typed `f64`, as Studio sends its
+    /// numbers, so the store takes Studio's writes.
     fn input(&mut self, path: &str, rest: f32) -> String {
         let id = format!("in/{path}");
-        self.node(&id, "input", json!({ "path": path, "value": rest }));
+        self.node(
+            &id,
+            "input",
+            json!({ "path": path, "value": { "f64": f64::from(rest) } }),
+        );
         id
     }
 

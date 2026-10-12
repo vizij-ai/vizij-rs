@@ -213,7 +213,8 @@ key the mapping reads and nothing in the composition writes is a **free
 input**, subscribed at `/<namespace>/keys/<path>` as the `std_msgs` type the
 `ros4hri` profile declares for it (`Float32` for valence and arousal, as
 `hri_msgs/Expression` types them); a free input outside the profile takes the
-type of its default value (`Float64` for a weight). The keys are **device-global**:
+type its default declares: `Float32` for a number, the graph's number type. The
+keys are **device-global**:
 the mapping prefixes only what it *writes* (`rig/<faceId>/standard/vizij/…`),
 never what it reads, so the topic carries no face id. The store keeps the last
 value, so one message holds a shape until the next one.

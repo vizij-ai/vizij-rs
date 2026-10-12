@@ -253,9 +253,10 @@ with its ROS4HRI exposure preset:
 - data topics under `/<namespace>/keys/<path>`: every store key **published**,
   and the keys the store opens to remote writers — the face's **free inputs**,
   input paths no graph in the composition writes, and the inputs its
-  programs read — **subscribed** as `std_msgs` (`Float64` for numeric
-  controls, `String`/`Bool` by the input's default; `ros2 topic info -v`
-  shows each).
+  programs read — **subscribed** as `std_msgs` of the type each input
+  declares (`Float32` for numbers, the graph's number type, but `Float64` for
+  Studio's keys, as Studio writes them; `String`/`Bool` by the input's
+  default; `ros2 topic info -v` shows each).
   Keys a graph writes every step (the ROS4HRI profile's `standard/vizij/*`
   outputs) are not inputs: drive them through the ROS4HRI topics. A program
   runs beside the graph as a task run, so the keys it writes stay inputs; a
@@ -345,7 +346,7 @@ involved —
 
 ```bash
 ros2 topic pub --once /<namespace>/keys/rig/<faceId>/standard/vizij/viseme/aa \
-  std_msgs/msg/Float64 "{data: 1.0}"
+  std_msgs/msg/Float32 "{data: 1.0}"
 ```
 
 — and [Bring Your Own Visemes](https://github.com/vizij-ai/vizij-docs/blob/main/current_documentation/guidebook/deploy/bring-your-own-visemes.md) compares the three entry points.
