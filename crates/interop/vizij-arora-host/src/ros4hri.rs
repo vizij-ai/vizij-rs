@@ -41,9 +41,9 @@
 //!   playhead, plays through the `play_viseme` skill: each new code spawns a
 //!   run of that shape at full weight, which takes over from the run before
 //!   it. The lips are a player's, never this graph's: a run writes the
-//!   face's viseme weights and state, so a stream and the device's own `say`
-//!   arbitrate as players do, and `sil` is a run that drives no shape — the
-//!   lips settle at rest.
+//!   face's viseme weights and state, so a streamed viseme shows over the
+//!   device's own speaking `say` as any player does, and `sil` is a run that
+//!   drives no shape — the lips settle at rest.
 //! - **Speech** — the other direction: the face's speech state is relayed
 //!   as is to the ROS4HRI speech state a bridge publishes — the utterance a
 //!   say run is speaking (`standard/vizij/speech`) to `speech/text`, for
