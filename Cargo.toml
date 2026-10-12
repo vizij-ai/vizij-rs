@@ -40,17 +40,3 @@ serde-wasm-bindgen = "0.6"
 opt-level = "s"
 lto = true
 codegen-units = 1
-
-# arora-msgs-ros2 2.2 (ClosedCaption, diagnostic_msgs) and arora-bridge-ros2
-# 10.4 (the ROS4HRI preset's /closed_captions and /diagnostics) from their
-# arora-sdk pull request until they are on crates.io. Every crate whose types
-# cross between vizij and the bridge comes from it, so one copy of each is in
-# the graph.
-[patch.crates-io]
-arora-types = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/ros4hri-captions-diagnostics" }
-arora-types-derive = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/ros4hri-captions-diagnostics" }
-arora-behavior = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/ros4hri-captions-diagnostics" }
-arora-bridge = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/ros4hri-captions-diagnostics" }
-arora-behavior-tree-types = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/ros4hri-captions-diagnostics" }
-arora-msgs-ros2 = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/ros4hri-captions-diagnostics" }
-arora-bridge-ros2 = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/ros4hri-captions-diagnostics" }
