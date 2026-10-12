@@ -1767,29 +1767,33 @@ mod tests {
         }
     }
 
-    /// End-to-end over the real demo face: graft Quori's standard-adaptation
-    /// sidecar into `Quori_Current_Extended.glb` with the bundler, compose the
-    /// ROS4HRI mapping, and drive the ROS4HRI keys through to Quori's pose
-    /// plane. Needs the GLB: set `VIZIJ_FIXTURES` to a directory holding it
-    /// (the snapshot-regression convention); skipped otherwise.
-    #[test]
-    fn ros4hri_drives_the_adapted_quori() {
-        let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
-            eprintln!("VIZIJ_FIXTURES unset — skipping the Quori integration test");
-            return;
-        };
-        let glb = std::path::Path::new(&fixtures).join("Quori_Current_Extended.glb");
-        let bytes = std::fs::read(&glb).expect("read the Quori GLB");
+    /// The real demo face as the binary runs it: Quori's standard-adaptation
+    /// sidecar grafted into `Quori_Current_Extended.glb` under `fixtures`
+    /// with the bundler, composed like the binary's defaults (standard
+    /// graphs + the ROS4HRI mapping, no autoplay — the idle program would
+    /// contend on gaze paths), its neutral pose staged.
+    fn adapted_quori(fixtures: &str) -> arora::Arora {
+        adapted_quori_with(fixtures, quori_adaptation())
+    }
 
-        // The bundler grafts the committed adaptation sidecar into the bundle.
+    /// Quori's committed adaptation sidecar.
+    fn quori_adaptation() -> serde_json::Value {
         let sidecar = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../fixtures/faces/quori/standard-adaptation.json"
         );
-        let spec = vizij_bundle::from_sidecar(
+        vizij_bundle::from_sidecar(
             &std::fs::read_to_string(sidecar).expect("read the adaptation sidecar"),
         )
-        .expect("parse the adaptation sidecar");
+        .expect("parse the adaptation sidecar")
+    }
+
+    /// [`adapted_quori`] with `spec` as the adaptation.
+    fn adapted_quori_with(fixtures: &str, spec: serde_json::Value) -> arora::Arora {
+        let glb = std::path::Path::new(fixtures).join("Quori_Current_Extended.glb");
+        let bytes = std::fs::read(&glb).expect("read the Quori GLB");
+
+        // The bundler grafts the adaptation into the bundle.
         let mut face = vizij_bundle::Face::parse(&bytes).expect("parse the Quori GLB");
         face.add_graph("standard-adaptation", "quori_standard_adaptation", spec)
             .expect("graft the adaptation");
@@ -1797,8 +1801,6 @@ mod tests {
         let cov = vizij_bundle::coverage(&vizij_bundle::Face::parse(&adapted).unwrap());
         assert!(cov.level >= 2, "adapted Quori below L2 (L{})", cov.level);
 
-        // Compose like the binary's defaults: standard graphs + the ROS4HRI
-        // mapping, no autoplay (the idle program would contend on gaze paths).
         let config = FaceConfig {
             wanted: ["rig", "pose-driver", "pose", "standard-adaptation"]
                 .map(String::from)
@@ -1814,10 +1816,23 @@ mod tests {
             load_face(&adapted, &config).expect("load the adapted face");
         let store = BlackboardStore::new();
         stage_neutral_pose(&store, &meta);
-        let mut arora = builder_for(&spec, RigHal::new(), store, &[], None)
+        builder_for(&spec, RigHal::new(), store, &[], None)
             .expect("build the device")
             .build()
-            .expect("build arora");
+            .expect("build arora")
+    }
+
+    /// End-to-end over the real demo face ([`adapted_quori`]): drive the
+    /// ROS4HRI keys through to Quori's pose plane. Needs the GLB: set
+    /// `VIZIJ_FIXTURES` to a directory holding it (the snapshot-regression
+    /// convention); skipped otherwise.
+    #[test]
+    fn ros4hri_drives_the_adapted_quori() {
+        let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
+            eprintln!("VIZIJ_FIXTURES unset — skipping the Quori integration test");
+            return;
+        };
+        let mut arora = adapted_quori(&fixtures);
 
         // A ROS4HRI expression command reaches Quori's emotion-pose plane.
         stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("happy"));
@@ -1877,6 +1892,175 @@ mod tests {
                 value > 0.95,
                 "{control} does not reach {rig_input} ({value})"
             );
+        }
+    }
+
+    /// On Quori, the reference adaptation maps the muscle tier onto the rig's
+    /// brow, lid and mouth inputs. AU 12 (lip corner puller) and AU 4 (brow
+    /// lowerer) at full intensity pull the mouth's corners up and wide and
+    /// the brows down and toward the centre, and the face's render follows;
+    /// the controls they do not name rest. AU 5 (upper lid raiser) opens the
+    /// top lids past their rest. At rest the muscle tier leaves the face as
+    /// the adaptation without it renders it, the mapped inputs at the rig's
+    /// own rest. The controls are written as a client writes them, under the
+    /// face's prefix. Needs `VIZIJ_FIXTURES`.
+    #[test]
+    fn quori_s_adaptation_maps_the_action_units() {
+        let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
+            eprintln!("VIZIJ_FIXTURES unset — skipping the Quori action-unit test");
+            return;
+        };
+        let rig = |input: &str| format!("rig/quori_latest/standard/vizij/{input}");
+        /// The float keys, task runs' keys aside.
+        fn floats(arora: &arora::Arora) -> std::collections::BTreeMap<String, f32> {
+            arora
+                .store()
+                .snapshot()
+                .storage
+                .into_iter()
+                .filter(|(key, _)| !key.path.starts_with("arora/"))
+                .filter_map(|(key, value)| Some((key.path.clone(), as_float(value.as_ref()?)?)))
+                .collect()
+        }
+        // Quori, settled with the muscle-tier controls of the action units
+        // `codes` at `intensity`.
+        let holding = |codes: &[u8], intensity: f32| {
+            let mut arora = adapted_quori(&fixtures);
+            for control in standard::FACE_CONTROLS
+                .iter()
+                .filter(|control| control.au.is_some_and(|au| codes.contains(&au)))
+            {
+                stage(
+                    &arora,
+                    &format!("rig/quori_latest/{}", standard::face_path(control.name)),
+                    float(intensity),
+                );
+            }
+            settle(&mut arora);
+            arora
+        };
+        let mut untouched = adapted_quori(&fixtures);
+        settle(&mut untouched);
+        let untouched = floats(&untouched);
+
+        let held = holding(&[12, 4], 1.0);
+        for (input, expected) in [
+            ("mouth/morph/corner_puller", 1.0),
+            ("mouth/morph/stretch", 1.0),
+            ("left_eye_brow/morph/in_up_down", -1.0),
+            ("right_eye_brow/morph/in_up_down", -1.0),
+            ("left_eye_brow/morph/mid_up_down", -0.5),
+            ("right_eye_brow/morph/mid_up_down", -0.5),
+            ("left_eye_brow/morph/in_left_right", 1.0),
+            ("right_eye_brow/morph/in_left_right", 1.0),
+            ("left_eye_brow/morph/out_up_down", 0.0),
+            ("left_eye_bottom_eyelid/pos/y", 0.0),
+            ("mouth/morph/left_top_sneer", 0.0),
+        ] {
+            let value = read_f32(&held, &rig(input));
+            assert!(
+                (value - expected).abs() < 0.02,
+                "{input} = {value}, expected {expected}"
+            );
+        }
+        // The render follows: against the same units held at rest, the rig's
+        // outputs move.
+        let resting = floats(&holding(&[12, 4], 0.0));
+        let rendered: Vec<String> = floats(&held)
+            .into_iter()
+            .filter(|(path, value)| {
+                !path.contains("/standard/")
+                    && resting
+                        .get(path)
+                        .is_some_and(|at_rest| (value - at_rest).abs() > 1e-3)
+            })
+            .map(|(path, _)| path)
+            .collect();
+        assert!(!rendered.is_empty(), "AU 12 and AU 4 move no rig output");
+
+        // AU 5 opens the top lids past their rest: the lids' translation, the
+        // rig's output, rises by the adaptation's 0.75 over the same unit
+        // held at rest — on top of whatever the blink and the lids' own
+        // inputs drive.
+        let lids = |intensity: f32| {
+            let arora = holding(&[5], intensity);
+            // The rig's translation outputs of the left and right top lids.
+            [
+                "97820eb4-12a5-41b8-a390-80d04f6f5a82",
+                "ec5ad8f9-08e1-4401-839d-e8d431661994",
+            ]
+            .map(|output| match read_value(&arora, output) {
+                Some(Value::ArrayF32(t)) => t[1],
+                Some(Value::ArrayF64(t)) => t[1] as f32,
+                other => panic!("{output} is no translation: {other:?}"),
+            })
+        };
+        for (wide, at_rest) in lids(1.0).into_iter().zip(lids(0.0)) {
+            assert!(
+                (wide - at_rest - 0.75).abs() < 0.02,
+                "AU 5 opens a top lid by 0.75: {at_rest} → {wide}"
+            );
+        }
+
+        // The adaptation without the outputs the muscle tier adds — onto
+        // the rig's own standard inputs and the lids' translation — renders
+        // the face the same.
+        let mut before = quori_adaptation();
+        let muscle: std::collections::HashSet<String> = before["nodes"]
+            .as_array()
+            .expect("nodes")
+            .iter()
+            .filter(|node| {
+                node["type"] == "output"
+                    && node["params"]["path"].as_str().is_some_and(|path| {
+                        path.contains("/standard/vizij/") || path.contains("/propsrig/")
+                    })
+            })
+            .filter_map(|node| node["id"].as_str().map(String::from))
+            .collect();
+        assert!(!muscle.is_empty(), "the adaptation maps the muscle tier");
+        let kept = |id: &serde_json::Value| id.as_str().is_none_or(|id| !muscle.contains(id));
+        before["nodes"]
+            .as_array_mut()
+            .expect("nodes")
+            .retain(|node| kept(&node["id"]));
+        before["edges"]
+            .as_array_mut()
+            .expect("edges")
+            .retain(|edge| kept(&edge["to"]["node_id"]));
+        let mut before = adapted_quori_with(&fixtures, before);
+        settle(&mut before);
+        let before = floats(&before);
+        let drifted: Vec<(&String, f32, f32)> = before
+            .iter()
+            .filter_map(|(path, was)| {
+                let is = *untouched.get(path)?;
+                ((is - was).abs() > 1e-6).then_some((path, *was, is))
+            })
+            .collect();
+        assert!(
+            drifted.is_empty(),
+            "the muscle tier at rest drifts {drifted:?}"
+        );
+        for side in ["left", "right"] {
+            for input in [
+                "eye_brow/morph/in_up_down",
+                "eye_brow/morph/mid_up_down",
+                "eye_brow/morph/out_up_down",
+                "eye_brow/morph/in_left_right",
+                "eye_bottom_eyelid/pos/y",
+                "eye_bottom_eyelid/morph/curve",
+            ] {
+                let path = rig(&format!("{side}_{input}"));
+                assert_eq!(untouched.get(&path), Some(&0.0), "{path} at rest");
+            }
+        }
+        assert_eq!(untouched.get(&rig("mouth/morph/corner_puller")), Some(&0.0));
+        assert_eq!(untouched.get("rig/quori_latest/lids/blink"), Some(&0.0));
+        for lid in ["ltlid", "rtlid"] {
+            let path = format!("rig/quori_latest/propsrig/{lid}/translation/y");
+            let rest = untouched[&path];
+            assert!((rest - 2.224_481_6).abs() < 1e-6, "{path} = {rest} at rest");
         }
     }
 
