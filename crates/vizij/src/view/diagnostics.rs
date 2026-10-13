@@ -97,7 +97,9 @@ mod tests {
         assert_eq!(endpoint.topic, "/diagnostics");
     }
 
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
+
+    use bevy::time::TimeUpdateStrategy;
 
     use arora_hal::Hal;
     use arora_msgs_ros2::diagnostic_msgs::{DiagnosticArray, DiagnosticStatus};
@@ -144,11 +146,13 @@ mod tests {
             camera: Entity::PLACEHOLDER,
         });
 
-        // About 2.5 s of frames at 100 Hz: two reports.
-        let start = Instant::now();
-        while start.elapsed() < Duration::from_millis(2500) {
+        // 2.5 s of frames at 100 Hz on the app's clock, stepped by hand so
+        // the rate is the test's and not the host's: two reports.
+        app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+            10,
+        )));
+        for _ in 0..=250 {
             app.update();
-            std::thread::sleep(Duration::from_millis(10));
         }
         let mut reports = Vec::new();
         while let Some(Some(change)) = readings.next().now_or_never() {
@@ -168,7 +172,7 @@ mod tests {
         };
         assert_eq!(view.name, "vizij: view");
         let rate: f32 = view.values[0].value.parse().expect("a rate");
-        assert!((40.0..=110.0).contains(&rate), "rendering at {rate} Hz");
+        assert!((99.0..=101.0).contains(&rate), "rendering at {rate} Hz");
         assert_eq!(face.name, "vizij: face diag_face");
         assert_eq!(face.level, DiagnosticStatus::WARN, "a contended path warns");
         let values: Vec<(&str, &str)> = face
