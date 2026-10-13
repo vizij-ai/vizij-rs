@@ -6,6 +6,8 @@
 //! the declared `Array`/`List`/`Tuple` shapes all validate against it — the
 //! distinction lives in the shape alone.
 
+use std::borrow::Cow;
+
 use crate::types::{NodeSpec, SelectorSegment};
 use hashbrown::HashMap;
 use vizij_api_core::shape::Field;
@@ -239,145 +241,133 @@ pub fn null_of_shape_numeric(shape: &ShapeId) -> Value {
 }
 
 /// Apply selector segments to a value and optional shape metadata, returning the projected value.
+///
+/// The selection walks `value` and `shape` by reference and clones only what
+/// it selects: a field of a large record costs the field, not the record.
 pub fn project_by_selector(
     value: &Value,
     shape: Option<&ShapeId>,
     selector: &[SelectorSegment],
 ) -> Result<(Value, Option<ShapeId>), String> {
-    if selector.is_empty() {
+    let Some((segment, rest)) = selector.split_first() else {
         return Ok((value.clone(), shape.cloned()));
-    }
+    };
+    let (next_value, next_shape) = match segment {
+        SelectorSegment::Field(field) => (
+            select_field(value, field)?,
+            shape.and_then(|shape| field_shape(shape, field)),
+        ),
+        SelectorSegment::Index(idx) => (
+            select_index(value, *idx)?,
+            shape.and_then(|shape| index_shape(shape, *idx)),
+        ),
+    };
+    let next_value = next_value.as_ref();
+    let next_shape = next_shape.unwrap_or_else(|| Cow::Owned(infer_shape_id(next_value)));
+    project_by_selector(next_value, Some(&next_shape), rest)
+}
 
-    let mut current_value = value.clone();
-    let mut current_shape = shape.cloned();
-
-    for segment in selector {
-        match segment {
-            SelectorSegment::Field(field) => {
-                let next_value = match vocab::kind(&current_value) {
-                    VizijKind::Record => vocab::as_record(&current_value)
-                        .and_then(|entries| {
-                            entries
-                                .iter()
-                                .find(|(name, _)| name == field)
-                                .map(|(_, v)| (*v).clone())
-                        })
-                        .ok_or_else(|| format!("selector field '{}' missing in record", field))?,
-                    VizijKind::Transform => {
-                        let t = vocab::as_transform(&current_value).ok_or_else(|| {
-                            format!("selector field '{}' invalid for transform", field)
-                        })?;
-                        transform_field_value(field, &t).ok_or_else(|| {
-                            format!("selector field '{}' invalid for transform", field)
-                        })?
-                    }
-                    VizijKind::Enum => {
-                        let (variant, payload) = vocab::as_enumeration(&current_value)
-                            .ok_or_else(|| format!("selector field '{}' invalid", field))?;
-                        if vocab::variant_id(field) == variant || variant.to_string() == *field {
-                            payload.clone()
-                        } else {
-                            return Err(format!(
-                                "selector field '{}' does not match enum variant '{}'",
-                                field, variant
-                            ));
-                        }
-                    }
-                    _ => {
-                        return Err(format!(
-                            "selector field '{}' unsupported for value {:?}",
-                            field,
-                            infer_shape_id(&current_value)
-                        ))
-                    }
-                };
-
-                let mut next_shape = None;
-                if let Some(shape_id) = current_shape.as_ref() {
-                    next_shape = match shape_id {
-                        ShapeId::Record(fields) => fields
-                            .iter()
-                            .find(|f| f.name == *field)
-                            .map(|f| f.shape.clone()),
-                        ShapeId::Transform => transform_field_shape(field),
-                        ShapeId::Enum(variants) => variants
-                            .iter()
-                            .find(|(tag, _)| tag == field)
-                            .map(|(_, shape)| shape.clone()),
-                        _ => None,
-                    };
-                }
-
-                current_value = next_value;
-                current_shape = next_shape.or_else(|| Some(infer_shape_id(&current_value)));
-            }
-            SelectorSegment::Index(index) => {
-                let idx = *index;
-                let next_value = match vocab::kind(&current_value) {
-                    VizijKind::Vector => vocab::as_vector(&current_value)
-                        .and_then(|items| items.get(idx).copied())
-                        .map(vocab::float)
-                        .ok_or_else(|| {
-                            format!(
-                                "selector index {} out of bounds for vector of len {}",
-                                idx,
-                                vocab::as_vector(&current_value)
-                                    .map(<[f32]>::len)
-                                    .unwrap_or(0)
-                            )
-                        })?,
-                    VizijKind::Array => vocab::as_array(&current_value)
-                        .and_then(|items| items.get(idx).cloned())
-                        .ok_or_else(|| {
-                            format!(
-                                "selector index {} out of bounds for array of len {}",
-                                idx,
-                                vocab::as_array(&current_value)
-                                    .map(<[Value]>::len)
-                                    .unwrap_or(0)
-                            )
-                        })?,
-                    VizijKind::Vec2 => component(vocab::as_vec2(&current_value), idx)
-                        .ok_or_else(|| format!("selector index {} out of bounds for vec2", idx))?,
-                    VizijKind::Vec3 => component(vocab::as_vec3(&current_value), idx)
-                        .ok_or_else(|| format!("selector index {} out of bounds for vec3", idx))?,
-                    VizijKind::Vec4 => component(vocab::as_vec4(&current_value), idx)
-                        .ok_or_else(|| format!("selector index {} out of bounds for vec4", idx))?,
-                    VizijKind::Quat => component(vocab::as_quat(&current_value), idx)
-                        .ok_or_else(|| format!("selector index {} out of bounds for quat", idx))?,
-                    VizijKind::ColorRgba => component(vocab::as_color_rgba(&current_value), idx)
-                        .ok_or_else(|| format!("selector index {} out of bounds for color", idx))?,
-                    _ => {
-                        return Err(format!(
-                            "selector index {} unsupported for value {:?}",
-                            idx,
-                            infer_shape_id(&current_value)
-                        ))
-                    }
-                };
-
-                let mut next_shape = None;
-                if let Some(shape_id) = current_shape.as_ref() {
-                    next_shape = match shape_id {
-                        ShapeId::Vector { .. }
-                        | ShapeId::Vec2
-                        | ShapeId::Vec3
-                        | ShapeId::Vec4
-                        | ShapeId::Quat
-                        | ShapeId::ColorRgba => Some(ShapeId::Scalar),
-                        ShapeId::Array(inner, _) | ShapeId::List(inner) => Some((**inner).clone()),
-                        ShapeId::Tuple(entries) => entries.get(idx).cloned(),
-                        _ => None,
-                    };
-                }
-
-                current_value = next_value;
-                current_shape = next_shape.or_else(|| Some(infer_shape_id(&current_value)));
+/// The value field `field` of `value` selects: a record's field, a
+/// transform's part, an enumeration's payload when `field` names its variant.
+fn select_field<'a>(value: &'a Value, field: &str) -> Result<Cow<'a, Value>, String> {
+    match vocab::kind(value) {
+        VizijKind::Record => vocab::record_field(value, field)
+            .map(Cow::Borrowed)
+            .ok_or_else(|| format!("selector field '{}' missing in record", field)),
+        VizijKind::Transform => vocab::as_transform(value)
+            .and_then(|t| transform_field_value(field, &t))
+            .map(Cow::Owned)
+            .ok_or_else(|| format!("selector field '{}' invalid for transform", field)),
+        VizijKind::Enum => {
+            let (variant, payload) = vocab::as_enumeration(value)
+                .ok_or_else(|| format!("selector field '{}' invalid", field))?;
+            if vocab::variant_id(field) == variant || variant.to_string() == *field {
+                Ok(Cow::Borrowed(payload))
+            } else {
+                Err(format!(
+                    "selector field '{}' does not match enum variant '{}'",
+                    field, variant
+                ))
             }
         }
+        _ => Err(format!(
+            "selector field '{}' unsupported for value {:?}",
+            field,
+            infer_shape_id(value)
+        )),
     }
+}
 
-    Ok((current_value, current_shape))
+/// The declared shape of field `field` of a value of shape `shape`, if the
+/// shape declares one.
+fn field_shape<'a>(shape: &'a ShapeId, field: &str) -> Option<Cow<'a, ShapeId>> {
+    match shape {
+        ShapeId::Record(fields) => fields
+            .iter()
+            .find(|f| f.name == *field)
+            .map(|f| Cow::Borrowed(&f.shape)),
+        ShapeId::Transform => transform_field_shape(field).map(Cow::Owned),
+        ShapeId::Enum(variants) => variants
+            .iter()
+            .find(|(tag, _)| tag == field)
+            .map(|(_, shape)| Cow::Borrowed(shape)),
+        _ => None,
+    }
+}
+
+/// The value index `idx` of `value` selects: a component of a numeric
+/// value, an item of an array.
+fn select_index(value: &Value, idx: usize) -> Result<Cow<'_, Value>, String> {
+    let owned = |component: Option<Value>, what: &str| {
+        component
+            .map(Cow::Owned)
+            .ok_or_else(|| format!("selector index {} out of bounds for {}", idx, what))
+    };
+    match vocab::kind(value) {
+        VizijKind::Vector => {
+            let items = vocab::as_vector(value).unwrap_or_default();
+            owned(
+                items.get(idx).copied().map(vocab::float),
+                &format!("vector of len {}", items.len()),
+            )
+        }
+        VizijKind::Array => {
+            let items = vocab::as_array(value).unwrap_or_default();
+            items.get(idx).map(Cow::Borrowed).ok_or_else(|| {
+                format!(
+                    "selector index {} out of bounds for array of len {}",
+                    idx,
+                    items.len()
+                )
+            })
+        }
+        VizijKind::Vec2 => owned(component(vocab::as_vec2(value), idx), "vec2"),
+        VizijKind::Vec3 => owned(component(vocab::as_vec3(value), idx), "vec3"),
+        VizijKind::Vec4 => owned(component(vocab::as_vec4(value), idx), "vec4"),
+        VizijKind::Quat => owned(component(vocab::as_quat(value), idx), "quat"),
+        VizijKind::ColorRgba => owned(component(vocab::as_color_rgba(value), idx), "color"),
+        _ => Err(format!(
+            "selector index {} unsupported for value {:?}",
+            idx,
+            infer_shape_id(value)
+        )),
+    }
+}
+
+/// The declared shape of item `idx` of a value of shape `shape`, if the
+/// shape declares one.
+fn index_shape(shape: &ShapeId, idx: usize) -> Option<Cow<'_, ShapeId>> {
+    match shape {
+        ShapeId::Vector { .. }
+        | ShapeId::Vec2
+        | ShapeId::Vec3
+        | ShapeId::Vec4
+        | ShapeId::Quat
+        | ShapeId::ColorRgba => Some(Cow::Owned(ShapeId::Scalar)),
+        ShapeId::Array(inner, _) | ShapeId::List(inner) => Some(Cow::Borrowed(&**inner)),
+        ShapeId::Tuple(entries) => entries.get(idx).map(Cow::Borrowed),
+        _ => None,
+    }
 }
 
 fn component<const N: usize>(arr: Option<[f32; N]>, idx: usize) -> Option<Value> {
@@ -485,5 +475,100 @@ fn transform_field_shape(field: &str) -> Option<ShapeId> {
         "rotation" => Some(ShapeId::Quat),
         "scale" => Some(ShapeId::Vec3),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn field(name: &str) -> SelectorSegment {
+        SelectorSegment::Field(name.to_string())
+    }
+
+    /// A record's field, an array item, a tuple entry and an enumeration's
+    /// payload select with the shape their parent declares, and a part no
+    /// shape declares takes the shape of its value.
+    #[test]
+    fn selection_takes_the_declared_shape_of_the_part() {
+        let value = vocab::record([
+            (
+                "values",
+                vocab::record([("a", vocab::float(1.0)), ("b", vocab::text("x"))]),
+            ),
+            (
+                "items",
+                vocab::array(vec![vocab::vec3([1.0, 2.0, 3.0]), vocab::float(4.0)]),
+            ),
+            ("choice", vocab::enumeration("on", vocab::float(5.0))),
+        ]);
+        let declared = ShapeId::Record(vec![
+            Field {
+                name: "values".into(),
+                shape: ShapeId::Record(vec![Field {
+                    name: "a".into(),
+                    shape: ShapeId::Vector { len: Some(1) },
+                }]),
+            },
+            Field {
+                name: "items".into(),
+                shape: ShapeId::Tuple(vec![ShapeId::Vec3, ShapeId::Scalar]),
+            },
+        ]);
+
+        let (a, shape) =
+            project_by_selector(&value, Some(&declared), &[field("values"), field("a")]).unwrap();
+        assert_eq!(a, vocab::float(1.0));
+        assert_eq!(shape, Some(ShapeId::Vector { len: Some(1) }));
+
+        let (b, shape) =
+            project_by_selector(&value, Some(&declared), &[field("values"), field("b")]).unwrap();
+        assert_eq!(b, vocab::text("x"));
+        assert_eq!(shape, Some(ShapeId::Text));
+
+        let (y, shape) = project_by_selector(
+            &value,
+            Some(&declared),
+            &[
+                field("items"),
+                SelectorSegment::Index(0),
+                SelectorSegment::Index(1),
+            ],
+        )
+        .unwrap();
+        assert_eq!(y, vocab::float(2.0));
+        assert_eq!(shape, Some(ShapeId::Scalar));
+
+        let (payload, _) =
+            project_by_selector(&value, None, &[field("choice"), field("on")]).unwrap();
+        assert_eq!(payload, vocab::float(5.0));
+
+        let (whole, shape) = project_by_selector(&value, Some(&declared), &[]).unwrap();
+        assert_eq!(whole, value);
+        assert_eq!(shape, Some(declared));
+    }
+
+    /// A missing field, an out-of-range index and a variant the value is not
+    /// say what failed.
+    #[test]
+    fn a_failed_selection_says_why() {
+        let value = vocab::record([
+            ("v", vocab::vec2([1.0, 2.0])),
+            ("e", vocab::enumeration("on", vocab::float(1.0))),
+        ]);
+        let error =
+            |selector: &[SelectorSegment]| project_by_selector(&value, None, selector).unwrap_err();
+        assert_eq!(
+            error(&[field("missing")]),
+            "selector field 'missing' missing in record"
+        );
+        assert_eq!(
+            error(&[field("v"), SelectorSegment::Index(2)]),
+            "selector index 2 out of bounds for vec2"
+        );
+        assert!(
+            error(&[field("e"), field("off")]).starts_with("selector field 'off' does not match")
+        );
+        assert!(error(&[field("v"), field("x")]).starts_with("selector field 'x' unsupported"));
     }
 }
