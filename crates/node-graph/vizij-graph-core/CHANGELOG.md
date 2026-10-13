@@ -23,6 +23,10 @@ All notable changes to `vizij-graph-core`. The format follows
   evaluates in 45 M instructions per frame instead of 271 M.
 - An `input` node formats its path only for an error message, not on every
   evaluation.
+- A `constant` keeps its port from one evaluation to the next while its
+  `value` is unchanged — neither cloned nor its shape inferred again — unless it
+  declares output shapes. A change to `value` in place, or a plan change,
+  evaluates it again.
 
 ## [2.4.0] - 2026-10-10
 

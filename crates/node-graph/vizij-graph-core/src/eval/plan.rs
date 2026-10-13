@@ -75,6 +75,12 @@ pub struct InputBinding {
 pub struct PlanCache {
     fingerprint: u64,
     version: u64,
+    /// Bumped whenever the plan changes — rebuilt, extended or shrunk — and
+    /// its node indices with it.
+    generation: u64,
+    /// The generation the runtime's output buckets were last filled under:
+    /// while it is the plan's, bucket `i` holds node `i`'s ports.
+    filled: Option<u64>,
     /// Node indices in topological order.
     pub order: Vec<usize>,
     /// Per-node input bindings keyed by slot index.
@@ -86,6 +92,17 @@ pub struct PlanCache {
 }
 
 impl PlanCache {
+    /// Whether the runtime's output buckets were filled under this plan, so
+    /// that bucket `i` holds node `i`'s ports from the last evaluation.
+    pub(crate) fn buckets_filled(&self) -> bool {
+        self.filled == Some(self.generation)
+    }
+
+    /// Record that the runtime's output buckets now follow this plan.
+    pub(crate) fn mark_buckets_filled(&mut self) {
+        self.filled = Some(self.generation);
+    }
+
     /// Ensure the cache matches the provided spec; rebuild on structural change.
     pub fn ensure(&mut self, spec: &GraphSpec) -> Result<(), String> {
         if spec.version > 0 {
@@ -162,6 +179,7 @@ impl PlanCache {
         );
         self.fingerprint = spec.fingerprint;
         self.version = spec.version;
+        self.generation += 1;
         Ok(())
     }
 
@@ -240,6 +258,7 @@ impl PlanCache {
         }
         self.fingerprint = spec.fingerprint;
         self.version = spec.version;
+        self.generation += 1;
         Ok(())
     }
 
@@ -316,6 +335,7 @@ impl PlanCache {
         self.input_bindings = input_bindings;
         self.fingerprint = fingerprint;
         self.version = version;
+        self.generation += 1;
         self.node_index = node_index
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))

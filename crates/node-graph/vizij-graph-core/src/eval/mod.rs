@@ -13,7 +13,7 @@
 //!
 //! Integration code should primarily interact with [`GraphRuntime`] and [`evaluate_all`].
 
-use crate::types::GraphSpec;
+use crate::types::{GraphSpec, NodeSpec, NodeType};
 use std::mem;
 
 pub mod eval_node;
@@ -108,22 +108,25 @@ fn evaluate_all_inner(
     rt.node_states
         .retain(|id, _| spec.nodes.iter().any(|node| node.id == *id));
 
-    let plan = mem::take(&mut rt.plan);
+    let mut plan = mem::take(&mut rt.plan);
     let result = (|| {
-        // Ensure output storage is sized/reset for the upcoming frame.
-        if rt.outputs_vec.len() != spec.nodes.len() {
-            rt.outputs_vec.resize_with(spec.nodes.len(), Vec::new);
-        }
-        for idx in 0..plan.layouts.len() {
-            let bucket = rt.outputs_vec.get_mut(idx).expect("outputs vec present");
-            bucket.clear();
-        }
+        prepare_buckets(rt, spec, &mut plan);
 
         for &idx in plan.order.iter() {
             let node = spec
                 .nodes
                 .get(idx)
                 .ok_or_else(|| format!("plan referenced missing node at index {}", idx))?;
+            if holds_its_constant(node, &rt.outputs_vec[idx]) {
+                if by_name == ByName::Kept {
+                    let compat = eval_node::materialize_outputs(
+                        &plan.layouts[idx].outputs,
+                        &rt.outputs_vec[idx],
+                    );
+                    rt.outputs.insert(node.id.clone(), compat);
+                }
+                continue;
+            }
             let (inputs_vec, present_vec) = eval_node::read_inputs(rt, idx, &plan)?;
             let inputs =
                 eval_node::InputSlots::new(&inputs_vec, &present_vec, &plan.layouts[idx].inputs);
@@ -152,6 +155,43 @@ fn evaluate_all_inner(
     })();
     rt.plan = plan;
     result
+}
+
+/// Size the output buckets for `spec` and clear them for an evaluation, but
+/// for the constants' — a constant keeps its port from one evaluation to the
+/// next ([`holds_its_constant`]) — as long as the buckets follow `plan`. When
+/// the plan has changed since they were filled, its node indices with it,
+/// every bucket starts empty.
+fn prepare_buckets(rt: &mut GraphRuntime, spec: &GraphSpec, plan: &mut PlanCache) {
+    if !plan.buckets_filled() {
+        rt.outputs_vec.clear();
+        plan.mark_buckets_filled();
+    }
+    if rt.outputs_vec.len() != spec.nodes.len() {
+        rt.outputs_vec.resize_with(spec.nodes.len(), Vec::new);
+    }
+    for (bucket, node) in rt.outputs_vec.iter_mut().zip(&spec.nodes) {
+        if !matches!(node.kind, NodeType::Constant) {
+            bucket.clear();
+        }
+    }
+}
+
+/// Whether `ports`, the bucket of constant `node` from the last evaluation,
+/// holds what evaluating it gives now: its value, with the shape that value
+/// infers. A constant's port depends on its `value` param alone, unless it
+/// declares output shapes; a changed `value` is evaluated again.
+fn holds_its_constant(node: &NodeSpec, ports: &[PortValue]) -> bool {
+    if !matches!(node.kind, NodeType::Constant) || !node.output_shapes.is_empty() {
+        return false;
+    }
+    let [port] = ports else {
+        return false;
+    };
+    match &node.params.value {
+        Some(value) => port.value == *value,
+        None => port.value == vizij_api_core::value::float(0.0),
+    }
 }
 
 fn resize_and_clear(bucket: &mut Vec<PortValue>) {
@@ -190,21 +230,23 @@ pub fn evaluate_all_cached(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<()
     rt.node_states
         .retain(|id, _| spec.nodes.iter().any(|node| node.id == *id));
 
-    let plan = mem::take(&mut rt.plan);
+    let mut plan = mem::take(&mut rt.plan);
     let result = (|| {
-        if rt.outputs_vec.len() != spec.nodes.len() {
-            rt.outputs_vec.resize_with(spec.nodes.len(), Vec::new);
-        }
-        for idx in 0..plan.layouts.len() {
-            let bucket = rt.outputs_vec.get_mut(idx).expect("outputs vec present");
-            bucket.clear();
-        }
+        prepare_buckets(rt, spec, &mut plan);
 
         for &idx in plan.order.iter() {
             let node = spec
                 .nodes
                 .get(idx)
                 .ok_or_else(|| format!("plan referenced missing node at index {}", idx))?;
+            if holds_its_constant(node, &rt.outputs_vec[idx]) {
+                let compat = eval_node::materialize_outputs(
+                    &plan.layouts[idx].outputs,
+                    &rt.outputs_vec[idx],
+                );
+                rt.outputs.insert(node.id.clone(), compat);
+                continue;
+            }
             let (inputs_vec, present_vec) = eval_node::read_inputs(rt, idx, &plan)?;
             let inputs =
                 eval_node::InputSlots::new(&inputs_vec, &present_vec, &plan.layouts[idx].inputs);

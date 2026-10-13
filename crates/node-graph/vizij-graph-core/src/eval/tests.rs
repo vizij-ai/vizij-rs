@@ -1880,6 +1880,72 @@ fn an_evaluation_for_writes_writes_what_a_full_one_writes() {
     }
 }
 
+/// A constant's port carries over from one evaluation to the next, and
+/// follows its `value` when that changes in place, without a new plan, and
+/// its node when a new plan moves it to another index.
+#[test]
+fn a_constant_follows_its_value_and_its_node() {
+    let out = |id: &str, path: &str| NodeSpec {
+        id: id.to_string(),
+        kind: NodeType::Output,
+        params: NodeParams {
+            path: Some(TypedPath::parse(path).expect("valid path")),
+            ..Default::default()
+        },
+        output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
+    };
+    let written = |rt: &GraphRuntime| -> Vec<(String, Value)> {
+        rt.writes
+            .iter()
+            .map(|op| (op.path.to_string(), op.value.clone()))
+            .collect()
+    };
+    let mut graph = GraphSpec {
+        nodes: vec![
+            constant_node("a", vocab::float(1.0)),
+            constant_node("b", vocab::record([("x", vocab::float(2.0))])),
+            out("out_a", "robot/a"),
+            out("out_b", "robot/b"),
+        ],
+        edges: vec![link("a", "out_a", "in"), link("b", "out_b", "in")],
+        ..Default::default()
+    };
+    let mut rt = GraphRuntime::default();
+    let b = vocab::record([("x", vocab::float(2.0))]);
+    for _ in 0..2 {
+        evaluate_all(&mut rt, &graph).expect("evaluation");
+        assert_eq!(
+            written(&rt),
+            vec![
+                ("robot/a".into(), vocab::float(1.0)),
+                ("robot/b".into(), b.clone())
+            ]
+        );
+        let port = &rt.outputs["b"]["out"];
+        assert_eq!(port.shape, shape_helpers::infer_shape(&b));
+    }
+
+    // The value changes in place: the plan stands, the port follows.
+    graph.nodes[0].params.value = Some(vocab::float(3.0));
+    evaluate_all(&mut rt, &graph).expect("evaluation");
+    assert_eq!(written(&rt)[0], ("robot/a".into(), vocab::float(3.0)));
+
+    // A new plan puts other nodes at the constants' indices.
+    graph.nodes.swap(0, 2);
+    graph.nodes.swap(1, 3);
+    evaluate_all(&mut rt, &graph).expect("evaluation");
+    let mut writes = written(&rt);
+    writes.sort_by(|l, r| l.0.cmp(&r.0));
+    assert_eq!(
+        writes,
+        vec![
+            ("robot/a".into(), vocab::float(3.0)),
+            ("robot/b".into(), b.clone())
+        ]
+    );
+}
+
 #[test]
 fn centered_remap_handles_anchor_segments() {
     let mut defaults = HashMap::new();
