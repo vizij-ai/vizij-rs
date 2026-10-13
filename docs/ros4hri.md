@@ -68,7 +68,7 @@ serves it); this table summarizes it.
 
 | Key | Type | ROS4HRI source | Meaning |
 |---|---|---|---|
-| `standard/ros4hri/expression/name` | string | `hri_msgs/Expression.expression` | one-hots the named expression weight |
+| `standard/ros4hri/expression/name` | string | `hri_msgs/Expression.expression` | the named expression, at the arousal as its intensity — each change of the three keys runs `set_expression` with them (see Expression below) |
 | `standard/ros4hri/expression/valence` | f32 `[-1,1]` | `hri_msgs/Expression.valence` | blends named weights by circumplex proximity when no name is set |
 | `standard/ros4hri/expression/arousal` | f32 `[-1,1]` | `hri_msgs/Expression.arousal` | as above |
 | `standard/ros4hri/gaze/target` | vec3 (m) | a look-at point (face frame: x forward, y left, z up) | per-eye gaze with vergence |
@@ -81,12 +81,22 @@ serves it); this table summarizes it.
 
 ## Per-channel behaviour
 
-- **Expression** — a non-empty `expression/name` one-hots the named weight.
-  Otherwise `valence`/`arousal` blend the named weights by proximity to each
-  expression's circumplex anchor. Weights are smoothed and written to
-  `standard/vizij/expression/<name>` for ROS4HRI's 25 names; the standard's
-  expressions beyond them (`concerned`, `sleepy`) have no ROS4HRI name and are
-  left to other writers.
+- **Expression** — commanded, never written by the mapping. Each change of
+  the three keys spawns a [`set_expression`](skills.md#the-expression-setters)
+  run with them, and the mapping's first evaluation spawns one with the keys
+  as loaded, so the face boots at neutral. The run computes the expression:
+  a non-empty `expression/name` selects the named weight at the arousal as
+  its intensity, otherwise `valence`/`arousal` blend the named weights by
+  proximity to each expression's circumplex anchor, smoothed, onto the
+  whole expression surface. A key write is then one more command among the
+  expression's setters: it takes the face over from a `set_expression` or
+  `set_facial_action_units` run, and a later call of either takes it back.
+  Quick successive writes of the three keys (a bridge landing a message's
+  fields one by one) each start a run; each continues from where the face
+  is, so the face only ever moves toward the latest. Since a setter run
+  writes the face's expression every step, the face standard's expression,
+  muscle-tier and jaw keys are no inputs while the mapping is composed: the
+  device does not declare them and refuses a remote write to them.
 - **Gaze** — `gaze/target` maps to per-eye positions with vergence, the
   incumbent ±0.78 rad → ±1 normalization, and a center fallback for targets at
   or behind the face plane (x ≤ 0.1 m).
@@ -300,11 +310,11 @@ ros2 topic pub --once /quori/keys/standard/ros4hri/expression/valence \
   std_msgs/msg/Float32 "{data: 0.0}"
 ```
 
-What happens on the device: with no expression name set, the mapping blends
-the named expressions by the commanded affect's proximity to each one's
-circumplex anchor — at valence 0.8 and arousal 0 that is `happy` alone, and at
-rest `neutral`. Its exponential smoother (half-life 0.14 s — a ≈200 ms time
-constant) carries the weight to
+What happens on the device: the write runs `set_expression` with the keys,
+which, with no expression name set, blends the named expressions by the
+commanded affect's proximity to each one's circumplex anchor — at valence 0.8
+and arousal 0 that is `happy` alone, and at rest `neutral`. Its exponential
+smoother (half-life 0.14 s — a ≈200 ms time constant) carries the weight to
 `rig/<faceId>/standard/vizij/expression/happy`, and the face's own graphs map
 that onto its rig. A face without the expression tier moves nothing —
 `vizij-bundle validate` reports which tiers a face covers. The same goes for the typed topics: publishing
@@ -549,19 +559,20 @@ is a diff of the behavior.
   authoring app to embed.
 - **Reconcile it against the profiles** with `vizij-bundle surface`: the
   mapping reads 9 of the profile's 10 command keys (`gaze/frame` belongs to
-  the `look_at` skill) and writes 33 of the face standard's 94 inputs (the 15
-  viseme weights are written by the `play_viseme` runs it spawns; the muscle
-  tier, the blink, the standard's gaze target (a point on the face's frame)
-  and its weight, the expressions beyond ROS4HRI's and the conversation state
-  have no ROS4HRI command the mapping reads; and the lipsync gain is a setting
-  of the face).
+  the `look_at` skill) and writes 8 of the face standard's 94 inputs: the
+  eyes, the top lids and the caption (the expression weights are written by
+  the `set_expression` runs it spawns and the 15 viseme weights by its
+  `play_viseme` runs; the muscle tier, the blink, the standard's gaze target
+  (a point on the face's frame) and its weight, and the conversation state
+  have no ROS4HRI command the mapping reads; and the lipsync gain is a
+  setting of the face).
 
 ## Progressive compliance
 
 A face implements the standard tiers it covers — gaze & lids (L0),
 expressions (L1), visemes (L2), muscle (L3) — and the mapping, which drives
-the gaze and expression tiers and spawns the runs that play visemes, degrades
-to them.
+the gaze tier and spawns the runs that set the expression and play visemes,
+degrades to them.
 `vizij-bundle validate --min-level <n>` reports and gates a face's coverage of
 the `vizij-face` profile; it reports the conversation state and the
 standard's gaze target and its weight without grading them.

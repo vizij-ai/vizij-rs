@@ -35,10 +35,15 @@ pub fn say_parameters() -> HashMap<Uuid, String> {
 
 /// The say task fragment, parsed from the shipped asset with the face's rig
 /// prefix on the controls it writes — what the device's interpreter grafts
-/// per run.
+/// per run. Exclusive among its own runs: a new utterance takes over from
+/// the one speaking. Outside the lips' players' domain
+/// ([`LIPS`](crate::viseme::LIPS)): a lips command spawned while it speaks
+/// writes after it and shows over it, and the run keeps speaking, its lips
+/// back from where the face is once that command ends.
 pub fn say_fragment(rig_prefix: &str) -> TaskFragment {
     TaskFragment::parse_with_rig_prefix(skills::SAY_JSON, rig_prefix, say_parameters())
         .expect("the shipped say asset parses")
+        .exclusive()
 }
 
 /// The say fragment the device registers, honoring the face's pinned
@@ -53,7 +58,7 @@ pub fn say_fragment_from(
         match TaskFragment::parse_with_rig_prefix(&spec.to_string(), rig_prefix, say_parameters()) {
             Ok(fragment) => {
                 log::info!("say: the face's embedded skill fragment overrides the built-in");
-                return fragment;
+                return fragment.exclusive();
             }
             Err(e) => log::warn!("embedded say fragment refused ({e}); the built-in serves"),
         }

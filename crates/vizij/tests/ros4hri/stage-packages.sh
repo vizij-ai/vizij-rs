@@ -19,7 +19,7 @@
 stage_ros4hri_packages() {
   local W="$1" ROOT="$2"; shift 2
   local want=("$@")
-  [ ${#want[@]} -eq 0 ] && want=(std_skills communication_skills interaction_skills hri_msgs)
+  [ ${#want[@]} -eq 0 ] && want=(std_skills communication_skills interaction_skills hri_msgs vizij_face_msgs)
   wants() { printf '%s\n' "${want[@]}" | grep -qx "$1"; }
 
   local MSGS
@@ -79,5 +79,12 @@ print(os.path.join(os.path.dirname(crates[-1]["manifest_path"]), "msgs"))
     sed -i.bak 's/^Header /std_msgs\/Header /' "$W"/interaction_skills/msg/*.msg && rm "$W"/interaction_skills/msg/*.bak
     package interaction_skills "ROS4HRI interaction skills (LookAt, SetExpression), from arora-msgs-ros2's vendored definitions." std_skills hri_msgs geometry_msgs action_msgs
     cmake interaction_skills "$(cd "$W/interaction_skills" && ls action/*.action msg/*.msg | sed 's/^/"/;s/$/"/' | tr '\n' ' ')" "std_skills hri_msgs geometry_msgs action_msgs"
+  fi
+  if wants vizij_face_msgs; then
+    mkdir -p "$W/vizij_face_msgs/action" "$W/vizij_face_msgs/msg"
+    cp "$MSGS"/vizij_face_msgs/*.action "$W/vizij_face_msgs/action/"
+    cp "$MSGS"/vizij_face_msgs/*.msg "$W/vizij_face_msgs/msg/"
+    package vizij_face_msgs "Vizij's face messages and skills (set_facial_action_units, set_viseme, play_visemes), from arora-msgs-ros2's vendored definitions." std_msgs builtin_interfaces std_skills action_msgs
+    cmake vizij_face_msgs "$(cd "$W/vizij_face_msgs" && ls action/*.action msg/*.msg | sed 's/^/"/;s/$/"/' | tr '\n' ' ')" "std_msgs builtin_interfaces std_skills action_msgs"
   fi
 }

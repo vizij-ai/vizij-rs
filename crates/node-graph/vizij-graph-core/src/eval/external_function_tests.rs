@@ -435,6 +435,33 @@ fn spawn_requests_a_run_each_time_its_when_changes() {
     assert!(step(&mut rt, 0.2).is_empty());
 }
 
+/// With `spawn_initial`, the first evaluation spawns with the args it
+/// records, and later ones spawn on changes as before.
+#[test]
+fn spawn_initial_spawns_on_the_first_evaluation_too() {
+    let (function, shape, weight) = (
+        Uuid::from_u128(0x7771),
+        Uuid::from_u128(0x7772),
+        Uuid::from_u128(0x7773),
+    );
+    let mut graph = spawn_graph(function, shape, weight);
+    graph.nodes[1].params.spawn_initial = Some(true);
+    let graph = graph.with_cache();
+    let mut rt = GraphRuntime::default();
+
+    assert_eq!(
+        spawn_step(&mut rt, &graph, "sil"),
+        vec![SpawnRequest {
+            module: None,
+            function,
+            args: vec![(weight, Value::F32(1.0)), (shape, vocab::text("sil"))],
+        }],
+        "the inputs as loaded"
+    );
+    assert!(spawn_step(&mut rt, &graph, "sil").is_empty());
+    assert_eq!(spawn_step(&mut rt, &graph, "aa").len(), 1);
+}
+
 #[test]
 fn spawn_refuses_an_arg_slot_without_a_parameter_id() {
     let mut graph = spawn_graph(

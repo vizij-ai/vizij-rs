@@ -1,6 +1,7 @@
 #!/bin/bash
 # Build the ROS 2 Jazzy + rmw_zenoh image carrying the ROS4HRI skill
-# interfaces (std_skills, communication_skills, interaction_skills, hri_msgs),
+# interfaces (std_skills, communication_skills, interaction_skills, hri_msgs)
+# and Vizij's face messages (vizij_face_msgs),
 # staged by stage-packages.sh from the `.msg` / `.action` files the
 # arora-msgs-ros2 crate vendors (located through cargo, so the container
 # speaks exactly the definitions the bridge serves — Vizij's extensions

@@ -97,6 +97,8 @@ assert.equal(await profile("nope"), null);
 // it reads the device-scoped ROS4HRI commands and writes the face's controls,
 // and the speech channel runs the other way — the face's speech state in,
 // the ROS4HRI speech state out — the prefix landing on the face's side only.
+// It reads the face's `asleep` weight, which inhibits its blink; the
+// expression is the set_expression runs it spawns.
 assert.deepEqual((await mappings()).map((m) => m.id), ["ros4hri"]);
 const graph = await mapping("ros4hri", "rig/quori/");
 const outputs = graph.nodes.filter((n) => n.type === "output").map((n) => n.params.path);
@@ -114,8 +116,16 @@ assert.ok(
     (p) =>
       p.startsWith("standard/ros4hri/") ||
       p === "rig/quori/standard/vizij/speech" ||
-      p === "rig/quori/standard/vizij/viseme",
+      p === "rig/quori/standard/vizij/viseme" ||
+      p === "rig/quori/standard/vizij/expression/asleep",
   ),
+);
+assert.ok(!outputs.some((p) => p.includes("/standard/vizij/expression/")));
+assert.ok(
+  graph.nodes.some(
+    (n) => n.type === "spawn" && n.params.spawn_initial === true,
+  ),
+  "the expression keys spawn set_expression, once on load too",
 );
 assert.ok(inputs.includes("rig/quori/standard/vizij/speech"));
 assert.ok(inputs.includes("rig/quori/standard/vizij/viseme"));
