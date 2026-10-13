@@ -137,9 +137,44 @@ jobs:
           pnpm --filter @vizij/node-graph run test
           pnpm --filter @vizij/animation-module run test
           pnpm --filter @vizij/runtime run test
-      # The bundle on a page: Quori and Toasty against the native references
-      # under the same metric, the authoring viewport's calls, and 25
-      # load/unload cycles with a flat memory.
+      # What the browser tests serve: the runtime's dist (the wasm module
+      # included) and the two workspace packages its page imports by name.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-bundle
+          path: |
+            npm/@vizij/runtime/dist
+            npm/@vizij/value-json/dist
+            npm/@vizij/wasm-loader/dist
+          retention-days: 1
+
+  # The bundle on a page: Quori and Toasty against the native references
+  # under the same metric, the authoring viewport's calls, and 25
+  # load/unload cycles with a flat memory. Two jobs, because the suite is the
+  # longest step of the run and its authoring half alone is as long as the
+  # rest: each half runs on its own runner against the bundle the `wasm` job
+  # built.
+  wasm-browser:
+    needs: [wasm]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [runtime, authoring]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Install workspace dependencies
+        run: pnpm install
+      - uses: actions/download-artifact@v4
+        with:
+          name: browser-bundle
+          path: npm/@vizij
       - name: Fetch the face GLBs from vizij-web
         # Pinned to a commit, so a re-export cannot move a reference.
         run: |
@@ -150,15 +185,15 @@ jobs:
           curl -fsSL "$base/Toasty_Current.glb" -o fixtures/Toasty_Current.glb
       - name: Install Chromium for Playwright
         run: pnpm --filter @vizij/runtime exec playwright install --with-deps chromium
-      - name: Run the browser tests
+      - name: Run the browser tests (${{ matrix.suite }})
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
           VIZIJ_SNAPSHOT_OUT: ${{ github.workspace }}/browser-snapshots
-        run: pnpm --filter @vizij/runtime run test:browser
+        run: pnpm --filter @vizij/runtime run test:browser:${{ matrix.suite }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: browser-snapshots
+          name: browser-snapshots-${{ matrix.suite }}
           path: browser-snapshots
           if-no-files-found: ignore
 
