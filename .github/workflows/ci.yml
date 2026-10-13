@@ -15,6 +15,16 @@ concurrency:
   group: rs-ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Each Rust job restores the dependencies main last built for it
+# (Swatinem/rust-cache: the registry and the dependencies' artifacts, keyed by
+# job, toolchain and lockfile, falling back to the job's latest). Only main
+# saves: a pull request's cache is visible to that pull request alone, and
+# saving one evicts main's from the repository's 10 GB, which every pull
+# request restores from. Line tables instead of full debuginfo keep each cache
+# a fraction of the size, and a failing test's backtrace still has file:line.
+env:
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
 jobs:
   rust:
     runs-on: ubuntu-latest
@@ -25,14 +35,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - name: Cache cargo
-        uses: actions/cache@v5
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       # Every crate but `vizij` takes `--all-features`; `vizij` cannot, because
       # its ROS 2 bridge backends (`ros2-dds` / `ros2-zenoh`) are compile-time
       # exclusive, so it gets one pass per backend. The Zenoh pass covers the
@@ -58,14 +63,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown, aarch64-linux-android
-      - name: Cache cargo
-        uses: actions/cache@v5
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-vizij-lib-targets-${{ hashFiles('**/Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo check -p vizij --lib --target wasm32-unknown-unknown --no-default-features
       # The speech provider's browser producer, on the runner's Chrome.
       - name: Install wasm-pack
@@ -95,14 +95,9 @@ jobs:
           # wasm32-wasip1 builds the animation-module artifact (an Arora guest
           # module, not a wasm-bindgen wrapper).
           targets: wasm32-wasip1
-      - name: Cache cargo
-        uses: actions/cache@v5
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-wasm-cargo-${{ hashFiles('**/Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install wasm-pack
         run: cargo install wasm-pack
       - name: Build WASM into npm wrapper pkg/
@@ -110,7 +105,7 @@ jobs:
       - name: Build Graph WASM into npm wrapper pkg/
         run: node scripts/build-graph-wasm.mjs
       # The browser bundle is the whole vizij crate (Bevy included) for
-      # wasm32: the cache above is what keeps this under the job's budget.
+      # wasm32: the cache is what keeps this under the job's budget.
       - name: Build the runtime WASM (the vizij crate for the browser) into npm wrapper pkg/
         run: node scripts/build-runtime-wasm.mjs
       - name: Install pnpm
@@ -222,14 +217,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-wasip1
-      - name: Cache cargo
-        uses: actions/cache@v5
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-animmod-cargo-${{ hashFiles('**/Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build the animation wasm module artifact
         run: cargo build -p vizij-animation-module --target wasm32-wasip1
       - name: Prove the arora_call boundary (host_ramp)
@@ -247,14 +237,9 @@ jobs:
       - name: Install Bevy deps + lavapipe (software Vulkan)
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config mesa-vulkan-drivers vulkan-tools
       - uses: dtolnay/rust-toolchain@stable
-      - name: Cache cargo
-        uses: actions/cache@v5
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-snapreg-cargo-${{ hashFiles('**/Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Fetch the face GLBs
         # Each face pinned to the commit its reference or test was written
         # against, so a re-export cannot move what a test reads: Quori,
