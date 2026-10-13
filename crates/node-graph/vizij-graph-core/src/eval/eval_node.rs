@@ -2569,25 +2569,35 @@ pub fn read_inputs(
     let mut present = vec![false; layout.inputs.slots.len()];
 
     for (slot_idx, binding) in bindings.iter().enumerate() {
-        let mut port = if let Some(src) = &binding.source {
-            let base = rt
-                .outputs_vec
-                .get(src.node_idx)
-                .and_then(|vec| vec.get(src.slot))
-                .cloned();
-            base.or_else(|| binding.default.clone())
-                .unwrap_or_else(|| PortValue::new(vocab::float(0.0)))
-        } else {
+        let fallback = || {
             binding
                 .default
                 .clone()
                 .unwrap_or_else(|| PortValue::new(vocab::float(0.0)))
         };
-
+        let source_port = binding.source.as_ref().and_then(|src| {
+            rt.outputs_vec
+                .get(src.node_idx)
+                .and_then(|vec| vec.get(src.slot))
+        });
         let has_value = binding.source.is_some() || binding.default.is_some();
 
-        if let Some(src) = &binding.source {
-            if let Some(selector) = &src.selector {
+        // A selector projects the source's port in place: only the selected
+        // part is cloned, however large the source value.
+        let selected = binding
+            .source
+            .as_ref()
+            .and_then(|src| Some((src, src.selector.as_ref()?)));
+        let port = match (selected, source_port) {
+            (Some((src, selector)), source) => {
+                let fallback_port;
+                let base = match source {
+                    Some(port) => port,
+                    None => {
+                        fallback_port = fallback();
+                        &fallback_port
+                    }
+                };
                 let source_label = plan
                     .layouts
                     .get(src.node_idx)
@@ -2596,8 +2606,8 @@ pub fn read_inputs(
                 let source_port_id = src.output_name.as_str();
                 let input_label = layout.inputs.slot_name(slot_idx).unwrap_or("<slot>");
                 let (value, shape_id) = project_by_selector(
-                    &port.value,
-                    Some(&port.shape.id),
+                    &base.value,
+                    Some(&base.shape.id),
                     selector,
                 )
                 .map_err(|err| {
@@ -2606,12 +2616,14 @@ pub fn read_inputs(
                         selector, src.node_idx, source_label, source_port_id, input_label, err
                     )
                 })?;
-                port = match shape_id {
+                match shape_id {
                     Some(id) => PortValue::with_shape(value, Shape::new(id)),
                     None => PortValue::new(value),
-                };
+                }
             }
-        }
+            (None, Some(port)) => port.clone(),
+            (None, None) => fallback(),
+        };
 
         if let Some(slot) = resolved.get_mut(slot_idx) {
             *slot = port;

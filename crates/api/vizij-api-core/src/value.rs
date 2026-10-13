@@ -402,6 +402,16 @@ pub fn as_record(value: &Value) -> Option<Vec<(&str, &Value)>> {
     }
 }
 
+/// Read one field of a record by name: `None` when `value` is no record, or
+/// when the record has no field `name` or that field holds no value. One map
+/// lookup, where [`as_record`] lists and sorts every field.
+pub fn record_field<'a>(value: &'a Value, name: &str) -> Option<&'a Value> {
+    match value {
+        Value::KeyValue(kv) => kv.fields.get(name)?.value.as_deref(),
+        _ => None,
+    }
+}
+
 /// Read a heterogeneous sequence.
 pub fn as_array(value: &Value) -> Option<&[Value]> {
     match value {
@@ -520,6 +530,16 @@ mod tests {
         assert_eq!(as_float(entries[0].1), Some(-1.2));
         let nested = as_record(entries[1].1).expect("nested record");
         assert_eq!(as_float(nested[0].1), Some(1.0));
+    }
+
+    #[test]
+    fn a_record_field_reads_by_name() {
+        let value = record([("x", float(1.0)), ("nested", record([("y", float(2.0))]))]);
+        assert_eq!(record_field(&value, "x").and_then(as_float), Some(1.0));
+        let nested = record_field(&value, "nested").expect("nested record");
+        assert_eq!(record_field(nested, "y").and_then(as_float), Some(2.0));
+        assert_eq!(record_field(&value, "missing"), None);
+        assert_eq!(record_field(&float(1.0), "x"), None);
     }
 
     #[test]

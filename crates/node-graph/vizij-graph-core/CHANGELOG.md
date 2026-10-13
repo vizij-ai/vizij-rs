@@ -4,6 +4,16 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [2.4.1] - 2026-10-13
+
+### Changed
+
+- A selector projects its source's port in place: an edge selecting a field
+  of a record, an item of an array or an enumeration's payload clones what
+  it selects, not the source value and its shape. A face's pose driver,
+  whose 94 edges each select one field of a 339-field neutral-pose record,
+  evaluates in 45 M instructions per frame instead of 271 M.
+
 ## [2.4.0] - 2026-10-10
 
 ### Added

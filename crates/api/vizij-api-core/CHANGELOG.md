@@ -4,6 +4,13 @@ All notable changes to `vizij-api-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] - 2026-10-13
+
+### Added
+
+- `value::record_field` reads one field of a record by name, with one map
+  lookup; `as_record` lists and sorts every field.
+
 ## [2.0.0] - 2026-09-26
 
 ### Changed
