@@ -4,7 +4,15 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [2.4.1] - 2026-10-13
+## [2.5.0] - 2026-10-13
+
+### Added
+
+- `evaluate_writes_with_functions`: an evaluation for a host that takes its
+  results from `GraphRuntime::writes` and `spawns`. It leaves
+  `GraphRuntime::outputs`, the copy of every port by node id and port name,
+  empty: that copy clones every value the graph computes a second time each
+  evaluation, a third of a face's graph evaluation.
 
 ### Changed
 

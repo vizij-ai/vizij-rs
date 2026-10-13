@@ -10,8 +10,9 @@ pub mod topo;
 pub mod types;
 
 pub use eval::{
-    eval_node, evaluate_all, evaluate_all_cached, evaluate_all_with_functions, GraphRuntime,
-    NodeFunction, NodeFunctionRegistry, NodeFunctions, PortValue, StagedInput,
+    eval_node, evaluate_all, evaluate_all_cached, evaluate_all_with_functions,
+    evaluate_writes_with_functions, GraphRuntime, NodeFunction, NodeFunctionRegistry,
+    NodeFunctions, PortValue, StagedInput,
 };
 pub use schema::registry;
 pub use topo::topo_order;

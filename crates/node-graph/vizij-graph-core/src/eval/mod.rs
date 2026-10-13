@@ -49,7 +49,7 @@ mod tests;
 /// This path has no [`NodeFunctions`] host, so any `ExternalFunction` node in `spec` errors.
 /// Use [`evaluate_all_with_functions`] to run graphs that invoke node-functions.
 pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
-    evaluate_all_inner(rt, spec, None)
+    evaluate_all_inner(rt, spec, None, ByName::Kept)
 }
 
 /// Evaluate every node in `spec`, threading `functions` through to any `ExternalFunction` nodes.
@@ -61,13 +61,37 @@ pub fn evaluate_all_with_functions(
     spec: &GraphSpec,
     functions: &mut dyn NodeFunctions,
 ) -> Result<(), String> {
-    evaluate_all_inner(rt, spec, Some(functions))
+    evaluate_all_inner(rt, spec, Some(functions), ByName::Kept)
+}
+
+/// Evaluate like [`evaluate_all_with_functions`], for a host that takes the
+/// evaluation's results from [`GraphRuntime::writes`] and
+/// [`GraphRuntime::spawns`]: every port's value stays in
+/// [`GraphRuntime::outputs_vec`], indexed by the plan, and
+/// [`GraphRuntime::outputs`] — a copy of every port by node id and port
+/// name — is left empty. That copy clones each value the graph computes, a
+/// second time, every evaluation.
+pub fn evaluate_writes_with_functions(
+    rt: &mut GraphRuntime,
+    spec: &GraphSpec,
+    functions: &mut dyn NodeFunctions,
+) -> Result<(), String> {
+    evaluate_all_inner(rt, spec, Some(functions), ByName::Skipped)
+}
+
+/// Whether an evaluation keeps [`GraphRuntime::outputs`], the copy of every
+/// port by node id and port name.
+#[derive(Clone, Copy, PartialEq)]
+enum ByName {
+    Kept,
+    Skipped,
 }
 
 fn evaluate_all_inner(
     rt: &mut GraphRuntime,
     spec: &GraphSpec,
     mut functions: Option<&mut dyn NodeFunctions>,
+    by_name: ByName,
 ) -> Result<(), String> {
     if spec.version > 0 {
         rt.plan.ensure_versioned(spec)?;
@@ -76,7 +100,9 @@ fn evaluate_all_inner(
     }
     rt.advance_epoch();
     rt.outputs.clear();
-    rt.outputs.reserve(spec.nodes.len());
+    if by_name == ByName::Kept {
+        rt.outputs.reserve(spec.nodes.len());
+    }
     rt.writes.0.clear();
     rt.spawns.clear();
     rt.node_states
@@ -116,9 +142,11 @@ fn evaluate_all_inner(
                 eval_node::eval_node_inner(rt, node, &inputs, &mut outputs, functions_ref)?;
             }
 
-            let compat = eval_node::materialize_outputs(&plan.layouts[idx].outputs, &vec_out);
+            if by_name == ByName::Kept {
+                let compat = eval_node::materialize_outputs(&plan.layouts[idx].outputs, &vec_out);
+                rt.outputs.insert(node.id.clone(), compat);
+            }
             rt.outputs_vec[idx] = vec_out;
-            rt.outputs.insert(node.id.clone(), compat);
         }
         Ok(())
     })();
