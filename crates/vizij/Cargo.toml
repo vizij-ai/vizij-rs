@@ -209,6 +209,10 @@ console_log = "1"
 # uuid v4 on wasm needs a browser RNG (selects getrandom's wasm_js backend).
 getrandom = { version = "0.4", features = ["wasm_js"] }
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+# The frame_cost example's instruction counter (perf events).
+libc = "0.2"
+
 [dev-dependencies]
 # The image and diagnostics messages a published frame and report are read
 # back as, so a field landing in the wrong place fails in a unit test rather
