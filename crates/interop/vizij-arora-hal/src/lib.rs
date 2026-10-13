@@ -116,6 +116,18 @@ impl RigHal {
             .collect()
     }
 
+    /// Visit the current pose in place, under the rig's lock: each driven
+    /// key's path and its value, nothing copied — what a renderer applies
+    /// every frame. Unordered.
+    pub fn visit_pose(&self, mut visit: impl FnMut(&str, &Value)) {
+        let inner = self.inner.lock().unwrap();
+        for (key, value) in inner.state.iter() {
+            if let Some(value) = value {
+                visit(&key.path, value);
+            }
+        }
+    }
+
     /// The value the rig was last driven to at `path`, if any — what a
     /// renderer reads of a key that is no pose (a caption, say) without
     /// copying the whole [`pose`](RigHal::pose).
