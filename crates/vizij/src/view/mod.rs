@@ -57,7 +57,7 @@ use bevy::mesh::morph::MorphWeights;
 use bevy::prelude::*;
 use uuid::Uuid;
 use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
-use vizij_api_core::{TypedPath, Value};
+use vizij_api_core::Value;
 
 use hold::{HoldTarget, Holds};
 use meta::{Binding, FaceMeta, FeatureKind, PrimitiveShape};
@@ -164,8 +164,18 @@ pub struct Bindings {
     /// what the glow outlines, what a static feature is set on.
     pub elements: HashMap<Uuid, ElementTargets>,
     /// animatable id → the value last applied to the scene, what a held
-    /// component keeps ([`hold`]).
+    /// component keeps ([`hold`]), and what a pose that has not changed
+    /// since leaves alone.
     shown: HashMap<Uuid, Decoded>,
+    /// The animatables that share their target — an entity's feature, a
+    /// morph target — with another, one of them binding it whole: each lands
+    /// over the others, so every one lands every frame, as the last landed
+    /// is what shows.
+    contended: HashSet<Uuid>,
+    /// Whether something other than the pose landed on the scene since the
+    /// last frame (a static feature): the next frame lands the whole pose
+    /// again, over it.
+    reland: bool,
     /// The triples per-axis animatables assemble, by the entity and feature
     /// they land on: each write replaces one component and the whole triple
     /// is applied. Kept rather than read back from the scene, because a
@@ -1440,10 +1450,13 @@ fn index_faces(
             by_uuid.len(),
             face.meta.elements.len(),
         );
+        let contended = contended(&by_uuid);
         face.bindings = Bindings {
             by_uuid,
             elements,
             shown: HashMap::new(),
+            contended,
+            reland: false,
             assembled: HashMap::new(),
             surfaces: shaded.into_iter().collect(),
             ready: true,
@@ -1536,13 +1549,36 @@ fn apply_statics(
                 morph_index,
             };
             scene.land(&mut face.bindings.assembled, &bound, decoded);
+            face.bindings.reland = true;
         }
     }
 }
 
+/// The animatables of `by_uuid` whose target — entity, feature, morph
+/// target — another one lands on too, one of them binding it whole: per-axis
+/// animatables alone each set their own component, so they do not contend.
+fn contended(by_uuid: &HashMap<Uuid, Bound>) -> HashSet<Uuid> {
+    let target = |bound: &Bound| (bound.entity, bound.feature.clone(), bound.morph_index);
+    // Per target: how many land on it, and whether one binds it whole.
+    let mut sharing = HashMap::new();
+    for bound in by_uuid.values() {
+        let (count, whole) = sharing.entry(target(bound)).or_insert((0, false));
+        *count += 1;
+        *whole |= bound.axis.is_none();
+    }
+    by_uuid
+        .iter()
+        .filter(|(_, bound)| matches!(sharing[&target(bound)], (count, true) if count > 1))
+        .map(|(id, _)| *id)
+        .collect()
+}
+
 /// Applies each device's current pose (the HAL's actuation state) onto its
 /// face's scene: transforms, material surfaces, morph influences — except
-/// what is held against the device ([`hold`]).
+/// what is held against the device ([`hold`]). A value the scene already
+/// shows is left alone, so an unchanged transform, morph weight or surface
+/// is not marked changed and what follows from it (transform propagation,
+/// the morph weights' upload) is not done again.
 fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneFeatures) {
     for mut face in &mut faces {
         if !face.bindings.ready {
@@ -1551,15 +1587,16 @@ fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneF
         let face = &mut *face;
         let held = holds.of(&face.id);
         let bindings = &mut face.bindings;
-        for (path, value) in face.rig.pose() {
-            let Some(id) = animatable_of(&path) else {
-                continue;
+        let reland = std::mem::take(&mut bindings.reland);
+        face.rig.visit_pose(|path, value| {
+            let Some(id) = animatable_of(path) else {
+                return;
             };
             let Some(bound) = bindings.by_uuid.get(&id) else {
-                continue;
+                return;
             };
-            let Some(mut decoded) = decode(&bound.feature, bound.axis, &value) else {
-                continue;
+            let Some(mut decoded) = decode(&bound.feature, bound.axis, value) else {
+                return;
             };
             if let Some(held) = held {
                 let shown = || {
@@ -1571,12 +1608,18 @@ fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneF
                 };
                 match hold::resolve(held, id, decoded, shown) {
                     Some(kept) => decoded = kept,
-                    None => continue,
+                    None => return,
                 }
+            }
+            if !reland
+                && bindings.shown.get(&id) == Some(&decoded)
+                && !bindings.contended.contains(&id)
+            {
+                return;
             }
             scene.land(&mut bindings.assembled, bound, decoded);
             bindings.shown.insert(id, decoded);
-        }
+        });
     }
 }
 
@@ -1784,12 +1827,10 @@ fn euler_zyx([x, y, z]: [f32; 3]) -> Quat {
 }
 
 /// The animatable a rig key names: the rig keys its pose by bare animatable
-/// id, so a namespaced or field-selected path is no animatable.
-fn animatable_of(path: &TypedPath) -> Option<Uuid> {
-    if !path.namespaces.is_empty() || !path.fields.is_empty() {
-        return None;
-    }
-    Uuid::parse_str(&path.target).ok()
+/// id, so a namespaced or field-selected path — one holding a `/` or a `.`,
+/// which no id does — is no animatable.
+fn animatable_of(path: &str) -> Option<Uuid> {
+    Uuid::parse_str(path).ok()
 }
 
 fn as_f32(value: &Value) -> Option<f32> {
@@ -2058,6 +2099,100 @@ mod tests {
         assert!(transform
             .rotation
             .abs_diff_eq(euler_zyx([0.1, 2.0, 0.0]), 1e-6));
+    }
+
+    /// A pose value the scene already shows is not landed again: the
+    /// transform it drives is not marked changed. A changed value lands, and
+    /// so does the whole pose on the frame after a static feature landed.
+    #[test]
+    fn an_unchanged_pose_value_leaves_its_target_alone() {
+        use bevy::ecs::system::RunSystemOnce;
+        use vizij_api_core::value::vec3;
+
+        let mut world = World::new();
+        world.init_resource::<Assets<StandardMaterial>>();
+        world.init_resource::<Holds>();
+        let node = world.spawn(Transform::default()).id();
+        let id = Uuid::new_v4();
+        let rig = vizij_arora_hal::RigHal::new();
+        let drive = |value: [f32; 3]| {
+            arora_hal::Hal::try_send(
+                &rig,
+                &arora_types::data::StateChange::set(id.to_string().as_str(), vec3(value)),
+            )
+        };
+        let bound = Bound {
+            entity: node,
+            feature: FeatureKind::Translation,
+            axis: None,
+            morph_index: None,
+        };
+        let face = world
+            .spawn(Face {
+                id: "face".into(),
+                meta: FaceMeta::default(),
+                asset_path: String::new(),
+                rig: rig.clone(),
+                slot: 0,
+                bindings: Bindings {
+                    by_uuid: HashMap::from([(id, bound)]),
+                    ready: true,
+                    ..Default::default()
+                },
+                camera: Entity::PLACEHOLDER,
+            })
+            .id();
+        let frame = |world: &mut World| {
+            world.increment_change_tick();
+            world.run_system_once(apply_poses).expect("runs");
+            let changed = world
+                .entity(node)
+                .get_change_ticks::<Transform>()
+                .unwrap()
+                .changed;
+            (world.get::<Transform>(node).unwrap().translation, changed)
+        };
+
+        drive([1.0, 2.0, 3.0]);
+        let (shown, first) = frame(&mut world);
+        assert_eq!(shown, Vec3::new(1.0, 2.0, 3.0));
+        let (_, unchanged) = frame(&mut world);
+        assert_eq!(unchanged, first, "an unchanged value lands nothing");
+
+        drive([4.0, 5.0, 6.0]);
+        let (shown, moved) = frame(&mut world);
+        assert_eq!(shown, Vec3::new(4.0, 5.0, 6.0));
+        assert_ne!(moved, first);
+
+        // A static feature lands over the pose: the next frame lands the
+        // pose again, unchanged as it is.
+        world.get_mut::<Transform>(node).unwrap().translation = Vec3::ZERO;
+        world.get_mut::<Face>(face).unwrap().bindings.reland = true;
+        let (shown, _) = frame(&mut world);
+        assert_eq!(shown, Vec3::new(4.0, 5.0, 6.0));
+    }
+
+    /// Animatables contend for a target when one of them binds it whole;
+    /// per-axis animatables alone each own their component.
+    #[test]
+    fn a_whole_binding_contends_with_whatever_shares_its_target() {
+        let mut world = World::new();
+        let (a, b) = (world.spawn_empty().id(), world.spawn_empty().id());
+        let bound = |entity, axis| Bound {
+            entity,
+            feature: FeatureKind::Translation,
+            axis,
+            morph_index: None,
+        };
+        let ids: Vec<Uuid> = (0..5).map(|_| Uuid::new_v4()).collect();
+        let by_uuid = HashMap::from([
+            (ids[0], bound(a, Some(0))),
+            (ids[1], bound(a, Some(1))),
+            (ids[2], bound(b, None)),
+            (ids[3], bound(b, Some(2))),
+            (ids[4], bound(a, Some(2))),
+        ]);
+        assert_eq!(contended(&by_uuid), HashSet::from([ids[2], ids[3]]));
     }
 
     #[test]

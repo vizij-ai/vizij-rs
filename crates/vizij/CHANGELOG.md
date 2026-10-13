@@ -26,6 +26,11 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- The view lands only the pose values that changed since the last frame,
+  read from the rig in place: an unchanged transform, morph weight or
+  surface is not marked changed, so it is not propagated or uploaded
+  again. Applying a face's pose takes 0.2 M instructions a frame instead
+  of 2.2 M.
 - `--ros2` requires `arora-bridge-ros2` 10.4, whose ROS4HRI preset takes
   `/closed_captions` and publishes `/diagnostics`.
 
