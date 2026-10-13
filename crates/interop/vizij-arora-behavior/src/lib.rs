@@ -275,9 +275,10 @@ pub struct ProcessingGraph {
     /// last lowered.
     dirty: bool,
     rt: GraphRuntime,
-    /// Store paths staged into the graph before each evaluation. Derived from
-    /// the lowered spec's `input` nodes each time the graph is re-lowered.
-    inputs: Vec<TypedPath>,
+    /// Store paths staged into the graph before each evaluation, each with
+    /// the store key it is read under: the lowered spec's `input` paths, once
+    /// each, derived each time the graph is re-lowered.
+    inputs: Inputs,
     /// function id -> module id, so `ExternalFunction` nodes can be dispatched through the
     /// [`CallBridge`]. See [`CallBridgeFunctions`] for why this map is needed and where it
     /// should come from.
@@ -346,6 +347,29 @@ pub fn encode_edit_call(diff: &graph_codec::GraphSpecDiff) -> Result<Call, Strin
     ))
 }
 
+/// The store paths a lowered spec's `input` nodes read, once each, and the
+/// keys they are read under — one store read for all of them each tick.
+#[derive(Default)]
+struct Inputs {
+    paths: Vec<TypedPath>,
+    keys: Vec<Key>,
+}
+
+impl Inputs {
+    fn of(spec: &GraphSpec) -> Self {
+        let mut seen = HashSet::new();
+        let paths: Vec<TypedPath> = input_paths(spec)
+            .into_iter()
+            .filter(|path| seen.insert(path.clone()))
+            .collect();
+        let keys = paths
+            .iter()
+            .map(|path| Key::new(path.to_string()))
+            .collect();
+        Self { paths, keys }
+    }
+}
+
 /// The store paths the spec's `input` nodes read — what the graph subscribes
 /// to on the device's store.
 pub fn input_paths(spec: &GraphSpec) -> Vec<TypedPath> {
@@ -369,7 +393,7 @@ impl ProcessingGraph {
             spec: GraphSpec::default(),
             dirty: true,
             rt: GraphRuntime::default(),
-            inputs: Vec::new(),
+            inputs: Inputs::default(),
             function_modules: HashMap::new(),
             runs: HashMap::new(),
             run_order: Vec::new(),
@@ -544,7 +568,7 @@ impl ProcessingGraph {
         self.spec.edges.extend(diff.upsert_edges);
         self.relowered();
         match self.rt.plan.append_component(&self.spec, first) {
-            Ok(()) => self.inputs = input_paths(&self.spec),
+            Ok(()) => self.inputs = Inputs::of(&self.spec),
             Err(_) => self.dirty = true,
         }
     }
@@ -577,7 +601,7 @@ impl ProcessingGraph {
         });
         self.relowered();
         match self.rt.plan.remove_nodes(&self.spec, &removed) {
-            Ok(()) => self.inputs = input_paths(&self.spec),
+            Ok(()) => self.inputs = Inputs::of(&self.spec),
             Err(_) => self.dirty = true,
         }
     }
@@ -738,7 +762,7 @@ impl ProcessingGraph {
     fn lower(&mut self) -> Result<(), BehaviorError> {
         let mut spec =
             graph_codec::decode(&self.graph).map_err(|message| BehaviorError { message })?;
-        self.inputs = input_paths(&spec);
+        self.inputs = Inputs::of(&spec);
         // Carry the version forward before re-caching. A freshly decoded spec
         // restarts at version 0 (→ 1 after `with_cache`); bumping from the
         // current version keeps it strictly increasing, so the version-keyed
@@ -786,15 +810,10 @@ impl ProcessingGraph {
         self.rt.t += delta;
 
         // Read subscribed inputs from the store and stage them into the graph.
-        for tp in &self.inputs {
-            let key = Key::new(tp.to_string());
-            if let Some(value) = store
-                .read(std::slice::from_ref(&key))
-                .into_iter()
-                .next()
-                .flatten()
-            {
-                self.rt.set_input(tp.clone(), value, None);
+        let values = store.read(&self.inputs.keys);
+        for (path, value) in self.inputs.paths.iter().zip(values) {
+            if let Some(value) = value {
+                self.rt.set_input(path.clone(), value, None);
             }
         }
 
@@ -1784,7 +1803,12 @@ mod tests {
             .collect();
         edges.sort();
         out.extend(edges);
-        let mut inputs: Vec<String> = graph.inputs.iter().map(|p| format!("input {p}")).collect();
+        let mut inputs: Vec<String> = graph
+            .inputs
+            .paths
+            .iter()
+            .map(|p| format!("input {p}"))
+            .collect();
         inputs.sort();
         out.extend(inputs);
         out

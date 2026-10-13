@@ -12,6 +12,9 @@ All notable changes to `vizij-arora-behavior`. The format follows
   (`vizij_graph_core::evaluate_writes_with_functions`): it keeps no copy of
   the graph's ports by name, which it never read. A face's device step takes
   30 % fewer instructions.
+- The interpreter reads its graph's inputs from the store in one read per
+  tick, each input path once, under keys formatted when the graph is
+  lowered rather than on every tick.
 
 ## [6.0.1] - 2026-10-12
 
