@@ -14,6 +14,10 @@ name: release-vizij
 # triggers no other workflow. The local Piper voice (`tts-piper`) stays out: it
 # links GPLv3 code. The installers are unsigned: macOS quarantines the app until
 # it is opened once from the context menu (the release notes say so).
+#
+# A pull request's trial build restores the build caches and saves none: a
+# pull request's cache serves that pull request alone, and four of them push
+# main's CI caches out of the repository's 10 GB.
 
 on:
   push:
@@ -131,6 +135,8 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.sha || needs.tag.outputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: Build
         run: cargo build -p vizij --release --features studio
       - name: Package the .app in a .dmg, and the binary
@@ -163,6 +169,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config rpm
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: Build
         run: cargo build -p vizij --release --features studio
       # Both packagers take the binary just built rather than building again.
@@ -199,6 +207,8 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.sha || needs.tag.outputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       # aws-lc-sys (rustls' provider, through the TTS client and the Studio
       # bridge) assembles with NASM on Windows.
       - uses: ilammy/setup-nasm@v1
@@ -234,6 +244,8 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - uses: actions/setup-node@v5
         with:
           node-version: "24"
