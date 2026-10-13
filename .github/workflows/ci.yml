@@ -69,9 +69,12 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo check -p vizij --lib --target wasm32-unknown-unknown --no-default-features
+      # The tools come as prebuilt binaries (taiki-e/install-action) here and
+      # in the jobs below: `cargo install` would compile them on every run.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack,cargo-ndk
       # The speech provider's browser producer, on the runner's Chrome.
-      - name: Install wasm-pack
-        run: cargo install wasm-pack
       - name: Test the speech provider in headless Chrome
         run: wasm-pack test --headless --chrome --chromedriver "$CHROMEWEBDRIVER/chromedriver" crates/interop/vizij-arora-tts
       - name: Set up Android NDK
@@ -84,7 +87,6 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: |
-          cargo install cargo-ndk --locked
           cargo ndk -t arm64-v8a -P 26 check -p vizij --lib --no-default-features --features studio
 
   wasm:
@@ -100,8 +102,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Install wasm-pack
-        run: cargo install wasm-pack
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
       - name: Build WASM into npm wrapper pkg/
         run: node scripts/build-animation-wasm.mjs
       - name: Build Graph WASM into npm wrapper pkg/
@@ -202,8 +205,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install wasm-pack
-        run: cargo install wasm-pack
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
       - name: Build WASM into npm wrapper pkg/
         run: node scripts/build-wasm.mjs
       - name: Install pnpm
