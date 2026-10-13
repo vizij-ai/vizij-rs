@@ -709,9 +709,13 @@ fn a_caption_shows_over_the_face() {
     assert_eq!(above, 0, "the caption stays in its band");
 
     // Queued behind the first, which holds for 2 s plus its last-chunk 1.5 s.
+    // The captions advance on the virtual clock, which caps a frame's step at
+    // `max_delta`: a slow renderer's frames take longer than that, so the wait
+    // counts the virtual clock's seconds, not the wall clock's.
     caption("And hello back.", "__system__");
-    let start = std::time::Instant::now();
-    while start.elapsed() < Duration::from_millis(3700) {
+    let virtual_now = |app: &App| app.world().resource::<Time<Virtual>>().elapsed();
+    let start = virtual_now(&app);
+    while virtual_now(&app) - start < Duration::from_millis(3700) {
         app.update();
     }
     let own = capture(&mut app, W, H, 2, view::all_faces_ready).expect("a frame");
