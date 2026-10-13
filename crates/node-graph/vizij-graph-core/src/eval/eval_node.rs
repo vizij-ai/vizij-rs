@@ -2398,7 +2398,6 @@ fn eval_input_node(
         .path
         .as_ref()
         .ok_or_else(|| format!("Input node '{}' missing required 'path' parameter", spec.id))?;
-    let path_str = path.to_string();
     let declared_shape = spec.output_shapes.get("out");
     let staged = rt.get_input(path).cloned();
 
@@ -2406,7 +2405,7 @@ fn eval_input_node(
         if let Some(staged_input) = staged {
             let port = align_input_to_declared(
                 &spec.id,
-                &path_str,
+                path,
                 "staged input",
                 target_shape,
                 staged_input.declared.as_ref(),
@@ -2418,7 +2417,7 @@ fn eval_input_node(
         if let Some(default_value) = params.value.clone() {
             let port = align_input_to_declared(
                 &spec.id,
-                &path_str,
+                path,
                 "default value",
                 target_shape,
                 None,
@@ -2440,7 +2439,7 @@ fn eval_input_node(
 
         return Err(format!(
             "Input node '{}' missing staged value for '{}' and declared non-numeric shape {:?}",
-            spec.id, path_str, target_shape.id
+            spec.id, path, target_shape.id
         ));
     }
 
@@ -2461,13 +2460,13 @@ fn eval_input_node(
 
     Err(format!(
         "Input node '{}' missing staged value for '{}' and no default provided",
-        spec.id, path_str
+        spec.id, path
     ))
 }
 
 fn align_input_to_declared(
     node_id: &str,
-    path: &str,
+    path: &TypedPath,
     source: &str,
     declared: &Shape,
     staged_shape: Option<&Shape>,

@@ -21,6 +21,8 @@ All notable changes to `vizij-graph-core`. The format follows
   it selects, not the source value and its shape. A face's pose driver,
   whose 94 edges each select one field of a 339-field neutral-pose record,
   evaluates in 45 M instructions per frame instead of 271 M.
+- An `input` node formats its path only for an error message, not on every
+  evaluation.
 
 ## [2.4.0] - 2026-10-10
 
