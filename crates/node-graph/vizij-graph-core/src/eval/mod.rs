@@ -117,6 +117,11 @@ fn evaluate_all_inner(
                 .nodes
                 .get(idx)
                 .ok_or_else(|| format!("plan referenced missing node at index {}", idx))?;
+            // A constant every read of which the plan resolved has no
+            // reader here — only the by-name copy shows it.
+            if by_name == ByName::Skipped && plan.unread_constant(idx) {
+                continue;
+            }
             if holds_its_constant(node, &rt.outputs_vec[idx]) {
                 if by_name == ByName::Kept {
                     let compat = eval_node::materialize_outputs(

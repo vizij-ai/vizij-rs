@@ -8,8 +8,10 @@ use hashbrown::{HashMap, HashSet};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 
+use super::shape_helpers::project_by_selector;
 use super::value_layout::PortValue;
 use super::variadic::{compare_variadic_keys, parse_variadic_key};
+use vizij_api_core::Shape;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct VariadicRange {
@@ -81,6 +83,9 @@ pub struct PlanCache {
     /// The generation the runtime's output buckets were last filled under:
     /// while it is the plan's, bucket `i` holds node `i`'s ports.
     filled: Option<u64>,
+    /// Per node: whether it is a constant no binding reads — every read of
+    /// it a selector the plan resolved ([`resolve_constant_picks`]).
+    unread_constants: Vec<bool>,
     /// Node indices in topological order.
     pub order: Vec<usize>,
     /// Per-node input bindings keyed by slot index.
@@ -101,6 +106,12 @@ impl PlanCache {
     /// Record that the runtime's output buckets now follow this plan.
     pub(crate) fn mark_buckets_filled(&mut self) {
         self.filled = Some(self.generation);
+    }
+
+    /// Whether node `idx` is a constant nothing reads at evaluation: every
+    /// selector reading it was resolved when the plan was built.
+    pub(crate) fn unread_constant(&self, idx: usize) -> bool {
+        self.unread_constants.get(idx).copied().unwrap_or(false)
     }
 
     /// Ensure the cache matches the provided spec; rebuild on structural change.
@@ -172,6 +183,7 @@ impl PlanCache {
             self.input_bindings.push(bindings);
         }
         self.layouts.extend(plan.layouts);
+        self.unread_constants.extend(plan.unread_constants);
         self.node_index.extend(
             plan.node_index
                 .into_iter()
@@ -252,6 +264,13 @@ impl PlanCache {
             })
             .collect();
         self.order = self.order.iter().filter_map(|&idx| remap[idx]).collect();
+        let unread_constants = std::mem::take(&mut self.unread_constants);
+        self.unread_constants = unread_constants
+            .into_iter()
+            .enumerate()
+            .filter(|(idx, _)| kept(idx))
+            .map(|(_, unread)| unread)
+            .collect();
         self.node_index.retain(|_, idx| remap[*idx].is_some());
         for idx in self.node_index.values_mut() {
             *idx = remap[*idx].expect("retained above");
@@ -329,10 +348,12 @@ impl PlanCache {
             );
             input_bindings.push(bindings);
         }
+        let unread_constants = resolve_constant_picks(spec, &mut input_bindings);
 
         self.order = order;
         self.layouts = layouts;
         self.input_bindings = input_bindings;
+        self.unread_constants = unread_constants;
         self.fingerprint = fingerprint;
         self.version = version;
         self.generation += 1;
@@ -532,6 +553,63 @@ fn build_input_bindings(
     bindings
 }
 
+/// Resolve every binding that selects from a `constant` into the value it
+/// selects: the binding then holds that port as its default and reads no
+/// source, so an evaluation neither reads nor copies the constant for it. A
+/// constant's port is its `value` with the shape that value infers — unless
+/// it declares output shapes, which an evaluation enforces, and is then left
+/// to the evaluation; a selection that fails is left to the evaluation too,
+/// which reports it. Returns, per node, whether it is a constant no binding
+/// still reads.
+///
+/// A resolved selection is plan structure: a change to such a constant's
+/// `value` takes a new plan — a new spec version, or a new fingerprint
+/// ([`fingerprint_spec`] covers these values).
+fn resolve_constant_picks(spec: &GraphSpec, input_bindings: &mut [Vec<InputBinding>]) -> Vec<bool> {
+    let constant_port = |idx: usize| {
+        let node = spec.nodes.get(idx)?;
+        (matches!(node.kind, NodeType::Constant) && node.output_shapes.is_empty()).then(|| {
+            PortValue::new(
+                node.params
+                    .value
+                    .clone()
+                    .unwrap_or_else(|| vizij_api_core::value::float(0.0)),
+            )
+        })
+    };
+    let mut ports: HashMap<usize, Option<PortValue>> = HashMap::new();
+    let mut read = vec![false; spec.nodes.len()];
+    for binding in input_bindings.iter_mut().flatten() {
+        let Some(source) = &binding.source else {
+            continue;
+        };
+        let resolved = source.selector.as_ref().and_then(|selector| {
+            let port = ports
+                .entry(source.node_idx)
+                .or_insert_with(|| constant_port(source.node_idx))
+                .as_ref()?;
+            let (value, shape) =
+                project_by_selector(&port.value, Some(&port.shape.id), selector).ok()?;
+            Some(match shape {
+                Some(id) => PortValue::with_shape(value, Shape::new(id)),
+                None => PortValue::new(value),
+            })
+        });
+        match resolved {
+            Some(port) => {
+                binding.default = Some(port);
+                binding.source = None;
+            }
+            None => read[source.node_idx] = true,
+        }
+    }
+    spec.nodes
+        .iter()
+        .zip(read)
+        .map(|(node, read)| matches!(node.kind, NodeType::Constant) && !read)
+        .collect()
+}
+
 fn connection_default_port(conn: &InputConnection) -> Option<PortValue> {
     conn.default_value.as_ref().map(|value| {
         if let Some(shape) = &conn.default_shape {
@@ -628,6 +706,23 @@ pub fn fingerprint_spec(spec: &GraphSpec) -> u64 {
             }
         } else {
             hasher.write_u8(0);
+        }
+    }
+
+    // The values of constants a selector reads: the plan resolves those
+    // selections, so a new value takes a new plan.
+    let picked: HashSet<&str> = spec
+        .edges
+        .iter()
+        .filter(|edge| edge.selector.is_some())
+        .map(|edge| edge.from.node_id.as_str())
+        .collect();
+    for node in &spec.nodes {
+        if matches!(node.kind, NodeType::Constant) && picked.contains(node.id.as_str()) {
+            hasher.write(node.id.as_bytes());
+            if let Ok(json) = serde_json::to_string(&node.params.value) {
+                hasher.write(json.as_bytes());
+            }
         }
     }
 

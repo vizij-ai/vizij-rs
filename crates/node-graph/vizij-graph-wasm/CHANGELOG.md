@@ -8,6 +8,9 @@ All notable changes to `vizij-graph-wasm`. The format follows
 
 ### Changed
 
+- `set_param` treats the `value` of a constant read through a selector as a
+  structural edit and drops the cached plan: vizij-graph-core 2.6 resolves
+  what such a selector reads when it plans.
 - Freshened workspace dependencies to current majors.
 
 ## [1.0.0] - 2026-07-10

@@ -19,7 +19,7 @@ wasm-bindgen = { workspace = true }
 serde        = { workspace = true }
 serde_json   = { workspace = true }
 hashbrown    = { workspace = true }
-vizij-graph-core = { path = "../vizij-graph-core", version = "2" }
+vizij-graph-core = { path = "../vizij-graph-core", version = "2.6" }
 vizij-api-core = { version = "2", path = "../../api/vizij-api-core" }
 serde-wasm-bindgen = { workspace = true }
 js-sys = { workspace = true }

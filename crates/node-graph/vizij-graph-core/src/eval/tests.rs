@@ -1780,7 +1780,8 @@ fn end_to_end_input_selector_scalar_math_output() {
 }
 
 /// An evaluation for writes writes what a full one writes, frame after
-/// frame, holds the same ports, and keeps no copy of them by name.
+/// frame, holds the same ports but for a constant nothing reads, and keeps
+/// no copy of them by name.
 #[test]
 fn an_evaluation_for_writes_writes_what_a_full_one_writes() {
     struct NoFunctions;
@@ -1867,7 +1868,12 @@ fn an_evaluation_for_writes_writes_what_a_full_one_writes() {
                 .map(|ports| ports.iter().map(|port| port.value.clone()).collect())
                 .collect()
         };
-        assert_eq!(ports(&for_writes), ports(&full));
+        // The record is only read through its `gain`, which the plan
+        // resolved: an evaluation for writes leaves it unevaluated.
+        let pose = full.plan.node_index["pose"];
+        let mut expected = ports(&full);
+        expected[pose].clear();
+        assert_eq!(ports(&for_writes), expected);
         assert_eq!(
             full.outputs.len(),
             4,
@@ -1942,6 +1948,116 @@ fn a_constant_follows_its_value_and_its_node() {
         vec![
             ("robot/a".into(), vocab::float(3.0)),
             ("robot/b".into(), b.clone())
+        ]
+    );
+}
+
+/// A selector reading a constant is resolved when the graph is planned; a
+/// constant also read whole is still evaluated for that read, and one read
+/// only through selectors is not evaluated for writes at all. A new value
+/// takes a new plan — a new version, or for an unversioned spec a new
+/// fingerprint — and is selected from then on.
+#[test]
+fn a_selection_from_a_constant_is_planned_and_follows_its_value() {
+    struct NoFunctions;
+    impl NodeFunctions for NoFunctions {
+        fn call(
+            &mut self,
+            function: uuid::Uuid,
+            _: &[(uuid::Uuid, Value)],
+        ) -> Result<Value, String> {
+            Err(format!("no function {function}"))
+        }
+    }
+    let out = |id: &str, path: &str| NodeSpec {
+        id: id.to_string(),
+        kind: NodeType::Output,
+        params: NodeParams {
+            path: Some(TypedPath::parse(path).expect("valid path")),
+            ..Default::default()
+        },
+        output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
+    };
+    let record = |x: f32| vocab::record([("values", vocab::record([("x", vocab::float(x))]))]);
+    let picked = || {
+        link_with_selector(
+            "rec",
+            "out",
+            "out_x",
+            "in",
+            vec![
+                SelectorSegment::Field("values".to_string()),
+                SelectorSegment::Field("x".to_string()),
+            ],
+        )
+    };
+    let written = |rt: &GraphRuntime| -> Vec<(String, Value)> {
+        let mut writes: Vec<(String, Value)> = rt
+            .writes
+            .iter()
+            .map(|op| (op.path.to_string(), op.value.clone()))
+            .collect();
+        writes.sort_by(|l, r| l.0.cmp(&r.0));
+        writes
+    };
+
+    // Read through a selector only.
+    let mut graph = GraphSpec {
+        nodes: vec![constant_node("rec", record(1.0)), out("out_x", "robot/x")],
+        edges: vec![picked()],
+        ..Default::default()
+    }
+    .with_cache();
+    let mut rt = GraphRuntime::default();
+    evaluate_writes_with_functions(&mut rt, &graph, &mut NoFunctions).expect("evaluation");
+    assert_eq!(written(&rt), vec![("robot/x".into(), vocab::float(1.0))]);
+    let rec = rt.plan.node_index["rec"];
+    assert!(rt
+        .plan
+        .input_bindings
+        .iter()
+        .flatten()
+        .all(|b| b.source.is_none() || b.source.as_ref().is_some_and(|s| s.node_idx != rec)));
+    assert!(
+        rt.outputs_vec[rec].is_empty(),
+        "the record is not evaluated"
+    );
+
+    // A new value in a new version is selected.
+    graph.nodes[0].params.value = Some(record(2.0));
+    graph = graph.with_cache();
+    evaluate_writes_with_functions(&mut rt, &graph, &mut NoFunctions).expect("evaluation");
+    assert_eq!(written(&rt), vec![("robot/x".into(), vocab::float(2.0))]);
+
+    // Read whole as well: evaluated for that read, the selection planned.
+    let mut both = GraphSpec {
+        nodes: vec![
+            constant_node("rec", record(3.0)),
+            out("out_x", "robot/x"),
+            out("out_rec", "robot/rec"),
+        ],
+        edges: vec![picked(), link("rec", "out_rec", "in")],
+        ..Default::default()
+    };
+    let mut rt = GraphRuntime::default();
+    evaluate_writes_with_functions(&mut rt, &both, &mut NoFunctions).expect("evaluation");
+    assert_eq!(
+        written(&rt),
+        vec![
+            ("robot/rec".into(), record(3.0)),
+            ("robot/x".into(), vocab::float(3.0))
+        ]
+    );
+
+    // Unversioned, edited in place: the fingerprint covers the value.
+    both.nodes[0].params.value = Some(record(4.0));
+    evaluate_writes_with_functions(&mut rt, &both, &mut NoFunctions).expect("evaluation");
+    assert_eq!(
+        written(&rt),
+        vec![
+            ("robot/rec".into(), record(4.0)),
+            ("robot/x".into(), vocab::float(4.0))
         ]
     );
 }

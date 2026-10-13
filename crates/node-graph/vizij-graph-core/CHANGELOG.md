@@ -4,6 +4,22 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [2.6.0] - 2026-10-13
+
+### Changed
+
+- The plan resolves what a selector reads from a `constant` when it is
+  built: the input's binding holds the selected value, and an evaluation
+  neither reads nor copies the constant for it. A constant every read of
+  which is resolved is not evaluated by `evaluate_writes_with_functions` at
+  all. A face's pose driver reads its neutral-pose record through 94 such
+  selectors; its device step takes 3.4 M fewer instructions per frame.
+- The `value` of a constant read through a selector is therefore plan
+  structure: a new value takes a new plan. `fingerprint_spec` covers it, so
+  an unversioned spec (`version` 0) edited in place is planned again; a
+  versioned spec takes a new version (`GraphSpec::with_cache`), as for any
+  structural edit.
+
 ## [2.5.0] - 2026-10-13
 
 ### Added
