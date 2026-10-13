@@ -39,8 +39,10 @@ jobs:
       # bins only: examples and the live ROS tests link the `ros2-client` dev
       # dependency, which is DDS. (`scripts/hook-tasks.sh` runs the same
       # passes locally, without `studio` and `tts-piper`.)
-      - run: cargo test --workspace --all-features --exclude vizij
-      - run: cargo test -p vizij --features ros2-dds,studio,tts-piper
+      # `vizij-animation-module` is tested with `vizij` (see `rust_test` in
+      # `scripts/hook-tasks.sh`): one build of it rather than one per pass.
+      - run: cargo test --workspace --all-features --exclude vizij --exclude vizij-animation-module
+      - run: cargo test -p vizij -p vizij-animation-module --features vizij/ros2-dds,vizij/studio,vizij/tts-piper
       - run: cargo clippy --workspace --all-features --exclude vizij --bins --examples --tests -- -D warnings
       - run: cargo clippy -p vizij --features ros2-dds,studio,tts-piper --bins --examples --tests -- -D warnings
       - run: cargo clippy -p vizij --features ros2-zenoh --bins -- -D warnings
