@@ -31,6 +31,9 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   surface is not marked changed, so it is not propagated or uploaded
   again. Applying a face's pose takes 0.2 M instructions a frame instead
   of 2.2 M.
+- The view's cameras cluster no lights — the faces are lit by the ambient
+  term alone — so the renderer builds one cluster per view instead of a
+  grid each frame: 8 % fewer instructions to render a frame.
 - `--ros2` requires `arora-bridge-ros2` 10.4, whose ROS4HRI preset takes
   `/closed_captions` and publishes `/diagnostics`.
 
