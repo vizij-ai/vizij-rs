@@ -40,3 +40,12 @@ serde-wasm-bindgen = "0.6"
 opt-level = "s"
 lto = true
 codegen-units = 1
+
+# The release code without its fat LTO, for measuring it (the frame_cost
+# example): a build of the whole view links in a fraction of the time and
+# memory, with line tables for a profiler.
+[profile.profiling]
+inherits = "release"
+lto = false
+codegen-units = 16
+debug = "line-tables-only"

@@ -10388,6 +10388,7 @@ dependencies = [
  "getrandom 0.4.3",
  "image",
  "js-sys",
+ "libc",
  "log",
  "rand 0.9.5",
  "reqwest",
