@@ -216,6 +216,8 @@ fn device(glb: &[u8], args: &Args) -> Device {
         program: args.program.clone(),
         stage_neutral: true,
         ros4hri: false,
+        #[cfg(feature = "studio")]
+        studio: false,
         speech: None,
     };
     let LoadedFace { meta, spec, .. } = face::load_face(glb, &config).expect("load face");
@@ -365,7 +367,8 @@ mod counted {
     //! `face::builder_for`'s device, its interpreter, its store and the
     //! interpreter's module calls counted section by section: the same
     //! composition, kept in step with `builder_for`, around wrappers that
-    //! count.
+    //! count — but for the `studio` feature's keeping of Studio's target
+    //! forms, which a face composed without Studio's keys does not use.
     use std::cell::Cell;
     use std::collections::HashMap;
     use std::rc::Rc;
