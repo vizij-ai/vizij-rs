@@ -834,6 +834,7 @@ fn clear_target(
             Tonemapping::None,
             DebandDither::Disabled,
             Msaa::Sample4,
+            bevy::light::cluster::ClusterConfig::Single,
         ));
         return;
     };
@@ -1074,6 +1075,9 @@ fn camera_for(framing: Framing, slot: usize, offscreen: Option<&OffscreenTarget>
         Tonemapping::None,
         DebandDither::Disabled,
         Msaa::Sample4,
+        // The faces are lit by the ambient term alone: no light to cluster,
+        // so one cluster spares the per-frame cluster grid.
+        bevy::light::cluster::ClusterConfig::Single,
     )
 }
 
