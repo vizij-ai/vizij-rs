@@ -1529,6 +1529,52 @@ mod tests {
         assert_eq!(read(&store, "actuator/y"), Some(float(0.5)));
     }
 
+    /// A field the graph selects from a constant record is resolved when the
+    /// graph is lowered; an edit to the record's value lowers it again and
+    /// the new field is what the graph writes.
+    #[test]
+    fn an_edit_to_a_picked_constant_reaches_its_selection() {
+        let store = SimpleDataStore::new();
+        let record =
+            |x: f32| json!({ "record": { "values": { "record": { "x": { "f32": x } } } } });
+        let mut spec = json!({
+            "nodes": [
+                { "id": "rec", "type": "constant", "params": { "value": record(0.25) } },
+                { "id": "out", "type": "output", "params": { "path": "actuator/y" } }
+            ],
+            "edges": [
+                { "from": { "node_id": "rec" }, "to": { "node_id": "out", "input": "in" },
+                  "selector": [{ "field": "values" }, { "field": "x" }] }
+            ]
+        });
+        vizij_api_core::json::normalize_graph_spec_value(&mut spec).expect("normalize");
+        let mut graph =
+            ProcessingGraph::from_spec(serde_json::from_value(spec).expect("spec")).expect("graph");
+        let mut bridge = NoopBridge;
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read(&store, "actuator/y"), Some(float(0.25)));
+
+        let spec_diff = parse_spec_diff(
+            &json!({
+                "upsert_nodes": [
+                    { "id": "rec", "type": "constant", "params": { "value": record(0.75) } }
+                ],
+                // An upserted node's edges come with it (the diff contract).
+                "upsert_edges": [
+                    { "from": { "node_id": "rec" }, "to": { "node_id": "out", "input": "in" },
+                      "selector": [{ "field": "values" }, { "field": "x" }] }
+                ]
+            })
+            .to_string(),
+        )
+        .expect("the edit");
+        graph
+            .apply(graph_codec::spec_diff_to_graph_diff(&spec_diff).expect("translate"))
+            .expect("apply");
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read(&store, "actuator/y"), Some(float(0.75)));
+    }
+
     /// A load keeps the graph runtime warm: the graph clock (surfaced by a
     /// `Time` node, which reads `rt.t`) stays continuous across a recompose
     /// instead of restarting at zero. Guards the runtime-continuity behavior

@@ -219,6 +219,34 @@ mod tests {
     }
 
     #[test]
+    fn set_param_on_a_constant_read_through_a_selector_reaches_the_selection() {
+        let mut graph = WasmGraph::new();
+        let spec = r#"{
+            "nodes": [
+                { "id": "rec", "type": "constant", "params": { "value": { "record": { "x": { "f32": 1.0 } } } }, "inputs": {}, "output_shapes": {} },
+                { "id": "out", "type": "output", "params": { "path": "demo/out" }, "inputs": {}, "output_shapes": {} }
+            ],
+            "edges": [
+                { "from": { "node_id": "rec", "output": "out" }, "to": { "node_id": "out", "input": "in" }, "selector": [{ "field": "x" }] }
+            ]
+        }"#;
+        let out = |graph: &WasmGraph| graph.runtime.outputs["out"]["out"].value.clone();
+        graph.load_graph(spec).expect("graph loads");
+        graph.eval_all().expect("initial eval");
+        assert_eq!(out(&graph), Value::F32(1.0));
+
+        graph
+            .set_param("rec", "value", r#"{ "record": { "x": { "f32": 2.0 } } }"#)
+            .expect("set_param succeeds");
+        assert!(
+            !graph.plan_ready,
+            "the plan holds what the selector reads, so the value is structural"
+        );
+        graph.eval_all().expect("re-eval");
+        assert_eq!(out(&graph), Value::F32(2.0));
+    }
+
+    #[test]
     fn set_param_supports_noise_params() {
         let mut graph = WasmGraph::new();
         let spec = r#"{
@@ -1260,15 +1288,25 @@ impl WasmGraph {
             }
         }
 
+        // The plan resolves what a selector reads from a constant, so the value of a constant
+        // read through a selector is plan structure.
+        let picked = self
+            .spec
+            .edges
+            .iter()
+            .any(|edge| edge.from.node_id == node_id && edge.selector.is_some());
         if let Some(node) = self.spec.nodes.iter_mut().find(|n| n.id == node_id) {
             // Structural params are those that can change the cached plan's port layouts or
             // bindings. Known structural mutations via `set_param`:
             // - `Split.sizes`: changes the number of variadic outputs and slot indices.
             // - `ReadRecord.record_keys`: changes the number of variadic outputs and slot indices.
+            // - `Constant.value`, for a constant read through a selector: the plan holds what
+            //   the selector reads.
             let structural_change = matches!(
                 (&node.kind, key),
                 (NodeType::Split, "sizes") | (NodeType::ReadRecord, "record_keys")
-            );
+            ) || (picked
+                && matches!((&node.kind, key), (NodeType::Constant, "value")));
 
             match key {
                 "value" => {
