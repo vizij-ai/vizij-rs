@@ -173,12 +173,14 @@ jobs:
           save-if: ${{ github.event_name != 'pull_request' }}
       - name: Build
         run: cargo build -p vizij --release --features studio
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb,cargo-generate-rpm
       # Both packagers take the binary just built rather than building again.
       - name: Package the .deb, the .rpm and the binary
         env:
           VERSION: ${{ needs.tag.outputs.version }}
         run: |
-          cargo install cargo-deb cargo-generate-rpm --locked
           cargo deb -p vizij --no-build
           cargo generate-rpm -p crates/vizij
           tar -czf "vizij-$VERSION-linux-x86_64.tar.gz" -C target/release vizij
@@ -250,10 +252,11 @@ jobs:
         with:
           node-version: "24"
           package-manager-cache: false
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
       - name: Build the browser module
-        run: |
-          cargo install wasm-pack --locked
-          node scripts/build-runtime-wasm.mjs
+        run: node scripts/build-runtime-wasm.mjs
       - name: Package the module
         env:
           VERSION: ${{ needs.tag.outputs.version }}

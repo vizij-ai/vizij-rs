@@ -69,9 +69,10 @@ jobs:
         # animation-module artifact (an Arora guest module).
         run: rustup target add wasm32-unknown-unknown wasm32-wasip1
 
-      - name: Install wasm-pack
+      - uses: taiki-e/install-action@v2
         if: steps.check.outputs.pending == 'true'
-        run: cargo install wasm-pack
+        with:
+          tool: wasm-pack
 
       - uses: pnpm/action-setup@v4
         if: steps.check.outputs.pending == 'true'
