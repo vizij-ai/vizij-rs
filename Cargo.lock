@@ -10489,7 +10489,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-behavior"
-version = "6.0.1"
+version = "6.0.2"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
@@ -10589,7 +10589,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-graph-core"
-version = "2.4.1"
+version = "2.5.0"
 dependencies = [
  "anyhow",
  "arora-behavior",

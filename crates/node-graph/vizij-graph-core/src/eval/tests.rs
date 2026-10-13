@@ -1779,6 +1779,107 @@ fn end_to_end_input_selector_scalar_math_output() {
     }
 }
 
+/// An evaluation for writes writes what a full one writes, frame after
+/// frame, holds the same ports, and keeps no copy of them by name.
+#[test]
+fn an_evaluation_for_writes_writes_what_a_full_one_writes() {
+    struct NoFunctions;
+    impl NodeFunctions for NoFunctions {
+        fn call(
+            &mut self,
+            function: uuid::Uuid,
+            _: &[(uuid::Uuid, Value)],
+        ) -> Result<Value, String> {
+            Err(format!("no function {function}"))
+        }
+    }
+    let path = TypedPath::parse("robot/calc.y").expect("valid path");
+    let graph = GraphSpec {
+        nodes: vec![
+            NodeSpec {
+                id: "t".to_string(),
+                kind: NodeType::Time,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            constant_node(
+                "pose",
+                vocab::record([("gain", vocab::float(2.0)), ("unused", vocab::text("x"))]),
+            ),
+            NodeSpec {
+                id: "scaled".to_string(),
+                kind: NodeType::Multiply,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "out".to_string(),
+                kind: NodeType::Output,
+                params: NodeParams {
+                    path: Some(path.clone()),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![
+            link("t", "scaled", "operand_1"),
+            link_with_selector(
+                "pose",
+                "out",
+                "scaled",
+                "operand_2",
+                vec![SelectorSegment::Field("gain".to_string())],
+            ),
+            link("scaled", "out", "in"),
+        ],
+        ..Default::default()
+    }
+    .with_cache();
+
+    let mut full = GraphRuntime::default();
+    let mut for_writes = GraphRuntime::default();
+    for frame in 1..=3 {
+        for rt in [&mut full, &mut for_writes] {
+            rt.dt = 0.25;
+            rt.t = 0.25 * frame as f32;
+        }
+        evaluate_all_with_functions(&mut full, &graph, &mut NoFunctions).expect("full");
+        evaluate_writes_with_functions(&mut for_writes, &graph, &mut NoFunctions)
+            .expect("for writes");
+        let written = |rt: &GraphRuntime| -> Vec<(String, Value)> {
+            rt.writes
+                .iter()
+                .map(|op| (op.path.to_string(), op.value.clone()))
+                .collect()
+        };
+        assert_eq!(written(&for_writes), written(&full));
+        assert_eq!(
+            written(&full),
+            vec![(path.to_string(), vocab::float(0.5 * frame as f32))]
+        );
+        let ports = |rt: &GraphRuntime| -> Vec<Vec<Value>> {
+            rt.outputs_vec
+                .iter()
+                .map(|ports| ports.iter().map(|port| port.value.clone()).collect())
+                .collect()
+        };
+        assert_eq!(ports(&for_writes), ports(&full));
+        assert_eq!(
+            full.outputs.len(),
+            4,
+            "a full evaluation keeps every node's ports"
+        );
+        assert!(
+            for_writes.outputs.is_empty(),
+            "an evaluation for writes keeps none by name"
+        );
+    }
+}
+
 #[test]
 fn centered_remap_handles_anchor_segments() {
     let mut defaults = HashMap::new();

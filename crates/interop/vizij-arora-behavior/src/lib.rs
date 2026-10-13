@@ -49,7 +49,7 @@ use arora_types::record::module::frozen;
 use arora_types::value::{Structure, StructureField, Value};
 use uuid::Uuid;
 use vizij_api_core::TypedPath;
-use vizij_graph_core::eval::{evaluate_all_with_functions, GraphRuntime, NodeFunctions};
+use vizij_graph_core::eval::{evaluate_writes_with_functions, GraphRuntime, NodeFunctions};
 pub use vizij_graph_core::task;
 use vizij_graph_core::types::{
     EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
@@ -802,7 +802,7 @@ impl ProcessingGraph {
             bridge: call_bridge,
             function_modules: &self.function_modules,
         };
-        evaluate_all_with_functions(&mut self.rt, &self.spec, &mut functions)
+        evaluate_writes_with_functions(&mut self.rt, &self.spec, &mut functions)
             .map_err(|message| BehaviorError { message })?;
 
         // Write the graph's outputs back to the store.
