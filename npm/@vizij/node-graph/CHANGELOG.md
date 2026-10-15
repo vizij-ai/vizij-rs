@@ -1,5 +1,13 @@
 # @vizij/node-graph
 
+## 0.11.1
+
+### Patch Changes
+
+- 0bdbf32: A graph edge that selects from a constant is resolved when the graph is planned, so evaluating the graph neither reads nor copies the constant: a face's device step takes 12 % fewer instructions. In `@vizij/node-graph`, `set_param` on the `value` of a constant read through a selector replans the graph.
+- be363f7: A graph's constants keep their value from one evaluation to the next instead of being copied each time: a face's device step takes 42 % fewer instructions.
+- 670cf16: A graph edge with a selector clones the part it selects, not its whole source value: a face whose pose driver selects fields of a large record steps in about a quarter of the instructions it took.
+
 ## 0.11.0
 
 ### Minor Changes

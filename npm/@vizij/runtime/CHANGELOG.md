@@ -1,5 +1,24 @@
 # Changelog
 
+## 6.1.0
+
+### Minor Changes
+
+- 1b2b23c: The `vizij-face` profile declares the caption a host shows over the face, `standard/vizij/caption/text`, and who says it, `standard/vizij/caption/speaker` (`__system__` for the face itself): string inputs resting empty, in no tier. The profile has 96 keys. The `ros4hri` profile declares `standard/ros4hri/caption/{text,speaker}`, which a ROS bridge writes from `hri_actions_msgs/ClosedCaption`, and the ROS4HRI mapping relays them as is to the face's caption.
+- 7dfa940: The `vizij-face` profile declares the gaze target, `standard/vizij/gaze/target/x` and `…/y`: a point on the face's frame — origin top-left, `x` to the right, `y` downward, each in `[0, 1]` — resting at the centre, (0.5, 0.5), in the gaze tier. A face whose graphs read it lists it in `listKeys` as an `f32` in `[0, 1]` resting at 0.5. The profile has 93 keys.
+- 6905800: The `vizij-face` profile declares the gaze target's weight, `standard/vizij/gaze/target/weight`: how strongly the eyes hold the target, an `f32` in `[0, 1]` resting at 0, in the gaze tier. At 0 the eyes do what the face itself does, whatever the target says; at 1 they hold the target. The profile has 94 keys.
+- 9ea8b3a: The `ros4hri` profile declares 10 keys and no `standard/ros4hri/au/<code>` keys, and the ROS4HRI mapping writes none of the face standard's muscle tier: ROS4HRI publishes facial action units only as perception output and defines no command for them. The mapping's idle blink is inhibited by the `asleep` expression alone.
+
+### Patch Changes
+
+- 0bdbf32: A graph edge that selects from a constant is resolved when the graph is planned, so evaluating the graph neither reads nor copies the constant: a face's device step takes 12 % fewer instructions. In `@vizij/node-graph`, `set_param` on the `value` of a constant read through a selector replans the graph.
+- be363f7: A graph's constants keep their value from one evaluation to the next instead of being copied each time: a face's device step takes 42 % fewer instructions.
+- 23ad7fa: A Vizij's device reads its graph's inputs from the store in one read per step, under keys prepared when the graph loads: its step takes 16 % fewer instructions.
+- 670cf16: A graph edge with a selector clones the part it selects, not its whole source value: a face whose pose driver selects fields of a large record steps in about a quarter of the instructions it took.
+- 740518d: A Vizij's device evaluates its graph without copying every port by name each step, a copy nothing read: its step takes 30 % fewer instructions.
+- 997ed10: The view's cameras build one light cluster instead of a grid each frame: the faces are lit by the ambient term alone.
+- 27fea02: The view lands only the pose values that changed since its last frame, read from the device in place: applying a Vizij's pose takes a tenth of the instructions it took.
+
 ## 6.0.0
 
 ### Major Changes
