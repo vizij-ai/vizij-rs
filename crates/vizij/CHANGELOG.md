@@ -41,6 +41,13 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   valid ROS 2 name tokens: a Studio-exported face's keys, named by UUID, get
   topics (an id starting with a digit gains a leading `_`).
 
+### Fixed
+
+- The browser module requires `arora-web` 9.0.1, which holds what a page
+  has not drained as the latest value per key: a page that never calls
+  `drainChanges` no longer grows its memory with every step. A drain
+  answers each changed key's latest value, as before.
+
 ## [0.2.0] - 2026-10-12
 
 ### Added

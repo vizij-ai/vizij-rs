@@ -826,8 +826,10 @@ export class Runtime {
     return this.inner.snapshot();
   }
 
-  /** The keys that changed since the previous drain (`null` = cleared); the
-   * first drain returns the whole current state. */
+  /** The keys that changed since the previous drain, each at its latest
+   * value (`null` = cleared); the first drain returns the whole current
+   * state. What has not been drained is held as one value per changed key,
+   * however many steps go by without a drain. */
   drainChanges(): Record<string, ValueJSON | null> {
     return this.inner.drainChanges();
   }
