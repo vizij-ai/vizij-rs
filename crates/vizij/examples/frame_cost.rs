@@ -348,17 +348,18 @@ fn speak(arora: &mut arora::Arora, rig_prefix: &str) {
         .expect("speaking");
 }
 
-/// The page's `drainChanges`: every change since the last drain, as a JSON
+/// The page's `drainChanges`: the feed folded into the latest value per key,
+/// as `arora-web` folds it on every step, then that net change as a JSON
 /// object of path to value.
 fn drain(changes: &arora_types::data::Subscription) -> usize {
-    let mut out = serde_json::Map::new();
+    let mut latest = std::collections::HashMap::new();
     while let Some(change) = changes.try_recv() {
-        for (key, value) in change.set {
-            out.insert(key.path, serde_json::to_value(value).unwrap());
-        }
-        for key in change.unset {
-            out.insert(key.path, serde_json::Value::Null);
-        }
+        latest.extend(change.set);
+        latest.extend(change.unset.into_iter().map(|key| (key, None)));
+    }
+    let mut out = serde_json::Map::new();
+    for (key, value) in latest {
+        out.insert(key.path, serde_json::to_value(value).unwrap());
     }
     out.len()
 }

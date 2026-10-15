@@ -833,8 +833,10 @@ impl VizijRuntime {
         self.inner.snapshot()
     }
 
-    /// The keys that changed since the last drain (`null` = cleared); the
-    /// first drain returns the whole current state.
+    /// The keys that changed since the last drain, each at its latest value
+    /// (`null` = cleared); the first drain returns the whole current state.
+    /// What the page has not drained is held as one value per changed key,
+    /// however many steps it goes without draining.
     #[wasm_bindgen(js_name = drainChanges)]
     pub fn drain_changes(&self) -> Result<JsValue, JsValue> {
         self.inner.drain_changes()
