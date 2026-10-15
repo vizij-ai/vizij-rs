@@ -6,18 +6,19 @@ name: release-vizij
 # binary and an installer per OS (dmg; deb and rpm; exe), and the browser
 # module. The release notes are the version's CHANGELOG.md section.
 #
-# A pull request that changes this release builds and packages everything the
-# same way, tagging and releasing nothing: the packages are the run's artifacts,
-# to try before the version reaches main.
+# Run by hand (workflow_dispatch), it either rebuilds an existing tag's
+# artifacts into its release, or — given no tag — builds and packages the
+# branch it is run on the same way, tagging and releasing nothing: the packages
+# are the run's artifacts, to try a version before it reaches main.
 #
 # Tagging and releasing share this run because a tag pushed with GITHUB_TOKEN
 # triggers no other workflow. The local Piper voice (`tts-piper`) stays out: it
 # links GPLv3 code. The installers are unsigned: macOS quarantines the app until
 # it is opened once from the context menu (the release notes say so).
 #
-# A pull request's trial build restores the build caches and saves none: a
-# pull request's cache serves that pull request alone, and four of them push
-# main's CI caches out of the repository's 10 GB.
+# A trial build restores the build caches and saves none: a branch's cache
+# serves that branch alone, and a few of them push main's CI caches out of the
+# repository's 10 GB.
 
 on:
   push:
@@ -26,24 +27,21 @@ on:
       - "crates/vizij/Cargo.toml"
       - ".github/workflows/release-vizij.yml"
       - "scripts/package_macos.sh"
-  pull_request:
-    paths:
-      - "crates/vizij/Cargo.toml"
-      - ".github/workflows/release-vizij.yml"
-      - "scripts/package_macos.sh"
-  # (Re)build the artifacts of an existing tag.
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing vizij-vX.Y.Z tag to (re)build artifacts for"
-        required: true
+        description: >-
+          Existing vizij-vX.Y.Z tag to rebuild artifacts for. Leave empty for a
+          trial build of the selected branch: artifacts only, no tag, no release.
+        required: false
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-vizij-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: release-vizij-${{ github.event_name == 'workflow_dispatch' && inputs.tag == '' && github.ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' && inputs.tag == '' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -54,8 +52,10 @@ jobs:
     timeout-minutes: 5
     outputs:
       created: ${{ steps.tag.outputs.created }}
-      # Whether to build: a release being made, or a pull request's trial.
-      build: ${{ steps.tag.outputs.created == 'true' || github.event_name == 'pull_request' }}
+      # Whether to build: a release being made, or a trial.
+      build: ${{ steps.tag.outputs.created == 'true' || steps.tag.outputs.trial == 'true' }}
+      # A trial build of the dispatched branch: artifacts only.
+      trial: ${{ steps.tag.outputs.trial }}
       tag: ${{ steps.tag.outputs.tag }}
       version: ${{ steps.tag.outputs.version }}
     steps:
@@ -66,7 +66,7 @@ jobs:
           INPUT_TAG: ${{ github.event.inputs.tag }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "$INPUT_TAG" ]; then
             echo "created=true" >> "$GITHUB_OUTPUT"
             echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
             echo "version=${INPUT_TAG#vizij-v}" >> "$GITHUB_OUTPUT"
@@ -76,8 +76,9 @@ jobs:
           tag="vizij-v$version"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "created=false" >> "$GITHUB_OUTPUT"
+            echo "trial=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if git ls-remote --tags origin "refs/tags/$tag" | grep -q "refs/tags/$tag"; then
@@ -99,7 +100,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.sha || needs.tag.outputs.tag }}
+          ref: ${{ needs.tag.outputs.trial == 'true' && github.sha || needs.tag.outputs.tag }}
       - name: Create the release from the CHANGELOG section
         env:
           GH_TOKEN: ${{ github.token }}
@@ -132,11 +133,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.sha || needs.tag.outputs.tag }}
+          ref: ${{ needs.tag.outputs.trial == 'true' && github.sha || needs.tag.outputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ needs.tag.outputs.trial != 'true' }}
       - name: Build
         run: cargo build -p vizij --release --features studio
       - name: Package the .app in a .dmg, and the binary
@@ -150,7 +151,7 @@ jobs:
           name: vizij-macos
           path: vizij-*-macos-arm64.*
       - name: Upload to the release
-        if: github.event_name != 'pull_request'
+        if: needs.tag.outputs.trial != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.tag.outputs.tag }}
@@ -164,13 +165,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.sha || needs.tag.outputs.tag }}
+          ref: ${{ needs.tag.outputs.trial == 'true' && github.sha || needs.tag.outputs.tag }}
       - name: Install Bevy's system dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config rpm
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ needs.tag.outputs.trial != 'true' }}
       - name: Build
         run: cargo build -p vizij --release --features studio
       - uses: taiki-e/install-action@v2
@@ -192,7 +193,7 @@ jobs:
             target/generate-rpm/*.rpm
             vizij-*-linux-x86_64.tar.gz
       - name: Upload to the release
-        if: github.event_name != 'pull_request'
+        if: needs.tag.outputs.trial != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.tag.outputs.tag }}
@@ -206,11 +207,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.sha || needs.tag.outputs.tag }}
+          ref: ${{ needs.tag.outputs.trial == 'true' && github.sha || needs.tag.outputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ needs.tag.outputs.trial != 'true' }}
       # aws-lc-sys (rustls' provider, through the TTS client and the Studio
       # bridge) assembles with NASM on Windows.
       - uses: ilammy/setup-nasm@v1
@@ -226,7 +227,7 @@ jobs:
           name: vizij-windows
           path: vizij-*-windows-x86_64.exe
       - name: Upload to the release
-        if: github.event_name != 'pull_request'
+        if: needs.tag.outputs.trial != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -241,13 +242,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.sha || needs.tag.outputs.tag }}
+          ref: ${{ needs.tag.outputs.trial == 'true' && github.sha || needs.tag.outputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ needs.tag.outputs.trial != 'true' }}
       - uses: actions/setup-node@v5
         with:
           node-version: "24"
@@ -266,7 +267,7 @@ jobs:
           name: vizij-web
           path: vizij-*-web.tar.gz
       - name: Upload to the release
-        if: github.event_name != 'pull_request'
+        if: needs.tag.outputs.trial != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.tag.outputs.tag }}
