@@ -23,6 +23,11 @@ release `vizij-v<version>`. The release carries a binary and an installer per
 desktop OS, built with the Studio bridge (`--features studio`), and the
 browser module. Its notes are the version's [CHANGELOG](CHANGELOG.md) section.
 
+To try a version before it reaches `main`, run the workflow by hand on its
+branch with no tag (`gh workflow run release-vizij.yml --ref <branch>`): it
+builds and packages the same way, and the packages are the run's artifacts.
+Nothing is tagged or released.
+
 | OS | Installer | Binary |
 |---|---|---|
 | macOS (Apple silicon) | `vizij-<version>-macos-arm64.dmg` | `vizij-<version>-macos-arm64.tar.gz` |
