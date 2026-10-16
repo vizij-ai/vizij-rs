@@ -41,6 +41,9 @@ import {
 } from "@vizij/wasm-loader";
 import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 import { play as defaultPlay, type Play } from "./audio.js";
+import { countDownload, nextPaint, reportProgress } from "./progress.js";
+
+export { onInitProgress, type InitProgress } from "./progress.js";
 
 /** A Vizij graph spec, as an object or already-serialized JSON. */
 export type GraphSpecInput = object | string;
@@ -542,6 +545,33 @@ function toWasmBindgenInitOptions(initArg: unknown): { module_or_path: unknown }
   return { module_or_path: initArg };
 }
 
+/**
+ * What wasm-bindgen's init is handed for `moduleOrPath`, with its download
+ * reported: a URL or a `Request` is fetched here and its `Response` counted
+ * as it streams into the compile; bytes or a compiled `WebAssembly.Module`
+ * need no download and go straight to the compile. `counted` resolves once
+ * `compile` is reported.
+ */
+async function withDownloadProgress(
+  moduleOrPath: unknown,
+): Promise<{ source: unknown; counted: Promise<void> }> {
+  const source = await moduleOrPath;
+  const fetchable =
+    typeof source === "string" ||
+    (typeof URL === "function" && source instanceof URL) ||
+    (typeof Request === "function" && source instanceof Request);
+  if (fetchable) {
+    const { response, counted } = countDownload(await fetch(source as RequestInfo | URL));
+    return { source: response, counted };
+  }
+  if (typeof Response === "function" && source instanceof Response) {
+    const { response, counted } = countDownload(source);
+    return { source: response, counted };
+  }
+  reportProgress({ stage: "compile" });
+  return { source, counted: Promise.resolve() };
+}
+
 function pkgWasmJsUrl(): URL {
   return new URL("../../pkg/vizij.js", import.meta.url);
 }
@@ -588,7 +618,14 @@ async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
       importModule: () => importWasmModule(),
       defaultWasmUrl,
       init: async (module, initArg) => {
-        await (module as WasmBindings).default(toWasmBindgenInitOptions(initArg));
+        const { module_or_path } = toWasmBindgenInitOptions(initArg);
+        const { source, counted } = await withDownloadProgress(module_or_path);
+        await (module as WasmBindings).default({ module_or_path: source });
+        // Each stage gets a painted frame before the next replaces it.
+        await counted;
+        await nextPaint();
+        reportProgress({ stage: "start" });
+        await nextPaint();
       },
       getBindings: (module) => module as WasmBindings,
     },
@@ -603,12 +640,15 @@ let _initPromise: Promise<void> | null = null;
 
 /**
  * Initialize the wasm module once. The returned promise is memoized; await it
- * during startup before calling `startRuntime`.
+ * during startup before calling `startRuntime`. {@link onInitProgress}
+ * follows it: the download, the compile, the module's start, and `ready`
+ * once it resolves.
  */
 export function init(input?: InitInput): Promise<void> {
   if (_initPromise) return _initPromise;
   _initPromise = (async () => {
     await loadBindings(input);
+    reportProgress({ stage: "ready" });
   })();
   return _initPromise;
 }

@@ -8,7 +8,8 @@ import { serve } from "./serve.mjs";
 
 export const FIXTURES = process.env.VIZIJ_FIXTURES;
 
-export async function open(fixtures, query = "") {
+/** Open the harness page; `initScript` runs in it before its own scripts. */
+export async function open(fixtures, query = "", { initScript } = {}) {
   const server = await serve(fixtures);
   const browser = await chromium.launch({
     headless: true,
@@ -23,6 +24,7 @@ export async function open(fixtures, query = "") {
   const logs = [];
   page.on("console", (m) => logs.push(`[${m.type()}] ${m.text()}`));
   page.on("pageerror", (e) => logs.push(`[pageerror] ${e.message}`));
+  if (initScript) await page.addInitScript(initScript);
   await page.goto(`${server.base}/tests/browser/index.html${query}`);
   try {
     await page.waitForFunction(() => window.vizijHarnessReady === true, null, { timeout: 120_000 });
