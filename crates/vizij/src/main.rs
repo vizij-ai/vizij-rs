@@ -272,6 +272,7 @@ fn main() -> Result<()> {
         zoom: cli.zoom,
         ambient: cli.ambient,
         unlit: cli.unlit,
+        msaa: Msaa::Sample4,
     };
     let Runtime {
         meta,

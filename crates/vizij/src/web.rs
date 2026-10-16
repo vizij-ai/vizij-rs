@@ -948,7 +948,20 @@ fn parse_view_options(json: Option<&str>) -> Result<ViewOptions, JsValue> {
             .get("unlit")
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false),
+        msaa: parse_msaa(&options)?,
     })
+}
+
+/// The mount options' `msaa`: the samples per pixel, 1 or 4 (the default).
+fn parse_msaa(options: &serde_json::Value) -> Result<Msaa, JsValue> {
+    match options.get("msaa") {
+        None | Some(serde_json::Value::Null) => Ok(Msaa::Sample4),
+        Some(samples) => match samples.as_u64() {
+            Some(1) => Ok(Msaa::Off),
+            Some(4) => Ok(Msaa::Sample4),
+            _ => Err(JsValue::from_str(&format!("msaa: 1 or 4, not {samples}"))),
+        },
+    }
 }
 
 /// [`set_view`]'s view.

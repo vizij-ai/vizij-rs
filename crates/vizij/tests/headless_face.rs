@@ -67,6 +67,7 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
         zoom: Vec2::ONE,
         ambient: std::f32::consts::FRAC_PI_2,
         unlit: false,
+        msaa: Msaa::Sample4,
     })
     .add_plugins(ViewPlugin);
 
@@ -185,6 +186,7 @@ fn a_studio_exported_face_renders_its_per_axis_pose() {
         zoom: Vec2::ONE,
         ambient: std::f32::consts::FRAC_PI_2,
         unlit: false,
+        msaa: Msaa::Sample4,
     })
     .add_plugins(ViewPlugin);
     let image = capture(&mut app, WIDTH, HEIGHT, 60, view::all_faces_ready).expect("a frame");
@@ -270,6 +272,7 @@ fn an_ellipse_draws_as_its_unit_circle() {
         zoom: Vec2::ONE,
         ambient: std::f32::consts::FRAC_PI_2,
         unlit: false,
+        msaa: Msaa::Sample4,
     })
     .add_plugins(ViewPlugin);
     let image = capture(&mut app, WIDTH, HEIGHT, 60, view::all_faces_ready).expect("a frame");
@@ -366,6 +369,7 @@ fn two_faces_share_one_target_each_in_its_own_viewport() {
         zoom: Vec2::ONE,
         ambient: std::f32::consts::FRAC_PI_2,
         unlit: false,
+        msaa: Msaa::Sample4,
     })
     .add_plugins(ViewPlugin);
 
@@ -450,6 +454,7 @@ fn load_unload_cycles_leave_nothing_behind() {
         zoom: Vec2::ONE,
         ambient: std::f32::consts::FRAC_PI_2,
         unlit: false,
+        msaa: Msaa::Sample4,
     })
     .add_plugins(ViewPlugin);
     vizij::view::snapshot::ensure_ready(&mut app);
@@ -572,6 +577,7 @@ fn a_face_draws_only_once_indexed() {
         zoom: Vec2::ONE,
         ambient: std::f32::consts::FRAC_PI_2,
         unlit: false,
+        msaa: Msaa::Sample4,
     })
     .add_plugins(ViewPlugin);
     vizij::view::snapshot::ensure_ready(&mut app);
@@ -668,6 +674,7 @@ fn a_caption_shows_over_the_face() {
         zoom: Vec2::ONE,
         ambient: std::f32::consts::FRAC_PI_2,
         unlit: false,
+        msaa: Msaa::Sample4,
     })
     .add_plugins(ViewPlugin);
 

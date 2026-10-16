@@ -238,6 +238,10 @@ export interface MountOptions {
   ambient?: number;
   /** Render pure albedo. */
   unlit?: boolean;
+  /** Multisample anti-aliasing, in samples per pixel: 4 (default) smooths
+   * the edges; 1 draws them aliased and spares the GPU the multisampled
+   * target and its resolve every frame. */
+  msaa?: 1 | 4;
 }
 
 /** A world rectangle in the face's plane, the shape {@link describe} reports

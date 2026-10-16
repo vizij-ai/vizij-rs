@@ -417,6 +417,10 @@ pub struct ViewOptions {
     pub ambient: f32,
     /// Render pure albedo (equivalent to ambient = π).
     pub unlit: bool,
+    /// Multisample anti-aliasing of every camera on the target: `Sample4`
+    /// smooths the faces' edges; `Off` draws them aliased and spares the GPU
+    /// the multisampled target and its resolve each frame.
+    pub msaa: Msaa,
 }
 
 impl ViewOptions {
@@ -723,6 +727,7 @@ fn apply_view_events(
                         Framing::of(&meta, &options, views.0.get(&face_id)),
                         slot,
                         offscreen.as_deref(),
+                        options.msaa,
                     ))
                     .id();
                 let face = commands
@@ -833,7 +838,7 @@ fn clear_target(
             bevy::camera::visibility::RenderLayers::none(),
             Tonemapping::None,
             DebandDither::Disabled,
-            Msaa::Sample4,
+            options.msaa,
             bevy::light::cluster::ClusterConfig::Single,
         ));
         return;
@@ -1050,8 +1055,14 @@ fn retire_superseded(
 }
 
 /// A face's camera: the fit over its framing, over its slot, drawing over
-/// what the target holds ([`ClearCamera`] clears it).
-fn camera_for(framing: Framing, slot: usize, offscreen: Option<&OffscreenTarget>) -> impl Bundle {
+/// what the target holds ([`ClearCamera`] clears it), with the target's
+/// `msaa` — every camera on one target has the same.
+fn camera_for(
+    framing: Framing,
+    slot: usize,
+    offscreen: Option<&OffscreenTarget>,
+    msaa: Msaa,
+) -> impl Bundle {
     // Lighting is baked into the materials (see `ViewOptions::albedo_factor`);
     // no scene light is spawned.
     let projection = fit_projection(&framing, None);
@@ -1074,7 +1085,7 @@ fn camera_for(framing: Framing, slot: usize, offscreen: Option<&OffscreenTarget>
         transform,
         Tonemapping::None,
         DebandDither::Disabled,
-        Msaa::Sample4,
+        msaa,
         // The faces are lit by the ambient term alone: no light to cluster,
         // so one cluster spares the per-frame cluster grid.
         bevy::light::cluster::ClusterConfig::Single,
@@ -2001,6 +2012,7 @@ mod tests {
             zoom: Vec2::splat(3.0),
             ambient: 1.0,
             unlit: false,
+            msaa: Msaa::Sample4,
         };
         let meta = FaceMeta {
             root_bounds: Some((1.0, 2.0, 3.0, 4.0)),

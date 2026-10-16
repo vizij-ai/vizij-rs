@@ -30,7 +30,9 @@
   canvas.addEventListener("webglcontextrestored", () => contextEvents.push("restored"));
 
   await vizij.init();
-  await vizij.mount("#faces", { background });
+  // `?msaa=1` mounts without multisampling.
+  const msaa = params.get("msaa");
+  await vizij.mount("#faces", { background, ...(msaa ? { msaa: Number(msaa) } : {}) });
 
   // The page owns every device and steps it on the device clock: by default
   // on the page's frames, each by the frame's wall time; once a test takes

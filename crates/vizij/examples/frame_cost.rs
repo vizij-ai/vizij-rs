@@ -725,6 +725,7 @@ fn view_app(glb: &[u8], devices: &[Device]) -> bevy::prelude::App {
             zoom: Vec2::ONE,
             ambient: std::f32::consts::FRAC_PI_2,
             unlit: false,
+            msaa: Msaa::Sample4,
         })
         .add_plugins(ViewPlugin);
     for (i, device) in devices.iter().enumerate() {
