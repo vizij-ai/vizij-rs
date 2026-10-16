@@ -77,7 +77,7 @@ fn draw_glow(
     mut gizmos: Gizmos<SelectionGlow>,
 ) {
     for face in &faces {
-        if !face.bindings.ready {
+        if !face.bindings.indexed {
             continue;
         }
         let Some(selected) = selections.0.get(&face.id) else {

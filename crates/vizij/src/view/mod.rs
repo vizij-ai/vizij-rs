@@ -13,9 +13,12 @@
 //! A face enters as GLB bytes: [`meta`] reads the bindings and the bundle
 //! from them, and the scene loads them through the in-memory asset source
 //! ([`FaceAssets`]), so the view never touches a file system — the same path
-//! on desktop, in the browser and on Android. [`snapshot`] renders offscreen
-//! and reads the pixels back; [`frames`] publishes what is rendered into the
-//! device's store, and [`diagnostics`] the device's health.
+//! on desktop, in the browser and on Android. A face comes into view once
+//! indexed, and is ready once the GPU has drawn every mesh visible to its
+//! camera ([`Face::ready`]).
+//! [`snapshot`] renders offscreen and reads the pixels back; [`frames`]
+//! publishes what is rendered into the device's store, and [`diagnostics`]
+//! the device's health.
 //!
 //! With the `captions` feature, each face shows the face standard's caption
 //! over it ([`captions`]).
@@ -29,6 +32,7 @@
 #[cfg(feature = "captions")]
 pub mod captions;
 pub mod diagnostics;
+mod drawn;
 pub mod frames;
 mod glow;
 pub mod hold;
@@ -48,7 +52,8 @@ use bevy::asset::io::memory::{Dir, MemoryAssetReader};
 use bevy::asset::io::AssetSourceBuilder;
 use bevy::asset::AssetApp;
 use bevy::camera::{
-    CameraProjection, Projection, RenderTarget, ScalingMode, SubCameraView, Viewport,
+    CameraOutputMode, CameraProjection, Projection, RenderTarget, ScalingMode, SubCameraView,
+    Viewport,
 };
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::ecs::system::SystemParam;
@@ -56,6 +61,7 @@ use bevy::gltf::GltfAssetLabel;
 use bevy::math::Vec3A;
 use bevy::mesh::morph::MorphWeights;
 use bevy::prelude::*;
+use bevy::render::render_resource::BlendState;
 use uuid::Uuid;
 use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
 use vizij_api_core::Value;
@@ -139,6 +145,16 @@ pub struct Face {
     pub bindings: Bindings,
     /// Its camera.
     pub camera: Entity,
+    /// Whether it is drawn: every mesh visible to its camera has its
+    /// pipeline compiled and the GPU has finished a frame drawing them —
+    /// or, should something keep that from happening, ten seconds of frames
+    /// at 60 Hz have gone by, and a warning says what held it back. From
+    /// then on it draws in its place on the target; until then its camera
+    /// draws it under the camera that clears the target, so the target never
+    /// shows a face whose mesh pipelines are still compiling. A mesh shown
+    /// later, and what is drawn over the meshes (captions, the selection
+    /// glow), may still compile when it first draws.
+    pub ready: bool,
 }
 
 /// Where one animatable lands in a face's spawned scene.
@@ -186,7 +202,9 @@ pub struct Bindings {
     /// The meshes whose materials the view composes ([`Surface`]): what the
     /// face's tone mapping goes over.
     surfaces: Vec<Entity>,
-    pub ready: bool,
+    /// Whether the joins are built: from then on the face is posed, shaded
+    /// and in view.
+    pub indexed: bool,
 }
 
 /// The entities one element's features land on.
@@ -202,7 +220,7 @@ pub struct ElementTargets {
 }
 
 /// A face being replaced by a reload under the same id: it keeps drawing
-/// until its successor is indexed, then goes ([`retire_superseded`]), so a
+/// until its successor is ready, then goes ([`retire_superseded`]), so a
 /// reload never shows an empty rectangle. It is not reported ready and
 /// reports no picks.
 #[derive(Component)]
@@ -371,13 +389,13 @@ struct Placements(HashMap<String, Option<IRect>>);
 #[derive(Resource, Default)]
 struct PendingStatics(HashMap<String, Vec<(Uuid, String, Value)>>);
 
-/// Whether every requested face is shown and indexed — and at least one is.
-/// What a snapshot waits for before it captures.
+/// Whether every requested face is ready ([`Face::ready`]) — and at least
+/// one is. What a snapshot waits for before it captures.
 pub fn all_faces_ready(app: &mut App) -> bool {
     let mut faces = app.world_mut().query::<&Face>();
     let mut any = false;
     for face in faces.iter(app.world()) {
-        if !face.bindings.ready {
+        if !face.ready {
             return false;
         }
         any = true;
@@ -633,11 +651,15 @@ impl Plugin for ViewPlugin {
             .init_resource::<Holds>()
             .init_resource::<Compositions>()
             .add_plugins(glow::GlowPlugin)
+            .add_plugins(drawn::DrawnPlugin)
             .add_observer(pick::on_press)
             .add_systems(
                 Update,
                 (
                     apply_view_events,
+                    // Before the cameras are placed, so a face made ready
+                    // draws in its place from the frame it is ready.
+                    drawn::ready_drawn_faces,
                     clear_target,
                     place_cameras,
                     frame_cameras,
@@ -659,7 +681,7 @@ impl Plugin for ViewPlugin {
 /// or set its view, recolor the background, and the authoring requests —
 /// selection, holds, static features. A load under an id already shown
 /// supersedes the face there rather than unloading it: the old scene draws
-/// until the new one is indexed ([`retire_superseded`]).
+/// until the new one is ready ([`retire_superseded`]).
 #[allow(clippy::too_many_arguments)]
 fn apply_view_events(
     events: Option<Res<ViewEvents>>,
@@ -736,6 +758,7 @@ fn apply_view_events(
                             slot,
                             bindings: Bindings::default(),
                             camera,
+                            ready: false,
                         },
                         Transform::from_translation(slot_origin(slot)),
                         // In view once indexed ([`index_faces`]).
@@ -803,11 +826,28 @@ fn apply_view_events(
 }
 
 /// The camera that clears the target with the background, below every
-/// face's: a face's camera only draws its face over it, so the target shows
-/// the background wherever no face draws — all of it when no face is placed
-/// on it — whichever faces come, go or leave the target.
+/// ready face's: a face's camera only draws its face over it, so the target
+/// shows the background wherever no face draws — all of it when no face is placed
+/// on it — whichever faces come, go or leave the target. Its write to the
+/// target replaces what is there, so what a camera ordered below it draws —
+/// a face that is not ready yet ([`drawn`]) — never shows.
 #[derive(Component)]
 struct ClearCamera;
+
+/// The order among the target's cameras of the camera that clears it: a
+/// face's camera ordered below it draws nothing the target shows.
+pub const CLEAR_ORDER: isize = -1;
+
+/// The order of a ready face's camera: above the clear, by slot.
+fn drawing_order(slot: usize) -> isize {
+    slot as isize
+}
+
+/// The order of a face's camera until the face is ready: below the clear,
+/// by slot.
+fn warming_order(slot: usize) -> isize {
+    CLEAR_ORDER - 1 - slot as isize
+}
 
 /// Keep the target's [`ClearCamera`], on the page's background.
 fn clear_target(
@@ -823,7 +863,11 @@ fn clear_target(
             Camera3d::default(),
             Camera {
                 clear_color: wanted,
-                order: -1,
+                order: CLEAR_ORDER,
+                output_mode: CameraOutputMode::Write {
+                    blend_state: Some(BlendState::REPLACE),
+                    clear_color: ClearColorConfig::Default,
+                },
                 ..default()
             },
             match offscreen.as_deref() {
@@ -847,14 +891,16 @@ fn clear_target(
 
 /// Point each face's camera at its placement: the part of its rectangle
 /// inside the target, framed as the whole rectangle ([`placement`]); no
-/// placement, the whole target; nothing to draw, the camera off.
+/// placement, the whole target; nothing to draw, the camera off — except
+/// under the clear, where a face not ready yet draws on the whole target
+/// instead, as it becomes ready by drawing ([`drawn`]).
 fn place_cameras(
     placements: Res<Placements>,
     faces: Query<&Face>,
-    mut cameras: Query<&mut Camera, With<FaceCamera>>,
+    mut cameras: Query<(&mut Camera, Has<drawn::Warming>), With<FaceCamera>>,
 ) {
     for face in &faces {
-        let Ok(mut camera) = cameras.get_mut(face.camera) else {
+        let Ok((mut camera, warming)) = cameras.get_mut(face.camera) else {
             continue;
         };
         let wanted = match placements.0.get(&face.id).copied().flatten() {
@@ -865,7 +911,10 @@ fn place_cameras(
             Some(rect) => camera
                 .physical_target_size()
                 .and_then(|target| placement(rect, target))
-                .map(|(viewport, sub_view)| (Some(viewport), sub_view)),
+                .map(|(viewport, sub_view)| (Some(viewport), sub_view))
+                .or_else(|| {
+                    (warming && camera.physical_target_size().is_some()).then_some((None, None))
+                }),
         };
         let active = wanted.is_some();
         if camera.is_active != active {
@@ -1029,8 +1078,8 @@ fn despawn_face(
     slots.release(face.slot);
 }
 
-/// Once a reloaded face is indexed, the faces it supersedes go: the swap
-/// lands in one frame, the new scene posed before it draws.
+/// Once a reloaded face is ready, the faces it supersedes go: the swap lands
+/// in one frame, the new scene posed, shaded and drawn once already.
 fn retire_superseded(
     faces: Query<(Entity, &Face, Has<Superseded>)>,
     assets: Res<FaceAssets>,
@@ -1038,7 +1087,7 @@ fn retire_superseded(
     mut commands: Commands,
 ) {
     for (_, face, superseded) in &faces {
-        if superseded || !face.bindings.ready {
+        if superseded || !face.ready {
             continue;
         }
         for (old, old_face, old_superseded) in &faces {
@@ -1063,7 +1112,16 @@ fn camera_for(framing: Framing, slot: usize, offscreen: Option<&OffscreenTarget>
         Camera3d::default(),
         Camera {
             clear_color: ClearColorConfig::None,
-            order: slot as isize,
+            // Under the clear until the face is ready ([`drawn`]).
+            order: warming_order(slot),
+            // Over what the target holds, as Bevy writes every camera after
+            // a target's first. Set here so that the output pipeline compiled
+            // while the face draws under the clear, where its camera is the
+            // target's first, is the one it uses once ready.
+            output_mode: CameraOutputMode::Write {
+                blend_state: Some(BlendState::ALPHA_BLENDING),
+                clear_color: ClearColorConfig::Default,
+            },
             ..default()
         },
         // The render target is its own component since Bevy 0.17.
@@ -1217,7 +1275,8 @@ fn visible_extent(bounds: Vec2, fit: Fit, zoom: Vec2, width: f32, height: f32) -
 ///
 /// A face comes into view here, in the frame it is indexed: its scene spawns
 /// after `Update`, so until the next frame's posing and toning it would draw
-/// as the GLB holds it.
+/// as the GLB holds it. Its camera draws it under the clear until it is
+/// ready ([`drawn`]).
 #[allow(clippy::too_many_arguments)]
 fn index_faces(
     mut faces: Query<(Entity, &mut Face)>,
@@ -1233,7 +1292,7 @@ fn index_faces(
     mut commands: Commands,
 ) {
     for (root, mut face) in &mut faces {
-        if face.bindings.ready {
+        if face.bindings.indexed {
             continue;
         }
         // Wait until the scene has spawned under the face's scene root.
@@ -1464,9 +1523,10 @@ fn index_faces(
             reland: false,
             assembled: HashMap::new(),
             surfaces: shaded.into_iter().collect(),
-            ready: true,
+            indexed: true,
         };
         commands.entity(root).insert(Visibility::Inherited);
+        commands.entity(face.camera).insert(drawn::Warming);
     }
 }
 
@@ -1508,7 +1568,7 @@ fn apply_statics(
         return;
     }
     for mut face in &mut faces {
-        if !face.bindings.ready {
+        if !face.bindings.indexed {
             continue;
         }
         let face = &mut *face;
@@ -1586,7 +1646,7 @@ fn contended(by_uuid: &HashMap<Uuid, Bound>) -> HashSet<Uuid> {
 /// the morph weights' upload) is not done again.
 fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneFeatures) {
     for mut face in &mut faces {
-        if !face.bindings.ready {
+        if !face.bindings.indexed {
             continue;
         }
         let face = &mut *face;
@@ -2141,10 +2201,11 @@ mod tests {
                 slot: 0,
                 bindings: Bindings {
                     by_uuid: HashMap::from([(id, bound)]),
-                    ready: true,
+                    indexed: true,
                     ..Default::default()
                 },
                 camera: Entity::PLACEHOLDER,
+                ready: true,
             })
             .id();
         let frame = |world: &mut World| {
