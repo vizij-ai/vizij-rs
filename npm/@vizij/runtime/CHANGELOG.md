@@ -1,5 +1,16 @@
 # Changelog
 
+## 6.2.0
+
+### Minor Changes
+
+- 1eccf06: A face's free input outside the shipped profiles takes its range, as `listKeys` reports it, from: its input node's `params.min` and `params.max`, when both are there and `max` exceeds `min` (both optional); else the `range` the rig declares for it in `metadata.vizij.inputs`, as the authoring app exports for every rig input; else `[0, 1]`. A key a shipped profile declares keeps that profile's range, and types are unchanged. A face's rig inputs that rested outside `[0, 1]` (an eye's scale or translation, say) now report the range their rig declares around their rest.
+- c3b6e21: `onInitProgress(listener)` follows `init()`: the wasm module's download in bytes (against its `Content-Length` when the response is not compressed), its compile, its start and `ready`. The listener is called with the current stage at once, then with each change, the download at most every 50 ms. The bytes are counted on a clone of the fetched response, and the response itself is what compiles as it streams in, so Chrome caches the compiled code for the next load. The README says how a host serves the module for that: a content-hashed URL, an immutable `Cache-Control`, `application/wasm`, and brotli.
+
+### Patch Changes
+
+- 7c2fa20: The wasm module is linked with fat LTO and leaves out Bevy's log plugin and multi-threaded executor, which a page never runs: 24.3 MB (6.9 MB gzip, 4.3 MB brotli), from 26.6 MB (7.5 MB, 4.6 MB).
+
 ## 6.1.1
 
 ### Patch Changes
