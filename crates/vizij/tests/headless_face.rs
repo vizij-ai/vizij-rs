@@ -216,6 +216,69 @@ fn a_studio_exported_face_renders_its_per_axis_pose() {
 /// A RobotData ellipse on a node carrying no mesh draws as its unit circle,
 /// sized by its `width` and `height` and filled by its `fillColor`; its
 /// stroke is not drawn.
+/// A face whose camera frames none of its meshes has nothing to wait for:
+/// it is ready as soon as it is indexed and drawn, its target showing the
+/// background.
+#[test]
+#[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job"]
+fn a_face_framing_none_of_its_meshes_is_ready() {
+    use vizij::view::{FaceView, ViewEvent};
+
+    let glb = studio_face_glb(
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        None,
+    );
+    let meta = vizij::view::meta::FaceMeta::from_glb_bytes(&glb).expect("reads");
+    let (events_tx, events_rx) = std::sync::mpsc::channel();
+    // The framed rectangle lies far above the unit plate, inside the face's
+    // slot.
+    events_tx
+        .send(ViewEvent::SetFaceView {
+            face_id: "away".into(),
+            view: FaceView {
+                bounds: Some((0.0, 400.0, 1.0, 1.0)),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    events_tx
+        .send(ViewEvent::LoadFace {
+            face_id: "away".into(),
+            meta: Box::new(meta),
+            glb,
+            rig: vizij_arora_hal::RigHal::new(),
+        })
+        .unwrap();
+    let mut app = App::new();
+    FaceAssets::register(&mut app);
+    app.add_plugins(SnapshotPlugin {
+        width: WIDTH,
+        height: HEIGHT,
+    })
+    .insert_resource(ViewEvents(std::sync::Mutex::new(events_rx)))
+    .insert_resource(ViewOptions {
+        background: Color::BLACK,
+        fit: view::Fit::Contain,
+        zoom: Vec2::ONE,
+        ambient: std::f32::consts::FRAC_PI_2,
+        unlit: false,
+    })
+    .add_plugins(ViewPlugin);
+    vizij::view::snapshot::ensure_ready(&mut app);
+
+    // Well under the frames after which a face held back is made ready.
+    for _ in 0..60 {
+        app.update();
+        if view::all_faces_ready(&mut app) {
+            return;
+        }
+    }
+    panic!("a face with no mesh in view was not ready within 60 frames");
+}
+
 #[test]
 #[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job"]
 fn an_ellipse_draws_as_its_unit_circle() {
@@ -531,13 +594,16 @@ fn load_unload_cycles_leave_nothing_behind() {
     assert_eq!(last, floor.unwrap(), "the cycles left something behind");
 }
 
-/// A face draws only once it is indexed, so a load or a reload never shows
-/// the GLB as it spawned: unposed and unshaded. A reload's scene spawns
-/// behind the face it replaces and comes into view in the frame that face
-/// retires; every frame in between still draws the old face alone.
+/// A face comes into view only once it is indexed, so a load or a reload
+/// never draws the GLB as it spawned, unposed and unshaded; and it draws on
+/// the target only once it is ready, its camera under the clear until then,
+/// so the target never shows a face whose pipelines are still compiling. A
+/// reload's scene spawns behind the face it replaces and takes the target in
+/// the frame that face retires; every frame in between the target shows the
+/// old face alone.
 #[test]
 #[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job with VIZIJ_FIXTURES set"]
-fn a_face_draws_only_once_indexed() {
+fn a_face_draws_on_its_target_only_once_ready() {
     use vizij::view::{Superseded, ViewEvent};
 
     let Some(fixtures) = std::env::var_os("VIZIJ_FIXTURES").map(PathBuf::from) else {
@@ -582,48 +648,80 @@ fn a_face_draws_only_once_indexed() {
         glb: glb.clone(),
         rig: device.rig.clone(),
     };
-    // Each frame's faces, as the frame drew them: whether it was indexed,
-    // whether it was superseded, whether it was in view.
-    fn drawn(app: &mut App) -> Vec<(bool, bool, bool)> {
-        let mut faces = app
-            .world_mut()
-            .query::<(&Face, Has<Superseded>, &InheritedVisibility)>();
+    /// One face as a frame drew it.
+    #[derive(Debug)]
+    struct Drawn {
+        indexed: bool,
+        ready: bool,
+        superseded: bool,
+        visible: bool,
+        /// Whether its camera draws over the clear: on the target.
+        on_target: bool,
+    }
+    fn drawn(app: &mut App) -> Vec<Drawn> {
+        let world = app.world_mut();
+        let mut faces = world.query::<(&Face, Has<Superseded>, &InheritedVisibility)>();
+        let mut cameras = world.query::<&Camera>();
         faces
-            .iter(app.world())
-            .map(|(face, superseded, visible)| (face.bindings.ready, superseded, visible.get()))
+            .iter(world)
+            .map(|(face, superseded, visible)| Drawn {
+                indexed: face.bindings.indexed,
+                ready: face.ready,
+                superseded,
+                visible: visible.get(),
+                on_target: cameras.get(world, face.camera).unwrap().order > view::CLEAR_ORDER,
+            })
             .collect()
     }
-    // Frames until one face is left and it is indexed, checking each frame
-    // that only an indexed face was in view, and the old face alone while
-    // its successor was not indexed.
+    // Frames until one face is left and it is ready, checking each frame
+    // that only an indexed face was in view, only a ready one on the
+    // target, and the old face alone on it while its successor was not
+    // ready. The frames it took: until the new face was indexed, and until
+    // it was ready.
     let frames_until_swapped = |app: &mut App, what: &str| {
+        let mut indexed = None;
         for frame in 0..600 {
             app.update();
             let faces = drawn(app);
-            for &(ready, superseded, visible) in &faces {
+            if indexed.is_none() && faces.iter().any(|face| face.indexed && !face.ready) {
+                indexed = Some(frame);
+            }
+            for face in &faces {
                 assert!(
-                    ready || !visible,
+                    face.indexed || !face.visible,
                     "{what}, frame {frame}: a face was drawn before it was indexed ({faces:?})"
                 );
-                if superseded {
+                assert_eq!(
+                    face.on_target, face.ready,
+                    "{what}, frame {frame}: a face was on the target unless ready ({faces:?})"
+                );
+                if face.superseded {
                     assert!(
-                        visible,
-                        "{what}, frame {frame}: the face being replaced left view"
+                        face.visible && face.on_target,
+                        "{what}, frame {frame}: the face being replaced left the target"
                     );
                 }
             }
-            if let [(true, false, true)] = faces[..] {
-                return;
+            if let [Drawn {
+                ready: true,
+                superseded: false,
+                visible: true,
+                ..
+            }] = faces[..]
+            {
+                return (indexed.unwrap_or(frame), frame);
             }
         }
         panic!("{what}: the face never came into view alone");
     };
 
     events_tx.send(load()).unwrap();
-    frames_until_swapped(&mut app, "the load");
+    let (indexed, ready) = frames_until_swapped(&mut app, "the load");
+    eprintln!("the load: indexed after {indexed} frames, ready after {ready}");
     for reload in 0..3 {
         events_tx.send(load()).unwrap();
-        frames_until_swapped(&mut app, &format!("reload {reload}"));
+        let (indexed, ready) = frames_until_swapped(&mut app, &format!("reload {reload}"));
+        eprintln!("reload {reload}: indexed after {indexed} frames, ready after {ready}");
     }
 }
 

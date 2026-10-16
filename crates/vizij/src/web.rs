@@ -61,7 +61,7 @@ thread_local! {
     static PAGE: RefCell<Option<Page>> = const { RefCell::new(None) };
 }
 
-/// What the App reports back each frame: the Vizijs whose scene is indexed,
+/// What the App reports back each frame: the Vizijs that are ready,
 /// the picks since the page last drained them, and where each Vizij's safe
 /// area lies (CSS pixels, `[x, y, width, height]` from the canvas's corner).
 static READY: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -80,7 +80,7 @@ fn report(
         ready.extend(
             faces
                 .iter()
-                .filter(|face| face.bindings.ready)
+                .filter(|face| face.ready)
                 .map(|face| face.id.clone()),
         );
     }
@@ -187,7 +187,7 @@ fn send(event: ViewEvent) -> Result<(), JsValue> {
 /// `ExternalFunction` nodes. The module set is fixed at build. A Vizij
 /// already shown under `vizij_id` is replaced — how an authoring page
 /// reloads a structurally edited Vizij from its exported bytes: the previous
-/// scene keeps drawing until the new one is indexed, then [`ready`] holds
+/// scene keeps drawing until the new one is ready, then [`ready`] holds
 /// again; its placement, selection and holds carry over, and the page frees
 /// the previous device. The device comes back JS-owned: step it, or `run`
 /// it, and `free` it after [`unload_vizij`].
@@ -366,8 +366,14 @@ pub fn safe_area(vizij_id: String) -> Result<JsValue, JsValue> {
     }
 }
 
-/// Whether the Vizij's scene has spawned and its bindings are joined — from
-/// then on its device's pose shows. False while a reload's new scene loads.
+/// Whether the Vizij is drawn: its scene has spawned, its bindings are
+/// joined, and the GPU has finished a frame drawing every mesh visible when
+/// it was drawn, each with its pipeline compiled — or, should something keep
+/// that from happening, 600 frames (ten seconds at 60 Hz) have gone by and
+/// the console says what held it back. From then on it draws in its place,
+/// its device's pose showing. False while a reload's new scene loads,
+/// compiles and draws for the first time; the previous scene draws
+/// meanwhile.
 #[wasm_bindgen]
 pub fn ready(vizij_id: String) -> bool {
     READY

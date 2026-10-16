@@ -144,6 +144,7 @@ mod tests {
             slot: 0,
             bindings: Bindings::default(),
             camera: Entity::PLACEHOLDER,
+            ready: false,
         });
 
         // 2.5 s of frames at 100 Hz on the app's clock, stepped by hand so

@@ -34,6 +34,21 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- **Breaking — the next release is 1.0.0.** A face is ready —
+  `Face::ready`, a new field, `view::all_faces_ready` (what the snapshot
+  harness waits for) and the browser module's `ready` — once the GPU has
+  finished a frame drawing every mesh visible when it was drawn, each with
+  its pipeline compiled, rather than once its scene is indexed; that is
+  `Bindings::indexed`, which was `Bindings::ready`. Until then its camera
+  draws it under the clear, so the target shows the previous face or the
+  background, never a face with meshes missing; a reload's previous face
+  draws until the new one is ready. Under a software GPU, where a face's
+  first draw compiles its pipelines for seconds, a page no longer stalls
+  right after `ready`: from it, the page draws on. Should something keep a
+  face from being drawn — a material that never loads, a mesh whose
+  pipeline cannot be specialized, a camera that draws no frame — a warning
+  names it after 120 frames, and after 600 (ten seconds at 60 Hz) the face
+  is ready as it draws.
 - The view lands only the pose values that changed since the last frame,
   read from the rig in place: an unchanged transform, morph weight or
   surface is not marked changed, so it is not propagated or uploaded

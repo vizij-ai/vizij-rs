@@ -39,7 +39,7 @@ pub(super) fn on_press(
     let position = press.pointer_location.position;
     let mut under: Vec<(&Face, &Camera, &GlobalTransform)> = faces
         .iter()
-        .filter(|face| face.bindings.ready)
+        .filter(|face| face.ready)
         .filter_map(|face| {
             let (camera, transform) = cameras.get(face.camera).ok()?;
             camera

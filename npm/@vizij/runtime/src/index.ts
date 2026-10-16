@@ -1033,8 +1033,14 @@ export function safeArea(vizijId: string): Rect | null {
   return bindings().safeArea(vizijId);
 }
 
-/** Whether the Vizij's scene has spawned and its bindings are joined — from
- * then on its device's pose shows. False while a reload's new scene loads. */
+/** Whether the Vizij is drawn: its scene has spawned, its bindings are
+ * joined, and the GPU has finished a frame drawing every mesh visible when
+ * it was drawn, each with its pipeline compiled — or, should something keep
+ * that from happening, 600 frames (ten seconds at 60 Hz) have gone by and
+ * the console says what held it back. From then on it draws in its place,
+ * its device's pose showing. False while a reload's new scene loads,
+ * compiles and draws for the first time; the previous scene draws
+ * meanwhile. */
 export function ready(vizijId: string): boolean {
   return bindings().ready(vizijId);
 }

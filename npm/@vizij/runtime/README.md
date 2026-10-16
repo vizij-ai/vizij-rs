@@ -27,7 +27,7 @@ await mount("#vizijs"); // the canvas; transparent wherever no Vizij draws
 const glb = new Uint8Array(await (await fetch("/faces/Quori_Current_Extended.glb")).arrayBuffer());
 const quori = await loadVizij("quori", glb); // composes its graphs, starts its device
 placeVizijIn("quori", document.getElementById("quori-slot")!, canvas); // where it draws
-await whenReady("quori"); // its scene is indexed; the pose shows from here on
+await whenReady("quori"); // drawn on the GPU; the pose shows from here on
 quori.run(); // the device paces itself (or call quori.step(dtMs) per frame)
 
 // any time — the device's store stays live while it runs:
