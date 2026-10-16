@@ -19,6 +19,7 @@ members = [
   "crates/tools/vizij-bundle",
   "crates/tools/vizij-glb-migrate",
   "crates/vizij",
+  "crates/vizij-wasm",
 ]
 resolver = "2"
 

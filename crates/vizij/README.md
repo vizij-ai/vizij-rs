@@ -67,10 +67,13 @@ speech provider to any native build. Without `desktop`, `cargo check --lib
 --no-default-features` gives the library the browser (`--target
 wasm32-unknown-unknown`) and Android (`cargo ndk … --features studio`)
 entry points build on; CI checks both. The browser bundle is `wasm-pack
-build crates/vizij --target web --release -- --no-default-features`
-(`pnpm run build:wasm:runtime` at the repository root), one WebGL2 bundle
-of about 25 MB (7 MB gzipped); CI renders Quori and Toasty on a page with
-it and holds them to the same references as the native snapshot.
+build crates/vizij-wasm --target web --release` (`pnpm run
+build:wasm:runtime` at the repository root): `vizij-wasm` links this crate's
+`web` module as a cdylib of its own, so the release profile's fat LTO
+applies, which it does not to this crate's `rlib` + `cdylib` library. One
+WebGL2 bundle of 24.3 MB (6.9 MB gzip, 4.3 MB brotli); CI renders Quori and
+Toasty on a page with it and holds them to the same references as the
+native snapshot.
 
 A face enters as GLB bytes on every target: `view::meta::FaceMeta` reads the
 bindings and the bundle from them, `face::load_face` composes them, and

@@ -1,0 +1,22 @@
+[package]
+name = "vizij-wasm"
+version = "0.1.0"
+edition = { workspace = true }
+publish = false
+description = "Vizij's browser module: the `vizij` crate's `web` half linked as a wasm-bindgen cdylib of its own, so the release profile's fat LTO applies to it."
+
+# A cdylib only: cargo applies the profile's LTO to a cdylib, and not to a
+# lib that is also an rlib (`vizij`'s own crate type, which its binary and
+# the Android activity need). Built by `wasm-pack build crates/vizij-wasm
+# --target web --release` (`scripts/build-runtime-wasm.mjs`); wasm-opt
+# shrinks it for size and strips the debug names, the larger of the two
+# wins.
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Os", "--strip-debug"]
+
+# The browser half of the view and the device, without the desktop app.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+vizij = { path = "../vizij", default-features = false }

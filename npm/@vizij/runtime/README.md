@@ -12,8 +12,8 @@ and the Vizij's composed graphs, with the animation module and the skills
 linked in, exposed through
 [`arora-web`](https://crates.io/crates/arora-web)'s surface. The view draws
 each Vizij into the rectangle of the canvas the page places it in, reading
-its device's pose every frame. The module is one artifact, 26.6 MB (7.5 MB
-gzip, 4.6 MB brotli): a page that only runs a device or reads the
+its device's pose every frame. The module is one artifact, 24.3 MB (6.9
+MB gzip, 4.3 MB brotli): a page that only runs a device or reads the
 registries fetches the view with it.
 
 ## Use
@@ -320,14 +320,15 @@ deserializes it instead of compiling it again. What a host does to get both:
   refuses to compile while streaming; the module still loads, from the
   whole response once it has arrived.
 - **Precompressed brotli (`.br`)**, served with `Content-Encoding: br`: the
-  module is 26.6 MB raw, 7.5 MB gzip at level 9 and 4.6 MB brotli at level
+  module is 24.3 MB raw, 6.9 MB gzip at level 9 and 4.3 MB brotli at level
   11. A server compressing on the fly uses a much lower level than these.
 
 ## Build
 
 The `pkg/` wasm artifacts are produced by `wasm-pack` from the repository root
-(one WebGL2 bundle of the `vizij` crate without its desktop half; a cold
-build takes many minutes, Bevy is most of it):
+(one WebGL2 bundle of the `vizij` crate without its desktop half, linked by
+the `vizij-wasm` crate with fat LTO; a cold build takes many minutes, Bevy and
+the LTO link are most of it):
 
 ```sh
 pnpm run build:wasm:runtime     # wasm-pack build -> npm/@vizij/runtime/pkg

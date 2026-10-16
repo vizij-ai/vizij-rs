@@ -10647,6 +10647,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "vizij-wasm"
+version = "0.1.0"
+dependencies = [
+ "vizij",
+]
+
+[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
