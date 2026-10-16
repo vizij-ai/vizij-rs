@@ -28,8 +28,9 @@ assets = [
 auto-req = "auto"
 
 # The library is the view + face + modules every entry point composes: the desktop
-# binary below, the browser module (a wasm-bindgen cdylib) and the Android
-# activity (a cdylib the activity loads).
+# binary below, the browser module (`crates/vizij-wasm`, the wasm-bindgen
+# cdylib linking this crate's `web` module) and the Android activity (a cdylib
+# the activity loads).
 [lib]
 crate-type = ["rlib", "cdylib"]
 
@@ -37,12 +38,6 @@ crate-type = ["rlib", "cdylib"]
 [[bin]]
 name = "vizij"
 required-features = ["desktop"]
-
-# The browser bundle: `wasm-pack build crates/vizij --target web --release --
-# --no-default-features` (`scripts/build-runtime-wasm.mjs`). wasm-opt shrinks
-# it for size and strips the debug names, the larger of the two wins.
-[package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-Os", "--strip-debug"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -65,16 +60,14 @@ uuid = { version = "1", features = ["serde"] }
 # 0.19 batches morph-target rendering, the faces' main workload), scene
 # spawning, winit windowing, picking (the pointer events, and the mesh ray
 # cast a pick runs over morphed positions), line gizmos (the selection glow:
-# wireframes are unavailable on WebGL2), WebGL2 as the browser backend, and
-# the log plugin the apps disable in favor of `log`. The face GLBs embed
-# no textures, so no image codec. The per-platform windowing backends are in
-# the target tables below.
+# wireframes are unavailable on WebGL2) and WebGL2 as the browser backend.
+# The face GLBs embed no textures, so no image codec. The per-platform
+# windowing backends, and what only the native builds carry, are in the
+# target tables below.
 bevy = { version = "0.19", default-features = false, features = [
     "bevy_asset",
-    "bevy_log",
     "async_executor",
     "std",
-    "multi_threaded",
     "bevy_render",
     "bevy_core_pipeline",
     "bevy_pbr",
@@ -170,6 +163,9 @@ vizij-animation-module = { path = "../interop/vizij-animation-module" }
 vizij-arora-tts = { version = "7", path = "../interop/vizij-arora-tts" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# The native engine's own: the multi-threaded schedule executor and task
+# pools (the browser has one thread), and the log plugin the apps disable.
+bevy = { version = "0.19", default-features = false, features = ["bevy_log", "multi_threaded"] }
 # The native driver (`native`): the stand-alone device on a worker thread under
 # arora's operator flow — `native` is the run loop, the local WS bridge and
 # the module executors — with the bridges the build adds. 11.0.1 is where its

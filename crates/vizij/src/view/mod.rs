@@ -34,6 +34,7 @@ mod glow;
 pub mod hold;
 pub mod meta;
 mod pick;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod snapshot;
 pub mod tone;
 

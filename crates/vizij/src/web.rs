@@ -142,10 +142,7 @@ pub fn mount(canvas: String, options_json: Option<String>) -> Result<(), JsValue
             .set(bevy::asset::AssetPlugin {
                 meta_check: bevy::asset::AssetMetaCheck::Never,
                 ..default()
-            })
-            // `log` carries Bevy's own events to the console (`tracing`'s
-            // `log` feature); the page owns the sink.
-            .disable::<bevy::log::LogPlugin>(),
+            }),
     )
     // Wherever no Vizij's rectangle draws, the canvas shows the page.
     .insert_resource(ClearColor(Color::NONE))
