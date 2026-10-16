@@ -29,7 +29,15 @@
   canvas.addEventListener("webglcontextlost", () => contextEvents.push("lost"));
   canvas.addEventListener("webglcontextrestored", () => contextEvents.push("restored"));
 
-  await vizij.init();
+  // Every stage init reports, with when it was reported and how many
+  // animation frames a test's init script had counted by then
+  // (`window.frameCount`); `?wasm=<url>` loads the module from that URL
+  // instead of the package's own.
+  const progress = [];
+  vizij.onInitProgress((p) =>
+    progress.push({ ...p, at: performance.now(), frame: window.frameCount ?? null }),
+  );
+  await vizij.init(params.get("wasm") ?? undefined);
   await vizij.mount("#faces", { background });
 
   // The page owns every device and steps it on the device clock: by default
@@ -94,6 +102,13 @@
     });
 
   window.vizijHarness = {
+    progress: () => progress,
+    // What a listener subscribing now is called with at once.
+    progressNow: () => {
+      const seen = [];
+      vizij.onInitProgress((p) => seen.push(p))();
+      return seen;
+    },
     memory: () => vizij.memoryBytes(),
     // Loading under an id already shown is a reload: the new device takes
     // over and the previous one is disposed.

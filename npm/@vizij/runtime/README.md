@@ -12,9 +12,9 @@ and the Vizij's composed graphs, with the animation module and the skills
 linked in, exposed through
 [`arora-web`](https://crates.io/crates/arora-web)'s surface. The view draws
 each Vizij into the rectangle of the canvas the page places it in, reading
-its device's pose every frame. The module is one artifact, 25 MB (7 MB
-gzipped): a page that only runs a device or reads the registries fetches the
-view with it.
+its device's pose every frame. The module is one artifact, 26.6 MB (7.5 MB
+gzip, 4.6 MB brotli): a page that only runs a device or reads the
+registries fetches the view with it.
 
 ## Use
 
@@ -275,6 +275,53 @@ returns the mapping's node-graph with its written control paths prefixed for
 the target face, ready to compose into a graph spec or embed into a GLB via the
 bundle tool. `standardProfiles()` / `standardProfile()` remain as deprecated
 aliases of `mappings()` / `mapping()`.
+
+## Loading
+
+`init()` fetches and compiles the wasm module; `onInitProgress` follows it,
+for a page that shows its own loading state:
+
+```ts
+import { init, onInitProgress } from "@vizij/runtime";
+
+const stop = onInitProgress((p) => {
+  if (p.stage === "download") bar.value = p.total ? p.loaded / p.total : NaN; // NaN: indeterminate
+  else label.textContent = p.stage; // "compile", "start", "ready"
+});
+await init();
+stop();
+```
+
+The listener is called with the current stage at once, then with each
+change: `download` with the bytes received (`total` is the response's
+`Content-Length`, `null` when it is unknown or counts compressed bytes), at
+most every 50 ms and once more with the final count; `compile` once the
+last byte is in, while the module compiles and instantiates; `start` once
+it is instantiated and its own start has run; `ready` once `init()` has
+resolved. On a visible page each of the last three stays for one painted
+frame, which is what that costs `init()`. Building the page's App is
+`mount()`'s work and showing a Vizij is `loadVizij()`'s, both after `ready`
+— and so is most of the compile: V8 compiles a function the first time it
+is called. A module passed to `init` as bytes or as a compiled
+`WebAssembly.Module` has no download.
+
+The module compiles while it downloads (`WebAssembly.instantiateStreaming`
+on the fetched response), and Chrome keeps the compiled code with the HTTP
+cache entry of the module's URL: the next load of an unchanged module
+deserializes it instead of compiling it again. What a host does to get both:
+
+- **A content-hashed URL.** Bundlers emit one for
+  `new URL("…/vizij_bg.wasm", import.meta.url)`, which is how the package
+  finds its module: a new version is a new URL, and the old one never
+  changes under its cache entry.
+- **`Cache-Control: public, max-age=31536000, immutable`** on that URL, so
+  the response comes from the HTTP cache, which holds the compiled code.
+- **`Content-Type: application/wasm`.** Under another type the browser
+  refuses to compile while streaming; the module still loads, from the
+  whole response once it has arrived.
+- **Precompressed brotli (`.br`)**, served with `Content-Encoding: br`: the
+  module is 26.6 MB raw, 7.5 MB gzip at level 9 and 4.6 MB brotli at level
+  11. A server compressing on the fly uses a much lower level than these.
 
 ## Build
 
