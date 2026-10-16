@@ -37,7 +37,7 @@ pub enum PlayerCommand {
     /// paused, and a playing one at speed 0 holds its time while it reads as playing.
     SetSpeed { player: PlayerId, speed: f32 },
     /// Set the player's internal time in seconds. A stopped player is left paused there.
-    Seek { player: PlayerId, time: f32 },
+    Seek { player: PlayerId, time: f64 },
     /// Change how player time maps into clip-local time.
     SetLoopMode { player: PlayerId, mode: LoopMode },
     /// Set the play window, in seconds of player time: [`LoopMode::Once`] clamps the playhead
@@ -47,8 +47,8 @@ pub enum PlayerCommand {
     /// window moves to its nearest bound.
     SetWindow {
         player: PlayerId,
-        start_time: f32,
-        end_time: Option<f32>,
+        start_time: f64,
+        end_time: Option<f64>,
     },
     /// Start playback `delay` seconds after the start of the update that applies the command,
     /// holding the playhead until then: that update, or a later one, advances the player only by
@@ -56,7 +56,7 @@ pub enum PlayerCommand {
     /// then advances it by the extra time. The player keeps its state until the start, then
     /// plays at its speed, as [`PlayerCommand::Play`] leaves it; a later `Play`, `Pause` or
     /// `Stop` cancels the wait.
-    PlayAfter { player: PlayerId, delay: f32 },
+    PlayAfter { player: PlayerId, delay: f64 },
 }
 
 /// Loop policy used when mapping player time into clip-local time.
@@ -87,7 +87,7 @@ pub struct InstanceUpdate {
     pub time_scale: Option<f32>,
     /// Replacement start offset in seconds.
     #[serde(default)]
-    pub start_offset: Option<f32>,
+    pub start_offset: Option<f64>,
     /// Replacement enabled state.
     #[serde(default)]
     pub enabled: Option<bool>,

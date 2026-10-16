@@ -20,6 +20,15 @@ All notable changes to `vizij-animation-wasm`. The format follows
 - Built on `vizij-animation-core` 5: the changes of an update come in a
   stable order, per player and then in the order its instances first write
   each key.
+- Built on `vizij-animation-core` 5: a player's time is kept in `f64`
+  seconds, where it was `f32`. `update*` take `dt` as `f64`, and the times
+  of the inputs, a bake's `frame_rate` and window, and the times
+  `list_players` reports keep full `f64` precision; their JSON shapes are
+  unchanged. Stepped at 100 Hz for an hour, a player stays within one `f64`
+  rounding of the sum of its updates' `dt`, a step samples exactly the frame
+  a bake takes at the same clip time, and a bake whose window is a whole
+  number of frames takes that number plus one (150 ms at 100 Hz: 16 frames,
+  where it took 17).
 
 ## [3.0.0] - 2026-10-06
 

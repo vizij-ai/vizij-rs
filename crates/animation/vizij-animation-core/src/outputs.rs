@@ -57,19 +57,19 @@ pub enum CoreEvent {
     },
     PlaybackEnded {
         player: PlayerId,
-        animation_time: f32,
+        animation_time: f64,
     },
     TimeChanged {
         player: PlayerId,
-        old_time: f32,
-        new_time: f32,
+        old_time: f64,
+        new_time: f64,
     },
     KeypointReached {
         player: PlayerId,
         track_path: String,
         key_index: usize,
         value: Value,
-        animation_time: f32,
+        animation_time: f64,
     },
     PerformanceWarning {
         metric: String,

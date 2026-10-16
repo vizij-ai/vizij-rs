@@ -678,7 +678,7 @@ fn baking_matches_sampling_and_counts() {
     .expect("a bake within the bound");
     assert_eq!(baked.frame_rate, 60.0);
     assert_eq!(baked.start_time, 0.0);
-    approx(baked.end_time, 1.0, 1e-6);
+    assert_eq!(baked.end_time, 1.0);
     let expected_samples =
         (cfg.frame_rate * (cfg.end_time.unwrap() - cfg.start_time)).ceil() as usize + 1;
     assert_eq!(baked.tracks.len(), 1);
@@ -745,21 +745,21 @@ fn baking_refuses_more_samples_than_the_bound() {
         .map(|i| mk_scalar_track_linear(&format!("node.{i}"), &[(0.0, 0.0), (1.0, 1.0)]))
         .collect();
     let anim = mk_anim("clip", 1.0, tracks);
-    let bake = |frame_rate: f32| {
+    let bake = |frame_rate: f64| {
         let cfg = BakingConfig {
             frame_rate,
             ..Default::default()
         };
         vizij_animation_core::baking::bake_animation_data(AnimId(0), &anim, &cfg)
     };
-    for rate in [1e9, f32::MAX] {
+    for rate in [1e9, f64::MAX] {
         assert!(
             matches!(bake(rate), Err(BakeError::TooManySamples { .. })),
             "{rate} Hz"
         );
     }
     // 4 tracks over 1 s: (rate + 1) frames each.
-    let at_bound = (MAX_BAKE_SAMPLES / 4 - 1) as f32;
+    let at_bound = (MAX_BAKE_SAMPLES / 4 - 1) as f64;
     assert_eq!(
         bake(at_bound).expect("at the bound").tracks[0].values.len(),
         MAX_BAKE_SAMPLES / 4
@@ -775,7 +775,7 @@ fn baking_refuses_more_samples_than_the_bound() {
         "derivatives double the samples"
     );
     let half = BakingConfig {
-        frame_rate: (MAX_BAKE_SAMPLES / 8 - 1) as f32,
+        frame_rate: (MAX_BAKE_SAMPLES / 8 - 1) as f64,
         ..Default::default()
     };
     let (values, derivatives) =
@@ -803,7 +803,7 @@ fn baking_refuses_more_samples_than_the_bound() {
     // No tracks: nothing to sample at any rate.
     let empty = mk_anim("empty", 1.0, Vec::new());
     let huge = BakingConfig {
-        frame_rate: f32::MAX,
+        frame_rate: f64::MAX,
         ..Default::default()
     };
     let baked = vizij_animation_core::baking::bake_animation_data(AnimId(0), &empty, &huge)
@@ -813,8 +813,8 @@ fn baking_refuses_more_samples_than_the_bound() {
     // Out-of-range windows clamp into the clip; a rate that is not positive
     // and finite is 60 Hz.
     for (start_time, end_time, frame_rate) in [
-        (f32::NAN, Some(f32::NAN), f32::NAN),
-        (-1.0, Some(f32::INFINITY), -5.0),
+        (f64::NAN, Some(f64::NAN), f64::NAN),
+        (-1.0, Some(f64::INFINITY), -5.0),
         (0.5, Some(0.25), 0.0),
     ] {
         let cfg = BakingConfig {

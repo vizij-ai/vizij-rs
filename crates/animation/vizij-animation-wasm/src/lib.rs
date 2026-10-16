@@ -90,11 +90,11 @@ impl TargetResolver for JsResolver {
 #[derive(Default, Deserialize)]
 struct BakingConfigOptions {
     #[serde(default)]
-    frame_rate: Option<f32>,
+    frame_rate: Option<f64>,
     #[serde(default)]
-    start_time: Option<f32>,
+    start_time: Option<f64>,
     #[serde(default)]
-    end_time: Option<Option<f32>>,
+    end_time: Option<Option<f64>>,
     #[serde(default)]
     derivative_epsilon: Option<f32>,
 }
@@ -249,7 +249,7 @@ impl VizijAnimation {
 
     /// Step the simulation by `dt` seconds with inputs JSON and return `Outputs` JSON.
     #[wasm_bindgen(js_name = update_values)]
-    pub fn update_values(&mut self, dt: f32, inputs_json: JsValue) -> Result<JsValue, JsError> {
+    pub fn update_values(&mut self, dt: f64, inputs_json: JsValue) -> Result<JsValue, JsError> {
         let inputs = parse_inputs_js(inputs_json)?;
         let out: &Outputs = self.core.update_values(dt, inputs);
         swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
@@ -259,7 +259,7 @@ impl VizijAnimation {
     #[wasm_bindgen(js_name = update_values_and_derivatives)]
     pub fn update_values_and_derivatives(
         &mut self,
-        dt: f32,
+        dt: f64,
         inputs_json: JsValue,
     ) -> Result<JsValue, JsError> {
         let inputs = parse_inputs_js(inputs_json)?;
@@ -269,7 +269,7 @@ impl VizijAnimation {
 
     /// Backwards-compatible alias for `update_values`.
     #[wasm_bindgen]
-    pub fn update(&mut self, dt: f32, inputs_json: JsValue) -> Result<JsValue, JsError> {
+    pub fn update(&mut self, dt: f64, inputs_json: JsValue) -> Result<JsValue, JsError> {
         self.update_values(dt, inputs_json)
     }
 
@@ -299,7 +299,7 @@ impl VizijAnimation {
     #[wasm_bindgen(js_name = update_nodes_writes)]
     pub fn update_nodes_writes(
         &mut self,
-        dt: f32,
+        dt: f64,
         inputs_json: JsValue,
     ) -> Result<JsValue, JsError> {
         let inputs: Inputs = if jsvalue_is_undefined_or_null(&inputs_json) {

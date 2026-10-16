@@ -6,6 +6,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::data::AnimationData;
+use crate::engine::{clip_seconds, normalized_time};
 use crate::ids::AnimId;
 use crate::sampling::{
     sample_track, sample_track_with_derivative_epsilon, DEFAULT_DERIVATIVE_EPSILON,
@@ -29,15 +30,15 @@ pub struct BakingConfig {
     /// Target frame rate (Hz) for baked samples.
     ///
     /// Non-finite or non-positive values fall back to `60.0`, then clamp to at least `1.0`.
-    pub frame_rate: f32,
+    pub frame_rate: f64,
     /// Start time (seconds) in clip space.
     ///
     /// Clamps into `[0, duration]`; NaN is `0.0`.
-    pub start_time: f32,
+    pub start_time: f64,
     /// End time (seconds) in clip space; if `None`, uses the animation duration in seconds.
     ///
     /// Non-finite values fall back to the clip duration, then clamp into `[start_time, duration]`.
-    pub end_time: Option<f32>,
+    pub end_time: Option<f64>,
     /// Optional override for the finite-difference epsilon used when estimating derivatives.
     ///
     /// Non-finite or non-positive values fall back to the default epsilon.
@@ -108,11 +109,11 @@ pub struct BakedAnimationData {
     /// Source animation id.
     pub anim: AnimId,
     /// Effective frame rate used during baking.
-    pub frame_rate: f32,
+    pub frame_rate: f64,
     /// Clip-space start time in seconds.
-    pub start_time: f32,
+    pub start_time: f64,
     /// Clip-space end time in seconds.
-    pub end_time: f32,
+    pub end_time: f64,
     /// Per-track sampled values.
     pub tracks: Vec<BakedTrack>,
 }
@@ -123,21 +124,21 @@ pub struct BakedDerivativeAnimationData {
     /// Source animation id.
     pub anim: AnimId,
     /// Effective frame rate used during baking.
-    pub frame_rate: f32,
+    pub frame_rate: f64,
     /// Clip-space start time in seconds.
-    pub start_time: f32,
+    pub start_time: f64,
     /// Clip-space end time in seconds.
-    pub end_time: f32,
+    pub end_time: f64,
     /// Per-track sampled derivatives.
     pub tracks: Vec<BakedDerivativeTrack>,
 }
 
 /// A bake's effective rate and window, and the frames it samples.
 struct Window {
-    rate: f32,
-    start: f32,
-    end: f32,
-    duration: f32,
+    rate: f64,
+    start: f64,
+    end: f64,
+    duration: f64,
     frames: usize,
 }
 
@@ -152,18 +153,29 @@ impl Window {
         };
         let rate = rate.max(1.0);
         // Canonical duration (ms) in seconds, the baking time domain.
-        let duration = data.duration_ms as f32 / 1000.0;
+        let duration = clip_seconds(data.duration_ms);
         let start = cfg.start_time.max(0.0).min(duration);
         let end = cfg
             .end_time
             .filter(|end| end.is_finite())
             .unwrap_or(duration)
             .clamp(start, duration);
-        // Inclusive of the end. The span is multiplied in f32, where an
-        // inexact duration (0.1 s) times a rate rounds onto the integer it
-        // means; a rate that overflows it is infinite and refused.
-        let frames = f64::from(((end - start) * rate).ceil()) + 1.0;
-        let frames = if data.tracks.is_empty() { 0.0 } else { frames };
+        // Frames up to the first at or past the end, by the times the frames
+        // are sampled at: the span times the rate estimates the last one,
+        // a hair off when the span is an inexact decimal (0.07 s at 100 Hz
+        // is 7.000000000000001 frames), and the frame times settle it.
+        let at = |frame: f64| start + frame / rate;
+        let mut last = ((end - start) * rate).ceil();
+        if last >= 1.0 && at(last - 1.0) >= end {
+            last -= 1.0;
+        } else if at(last) < end {
+            last += 1.0;
+        }
+        let frames = if data.tracks.is_empty() {
+            0.0
+        } else {
+            last + 1.0
+        };
         let samples = frames * (data.tracks.len() * per_frame) as f64;
         if samples.is_nan() || samples > MAX_BAKE_SAMPLES as f64 {
             return Err(BakeError::TooManySamples { samples });
@@ -177,14 +189,10 @@ impl Window {
         })
     }
 
-    /// The normalized clip time of frame `f`.
+    /// The normalized clip time of frame `f`, sampled as a player's step at
+    /// that clip time is.
     fn u(&self, f: usize) -> f32 {
-        let t = self.start + (f as f32) / self.rate;
-        if self.duration > 0.0 {
-            (t / self.duration).clamp(0.0, 1.0)
-        } else {
-            0.0
-        }
+        normalized_time(self.start + f as f64 / self.rate, self.duration)
     }
 }
 
@@ -254,7 +262,7 @@ pub fn bake_animation_data_with_derivatives(
             let (v, deriv) = sample_track_with_derivative_epsilon(
                 track,
                 window.u(f),
-                window.duration,
+                window.duration as f32,
                 derivative_epsilon,
             );
             values.push(v.into());

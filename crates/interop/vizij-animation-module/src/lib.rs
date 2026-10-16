@@ -565,7 +565,7 @@ impl AnimationModule {
     /// the echoed instance id.
     pub fn set_start_offset(&mut self, player: u32, instance: u32, offset_ns: i64) -> u32 {
         self.update_instance(InstanceUpdate {
-            start_offset: Some((offset_ns as f64 / 1e9) as f32),
+            start_offset: Some(offset_ns as f64 / 1e9),
             ..instance_update(player, instance)
         })
     }
@@ -654,8 +654,7 @@ impl AnimationModule {
                         instance: instance.id,
                         anim: instance.animation,
                         weight: instance.cfg.weight,
-                        start_offset_ns: (f64::from(instance.cfg.start_offset) * 1e9).round()
-                            as i64,
+                        start_offset_ns: (instance.cfg.start_offset * 1e9).round() as i64,
                         time_scale: instance.cfg.time_scale,
                     })
                     .collect(),
@@ -805,13 +804,13 @@ impl AnimationModule {
     /// The engine update a step of `dt_ns` ending at `time_ns` makes: its
     /// `dt` in seconds and the buffered transport, each `play_at` delay
     /// counted from the step's start.
-    fn step_inputs(&mut self, dt_ns: u64, time_ns: Option<u64>) -> (f32, Inputs) {
+    fn step_inputs(&mut self, dt_ns: u64, time_ns: Option<u64>) -> (f64, Inputs) {
         let now = time_ns.unwrap_or(self.clock_ns.saturating_add(dt_ns));
         let start = i128::from(now) - i128::from(dt_ns);
         let mut inputs = std::mem::take(&mut self.pending);
         for (index, at) in self.anchors.drain(..) {
             if let PlayerCommand::PlayAfter { delay, .. } = &mut inputs.player_cmds[index] {
-                *delay = ((i128::from(at) - start) as f64 / 1e9) as f32;
+                *delay = (i128::from(at) - start) as f64 / 1e9;
             }
         }
         self.clock_ns = now;
@@ -1088,7 +1087,7 @@ fn baking_config(
 ) -> BakingConfig {
     let defaults = BakingConfig::default();
     BakingConfig {
-        frame_rate: frame_rate.unwrap_or(defaults.frame_rate),
+        frame_rate: frame_rate.map_or(defaults.frame_rate, f64::from),
         start_time: start_ns.map_or(defaults.start_time, ns_to_seconds),
         end_time: end_ns.map(ns_to_seconds).or(defaults.end_time),
         derivative_epsilon: defaults.derivative_epsilon,
@@ -1137,7 +1136,9 @@ fn baked_animation(
 ) -> BakedAnimation {
     let mut derivatives = derivatives.map(|d| d.tracks.into_iter());
     BakedAnimation {
-        frame_rate: baked.frame_rate,
+        // The rate the bake was given, an `f32` widened: it narrows back
+        // exactly.
+        frame_rate: baked.frame_rate as f32,
         start_ns,
         end_ns,
         tracks: baked
@@ -1168,12 +1169,12 @@ fn valid_weight(weight: f32) -> bool {
     weight.is_finite() && weight >= 0.0
 }
 
-fn seconds_to_ns(seconds: f32) -> u64 {
-    (seconds.max(0.0) as f64 * 1e9).round() as u64
+fn seconds_to_ns(seconds: f64) -> u64 {
+    (seconds.max(0.0) * 1e9).round() as u64
 }
 
-fn ns_to_seconds(ns: u64) -> f32 {
-    (ns as f64 / 1e9) as f32
+fn ns_to_seconds(ns: u64) -> f64 {
+    ns as f64 / 1e9
 }
 
 /// An update of `instance` on `player` that changes nothing.

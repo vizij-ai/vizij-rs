@@ -49,14 +49,17 @@ pub struct Player {
     /// `SetSpeed` alone: pausing, stopping and playing keep it, so a player
     /// resumes at the speed it was given.
     pub speed: f32,
-    /// Internal accumulated player time in seconds.
-    pub time: f32,
+    /// Internal accumulated player time in seconds: the sum of the time its
+    /// updates advanced it by since it was last set, kept in `f64` and summed
+    /// with compensation (see [`Self::advance`]), so a player stepped at a
+    /// steady rate stays on the timeline its updates' `dt`s add up to.
+    pub time: f64,
     /// Looping mode used when mapping player time into clip-local time.
     pub mode: LoopMode,
     /// Play window start in seconds of player time.
-    pub start_time: f32,
+    pub start_time: f64,
     /// Play window end in seconds of player time; `None` ends the window at `total_duration`.
-    pub end_time: Option<f32>,
+    pub end_time: Option<f64>,
     /// Seconds until a [`PlayerCommand::PlayAfter`](crate::PlayerCommand::PlayAfter) start,
     /// counted down by each update whatever the state; the playhead holds while it is set, and
     /// the player plays when it runs out. `Play`, `Pause` and `Stop` clear it.
@@ -65,7 +68,10 @@ pub struct Player {
     pub instances: Vec<InstId>,
     /// Player length in seconds: the latest end over its instances,
     /// `start_offset + anim_duration * |time_scale|`.
-    pub total_duration: f32,
+    pub total_duration: f64,
+    /// The low-order part of [`Self::time`]'s running sum that `f64` could
+    /// not hold, fed back into the next advance.
+    time_carry: f64,
 }
 
 impl Player {
@@ -82,18 +88,39 @@ impl Player {
             starts_in: None,
             instances: Vec::new(),
             total_duration: 0.0,
+            time_carry: 0.0,
         }
     }
 
+    /// Set the player's time, starting a new running sum.
+    fn set_time(&mut self, time: f64) {
+        self.time = time;
+        self.time_carry = 0.0;
+    }
+
+    /// Advance the player's time by `by` seconds, with compensated (Kahan)
+    /// summation: each addition's rounding error is carried into the next,
+    /// so the time stays within an `f64` rounding of the exact sum however
+    /// many updates it took: stepped by 10 ms for an hour, it stays within
+    /// one rounding (4.5e-13 s) of `n × 10 ms`, where a plain sum drifts
+    /// 32 ns, and a `Once` player reaches the end of its window on the step
+    /// that sums to it.
+    fn advance(&mut self, by: f64) {
+        let by = by - self.time_carry;
+        let time = self.time + by;
+        self.time_carry = (time - self.time) - by;
+        self.time = time;
+    }
+
     /// The play window `[start, end]` in player time.
-    fn window(&self) -> (f32, f32) {
+    fn window(&self) -> (f64, f64) {
         let start = self.start_time.max(0.0);
         let end = self.end_time.unwrap_or(self.total_duration).max(start);
         (start, end)
     }
 
     /// The playhead: player time mapped into the play window by the loop mode.
-    fn playhead(&self) -> f32 {
+    fn playhead(&self) -> f64 {
         let (start, end) = self.window();
         let span = end - start;
         if span <= 0.0 {
@@ -133,7 +160,7 @@ pub struct Instance {
     pub anim: AnimId,
     pub weight: f32,
     pub time_scale: f32,
-    pub start_offset: f32,
+    pub start_offset: f64,
     pub enabled: bool,
     pub binding_set: BindingSet,
     /// The output each channel of `binding_set` writes, an index into
@@ -175,7 +202,7 @@ pub struct InstanceCfg {
     /// Playback scaling factor used by the local-time mapping.
     pub time_scale: f32,
     /// Start offset in seconds on the player timeline.
-    pub start_offset: f32,
+    pub start_offset: f64,
     /// Whether the instance participates in evaluation.
     pub enabled: bool,
 }
@@ -255,7 +282,7 @@ pub struct Engine {
     target_values: Vec<Option<Value>>,
 }
 
-fn fmod(a: f32, b: f32) -> f32 {
+fn fmod(a: f64, b: f64) -> f64 {
     if b == 0.0 {
         return 0.0;
     }
@@ -268,7 +295,7 @@ fn fmod(a: f32, b: f32) -> f32 {
 }
 
 /// Reflect t into [0, period] with ping-pong behavior, where period = 2 * span.
-fn ping_pong(t: f32, span: f32) -> f32 {
+fn ping_pong(t: f64, span: f64) -> f64 {
     if span <= 0.0 {
         return 0.0;
     }
@@ -286,6 +313,24 @@ fn ping_pong(t: f32, span: f32) -> f32 {
         m
     } else {
         period - m
+    }
+}
+
+/// A clip's duration in seconds, the time domain players and bakes sample it
+/// in.
+pub(crate) fn clip_seconds(duration_ms: u32) -> f64 {
+    f64::from(duration_ms) / 1000.0
+}
+
+/// The normalized time `[0, 1]` the tracks of a clip `duration` seconds long
+/// are sampled at, `time` seconds into it. Time stays in `f64` up to here;
+/// only the normalized time a sample takes is `f32`, so a step and a bake at
+/// one clip time sample alike.
+pub(crate) fn normalized_time(time: f64, duration: f64) -> f32 {
+    if duration > 0.0 {
+        (time / duration).clamp(0.0, 1.0) as f32
+    } else {
+        0.0
     }
 }
 
@@ -325,17 +370,17 @@ pub struct PlayerInfo {
     /// Playback state, as the last `Play`, `Pause` or `Stop` left it.
     pub state: PlaybackState,
     /// Display/playhead time in seconds after loop/window mapping.
-    pub time: f32,
+    pub time: f64,
     /// Playback speed multiplier, as `SetSpeed` set it, whatever the state.
     pub speed: f32,
     /// Active loop mode.
     pub loop_mode: LoopMode,
     /// Play window start in seconds.
-    pub start_time: f32,
+    pub start_time: f64,
     /// Play window end in seconds; `None` ends the window at `length`.
-    pub end_time: Option<f32>,
+    pub end_time: Option<f64>,
     /// Full player length (seconds): max over instances of start_offset + (anim_duration * |time_scale|)
-    pub length: f32,
+    pub length: f64,
     /// A [`LoopMode::Once`] player advancing at a non-zero speed has reached the window bound
     /// it heads for (the end, or the start when playing backwards) and holds there.
     pub ended: bool,
@@ -354,7 +399,7 @@ pub struct InstanceInfo {
 
 impl Engine {
     /// Public accessor for a player's computed total duration (in player time).
-    pub fn player_total_duration(&self, player: PlayerId) -> Option<f32> {
+    pub fn player_total_duration(&self, player: PlayerId) -> Option<f64> {
         self.players
             .iter()
             .find(|p| p.id == player)
@@ -608,12 +653,12 @@ impl Engine {
     /// length = max over instances of: start_offset + (anim_duration * |time_scale|)
     fn recalc_player_duration(&mut self, player: PlayerId) {
         if let Some(p) = self.players.iter_mut().find(|pp| pp.id == player) {
-            let mut max_end = 0.0f32;
+            let mut max_end = 0.0f64;
             for iid in &p.instances {
                 if let Some(inst) = self.instances.iter().find(|ii| ii.id == *iid) {
                     if let Some(anim) = self.anims.get(inst.anim) {
-                        let anim_duration = anim.duration_ms as f32 / 1000.0;
-                        let ts_abs = inst.time_scale.abs().max(1e-6);
+                        let anim_duration = clip_seconds(anim.duration_ms);
+                        let ts_abs = f64::from(inst.time_scale.abs().max(1e-6));
                         let end_time = inst.start_offset + (anim_duration * ts_abs);
                         if end_time > max_end {
                             max_end = end_time;
@@ -646,7 +691,7 @@ impl Engine {
                     if let Some(p) = self.players.iter_mut().find(|p| p.id == player) {
                         p.state = PlaybackState::Stopped;
                         p.starts_in = None;
-                        p.time = p.start_time;
+                        p.set_time(p.start_time);
                     }
                 }
                 crate::inputs::PlayerCommand::SetSpeed { player, speed } => {
@@ -656,7 +701,7 @@ impl Engine {
                 }
                 crate::inputs::PlayerCommand::Seek { player, time } => {
                     if let Some(p) = self.players.iter_mut().find(|p| p.id == player) {
-                        p.time = time;
+                        p.set_time(time);
                         // A stopped player is at its window start: one moved
                         // off it holds there, paused.
                         if p.state == PlaybackState::Stopped {
@@ -680,16 +725,16 @@ impl Engine {
                         p.end_time = end_time.map(|e| e.max(p.start_time));
                         let (start, end) = p.window();
                         // A stopped player stays at its window start.
-                        p.time = if p.state == PlaybackState::Stopped {
+                        p.set_time(if p.state == PlaybackState::Stopped {
                             start
                         } else {
                             playhead.clamp(start, end)
-                        };
+                        });
                     }
                 }
                 crate::inputs::PlayerCommand::PlayAfter { player, delay } => {
                     if let Some(p) = self.players.iter_mut().find(|p| p.id == player) {
-                        p.starts_in = Some(f64::from(delay));
+                        p.starts_in = Some(delay);
                     }
                 }
             }
@@ -722,31 +767,33 @@ impl Engine {
     /// its state, holds until the start, then plays and advances only by the time after it.
     /// `Once` holds the time inside the play window, so playback reverses from the bound it
     /// reached; `Loop` and `PingPong` map it into the window when sampling.
-    fn advance_player_times(&mut self, dt: f32) {
+    fn advance_player_times(&mut self, dt: f64) {
         for p in &mut self.players {
             let run = match p.starts_in {
-                Some(wait) if wait > f64::from(dt) => {
-                    p.starts_in = Some(wait - f64::from(dt));
+                Some(wait) if wait > dt => {
+                    p.starts_in = Some(wait - dt);
                     continue;
                 }
                 Some(wait) => {
                     p.starts_in = None;
                     p.state = PlaybackState::Playing;
-                    (f64::from(dt) - wait) as f32
+                    dt - wait
                 }
                 None if p.state == PlaybackState::Playing => dt,
                 None => continue,
             };
-            p.time += run * p.speed;
+            p.advance(run * f64::from(p.speed));
             if p.mode == LoopMode::Once {
                 let (start, end) = p.window();
-                p.time = p.time.clamp(start, end);
+                if !(start..=end).contains(&p.time) {
+                    p.set_time(p.time.clamp(start, end));
+                }
             }
         }
     }
 
     /// Compute instance-local time given a player and animation duration under the player's loop mode.
-    fn local_time_for_instance(player: &Player, inst: &Instance, anim_duration: f32) -> f32 {
+    fn local_time_for_instance(player: &Player, inst: &Instance, anim_duration: f64) -> f64 {
         // Interpret start_offset as a player-time shift (when the instance starts).
         // Interpret time_scale as a duration multiplier (|ts| > 1 => longer, |ts| < 1 => shorter).
         // Mapping from the playhead to clip local time:
@@ -762,7 +809,7 @@ impl Engine {
             return inst.start_offset.clamp(0.0, anim_duration);
         }
         // Guard against division by zero while preserving sign semantics
-        let ts = inst.time_scale;
+        let ts = f64::from(inst.time_scale);
         let rel = player.playhead() - inst.start_offset;
         if rel <= 0.0 {
             // Hold initial value up to the instance start within each cycle.
@@ -783,7 +830,7 @@ impl Engine {
         }
     }
 
-    fn step(&mut self, dt: f32, inputs: Inputs, report: Report) {
+    fn step(&mut self, dt: f64, inputs: Inputs, report: Report) {
         let with_derivatives = report == Report::ChangesWithDerivatives;
         self.scratch.begin_frame();
         self.outputs.clear();
@@ -806,13 +853,10 @@ impl Engine {
                 let Some(anim_data) = self.anims.get(inst.anim) else {
                     continue;
                 };
-                let anim_duration_s = anim_data.duration_ms as f32 / 1000.0;
+                let anim_duration_s = clip_seconds(anim_data.duration_ms);
                 let local_t = Self::local_time_for_instance(p, inst, anim_duration_s);
-                let u = if anim_duration_s > 0.0 {
-                    (local_t / anim_duration_s).clamp(0.0, 1.0)
-                } else {
-                    0.0
-                };
+                let u = normalized_time(local_t, anim_duration_s);
+                let anim_duration_s = anim_duration_s as f32;
                 for (ch, &target) in inst.binding_set.channels.iter().zip(&inst.targets) {
                     if target == NO_TARGET {
                         continue;
@@ -877,7 +921,7 @@ impl Engine {
     ///
     /// The returned slice borrows the engine's buffer and is invalidated by
     /// the next call that mutates outputs. It builds no keyed [`Change`].
-    pub fn update_by_target(&mut self, dt: f32, inputs: Inputs) -> &[Option<Value>] {
+    pub fn update_by_target(&mut self, dt: f64, inputs: Inputs) -> &[Option<Value>] {
         self.step(dt, inputs, Report::ByTarget);
         &self.target_values
     }
@@ -886,7 +930,7 @@ impl Engine {
     ///
     /// The returned reference borrows the engine's internal output buffer and is invalidated by
     /// the next call that mutates outputs (`update*`, `step`, or `update_writebatch`).
-    pub fn update_values(&mut self, dt: f32, inputs: Inputs) -> &Outputs {
+    pub fn update_values(&mut self, dt: f64, inputs: Inputs) -> &Outputs {
         self.step(dt, inputs, Report::Changes);
         &self.outputs
     }
@@ -897,7 +941,7 @@ impl Engine {
     /// invalidated by the next call that mutates outputs.
     pub fn update_values_and_derivatives(
         &mut self,
-        dt: f32,
+        dt: f64,
         inputs: Inputs,
     ) -> &OutputsWithDerivatives {
         self.step(dt, inputs, Report::ChangesWithDerivatives);
@@ -905,7 +949,7 @@ impl Engine {
     }
 
     /// Backwards-compatible alias for [`Self::update_values`].
-    pub fn update(&mut self, dt: f32, inputs: Inputs) -> &Outputs {
+    pub fn update(&mut self, dt: f64, inputs: Inputs) -> &Outputs {
         self.update_values(dt, inputs)
     }
 
@@ -913,7 +957,7 @@ impl Engine {
     /// WriteOp.path is parsed as a `TypedPath`. If a change's key does not parse as a
     /// TypedPath it will be skipped in the returned batch. The engine still maintains
     /// its normal Outputs in `self.outputs`.
-    pub fn update_writebatch(&mut self, dt: f32, inputs: Inputs) -> WriteBatch {
+    pub fn update_writebatch(&mut self, dt: f64, inputs: Inputs) -> WriteBatch {
         // Populate self.outputs as usual.
         let _ = self.update_values(dt, inputs);
 
@@ -1175,7 +1219,7 @@ mod tests {
             .expect("player")
     }
 
-    fn approx(a: f32, b: f32) {
+    fn approx(a: f64, b: f64) {
         assert!((a - b).abs() < 1e-5, "{a} != {b}");
     }
 
