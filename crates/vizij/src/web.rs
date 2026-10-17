@@ -686,8 +686,12 @@ impl VizijRuntime {
     }
 
     /// Advance the device one step. `dt_ms` is the wall time elapsed since
-    /// the previous step, in milliseconds. Unavailable while `run` owns the
-    /// device.
+    /// the previous step, in milliseconds. A step of 0 advances no time: it
+    /// carries changes through the Vizij's graphs and runs and moves nothing
+    /// that time drives (clocks, oscillators, noise, springs, dampers,
+    /// slews, animations), so a paused Vizij shows each edit. A `say` run
+    /// follows its audio, which plays in real time. Unavailable while `run`
+    /// owns the device.
     pub fn step(&self, dt_ms: f64) -> Result<(), JsValue> {
         self.inner.step(dt_ms)
     }

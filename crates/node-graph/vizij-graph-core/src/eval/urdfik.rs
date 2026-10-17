@@ -15,6 +15,25 @@ pub struct UrdfKinematicsState {
     pub dofs: usize,
     pub joint_names: Vec<String>,
     pub chain: k::SerialChain<f32>,
+    /// An IK node's last solve: what it solved for and the joint angles it
+    /// found. A request equal to it is answered from it, not solved again:
+    /// solving from its own solution can land a redundant chain on another
+    /// one, so the joints would move with nothing they depend on changed.
+    pub(crate) last_solve: Option<(IkRequest, Vec<f32>)>,
+}
+
+/// What an IK node solves for: its target, the seed and weights it was
+/// given and the solver settings. Without a seed, a solve starts from the
+/// node's last solution.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct IkRequest {
+    pub target_pos: [f32; 3],
+    pub target_rot: Option<[f32; 4]>,
+    pub seed: Option<Vec<f32>>,
+    pub weights: Option<Vec<f32>>,
+    pub max_iters: u32,
+    pub tol_pos: f32,
+    pub tol_rot: Option<f32>,
 }
 
 impl fmt::Debug for UrdfKinematicsState {
@@ -40,7 +59,25 @@ impl UrdfKinematicsState {
             dofs,
             joint_names,
             chain,
+            last_solve: None,
         }
+    }
+
+    /// The joint angles `request` solves to: the last solve's when it asked
+    /// the same, else `solve`'s, kept as the last solve when it succeeds.
+    pub(crate) fn solve_once(
+        &mut self,
+        request: IkRequest,
+        solve: impl FnOnce(&mut Self, &IkRequest) -> Result<Vec<f32>, String>,
+    ) -> Result<Vec<f32>, String> {
+        if let Some((last, solution)) = &self.last_solve {
+            if *last == request {
+                return Ok(solution.clone());
+            }
+        }
+        let solution = solve(self, &request)?;
+        self.last_solve = Some((request, solution.clone()));
+        Ok(solution)
     }
 
     /// Produce a record value mapping joint names to solved angles.

@@ -34,6 +34,11 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- A device stepped with no time in it — the browser module's `step(0)` —
+  carries changes through the face's graphs and runs and moves nothing that
+  time drives: the springs, dampers and slews of its graphs,
+  programs and skills hold with the clocks, oscillators, noise and
+  animations (vizij-graph-core 3). They used to jump to their targets.
 - **Breaking — the next release is 1.0.0.** A face is ready —
   `Face::ready`, a new field, `view::all_faces_ready` (what the snapshot
   harness waits for) and the browser module's `ready` — once the GPU has

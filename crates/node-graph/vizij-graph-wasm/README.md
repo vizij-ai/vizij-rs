@@ -138,7 +138,7 @@ console.log(graph.evalAll());
   - Only **structural** edits invalidate the plan (today: `Split.sizes`, plus any future params that affect port layouts/bindings). Structural edits trigger a rebuild on the next `eval_*` call.
   - Most `set_param` calls are **non-structural** (e.g., `Constant.value`) and keep the plan cache valid so steady-state evaluation can keep using the fast path.
 - **Parameter updates** – `set_param` validates types strictly (no silent coercion). Structural parameter edits invalidate the cached plan so port-layout changes are safe without reloading the graph. All core node parameters plus robotics settings are supported.
-- **Time management** – Call `set_time`/`step` as needed. `eval_all` computes `dt` based on internal time values when both are invoked.
+- **Time management** – Call `set_time`/`step` as needed. `eval_all` computes `dt` based on internal time values when both are invoked. An `eval_all` with no `step` before it evaluates at a `dt` of zero, as does one after a `set_time` back in time: it carries changed inputs through the graph and moves nothing that time drives (Spring, Damp and Slew hold).
 
 ---
 

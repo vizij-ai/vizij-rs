@@ -2392,6 +2392,64 @@ mod tests {
         assert_eq!(read_key(&store, &handle.result[0]), Some(Value::U8(134)));
     }
 
+    /// A skill run measures its time from its spawn even when no time has
+    /// passed before it: on a graph whose clock still reads 0, ticked at zero
+    /// after the spawn, a glance and a played viseme each end once their
+    /// time has passed.
+    #[test]
+    fn a_skill_run_spawned_before_any_time_passes_ends_once_its_time_has() {
+        use crate::gaze::{self, look_at::ids::look_at as look_at_ids};
+        use crate::viseme::{self, play_viseme::ids::play_viseme as viseme_ids};
+
+        let mut bridge = NoopBridge;
+        let arg = |id: Uuid, value: Value| StructureField {
+            id,
+            value: Box::new(value),
+        };
+        let glance = Call {
+            module_id: Some(arora_behavior::interpreter_module::ID),
+            id: look_at_ids::FUNCTION,
+            args: vec![
+                arg(look_at_ids::POLICY, Value::String("glance".to_string())),
+                arg(look_at_ids::TARGET, Value::ArrayF32(vec![0.5, 0.0, 0.5])),
+                arg(look_at_ids::FRAME, Value::String(String::new())),
+            ],
+        };
+        let viseme = Call {
+            module_id: Some(arora_behavior::interpreter_module::ID),
+            id: viseme_ids::FUNCTION,
+            args: vec![
+                arg(viseme_ids::SHAPE, Value::String("aa".to_string())),
+                arg(viseme_ids::WEIGHT, float(1.0)),
+            ],
+        };
+
+        for call in [glance, viseme] {
+            let store = SimpleDataStore::new();
+            store
+                .write(StateChange::set("sensor/x", float(0.75)))
+                .unwrap();
+            let mut graph = ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y"))
+                .expect("from_spec");
+            graph.set_task_fragment(look_at_ids::FUNCTION, gaze::look_at_fragment());
+            graph.set_task_fragment(viseme_ids::FUNCTION, viseme::play_viseme_fragment(""));
+            let handle = graph.spawn(call, RunPolicy::Concurrent).expect("spawn");
+            for _ in 0..3 {
+                graph.tick_store(&store, &mut bridge, 0.0).expect("tick");
+            }
+            assert_eq!(read_key(&store, &handle.status), Some(task::running()));
+            for _ in 0..100 {
+                graph.tick_store(&store, &mut bridge, 0.02).expect("tick");
+            }
+            assert_eq!(
+                read_key(&store, &handle.status),
+                Some(task::success()),
+                "{} ends once its time has passed",
+                handle.status.path
+            );
+        }
+    }
+
     /// The continuous gaze policies: `idle` and `random` ignore the goal
     /// target, wander the gaze around a point 10 m straight ahead in the
     /// face's own frame, and run until halted.

@@ -19,7 +19,7 @@ use super::shape_helpers::{
 #[cfg(feature = "urdf_ik")]
 use super::urdfik::{
     apply_joint_positions, fetch_joint_vector, hash_urdf_config, quat_from_value, solve_pose,
-    solve_position, tip_pose, vector_from_value, IkKey,
+    solve_position, tip_pose, vector_from_value, IkKey, IkRequest,
 };
 use super::value_layout::{align_flattened, flatten_numeric, FlatValue, PortValue};
 use super::variadic::fold_numeric_variadic;
@@ -882,10 +882,9 @@ fn eval_stateful(
             let state = rt.spring_state_mut(&spec.id, &flat);
             state.target = flat.data.clone();
 
-            if dt <= 0.0 {
-                state.position = state.target.clone();
-                state.velocity.fill(0.0);
-            } else {
+            // No time passes at a zero dt, so the spring holds its position
+            // and velocity: a new target is recorded, not reached.
+            if dt > 0.0 {
                 let inv_mass = 1.0 / mass;
                 for ((pos, vel), target) in state
                     .position
@@ -917,9 +916,11 @@ fn eval_stateful(
                 0.1
             };
             let state = rt.damp_state_mut(&spec.id, &flat);
-            if dt <= 0.0 || half_life <= 0.0 {
+            // A half-life of zero does not smooth, at any dt. Otherwise a
+            // zero dt holds the value: no time passes for it to decay.
+            if half_life <= 0.0 {
                 state.value = flat.data.clone();
-            } else {
+            } else if dt > 0.0 {
                 let hl = half_life.max(1.0e-6);
                 let decay = (-std::f32::consts::LN_2 * dt / hl).exp();
                 for (value, target) in state.value.iter_mut().zip(flat.data.iter()) {
@@ -937,9 +938,11 @@ fn eval_stateful(
             let max_rate = params.max_rate.unwrap_or(1.0);
             let max_rate = if max_rate.is_finite() { max_rate } else { 1.0 };
             let state = rt.slew_state_mut(&spec.id, &flat);
-            if dt <= 0.0 || max_rate <= 0.0 {
+            // A max rate of zero does not limit, at any dt. Otherwise a zero
+            // dt holds the value: no time passes for it to move.
+            if max_rate <= 0.0 {
                 state.value = flat.data.clone();
-            } else {
+            } else if dt > 0.0 {
                 let max_delta = max_rate * dt;
                 for (value, target) in state.value.iter_mut().zip(flat.data.iter()) {
                     let delta = *target - *value;
@@ -2156,17 +2159,26 @@ fn eval_urdf_position(
             ));
         }
     }
-    let weights = weights_ref.map(|w| w.as_slice());
-
-    let solution = solve_position(
-        state,
-        &mut solver,
+    let request = IkRequest {
         target_pos,
-        seed.as_slice(),
-        weights,
-        params.max_iters.unwrap_or(100),
-        params.tol_pos.unwrap_or(1e-3),
-    )?;
+        target_rot: None,
+        seed: seed_provided.then(|| seed.clone()),
+        weights: weights_ref.cloned(),
+        max_iters: params.max_iters.unwrap_or(100),
+        tol_pos: params.tol_pos.unwrap_or(1e-3),
+        tol_rot: None,
+    };
+    let solution = state.solve_once(request, |state, request| {
+        solve_position(
+            state,
+            &mut solver,
+            target_pos,
+            seed.as_slice(),
+            request.weights.as_deref(),
+            request.max_iters,
+            request.tol_pos,
+        )
+    })?;
 
     single_output(outputs, state.solution_record(&solution))
 }
@@ -2239,19 +2251,28 @@ fn eval_urdf_pose(
             ));
         }
     }
-    let weights = weights_ref.map(|w| w.as_slice());
-
-    let solution = solve_pose(
-        state,
-        &mut solver,
+    let request = IkRequest {
         target_pos,
-        target_rot,
-        seed.as_slice(),
-        weights,
-        params.max_iters.unwrap_or(100),
-        params.tol_pos.unwrap_or(1e-3),
-        params.tol_rot.unwrap_or(1e-3),
-    )?;
+        target_rot: Some(target_rot),
+        seed: seed_provided.then(|| seed.clone()),
+        weights: weights_ref.cloned(),
+        max_iters: params.max_iters.unwrap_or(100),
+        tol_pos: params.tol_pos.unwrap_or(1e-3),
+        tol_rot: Some(params.tol_rot.unwrap_or(1e-3)),
+    };
+    let solution = state.solve_once(request, |state, request| {
+        solve_pose(
+            state,
+            &mut solver,
+            target_pos,
+            target_rot,
+            seed.as_slice(),
+            request.weights.as_deref(),
+            request.max_iters,
+            request.tol_pos,
+            params.tol_rot.unwrap_or(1e-3),
+        )
+    })?;
 
     single_output(outputs, state.solution_record(&solution))
 }
