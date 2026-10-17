@@ -4,9 +4,12 @@
 // given a weight, played, paused and seeked, run to its end once at four
 // times its speed, stopped back to its first frame and silenced; then one
 // loaded at run time, played on the gaze, and unloaded. The gaze key is read
-// from the store and the states from the player states. Needs
-// `VIZIJ_FIXTURES`; skips without.
+// from the store and the states from the player states. Last, the keys its
+// tracks play on, named from its glTF document by `channelKeys`: those the
+// loaded face keys them by. Needs `VIZIJ_FIXTURES`; skips without.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { FIXTURES, loadVizij, open } from "./common.mjs";
 
 if (!FIXTURES) {
@@ -147,6 +150,59 @@ try {
   assert.deepEqual(
     (await players()).map(({ name }) => name),
     ["authoring.timeline.clip.1", "authoring.timeline.main"],
+  );
+
+  // The keys each track plays on, named from Quori's glTF document without
+  // loading it, are the keys the loaded face keys the track by: its own
+  // animations' channels, an input's id (the input's path) and a channel
+  // naming no input (under the rig prefix).
+  const glb = readFileSync(join(FIXTURES, "Quori_Current_Extended.glb"));
+  const gltf = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8"));
+  const { animations } = await page.evaluate(
+    () => window.vizijHarness.describe("/fixtures/Quori_Current_Extended.glb"),
+  );
+  const own = animations.flatMap(({ tracks }) => tracks.map(({ channel }) => channel));
+  const probe = {
+    id: "runtime.probe",
+    name: null,
+    duration: 1,
+    tracks: ["gaze_left_right", "no/such/input"].map((channel) => ({
+      channel,
+      interpolation: "linear",
+      keyframes: [{ time: 0, value: 0, interpolation: null }],
+    })),
+  };
+  // `AnimationClip.tracks`, and `AnimTrack`'s `name` (its channel) and
+  // `animatable_id` (its key), by field id.
+  const CLIP_TRACKS = "76697a69-6a00-0000-0100-000000000003";
+  const TRACK_NAME = "76697a69-6a00-0000-0101-000000000002";
+  const TRACK_KEY = "76697a69-6a00-0000-0101-000000000003";
+  const fields = (record) => new Map(record.fields.map(({ id, value }) => [id, value]));
+  const keyed = [];
+  for (const animation of [...animations, probe]) {
+    const { moduleAnimation } = await page.evaluate(
+      (animation) => window.vizijHarness.moduleAnimation("face", animation),
+      animation,
+    );
+    for (const track of fields(moduleAnimation.struct).get(CLIP_TRACKS).structs.elements) {
+      const f = fields(track);
+      keyed.push([f.get(TRACK_NAME).str, f.get(TRACK_KEY).str]);
+    }
+  }
+  const channels = [...own, ...probe.tracks.map(({ channel }) => channel)];
+  assert.deepEqual(keyed.map(([channel]) => channel), channels);
+  const named = await page.evaluate(
+    ([gltf, channels]) => window.vizijHarness.channelKeys(gltf, channels),
+    [gltf, channels],
+  );
+  assert.deepEqual(named, keyed.map(([, key]) => key), "channelKeys names the keys the loaded face plays");
+  assert.deepEqual(named.slice(own.length), [
+    "rig/quori_latest/gaze/left_right",
+    "rig/quori_latest/no/such/input",
+  ]);
+  assert.ok(
+    own.length > 0 && named.every((key) => key.startsWith("rig/quori_latest/")),
+    `Quori's own channels key under its rig: ${named}`,
   );
 
   const { stepErrors } = await page.evaluate(() => window.vizijHarness.state());

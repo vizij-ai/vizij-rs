@@ -824,6 +824,109 @@ mod tests {
         assert_eq!(Bundle::default().channel_keys().key("gaze/x"), "gaze/x");
     }
 
+    /// A glTF document's channels resolve through the rig of the bundle it
+    /// carries, on a node or on its root alike: a rig input's relative path
+    /// to that input, an input's id to its path, a channel naming no input
+    /// under the rig prefix.
+    #[test]
+    fn a_documents_channels_resolve_through_its_bundles_rig() {
+        let bundle = json!({
+            "metadata": { "faceId": "f" },
+            "graphs": [{ "kind": "rig", "spec": graph(
+                json!([
+                    { "id": "input_direct_gaze_left_right", "type": "input",
+                      "params": { "path": "rig/f/gaze/left_right" } },
+                    { "id": "input_mouth_smile", "type": "input",
+                      "params": { "path": "rig/f/mouth/smile_amount" } },
+                ]),
+                json!([]),
+            ) }],
+        });
+        for gltf in [
+            json!({ "nodes": [{}, { "extensions": { "VIZIJ_bundle": bundle } }] }),
+            json!({ "nodes": [{}], "extensions": { "VIZIJ_bundle": bundle } }),
+        ] {
+            let keys = Bundle::from_gltf_json(&gltf)
+                .expect("the document carries a bundle")
+                .channel_keys();
+            let resolved: Vec<String> = ["gaze/left_right", "mouth_smile", "brow/raise"]
+                .into_iter()
+                .map(|channel| keys.key(channel))
+                .collect();
+            assert_eq!(
+                resolved,
+                [
+                    "rig/f/gaze/left_right",
+                    "rig/f/mouth/smile_amount",
+                    "rig/f/brow/raise"
+                ]
+            );
+        }
+        assert!(Bundle::from_gltf_json(&json!({ "nodes": [{}] })).is_none());
+    }
+
+    /// A channel drives the one key it names, and no key it only resembles:
+    /// under another face's rig prefix it keeps that prefix; a channel that
+    /// ends rig input paths names none of them; an input's id names that
+    /// input, not the pose driver's input beside it (`pose/control/<id>`),
+    /// whose path the id ends; and an input the rig reads only through its
+    /// override — `override/<id>/value`, which moves the input only while
+    /// `override/<id>/enabled` is 1 — is named neither by its path nor by its
+    /// id, so either keys under the rig prefix, where the rig reads nothing.
+    #[test]
+    fn a_channel_drives_one_key_and_none_it_only_resembles() {
+        let input =
+            |id: &str, path: &str| json!({ "id": id, "type": "input", "params": { "path": path } });
+        let keys = Bundle::from_bundle_json(&json!({
+            "metadata": { "faceId": "quori" },
+            "graphs": [{ "kind": "rig", "spec": graph(
+                json!([
+                    input("input_direct_gaze_left_right", "rig/quori/gaze/left_right"),
+                    input("input_direct_lids_blink", "rig/quori/lids/blink"),
+                    input("input_direct_standard_vizij_blink", "rig/quori/standard/vizij/blink"),
+                    input("input_direct_standard_vizij_left_eye_pos_x",
+                          "rig/quori/standard/vizij/left_eye/pos/x"),
+                    input("input_direct_standard_vizij_right_eye_pos_x",
+                          "rig/quori/standard/vizij/right_eye/pos/x"),
+                    input("input_propsrig_l_eye_scale_x", "rig/quori/propsrig/l_eye/scale/x"),
+                    input("input_pose_control_propsrig_l_eye_scale_x",
+                          "rig/quori/pose/control/propsrig_l_eye_scale_x"),
+                    input("input_override_enabled_propsrig_l_eye_scale_z",
+                          "rig/quori/override/propsrig_l_eye_scale_z/enabled"),
+                    input("input_override_value_propsrig_l_eye_scale_z",
+                          "rig/quori/override/propsrig_l_eye_scale_z/value"),
+                ]),
+                json!([]),
+            ) }],
+        }))
+        .channel_keys();
+
+        // Another face's prefix is kept: the track drives that face's key,
+        // not this face's input of the same relative path.
+        assert_eq!(
+            keys.key("rig/hugo/gaze/left_right"),
+            "rig/hugo/gaze/left_right"
+        );
+        // The end of several input paths is none of them.
+        assert_eq!(keys.key("blink"), "rig/quori/blink");
+        assert_eq!(keys.key("pos/x"), "rig/quori/pos/x");
+        // An input's id names that input alone.
+        assert_eq!(keys.key("lids_blink"), "rig/quori/lids/blink");
+        assert_eq!(
+            keys.key("propsrig_l_eye_scale_x"),
+            "rig/quori/propsrig/l_eye/scale/x"
+        );
+        // An input the rig reads only through its override.
+        assert_eq!(
+            keys.key("propsrig/l_eye/scale/z"),
+            "rig/quori/propsrig/l_eye/scale/z"
+        );
+        assert_eq!(
+            keys.key("propsrig_l_eye_scale_z"),
+            "rig/quori/propsrig_l_eye_scale_z"
+        );
+    }
+
     #[test]
     fn bundle_reads_programs_and_active_id() {
         let b = Bundle::from_bundle_json(&bundle_json());

@@ -235,6 +235,35 @@ applies at the device's next step, in the order the calls were issued.
 the module's `AnimationClip`, each track keyed by the store key its channel
 names through this Vizij's rig, as the Vizij's own are loaded.
 
+`channelKeys(gltf, channels)` names those keys from a Vizij's glTF JSON
+document, without loading it — its `VIZIJ_bundle` read as `composeVizij`
+reads it: one key per channel, in order, the key `moduleAnimation` gives the
+track once the Vizij is loaded. It is what a page drives on a `startRuntime`
+device over `composeVizij`'s graph, to move it as the Vizij's animations
+move the loaded Vizij; that device has no Vizij, so its own
+`moduleAnimation` keys a channel as is.
+
+```ts
+import { channelKeys, composeVizij, startRuntime } from "@vizij/runtime";
+
+const bench = await startRuntime(await composeVizij(gltf, { program: "none" }));
+const keys = await channelKeys(gltf, animation.tracks.map((track) => track.channel));
+// ["rig/quori_latest/gaze/left_right", …]: write each track's samples there
+```
+
+A channel resolves through the bundle's rig, to one key:
+
+- itself, when it is a rig input's path;
+- the rig input at `rig/<faceId>/<channel>`;
+- the input the rig names it by: its input node's id without `input_`, or
+  that id's `direct_` or `pose_control_` alias (`gaze_left_right` names
+  `input_direct_gaze_left_right`);
+- else `rig/<faceId>/<channel>` regardless, a key some other graph may read
+  (the bare channel when the bundle names no `faceId`).
+
+A channel under `rig/` is never prefixed again. `channelKeys` rejects a
+document that carries no `VIZIJ_bundle`.
+
 The types are `Animation`, `AnimationTrack` and `AnimationKeyframe` (what
 `describe` lists), `ModuleAnimation`, `PlayerState` and `InstanceState`.
 `Animation` is `@vizij/runtime`'s: importing it shadows the DOM's Web
