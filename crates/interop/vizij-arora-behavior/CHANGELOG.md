@@ -4,6 +4,18 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [7.0.0] - 2026-10-17
+
+### Changed
+
+- **Breaking:** built on vizij-graph-core 3. The graph types in this crate's
+  API — the `GraphSpec` of `parse_spec`, `graph_codec` and `run`, and the
+  node and edge specs a `GraphSpecDiff` carries — are vizij-graph-core 3's,
+  so they do not unify with those of a crate built on vizij-graph-core 2. A tick with a zero `dt` moves nothing
+  that time drives: a device stepped at zero carries a change through its
+  graph and its runs, and their springs, dampers, slews, clocks and noise
+  hold.
+
 ## [6.0.2] - 2026-10-13
 
 ### Changed

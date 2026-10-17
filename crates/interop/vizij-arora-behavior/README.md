@@ -7,6 +7,9 @@ each tick it reads its subscribed input paths from the shared data store,
 evaluates the [`vizij-graph-core`](../../node-graph/vizij-graph-core/) graph for
 `dt`, and writes the graph's outputs back. Vizij and Arora share one runtime
 value type, so values cross the store and call boundaries with no conversion.
+A tick with a zero `dt` advances no time: it carries the store's changes
+through the graph and its runs and moves nothing that time drives — their
+clocks, oscillators, noise, springs, dampers and slews hold.
 
 **How it works, with diagrams:** [`docs/node-graph.md`](docs/node-graph.md) walks
 this interpreter against Arora's interpreter model — load, tick, the store seam,

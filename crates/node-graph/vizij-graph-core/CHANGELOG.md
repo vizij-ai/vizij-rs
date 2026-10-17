@@ -4,6 +4,30 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - 2026-10-17
+
+### Changed
+
+- **Breaking:** a step with no time in it moves nothing that time drives. At
+  a `dt` of zero, or a negative or non-finite one, `Spring` records its new
+  target and keeps its position and velocity, and `Damp` and `Slew` keep
+  their value; each moves on from there at the next step with time in it,
+  exactly as if the zero step had not been. They used to jump to their
+  target and zero a spring's velocity. `Time` and `Oscillator` read the
+  unchanged `t`, so an evaluation at `dt = 0` carries a changed input through
+  every node that does not depend on time and moves nothing else. A `Damp`
+  with no half-life and a `Slew` with no rate limit pass their target
+  through at any `dt`, as before. A smoother whose input changes shape
+  starts again from the new input, at any `dt`, as before.
+- **Breaking:** an IK node (`UrdfIkPosition`, `UrdfIkPose`) answers a request
+  equal to its last one — target, seed, weights and solver settings — with
+  its last solution rather than solving again. An unseeded solve starts from
+  the node's last solution, and solving a redundant chain again from it lands
+  on another solution, so the joints moved on every evaluation with nothing
+  they depend on changed. `UrdfKinematicsState` keeps the last solve in a
+  field private to the crate, so it is built through
+  `UrdfKinematicsState::new` only.
+
 ## [2.6.0] - 2026-10-13
 
 ### Changed

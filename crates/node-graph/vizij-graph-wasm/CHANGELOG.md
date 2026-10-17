@@ -8,6 +8,10 @@ All notable changes to `vizij-graph-wasm`. The format follows
 
 ### Changed
 
+- **Breaking:** built on vizij-graph-core 3. An `eval_all` with no `step`
+  before it, or after a `set_time` back in time, evaluates at a `dt` of zero,
+  which moves no Spring, Damp or Slew; they used to jump to their target. An
+  IK node answers an unchanged request with its last solution.
 - `set_param` treats the `value` of a constant read through a selector as a
   structural edit and drops the cached plan: vizij-graph-core 2.6 resolves
   what such a selector reads when it plans.

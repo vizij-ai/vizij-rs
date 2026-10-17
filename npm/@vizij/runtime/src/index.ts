@@ -698,7 +698,12 @@ export class Runtime {
   /**
    * Advance the device one tick. `dtMs` is the wall time since the previous
    * step in milliseconds (the difference of two `requestAnimationFrame`
-   * timestamps). Unavailable while `run()` owns the device.
+   * timestamps). A step of 0 advances no time: it carries changes through
+   * the Vizij's graphs and runs, and moves nothing that time drives —
+   * clocks, oscillators, noise, springs, dampers, slews and animations
+   * hold — so a paused Vizij shows each edit. A `say` run follows its
+   * audio, which plays in real time. Unavailable while `run()` owns the
+   * device.
    */
   step(dtMs: number): void {
     this.inner.step(dtMs);

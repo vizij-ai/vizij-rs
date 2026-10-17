@@ -633,7 +633,7 @@ const registry: Registry = {
       "type_id": "spring",
       "name": "Spring",
       "category": "Transitions",
-      "doc": "Integrates a critically damped spring toward the Target; zero or non-finite dt snaps to Target.",
+      "doc": "Integrates a critically damped spring toward the Target; a zero or non-finite dt holds its value and velocity.",
       "inputs": [
         {
           "id": "in",
@@ -689,7 +689,7 @@ const registry: Registry = {
       "type_id": "damp",
       "name": "Damp",
       "category": "Transitions",
-      "doc": "Exponentially decays toward the Target using a configurable half-life; zero dt or half-life snaps to Target.",
+      "doc": "Exponentially decays toward the Target using a configurable half-life; a zero half-life passes the Target through, and a zero or non-finite dt holds the value.",
       "inputs": [
         {
           "id": "in",
@@ -725,7 +725,7 @@ const registry: Registry = {
       "type_id": "slew",
       "name": "Slew",
       "category": "Transitions",
-      "doc": "Limits the rate of change toward Target using max_rate units per second; zero dt or max_rate snaps to Target.",
+      "doc": "Limits the rate of change toward Target using max_rate units per second; a zero max_rate passes the Target through, and a zero or non-finite dt holds the value.",
       "inputs": [
         {
           "id": "in",

@@ -63,7 +63,13 @@ an Arora device has — a page here, a remote on a bridge, Semio Studio:
 Each operation that reaches the device is enqueued before it returns and
 applied at the device's next step, which its promise waits for: under
 `run()` just `await` it; a page that drives the device with `step` steps
-after issuing it. What the face does, it does through the methods its
+after issuing it. A `step(0)` advances no time: it carries changes through the
+Vizij's graphs and runs and moves nothing that time drives —
+clocks, oscillators, noise, springs, dampers, slews and animations hold — so
+a paused Vizij shows each edit as it is made. A value crosses one store key
+per step on its way from one of the Vizij's graphs to the next, so an edit
+can take a few zero steps to reach the rig. A `say` run follows its audio,
+which plays in real time. What the face does, it does through the methods its
 modules and its interpreter declare: `say`, `look_at` (ROS4HRI's gaze, see
 [Profiles and mappings](#profiles-and-mappings)) and `play_viseme` (the
 skills), `run_behavior` (programs), the animation module's functions,

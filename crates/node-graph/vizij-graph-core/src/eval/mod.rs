@@ -40,6 +40,8 @@ mod blend_tests;
 mod external_function_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod zero_dt_tests;
 
 /// Evaluate every node in `spec`, updating `rt` in-place.
 ///

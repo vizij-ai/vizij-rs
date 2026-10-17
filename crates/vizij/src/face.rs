@@ -2018,7 +2018,7 @@ mod tests {
     }
 
     /// Quori's committed adaptation sidecar.
-    fn quori_adaptation() -> serde_json::Value {
+    pub(super) fn quori_adaptation() -> serde_json::Value {
         let sidecar = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../fixtures/faces/quori/standard-adaptation.json"
@@ -2029,18 +2029,23 @@ mod tests {
         .expect("parse the adaptation sidecar")
     }
 
-    /// [`adapted_quori`] with `spec` as the adaptation.
-    fn adapted_quori_with(fixtures: &str, spec: serde_json::Value) -> arora::Arora {
+    /// `Quori_Current_Extended.glb` under `fixtures` with `spec` grafted in
+    /// as its standard adaptation, by the bundler.
+    pub(super) fn adapted_quori_glb(fixtures: &str, spec: serde_json::Value) -> Vec<u8> {
         let glb = std::path::Path::new(fixtures).join("Quori_Current_Extended.glb");
         let bytes = std::fs::read(&glb).expect("read the Quori GLB");
-
-        // The bundler grafts the adaptation into the bundle.
         let mut face = vizij_bundle::Face::parse(&bytes).expect("parse the Quori GLB");
         face.add_graph("standard-adaptation", "quori_standard_adaptation", spec)
             .expect("graft the adaptation");
         let adapted = face.to_bytes().expect("repack the GLB");
         let cov = vizij_bundle::coverage(&vizij_bundle::Face::parse(&adapted).unwrap());
         assert!(cov.level >= 2, "adapted Quori below L2 (L{})", cov.level);
+        adapted
+    }
+
+    /// [`adapted_quori`] with `spec` as the adaptation.
+    fn adapted_quori_with(fixtures: &str, spec: serde_json::Value) -> arora::Arora {
+        let adapted = adapted_quori_glb(fixtures, spec);
 
         let config = FaceConfig {
             wanted: ["rig", "pose-driver", "pose", "standard-adaptation"]
@@ -2639,5 +2644,223 @@ mod animation_tests {
             played < -0.2 && (played - resting).abs() > 0.1,
             "the animation moves the gaze: {resting} → {played}"
         );
+    }
+
+    /// Quori as a page runs it, with its committed standard adaptation: its
+    /// graphs composed over its neutral pose, its active program running
+    /// through the adaptation, and an animation playing.
+    fn running_quori(fixtures: &str) -> (arora::Arora, LoadedFace) {
+        let glb = super::tests::adapted_quori_glb(fixtures, super::tests::quori_adaptation());
+        let config = FaceConfig {
+            wanted: ["rig", "pose-driver", "pose", "standard-adaptation"]
+                .map(String::from)
+                .to_vec(),
+            program: ProgramSelect::Auto,
+            stage_neutral: true,
+            ros4hri: false,
+            #[cfg(feature = "studio")]
+            studio: false,
+            speech: None,
+        };
+        let face = load_face(&glb, &config).expect("load Quori");
+        let store = BlackboardStore::new();
+        stage_neutral_pose(&store, &face.meta);
+        declare_keys(
+            &store,
+            &face.spec,
+            &face.meta.bundle.programs,
+            &face.meta.bundle.neutral_stage_writes(),
+            &rig_ranges(&face.meta.bundle),
+        );
+        let mut arora = builder_for(
+            &face.spec,
+            RigHal::new(),
+            store,
+            &face.meta.bundle.skills,
+            None,
+        )
+        .expect("build the device")
+        .build()
+        .expect("build arora");
+        load_animations(&mut arora, &face.meta.bundle).expect("load Quori's animations");
+        spawn_program(&mut arora, &face.meta.bundle, &config.program)
+            .expect("spawn Quori's program")
+            .expect("Quori has an active program");
+        play(&mut arora, "authoring.timeline.clip.1");
+        (arora, face)
+    }
+
+    /// Every key of the store but the runtime's own clock, which states the
+    /// last step's duration.
+    fn store_state(arora: &arora::Arora) -> std::collections::BTreeMap<String, Option<AValue>> {
+        arora
+            .store()
+            .snapshot()
+            .storage
+            .into_iter()
+            .filter(|(key, _)| !key.path.starts_with(arora_behavior::built_in::PREFIX))
+            .map(|(key, value)| (key.path, value))
+            .collect()
+    }
+
+    /// The keys whose values differ between two store states.
+    fn differing(
+        before: &std::collections::BTreeMap<String, Option<AValue>>,
+        after: &std::collections::BTreeMap<String, Option<AValue>>,
+    ) -> std::collections::BTreeSet<String> {
+        before
+            .keys()
+            .chain(after.keys())
+            .filter(|key| before.get(*key) != after.get(*key))
+            .cloned()
+            .collect()
+    }
+
+    /// The store keys the graphs compute, with no time passing, from a
+    /// change of `changed`: the keys written by every output reached from an
+    /// input that reads a changed key, and on through the inputs that read
+    /// those, short of a smoother (`spring`, `damp`, `slew`), which holds its
+    /// value until time passes.
+    fn reached_without_time(
+        graphs: &[&serde_json::Value],
+        changed: &std::collections::BTreeSet<String>,
+    ) -> std::collections::BTreeSet<String> {
+        use std::collections::{BTreeSet, HashMap};
+        let kind = |node: &serde_json::Value| {
+            node.get("type")
+                .or_else(|| node.get("kind"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string()
+        };
+        let mut reached = BTreeSet::new();
+        let mut frontier: Vec<String> = changed.iter().cloned().collect();
+        while let Some(path) = frontier.pop() {
+            for graph in graphs {
+                let nodes = graph["nodes"].as_array().expect("a graph's nodes");
+                let by_id: HashMap<&str, &serde_json::Value> = nodes
+                    .iter()
+                    .filter_map(|node| Some((node["id"].as_str()?, node)))
+                    .collect();
+                let mut downstream: HashMap<&str, Vec<&str>> = HashMap::new();
+                for edge in graph["edges"].as_array().into_iter().flatten() {
+                    if let (Some(from), Some(to)) = (
+                        edge["from"]["node_id"].as_str(),
+                        edge["to"]["node_id"].as_str(),
+                    ) {
+                        downstream.entry(from).or_default().push(to);
+                    }
+                }
+                let mut queue: Vec<&str> = nodes
+                    .iter()
+                    .filter(|node| kind(node) == "input" && node["params"]["path"] == *path)
+                    .filter_map(|node| node["id"].as_str())
+                    .collect();
+                let mut seen: BTreeSet<&str> = queue.iter().copied().collect();
+                while let Some(id) = queue.pop() {
+                    let node = by_id[id];
+                    if matches!(kind(node).as_str(), "spring" | "damp" | "slew") {
+                        continue;
+                    }
+                    if kind(node) == "output" {
+                        if let Some(written) = node["params"]["path"].as_str() {
+                            if reached.insert(written.to_string()) {
+                                frontier.push(written.to_string());
+                            }
+                        }
+                    }
+                    for next in downstream.get(id).into_iter().flatten() {
+                        if seen.insert(next) {
+                            queue.push(next);
+                        }
+                    }
+                }
+            }
+        }
+        reached
+    }
+
+    /// Quori stepped at zero, with its program running through its
+    /// adaptation and an animation playing. A zero step moves only what the
+    /// graphs compute from what changed: first the last real step's writes,
+    /// carried through the hops between the composition's sources, after
+    /// which the store holds still; then an expression an author sets,
+    /// carried through the rig. The springs, the noise and the clocks of the
+    /// program and of the animation hold. Needs `VIZIJ_FIXTURES` (see
+    /// `ros4hri_drives_the_adapted_quori`); skipped otherwise.
+    #[test]
+    fn quori_stepped_at_zero_shows_a_change_and_nothing_else_moves() {
+        use std::collections::BTreeSet;
+        let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
+            eprintln!("VIZIJ_FIXTURES unset — skipping the Quori zero-step test");
+            return;
+        };
+        let (mut arora, face) = running_quori(&fixtures);
+        let composed: serde_json::Value =
+            serde_json::from_str(&face.spec).expect("the composed spec is JSON");
+        let (_, program) = face
+            .meta
+            .bundle
+            .program(&ProgramSelect::Auto)
+            .expect("the active program");
+        let graphs = [&composed, program];
+
+        // Zero steps after `last`, each moving only keys in `allowed`, until
+        // the store holds still; the store state they settle on.
+        let settle = |arora: &mut arora::Arora,
+                      mut last: std::collections::BTreeMap<String, Option<AValue>>,
+                      allowed: &BTreeSet<String>| {
+            for _ in 0..8 {
+                arora.step(Duration::ZERO).expect("step");
+                let now = store_state(arora);
+                let moved = differing(&last, &now);
+                let unexplained: Vec<&String> = moved.difference(allowed).collect();
+                assert!(
+                    unexplained.is_empty(),
+                    "a zero step moved what nothing changed computes: {unexplained:?}"
+                );
+                last = now;
+            }
+            for _ in 0..4 {
+                arora.step(Duration::ZERO).expect("step");
+                let moved = differing(&last, &store_state(arora));
+                assert!(moved.is_empty(), "the store did not settle: {moved:?}");
+            }
+            last
+        };
+
+        step_for(&mut arora, 1.0);
+        let before = store_state(&arora);
+        arora.step(Duration::from_millis(10)).expect("step");
+        let stepped = store_state(&arora);
+        let written = differing(&before, &stepped);
+        assert!(
+            written.len() > 10,
+            "the program and the animation move the face"
+        );
+        let paused = settle(
+            &mut arora,
+            stepped,
+            &reached_without_time(&graphs, &written),
+        );
+
+        // An author sets an expression: zero steps carry it through the rig.
+        let expression = "rig/quori_latest/standard/vizij/expression/concerned";
+        let pose = "rig/quori_latest/poses/pose_d_concerned_d.weight";
+        let mut change = StateChange::new();
+        change.set.insert(Key::from(expression), Some(float(1.0)));
+        arora.store().write(change).expect("write the expression");
+        let changed = BTreeSet::from([expression.to_string()]);
+        let mut allowed = reached_without_time(&graphs, &changed);
+        assert!(allowed.contains(pose));
+        allowed.insert(expression.to_string());
+        let shown = settle(&mut arora, paused.clone(), &allowed);
+        assert_eq!(read(&arora, pose), Some(1.0), "the change reaches the rig");
+        let moved = differing(&paused, &shown);
+        assert!(moved.len() > 2, "the pose drives the rig: {moved:?}");
+
+        // And the face moves on when time passes again.
+        arora.step(Duration::from_millis(10)).expect("step");
+        assert!(differing(&shown, &store_state(&arora)).len() > 10);
     }
 }
