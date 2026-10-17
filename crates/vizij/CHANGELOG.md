@@ -66,6 +66,13 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Fixed
 
+- A face whose RobotData ids are no UUIDs loads: an element's and an
+  animatable's id is any string, as the published three.js line reads it.
+  It used to fail with "bad RobotData on node …: UUID parsing failed".
+  `FaceMeta`'s element ids and animatable keys, the view's bindings, picks,
+  selections, static-feature edits and holds take the id as written; on a
+  per-axis feature, an id ending in `.<axis>` is still Studio's component of
+  a compound animatable.
 - The browser module requires `arora-web` 9.0.1, which holds what a page
   has not drained as the latest value per key: a page that never calls
   `drainChanges` no longer grows its memory with every step. A drain

@@ -16,14 +16,14 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use bevy::prelude::Resource;
-use uuid::Uuid;
 
 use super::Decoded;
 
 /// One held output: an animatable, or one component of it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HoldTarget {
-    pub animatable: Uuid,
+    /// The animatable's id: any string, as its RobotData names it.
+    pub animatable: String,
     /// The component held: 0 (`x`/`r`), 1 (`y`/`g`) or 2 (`z`/`b`); `None`
     /// holds the whole output.
     pub component: Option<usize>,
@@ -33,28 +33,22 @@ impl FromStr for HoldTarget {
     type Err = String;
 
     /// `<animatable id>` or `<animatable id>:<component>`, the id bare or as
-    /// the rig path it is written under (`rig/<faceId>/<id>`).
+    /// the rig path it is written under (`rig/<faceId>/<id>`): the path's
+    /// last `/`-segment, less a final `:x`, `:y`, `:z`, `:r`, `:g` or `:b`,
+    /// which names the component. An id is any other non-empty string.
     fn from_str(path: &str) -> Result<Self, Self::Err> {
-        let last = path.rsplit('/').next().unwrap_or(path);
-        let (id, component) = match last.split_once(':') {
-            Some((id, component)) => (id, Some(component)),
-            None => (last, None),
+        let last = path.rsplit('/').next().unwrap_or(path).trim();
+        let (id, component) = match last.rsplit_once(':') {
+            Some((id, "x" | "r")) => (id, Some(0)),
+            Some((id, "y" | "g")) => (id, Some(1)),
+            Some((id, "z" | "b")) => (id, Some(2)),
+            _ => (last, None),
         };
-        let animatable =
-            Uuid::parse_str(id.trim()).map_err(|_| format!("{path:?} names no animatable id"))?;
-        let component = match component {
-            None => None,
-            Some("x" | "r") => Some(0),
-            Some("y" | "g") => Some(1),
-            Some("z" | "b") => Some(2),
-            Some(other) => {
-                return Err(format!(
-                    "{path:?}: {other:?} is no component (x, y, z, r, g or b)"
-                ))
-            }
-        };
+        if id.is_empty() {
+            return Err(format!("{path:?} names no animatable id"));
+        }
         Ok(Self {
-            animatable,
+            animatable: id.to_string(),
             component,
         })
     }
@@ -76,7 +70,7 @@ impl Held {
 
 /// The holds of every face, by face id.
 #[derive(Resource, Default)]
-pub(crate) struct Holds(HashMap<String, HashMap<Uuid, Held>>);
+pub(crate) struct Holds(HashMap<String, HashMap<String, Held>>);
 
 impl Holds {
     pub(crate) fn hold(&mut self, face_id: &str, targets: Vec<HoldTarget>) {
@@ -120,7 +114,7 @@ impl Holds {
     }
 
     /// The face's holds, `None` when it holds nothing.
-    pub(crate) fn of(&self, face_id: &str) -> Option<&HashMap<Uuid, Held>> {
+    pub(crate) fn of(&self, face_id: &str) -> Option<&HashMap<String, Held>> {
         self.0.get(face_id)
     }
 }
@@ -131,12 +125,12 @@ impl Holds {
 /// components taken from what the scene `shown`s — or `None` when the scene
 /// shows nothing to take them from.
 pub(crate) fn resolve(
-    holds: &HashMap<Uuid, Held>,
-    id: Uuid,
+    holds: &HashMap<String, Held>,
+    id: &str,
     value: Decoded,
     shown: impl FnOnce() -> Option<Decoded>,
 ) -> Option<Decoded> {
-    let Some(held) = holds.get(&id) else {
+    let Some(held) = holds.get(id) else {
         return Some(value);
     };
     if held.whole {
@@ -170,11 +164,11 @@ mod tests {
 
     #[test]
     fn a_target_names_an_animatable_and_maybe_a_component() {
-        let id = Uuid::parse_str(ID).unwrap();
+        let id = ID.to_string();
         assert_eq!(
             target(ID),
             HoldTarget {
-                animatable: id,
+                animatable: id.clone(),
                 component: None
             }
         );
@@ -183,13 +177,24 @@ mod tests {
         assert_eq!(target(&format!("{ID}:b")).component, Some(2));
         let rig_path = target(&format!("rig/quori_latest/{ID}:z"));
         assert_eq!((rig_path.animatable, rig_path.component), (id, Some(2)));
-        assert!("not-an-id".parse::<HoldTarget>().is_err());
-        assert!(format!("{ID}:w").parse::<HoldTarget>().is_err());
+        // Any string is an id: a plain one, and one whose last `:` names no
+        // component.
+        assert_eq!(target("left_eye").animatable, "left_eye");
+        assert_eq!(
+            (
+                target("rig/f/left_eye:x").animatable,
+                target("left_eye:x").component
+            ),
+            ("left_eye".to_string(), Some(0))
+        );
+        assert_eq!(target(&format!("{ID}:w")).animatable, format!("{ID}:w"));
+        assert!("rig/f/".parse::<HoldTarget>().is_err());
+        assert!(":x".parse::<HoldTarget>().is_err());
     }
 
     #[test]
     fn a_whole_hold_declines_every_write_and_releases() {
-        let id = Uuid::parse_str(ID).unwrap();
+        let id = ID;
         let mut holds = Holds::default();
         holds.hold("face", vec![target(ID)]);
         let face = holds.of("face").unwrap();
@@ -208,7 +213,7 @@ mod tests {
 
     #[test]
     fn a_held_component_keeps_what_the_scene_shows() {
-        let id = Uuid::parse_str(ID).unwrap();
+        let id = ID;
         let mut holds = Holds::default();
         holds.hold("face", vec![target(&format!("{ID}:y"))]);
         let face = holds.of("face").unwrap();
@@ -229,7 +234,7 @@ mod tests {
         );
         // Another animatable is free.
         assert_eq!(
-            resolve(face, Uuid::nil(), Decoded::Scalar(0.25), shown),
+            resolve(face, "another", Decoded::Scalar(0.25), shown),
             Some(Decoded::Scalar(0.25))
         );
     }
@@ -238,7 +243,7 @@ mod tests {
     /// own, as the inspector's locks are.
     #[test]
     fn whole_and_component_holds_are_independent() {
-        let id = Uuid::parse_str(ID).unwrap();
+        let id = ID;
         let mut holds = Holds::default();
         holds.hold("face", vec![target(ID), target(&format!("{ID}:x"))]);
         holds.release("face", Some(vec![target(ID)]));

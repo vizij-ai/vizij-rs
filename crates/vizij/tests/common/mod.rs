@@ -15,6 +15,21 @@ pub fn studio_face_glb(
     color: Uuid,
     bundle: Option<serde_json::Value>,
 ) -> Vec<u8> {
+    plate_face_glb(
+        &Uuid::new_v4().to_string(),
+        [x, y, yaw, color].map(|id| id.to_string()),
+        bundle,
+    )
+}
+
+/// [`studio_face_glb`]'s face with any RobotData ids: `element` the
+/// plate's, `[x, y, yaw, color]` its animatables'.
+#[allow(dead_code)] // each test binary uses what it needs of this module
+pub fn plate_face_glb(
+    element: &str,
+    [x, y, yaw, color]: [String; 4],
+    bundle: Option<serde_json::Value>,
+) -> Vec<u8> {
     let axis = |id: String| serde_json::json!({ "animated": true, "value": { "id": id, "type": "number", "default": 0 } });
     let fixed = |value: f32| serde_json::json!({ "animated": false, "value": value });
     let mut json = serde_json::json!({
@@ -25,17 +40,17 @@ pub fn studio_face_glb(
         "nodes": [{
             "mesh": 0,
             "extensions": { "RobotData": {
-                "id": Uuid::new_v4().to_string(),
+                "id": element,
                 "name": "Plate",
                 "type": "shape",
                 "material": "phong",
                 "features": {
-                    "translation.x": axis(x.to_string()),
-                    "translation.y": axis(y.to_string()),
+                    "translation.x": axis(x),
+                    "translation.y": axis(y),
                     "translation.z": fixed(0.0),
                     "rotation.r": fixed(0.0),
                     "rotation.p": fixed(0.0),
-                    "rotation.y": axis(yaw.to_string()),
+                    "rotation.y": axis(yaw),
                     "color.r": axis(format!("{color}.r")),
                     "color.g": axis(format!("{color}.g")),
                     "color.b": axis(format!("{color}.b")),
