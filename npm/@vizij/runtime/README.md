@@ -66,7 +66,10 @@ applied at the device's next step, which its promise waits for: under
 after issuing it. A `step(0)` advances no time: it carries changes through the
 Vizij's graphs and runs and moves nothing that time drives —
 clocks, oscillators, noise, springs, dampers, slews and animations hold — so
-a paused Vizij shows each edit as it is made. A value crosses one store key
+a paused Vizij shows each edit as it is made, wherever the face computes
+from it without time. An edit whose way to the rig crosses a spring, a
+damper or a slew becomes that smoother's new target, which shows once time
+passes. A value crosses one store key
 per step on its way from one of the Vizij's graphs to the next, so an edit
 can take a few zero steps to reach the rig. A `say` run follows its audio,
 which plays in real time. What the face does, it does through the methods its

@@ -23,17 +23,30 @@ pub struct UrdfKinematicsState {
 }
 
 /// What an IK node solves for: its target, the seed and weights it was
-/// given and the solver settings. Without a seed, a solve starts from the
+/// given and the solver settings — everything a solve reads but the chain.
+/// Without a seed, a solve starts from the joints the chain holds: the
 /// node's last solution.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct IkRequest {
-    pub target_pos: [f32; 3],
-    pub target_rot: Option<[f32; 4]>,
+    pub target: IkTarget,
     pub seed: Option<Vec<f32>>,
     pub weights: Option<Vec<f32>>,
     pub max_iters: u32,
     pub tol_pos: f32,
-    pub tol_rot: Option<f32>,
+}
+
+/// Where an IK node puts the chain's tip.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum IkTarget {
+    /// A position, the tip's orientation free.
+    Position([f32; 3]),
+    /// A position and an orientation (`[x, y, z, w]`), the orientation
+    /// within `tol_rot` radians.
+    Pose {
+        position: [f32; 3],
+        rotation: [f32; 4],
+        tol_rot: f32,
+    },
 }
 
 impl fmt::Debug for UrdfKinematicsState {
@@ -63,19 +76,17 @@ impl UrdfKinematicsState {
         }
     }
 
-    /// The joint angles `request` solves to: the last solve's when it asked
-    /// the same, else `solve`'s, kept as the last solve when it succeeds.
-    pub(crate) fn solve_once(
-        &mut self,
-        request: IkRequest,
-        solve: impl FnOnce(&mut Self, &IkRequest) -> Result<Vec<f32>, String>,
-    ) -> Result<Vec<f32>, String> {
+    /// The joint angles that reach `request`'s target: the last solve's when
+    /// it asked the same, the chain set back to them, else a new solve's,
+    /// kept as the last solve when it succeeds.
+    pub(crate) fn solve(&mut self, request: IkRequest) -> Result<Vec<f32>, String> {
         if let Some((last, solution)) = &self.last_solve {
             if *last == request {
+                self.chain.set_joint_positions_clamped(solution);
                 return Ok(solution.clone());
             }
         }
-        let solution = solve(self, &request)?;
+        let solution = solve_request(self, &request)?;
         self.last_solve = Some((request, solution.clone()));
         Ok(solution)
     }
@@ -199,6 +210,50 @@ fn apply_weights(
         solver.clear_nullspace_function();
     }
     Ok(())
+}
+
+/// Solve `request` on `state`'s chain, from its seed or, without one, from
+/// the joints the chain holds.
+fn solve_request(state: &mut UrdfKinematicsState, request: &IkRequest) -> Result<Vec<f32>, String> {
+    let seed = match &request.seed {
+        Some(seed) => seed.clone(),
+        None => {
+            let joints = state.chain.joint_positions();
+            if joints.len() == state.dofs {
+                joints
+            } else {
+                vec![0.0; state.dofs]
+            }
+        }
+    };
+    let mut solver = k::JacobianIkSolver::default();
+    let weights = request.weights.as_deref();
+    match request.target {
+        IkTarget::Position(position) => solve_position(
+            state,
+            &mut solver,
+            position,
+            &seed,
+            weights,
+            request.max_iters,
+            request.tol_pos,
+        ),
+        IkTarget::Pose {
+            position,
+            rotation,
+            tol_rot,
+        } => solve_pose(
+            state,
+            &mut solver,
+            position,
+            rotation,
+            &seed,
+            weights,
+            request.max_iters,
+            request.tol_pos,
+            tol_rot,
+        ),
+    }
 }
 
 /// Solve for joint positions that reach `target_pos` while respecting `weights`.

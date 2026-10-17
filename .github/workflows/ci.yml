@@ -320,6 +320,10 @@ jobs:
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
         run: cargo test -p vizij --lib quori_plays_its_animations -- --nocapture
+      - name: Step Quori at zero, its program and an animation running
+        env:
+          VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
+        run: cargo test -p vizij --lib quori_stepped_at_zero_shows_a_change_and_nothing_else_moves -- --nocapture
       - name: Drive the face from a client on the local bridge
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures

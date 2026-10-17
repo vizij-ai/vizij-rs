@@ -701,9 +701,10 @@ export class Runtime {
    * timestamps). A step of 0 advances no time: it carries changes through
    * the Vizij's graphs and runs, and moves nothing that time drives —
    * clocks, oscillators, noise, springs, dampers, slews and animations
-   * hold — so a paused Vizij shows each edit. A `say` run follows its
-   * audio, which plays in real time. Unavailable while `run()` owns the
-   * device.
+   * hold — so a paused Vizij shows each edit the face computes without
+   * time; one that reaches a smoother is its new target, shown once time
+   * passes. A `say` run follows its audio, which plays in real time.
+   * Unavailable while `run()` owns the device.
    */
   step(dtMs: number): void {
     this.inner.step(dtMs);

@@ -18,8 +18,8 @@ use super::shape_helpers::{
 };
 #[cfg(feature = "urdf_ik")]
 use super::urdfik::{
-    apply_joint_positions, fetch_joint_vector, hash_urdf_config, quat_from_value, solve_pose,
-    solve_position, tip_pose, vector_from_value, IkKey, IkRequest,
+    apply_joint_positions, fetch_joint_vector, hash_urdf_config, quat_from_value, tip_pose,
+    vector_from_value, IkKey, IkRequest, IkTarget,
 };
 use super::value_layout::{align_flattened, flatten_numeric, FlatValue, PortValue};
 use super::variadic::fold_numeric_variadic;
@@ -2129,29 +2129,23 @@ fn eval_urdf_position(
     };
     let state = rt.kinematics_state_mut(&spec.id, key)?;
     let dofs = state.dofs;
-    let mut solver = k::JacobianIkSolver::default();
 
-    let seed_candidate: Option<Vec<f32>> = inputs
+    let seed: Option<Vec<f32>> = inputs
         .get("seed")
         .map(|port| vector_from_value(&port.value, "UrdfIkPosition seed"))
         .transpose()?
         .or_else(|| params.seed.clone());
-
-    let seed_provided = seed_candidate.is_some();
-    let mut seed = seed_candidate.unwrap_or_else(|| state.chain.joint_positions());
-
-    if seed.len() != dofs {
-        if seed_provided {
+    if let Some(seed) = &seed {
+        if seed.len() != dofs {
             return Err(format!(
                 "UrdfIkPosition seed length {} does not match chain DoF {dofs}",
                 seed.len()
             ));
         }
-        seed = vec![0.0; dofs];
     }
 
-    let weights_ref = params.weights.as_ref().filter(|w| !w.is_empty());
-    if let Some(weights) = weights_ref {
+    let weights = params.weights.clone().filter(|w| !w.is_empty());
+    if let Some(weights) = &weights {
         if weights.len() != dofs {
             return Err(format!(
                 "UrdfIkPosition weights length {} does not match chain DoF {dofs}",
@@ -2159,25 +2153,13 @@ fn eval_urdf_position(
             ));
         }
     }
-    let request = IkRequest {
-        target_pos,
-        target_rot: None,
-        seed: seed_provided.then(|| seed.clone()),
-        weights: weights_ref.cloned(),
+
+    let solution = state.solve(IkRequest {
+        target: IkTarget::Position(target_pos),
+        seed,
+        weights,
         max_iters: params.max_iters.unwrap_or(100),
         tol_pos: params.tol_pos.unwrap_or(1e-3),
-        tol_rot: None,
-    };
-    let solution = state.solve_once(request, |state, request| {
-        solve_position(
-            state,
-            &mut solver,
-            target_pos,
-            seed.as_slice(),
-            request.weights.as_deref(),
-            request.max_iters,
-            request.tol_pos,
-        )
     })?;
 
     single_output(outputs, state.solution_record(&solution))
@@ -2221,29 +2203,23 @@ fn eval_urdf_pose(
     };
     let state = rt.kinematics_state_mut(&spec.id, key)?;
     let dofs = state.dofs;
-    let mut solver = k::JacobianIkSolver::default();
 
-    let seed_candidate: Option<Vec<f32>> = inputs
+    let seed: Option<Vec<f32>> = inputs
         .get("seed")
         .map(|port| vector_from_value(&port.value, "UrdfIkPose seed"))
         .transpose()?
         .or_else(|| params.seed.clone());
-
-    let seed_provided = seed_candidate.is_some();
-    let mut seed = seed_candidate.unwrap_or_else(|| state.chain.joint_positions());
-
-    if seed.len() != dofs {
-        if seed_provided {
+    if let Some(seed) = &seed {
+        if seed.len() != dofs {
             return Err(format!(
                 "UrdfIkPose seed length {} does not match chain DoF {dofs}",
                 seed.len()
             ));
         }
-        seed = vec![0.0; dofs];
     }
 
-    let weights_ref = params.weights.as_ref().filter(|w| !w.is_empty());
-    if let Some(weights) = weights_ref {
+    let weights = params.weights.clone().filter(|w| !w.is_empty());
+    if let Some(weights) = &weights {
         if weights.len() != dofs {
             return Err(format!(
                 "UrdfIkPose weights length {} does not match chain DoF {dofs}",
@@ -2251,27 +2227,17 @@ fn eval_urdf_pose(
             ));
         }
     }
-    let request = IkRequest {
-        target_pos,
-        target_rot: Some(target_rot),
-        seed: seed_provided.then(|| seed.clone()),
-        weights: weights_ref.cloned(),
+
+    let solution = state.solve(IkRequest {
+        target: IkTarget::Pose {
+            position: target_pos,
+            rotation: target_rot,
+            tol_rot: params.tol_rot.unwrap_or(1e-3),
+        },
+        seed,
+        weights,
         max_iters: params.max_iters.unwrap_or(100),
         tol_pos: params.tol_pos.unwrap_or(1e-3),
-        tol_rot: Some(params.tol_rot.unwrap_or(1e-3)),
-    };
-    let solution = state.solve_once(request, |state, request| {
-        solve_pose(
-            state,
-            &mut solver,
-            target_pos,
-            target_rot,
-            seed.as_slice(),
-            request.weights.as_deref(),
-            request.max_iters,
-            request.tol_pos,
-            params.tol_rot.unwrap_or(1e-3),
-        )
     })?;
 
     single_output(outputs, state.solution_record(&solution))
