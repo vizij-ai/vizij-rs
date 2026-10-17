@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.0.0
+
+### Major Changes
+
+- c54800c: A step with no time in it moves nothing that time drives. In `@vizij/runtime`, `step(0)` carries changes through the Vizij's graphs and runs and moves nothing that time drives: the springs, dampers and slews of its graphs, programs and skills keep their value (and a spring its velocity), as the clocks, oscillators, noise and animations already did. They used to jump to their targets, so a paused face snapped each smoothed value on every edit. An edit whose way to the rig crosses a spring, a damper or a slew becomes that smoother's new target, which the face shows once time passes. A `say` run follows its audio, which plays in real time. In `@vizij/node-graph`, the same holds for an `evalAll` with no `step` before it. An IK node answers a request equal to its last one with its last solution: solving a redundant chain again from its own solution moved its joints with nothing changed.
+
+### Patch Changes
+
+- 48c880b: `ready` and `whenReady` report a Vizij once the GPU has finished a frame drawing every mesh visible when it was drawn, each with its pipeline compiled, rather than once its scene is indexed. Until then the Vizij draws under the canvas's clear, so its rectangle shows the previous scene or the background, never a face with meshes missing; a reload's previous scene draws until the new one is ready. Under a software GPU, where a face's first draw compiles its pipelines for seconds, a page no longer stalls after `ready`: it draws on from there. Should something keep a Vizij from being drawn — a material that never loads, a mesh whose pipeline cannot be specialized — the console says what after 120 frames, and the Vizij is ready as it draws after 600 (ten seconds at 60 Hz).
+
 ## 6.2.0
 
 ### Minor Changes
