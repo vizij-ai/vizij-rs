@@ -37,3 +37,15 @@ result keys live under `arora/tasks/<module>/<function>/<run id>/`.
 A run's nodes are the graph's nodes under its id: an EDIT there changes the
 running behavior in place (`run::edit` builds one; kept nodes keep their
 state), and a LOAD of the main behavior leaves the live runs running.
+
+## Key holds
+
+`ProcessingGraph::key_holds` hands out a `KeyHolds`: store keys the graph
+leaves to its clients. A held key is left out of what the graph writes —
+the main behavior's outputs, every run's, and the unset of a spawned run's
+keys when it ends — so it keeps whatever a client writes, while the graph
+reads it like any other key. A halted run's status, the run's lifecycle, is
+written whatever holds it. Holds and releases take effect at the next tick:
+released, a key the graph writes every tick takes its value again. A page that shares the device's
+module holds this way the keys it is editing (`@vizij/runtime`'s
+`holdKeys`).

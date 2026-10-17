@@ -27,7 +27,11 @@
 //! device ([`VizijRuntime::hold`]), sets static features in place
 //! ([`set_static_feature`]), and reloads a structurally edited Vizij from
 //! its exported bytes with [`load_vizij`], whose previous scene draws until
-//! the new one is ready.
+//! the new one is ready. It holds the store keys it edits — rig inputs, pose
+//! weights, a program's inputs — at the values it writes, against the
+//! Vizij's own behavior, with [`VizijRuntime::hold_keys`]: the page and the
+//! device share the module, so the holds are the device's interpreter's,
+//! reached from the page.
 
 use std::cell::RefCell;
 use std::sync::mpsc::Sender;
@@ -35,10 +39,13 @@ use std::sync::Mutex;
 
 use arora::{Caller, LocalCaller};
 use arora_types::call::Call;
+use arora_types::data::Key;
 use arora_web::AroraWeb;
 use bevy::prelude::*;
 use uuid::Uuid;
-use vizij_arora_behavior::{encode_edit_call, encode_load_call, parse_spec, parse_spec_diff};
+use vizij_arora_behavior::{
+    encode_edit_call, encode_load_call, parse_spec, parse_spec_diff, KeyHolds,
+};
 use vizij_arora_hal::RigHal;
 use vizij_arora_host::{ChannelKeys, ProgramSelect};
 use vizij_arora_store::BlackboardStore;
@@ -188,7 +195,8 @@ fn send(event: ViewEvent) -> Result<(), JsValue> {
 /// already shown under `vizij_id` is replaced — how an authoring page
 /// reloads a structurally edited Vizij from its exported bytes: the previous
 /// scene keeps drawing until the new one is ready, then [`ready`] holds
-/// again; its placement, selection and holds carry over, and the page frees
+/// again; its placement, selection and view holds carry over — the new
+/// device holds no keys ([`VizijRuntime::hold_keys`]) — and the page frees
 /// the previous device. The device comes back JS-owned: step it, or `run`
 /// it, and `free` it after [`unload_vizij`].
 #[wasm_bindgen(js_name = loadVizij)]
@@ -226,7 +234,7 @@ pub fn load_vizij(
     );
     let speech = config.speech.as_ref().map(|build| build());
     let guests = parse_modules(modules)?;
-    let builder = face::builder_with_guests(
+    let (builder, holds) = face::builder_with_guests(
         &spec,
         rig.clone(),
         store.clone(),
@@ -261,12 +269,14 @@ pub fn load_vizij(
         rig_prefix,
         inner: AroraWeb::from(arora),
         caller,
+        holds,
         channel_keys,
     })
 }
 
 /// Take the Vizij down: its scene, its camera, its GLB, its selection and
-/// holds. The device the page holds keeps stepping until the page frees it.
+/// view holds. The device the page holds keeps stepping, its key holds
+/// with it, until the page frees it.
 #[wasm_bindgen(js_name = unloadVizij)]
 pub fn unload_vizij(vizij_id: String) -> Result<(), JsValue> {
     send(ViewEvent::UnloadFace {
@@ -585,7 +595,8 @@ pub fn run_edits(run: &str, from_json: &str, to_json: &str) -> Result<JsValue, J
 /// accessors, and the calls any client of the device makes (`call`,
 /// `invoke`, `spawn`, `halt`, `listKeys`, `describeMethods`) — plus the
 /// interpreter module's LOAD and EDIT of a Vizij graph (`loadGraph`,
-/// `applyGraphEdits`).
+/// `applyGraphEdits`), and the page's holds on store keys against the
+/// Vizij's behavior (`holdKeys`, `releaseKeys`).
 #[wasm_bindgen]
 pub struct VizijRuntime {
     vizij_id: String,
@@ -595,6 +606,9 @@ pub struct VizijRuntime {
     /// device — enqueued at once, applied at the next step, resolved on that
     /// step's reply. Usable while `run` owns the device.
     caller: LocalCaller,
+    /// The store keys the device's interpreter leaves to the page
+    /// ([`hold_keys`](Self::hold_keys)).
+    holds: KeyHolds,
     /// How the Vizij's animation channels name store keys, through its rig.
     channel_keys: ChannelKeys,
 }
@@ -621,7 +635,7 @@ impl VizijRuntime {
         let store = BlackboardStore::new();
         face::declare_keys(&store, &spec, &[], &[], &face::InputRanges::default());
         let guests = parse_modules(modules)?;
-        let builder =
+        let (builder, holds) =
             face::builder_with_guests(&spec, RigHal::new(), store.clone(), &[], None, guests)
                 .ok_or_else(|| JsValue::from_str("the graph does not encode (see the console)"))?;
         let arora = builder
@@ -633,6 +647,7 @@ impl VizijRuntime {
             rig_prefix: String::new(),
             inner: AroraWeb::from(arora),
             caller,
+            holds,
             channel_keys: ChannelKeys::default(),
         })
     }
@@ -674,6 +689,30 @@ impl VizijRuntime {
             face_id: self.shown_vizij()?,
             targets,
         })
+    }
+
+    /// Hold store keys — full store paths — at the values clients write: from
+    /// the next step until they are released, the Vizij's own behavior — its
+    /// graphs, its program and skill runs, its animations — does not write
+    /// them, while a client's write (`setValue`, `writeValues`, the rest
+    /// module's reset) still does. What the graphs compute from a held key
+    /// follows the client's value. A held key no client has written keeps
+    /// the value it had; holding a key the behavior does not write changes
+    /// nothing. The holds are the device's, one set whoever holds: a
+    /// reloaded Vizij starts with none.
+    #[wasm_bindgen(js_name = holdKeys)]
+    pub fn hold_keys(&self, keys: Vec<String>) {
+        self.holds.hold(keys.into_iter().map(Key::from));
+    }
+
+    /// Return held keys to the Vizij's behavior; omitted, every held key,
+    /// whoever held it. A key the behavior writes every step — a graph's
+    /// output, a run's, an animation's — takes its writer's value at the
+    /// next step.
+    #[wasm_bindgen(js_name = releaseKeys)]
+    pub fn release_keys(&self, keys: Option<Vec<String>>) {
+        self.holds
+            .release(keys.map(|keys| keys.into_iter().map(Key::from).collect()));
     }
 
     /// The slot this device's Vizij is shown under; an error for a device
