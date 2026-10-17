@@ -850,7 +850,9 @@ impl VizijRuntime {
     /// animation's id, name and duration in seconds, and `moduleAnimation`,
     /// its `AnimationClip` as an Arora `Value` — each track keyed by the store key
     /// its channel names through the Vizij's rig, as the Vizij's own
-    /// animations are ([`face::load_animations`]).
+    /// animations are ([`face::load_animations`]), and as [`channel_keys`]
+    /// names them from the Vizij's glTF document. On a device with no Vizij
+    /// a channel is its own key.
     #[wasm_bindgen(js_name = moduleAnimation)]
     pub fn module_animation(&self, animation_json: &str) -> Result<JsValue, JsValue> {
         let json: serde_json::Value = serde_json::from_str(animation_json)
@@ -1275,13 +1277,9 @@ fn parse_modules(modules: Option<js_sys::Array>) -> Result<Vec<face::GuestModule
 ///   animation module, so the source dispatches there.
 #[wasm_bindgen(js_name = composeVizij)]
 pub fn compose_vizij(gltf_json: &str, options_json: Option<String>) -> Result<JsValue, JsValue> {
-    use vizij_arora_host::{ros4hri, Bundle};
+    use vizij_arora_host::ros4hri;
 
-    let gltf: serde_json::Value = serde_json::from_str(gltf_json)
-        .map_err(|e| JsValue::from_str(&format!("glTF JSON: {e}")))?;
-    let bundle = Bundle::from_gltf_json(&gltf)
-        .ok_or_else(|| JsValue::from_str("the document carries no VIZIJ_bundle"))?;
-
+    let bundle = gltf_bundle(gltf_json)?;
     let options: serde_json::Value = match options_json.as_deref() {
         None | Some("") => serde_json::Value::Null,
         Some(json) => serde_json::from_str(json)
@@ -1322,6 +1320,29 @@ pub fn compose_vizij(gltf_json: &str, options_json: Option<String>) -> Result<Js
     let json = serde_json::to_string(&spec)
         .map_err(|e| JsValue::from_str(&format!("composed spec: {e}")))?;
     js_sys::JSON::parse(&json)
+}
+
+/// The store key each of `channels` drives on the Vizij whose glTF JSON
+/// document is `gltf_json` (its `VIZIJ_bundle` read as [`compose_vizij`]
+/// reads it), without loading it: each animation track channel resolved
+/// through the bundle's rig ([`vizij_arora_host::ChannelKeys`]), the keys
+/// [`VizijRuntime::module_animation`] gives the tracks of that Vizij once
+/// loaded — one key per channel, in order. What a page drives on a device
+/// with no Vizij ([`VizijRuntime::from_graph`] over [`compose_vizij`]'s
+/// graph) to move it as the loaded Vizij's animations do. An error for a
+/// document that carries no `VIZIJ_bundle`.
+#[wasm_bindgen(js_name = channelKeys)]
+pub fn channel_keys(gltf_json: &str, channels: Vec<String>) -> Result<Vec<String>, JsValue> {
+    let keys = gltf_bundle(gltf_json)?.channel_keys();
+    Ok(channels.iter().map(|channel| keys.key(channel)).collect())
+}
+
+/// The `VIZIJ_bundle` of a glTF JSON document, on its root or on a node.
+fn gltf_bundle(gltf_json: &str) -> Result<vizij_arora_host::Bundle, JsValue> {
+    let gltf: serde_json::Value = serde_json::from_str(gltf_json)
+        .map_err(|e| JsValue::from_str(&format!("glTF JSON: {e}")))?;
+    vizij_arora_host::Bundle::from_gltf_json(&gltf)
+        .ok_or_else(|| JsValue::from_str("the document carries no VIZIJ_bundle"))
 }
 
 /// The passthrough proof graph (`input` path → `output` path), as spec JSON.
