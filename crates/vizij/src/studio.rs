@@ -37,7 +37,7 @@
 //! form's value, as `arora_hal::set_targets` does.
 //!
 //! The view indexes a face's pose by bare animatable id — a compound feature
-//! whole, under its `<uuid>` — so the profile is the mapping between the two:
+//! whole, under its `<id>` — so the profile is the mapping between the two:
 //! a graph source, composed into the face's behavior like the ROS4HRI
 //! mapping, generated from the face's [`FaceMeta`] bindings. Per animatable
 //! (its value shape is its [`Rest`]):
@@ -565,11 +565,11 @@ mod tests {
         let meta = FaceMeta {
             animatables: HashMap::from([
                 (
-                    x,
+                    x.to_string(),
                     binding(FeatureKind::Translation, Some(0), Rest::Scalar(0.5)),
                 ),
                 (
-                    color,
+                    color.to_string(),
                     binding(FeatureKind::Color, None, Rest::Components([0.1, 0.2, 0.3])),
                 ),
             ]),

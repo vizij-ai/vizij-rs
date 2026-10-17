@@ -2,10 +2,15 @@
 //!
 //! Bevy loads the same GLB for meshes/materials/morphs; this module reads what
 //! Bevy's loader does not surface: the per-node `RobotData` glTF extension
-//! (the animatables — UUID-identified features the runtime drives) and the
+//! (the animatables — features the runtime drives, each by its id) and the
 //! scene-root node's `VIZIJ_bundle` extension (the face's graphs, poses,
 //! animations). The two worlds join on the glTF node name, which Bevy
 //! preserves as the spawned entity's `Name`.
+//!
+//! A RobotData id — an element's, an animatable's — is any string. The
+//! authoring app and Studio write UUIDs, but nothing here reads one as a
+//! UUID: an element is reported by its id as written, and an animatable is
+//! the store key the device writes its value under.
 //!
 //! RobotData comes in two feature models, both read here. The web's
 //! (vizij-web's authoring app) names a feature whole — `translation`,
@@ -20,7 +25,6 @@ use anyhow::{bail, Context, Result};
 use bevy::math::{Mat4, Quat, Vec3};
 use serde::Deserialize;
 use serde_json::Value as Json;
-use uuid::Uuid;
 use vizij_arora_host::Bundle;
 
 /// What one animated feature drives on a scene element.
@@ -176,8 +180,9 @@ impl Binding {
 #[derive(Debug, Clone)]
 pub struct Element {
     /// The element's own id — what the authoring app and Studio name it by,
-    /// and what a pick reports.
-    pub id: Uuid,
+    /// and what a pick reports. Any string: authoring and Studio write UUIDs,
+    /// and nothing here reads one as such.
+    pub id: String,
     pub node_name: String,
     /// `shape` (mesh-bearing) or `group` — an `ellipse` or `rectangle` reads
     /// as the `shape` it converts to ([`Element::primitive`]); unused until
@@ -254,8 +259,9 @@ fn primitive_feature(name: &str) -> Option<Option<(FeatureKind, Option<usize>)>>
 #[derive(Debug, Clone, Default)]
 pub struct FaceMeta {
     pub elements: Vec<Element>,
-    /// animatable id → what it drives.
-    pub animatables: HashMap<Uuid, Binding>,
+    /// animatable id → what it drives. An id is any string, the store key
+    /// the device writes the animatable under.
+    pub animatables: HashMap<String, Binding>,
     /// The view bounds: (center_x, center_y, size_x, size_y). The authored
     /// `rootBounds` of the root element, or for a GLB that declares none, the
     /// bounding box of its scene in the XY plane ([`scene_bounds`]) — what
@@ -367,7 +373,7 @@ impl RawFeature {
 
 #[derive(Deserialize)]
 struct RawRobotData {
-    id: Uuid,
+    id: String,
     material: Option<String>,
     #[serde(rename = "type", default)]
     kind: String,
@@ -459,7 +465,7 @@ impl FaceMeta {
                 let named_axis = axis;
                 let Some((animatable, axis)) = animatable_of(id, &kind, axis) else {
                     log::debug!(
-                        "{node_name}: {feature_name:?} names no animatable ({id:?}) — skipped"
+                        "{node_name}: {feature_name:?} names a component it does not take ({id:?}) — skipped"
                     );
                     unbound.extend(feature.studio_keys(id));
                     continue;
@@ -541,24 +547,28 @@ impl FaceMeta {
 }
 
 /// The animatable a feature's animatable `id` names, and the component of
-/// the feature it drives alone. A UUID is the animatable itself, driving the
-/// whole feature or, for a per-axis feature, its `axis`. Studio's split of a
-/// compound animatable `<uuid>` names its components `<uuid>.<axis>`: those
-/// bind the compound animatable to the whole feature, the key a device writes.
+/// the feature it drives alone. Studio's split of a compound animatable
+/// `<id>` names its components `<id>.<axis>`: on a per-axis feature, an id
+/// ending in the feature's own axis name binds the compound animatable to
+/// the whole feature, the key a device writes, and one ending in another of
+/// its axis names is a component it does not draw (`None`). Any other id is
+/// the animatable itself, driving the whole feature or, for a per-axis
+/// feature, its `axis`.
 fn animatable_of(
     id: &str,
     kind: &FeatureKind,
     axis: Option<usize>,
-) -> Option<(Uuid, Option<usize>)> {
-    if let Ok(uuid) = Uuid::parse_str(id) {
-        return Some((uuid, axis));
+) -> Option<(String, Option<usize>)> {
+    let split = axis.zip(kind.axes()).and_then(|(axis, axes)| {
+        let (compound, component) = id.rsplit_once('.')?;
+        let component = axes.iter().position(|named| *named == component)?;
+        Some((compound, component == axis))
+    });
+    match split {
+        Some((compound, true)) if !compound.is_empty() => Some((compound.to_string(), None)),
+        Some((compound, false)) if !compound.is_empty() => None,
+        _ => Some((id.to_string(), axis)),
     }
-    let (compound, component) = id.split_once('.')?;
-    let named = kind.axes()?[axis?];
-    (component == named)
-        .then(|| Uuid::parse_str(compound).ok())
-        .flatten()
-        .map(|uuid| (uuid, None))
 }
 
 /// The bounding box in the XY plane of every mesh of the GLB's first scene:
@@ -686,10 +696,48 @@ fn glb_json_chunk(bytes: &[u8]) -> Result<Json> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuid::Uuid;
 
     #[test]
     fn rejects_non_glb() {
         assert!(FaceMeta::from_glb_bytes(b"not a glb at all....").is_err());
+    }
+
+    /// RobotData ids are any strings: an element and its animatables named
+    /// with no UUID bind under their ids — a per-axis animatable, a compound
+    /// one Studio splits as `<id>.<axis>`, and an id holding a `.` whose
+    /// suffix is no axis of its feature, which is an animatable of its own.
+    #[test]
+    fn ids_that_are_no_uuids_bind_under_their_ids() {
+        let animated = |id: &str| serde_json::json!({ "animated": true, "value": { "id": id, "type": "number", "default": 0.5 } });
+        let gltf = serde_json::json!({
+            "nodes": [{
+                "name": "Plate",
+                "extensions": { "RobotData": {
+                    "id": "plate",
+                    "type": "shape",
+                    "features": {
+                        "translation.x": animated("plate_x"),
+                        "translation.y": animated("eyes.left"),
+                        "color.r": animated("plate_color.r"),
+                        "color.g": animated("plate_color.g"),
+                        "color.b": animated("plate_color.b"),
+                    }
+                } }
+            }]
+        });
+        let meta = FaceMeta::from_gltf_json(&gltf).expect("parses");
+        assert_eq!(meta.elements[0].id, "plate");
+        let mut ids: Vec<&str> = meta.animatables.keys().map(String::as_str).collect();
+        ids.sort();
+        assert_eq!(ids, ["eyes.left", "plate_color", "plate_x"]);
+        let x = &meta.animatables["plate_x"];
+        assert_eq!((&x.feature, x.axis), (&FeatureKind::Translation, Some(0)));
+        let y = &meta.animatables["eyes.left"];
+        assert_eq!((&y.feature, y.axis), (&FeatureKind::Translation, Some(1)));
+        let color = &meta.animatables["plate_color"];
+        assert_eq!((&color.feature, color.axis), (&FeatureKind::Color, None));
+        assert_eq!(color.rest, Rest::Components([0.5; 3]));
     }
 
     /// Every material feature the authoring app publishes binds — the four
@@ -774,7 +822,7 @@ mod tests {
         assert_eq!(meta.elements.len(), 1);
         assert_eq!(meta.animatables.len(), 1);
         assert_eq!(
-            meta.animatables[&animated].feature,
+            meta.animatables[&animated.to_string()].feature,
             FeatureKind::Translation
         );
     }
@@ -816,7 +864,7 @@ mod tests {
         let meta = FaceMeta::from_gltf_json(&gltf).expect("parses");
         assert_eq!(meta.elements[0].node_name, "GltfNode1");
         let bound = |id: &Uuid| {
-            let b = &meta.animatables[id];
+            let b = &meta.animatables[&id.to_string()];
             (b.feature.clone(), b.axis, b.feature_name())
         };
         assert_eq!(
@@ -882,7 +930,7 @@ mod tests {
             }]
         });
         let meta = FaceMeta::from_gltf_json(&gltf).expect("parses");
-        let rest = |i: usize| meta.animatables[&ids[i]].rest;
+        let rest = |i: usize| meta.animatables[&ids[i].to_string()].rest;
         assert_eq!(rest(0), Rest::Scalar(0.5));
         assert_eq!(rest(1), Rest::Components([0.1, 0.2, 0.0]));
         assert_eq!(rest(2), Rest::Components([0.1, 0.2, 0.3]));
@@ -949,10 +997,16 @@ mod tests {
                 opacity: 1.0,
             })
         );
-        assert_eq!(meta.animatables[&width].feature, FeatureKind::Scale);
-        assert_eq!(meta.animatables[&width].axis, Some(0));
-        assert_eq!(meta.animatables[&fill].feature, FeatureKind::Color);
-        assert!(!meta.animatables.contains_key(&stroke));
+        assert_eq!(
+            meta.animatables[&width.to_string()].feature,
+            FeatureKind::Scale
+        );
+        assert_eq!(meta.animatables[&width.to_string()].axis, Some(0));
+        assert_eq!(
+            meta.animatables[&fill.to_string()].feature,
+            FeatureKind::Color
+        );
+        assert!(!meta.animatables.contains_key(&stroke.to_string()));
     }
 
     /// A GLB declaring no rootBounds is framed on its scene's bounding box,

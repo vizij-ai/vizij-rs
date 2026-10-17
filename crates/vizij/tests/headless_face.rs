@@ -22,7 +22,7 @@ use vizij::view::meta::FeatureKind;
 use vizij::view::snapshot::{capture, SnapshotPlugin};
 use vizij::view::{self, Face, FaceAssets, ViewEvents, ViewOptions, ViewPlugin};
 
-use common::{glb, studio_face_glb};
+use common::{glb, plate_face_glb, studio_face_glb};
 
 const WIDTH: u32 = 320;
 const HEIGHT: u32 = 200;
@@ -84,11 +84,7 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
     assert!(!pose.is_empty(), "the rig holds no pose");
     let bound = pose
         .iter()
-        .filter(|(path, _)| {
-            path.to_string()
-                .parse::<Uuid>()
-                .is_ok_and(|id| face.bindings.by_uuid.contains_key(&id))
-        })
+        .filter(|(path, _)| face.bindings.by_id.contains_key(path.to_string().as_str()))
         .count();
     assert_eq!(
         bound,
@@ -97,7 +93,7 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
     );
     let translated = face
         .bindings
-        .by_uuid
+        .by_id
         .values()
         .find(|bound| bound.feature == FeatureKind::Translation)
         .map(|bound| bound.entity)
@@ -106,8 +102,8 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
         app.world().get::<Transform>(translated).is_some(),
         "the bound entity carries no transform"
     );
-    let element_ids: std::collections::HashSet<Uuid> =
-        face.meta.elements.iter().map(|e| e.id).collect();
+    let element_ids: std::collections::HashSet<&String> =
+        face.meta.elements.iter().map(|e| &e.id).collect();
     assert!(
         face.bindings.elements.values().any(|e| e.mesh.is_some()),
         "no element has a mesh"
@@ -136,30 +132,53 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
 #[test]
 #[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job"]
 fn a_studio_exported_face_renders_its_per_axis_pose() {
+    let element = Uuid::new_v4().to_string();
+    let ids = [(); 4].map(|_| Uuid::new_v4().to_string());
+    renders_its_per_axis_pose(&element, ids);
+}
+
+/// The same face with RobotData ids that are no UUIDs — an element `plate`,
+/// animatables `plate_x` … and the compound `plate_color` split per axis —
+/// loads, binds every animatable under its id and draws its pose.
+#[test]
+#[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job"]
+fn a_face_whose_ids_are_plain_strings_renders_its_pose() {
+    let ids = ["plate_x", "plate_y", "plate_yaw", "plate_color"].map(String::from);
+    renders_its_per_axis_pose("plate", ids);
+}
+
+/// The plate face with element id `element` and animatable ids
+/// `[x, y, yaw, color]`, its pose driven through them, rendered.
+fn renders_its_per_axis_pose(element: &str, [x, y, yaw, color]: [String; 4]) {
     use arora_hal::Hal;
     use arora_types::data::{Key, StateChange};
     use vizij::view::{Shading, Surface, ViewEvent};
     use vizij_api_core::value::{float, vec3};
 
-    let (x, y, yaw, color) = (
-        Uuid::new_v4(),
-        Uuid::new_v4(),
-        Uuid::new_v4(),
-        Uuid::new_v4(),
+    let glb = plate_face_glb(
+        element,
+        [x.clone(), y.clone(), yaw.clone(), color.clone()],
+        None,
     );
-    let glb = studio_face_glb(x, y, yaw, color, None);
     let meta = vizij::view::meta::FaceMeta::from_glb_bytes(&glb).expect("reads");
+    assert_eq!(
+        meta.elements
+            .iter()
+            .map(|e| e.id.as_str())
+            .collect::<Vec<_>>(),
+        [element]
+    );
     assert_eq!(meta.root_bounds, Some((0.0, 0.0, 1.0, 1.0)));
 
     let rig = vizij_arora_hal::RigHal::new();
     let mut pose = StateChange::new();
     for (id, value) in [
-        (x, float(0.25)),
-        (y, float(-0.125)),
-        (yaw, float(0.3)),
-        (color, vec3([1.0, 0.0, 0.0])),
+        (&x, float(0.25)),
+        (&y, float(-0.125)),
+        (&yaw, float(0.3)),
+        (&color, vec3([1.0, 0.0, 0.0])),
     ] {
-        pose.set.insert(Key::from(id.to_string()), Some(value));
+        pose.set.insert(Key::from(id.as_str()), Some(value));
     }
     rig.try_send(&pose);
 
@@ -191,8 +210,11 @@ fn a_studio_exported_face_renders_its_per_axis_pose() {
 
     let mut faces = app.world_mut().query::<&Face>();
     let face = faces.single(app.world()).expect("one face");
-    assert_eq!(face.bindings.by_uuid.len(), 4, "every animatable binds");
-    let targets = *face.bindings.elements.values().next().expect("the plate");
+    assert_eq!(face.bindings.by_id.len(), 4, "every animatable binds");
+    for id in [&x, &y, &yaw, &color] {
+        assert!(face.bindings.by_id.contains_key(id.as_str()), "{id} binds");
+    }
+    let targets = *face.bindings.elements.get(element).expect("the plate");
     let transform = app.world().get::<Transform>(targets.node).expect("a node");
     assert_eq!(transform.translation, Vec3::new(0.25, -0.125, 0.0));
     assert!(transform

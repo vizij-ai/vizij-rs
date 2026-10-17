@@ -15,7 +15,6 @@ use std::sync::Arc;
 use bevy::gizmos::config::{GizmoConfig, GizmoConfigGroup, GizmoLineConfig};
 use bevy::mesh::Indices;
 use bevy::prelude::*;
-use uuid::Uuid;
 
 use super::pick::ElementMeshes;
 use super::{ElementTargets, Face, Superseded};
@@ -61,7 +60,7 @@ struct SelectionGlow;
 
 /// The selected elements of each face, by face id.
 #[derive(Resource, Default)]
-pub(super) struct Selections(pub(super) HashMap<String, Vec<Uuid>>);
+pub(super) struct Selections(pub(super) HashMap<String, Vec<String>>);
 
 /// Each mesh's feature edges, found on first selection.
 #[derive(Resource, Default)]

@@ -59,13 +59,13 @@ pub(super) fn on_press(
             .bindings
             .elements
             .iter()
-            .filter_map(|(id, targets)| Some((*id, elements.drawn(targets)?.hit(ray)?)))
+            .filter_map(|(id, targets)| Some((id, elements.drawn(targets)?.hit(ray)?)))
             .min_by(|a, b| a.1.total_cmp(&b.1));
         if let Some((element_id, _)) = nearest {
             log::info!("face {}: picked element {element_id}", face.id);
             picks.0.push(Picked {
                 face_id: face.id.clone(),
-                element_id: Some(element_id),
+                element_id: Some(element_id.clone()),
             });
             return;
         }

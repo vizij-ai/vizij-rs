@@ -62,7 +62,6 @@ use bevy::math::Vec3A;
 use bevy::mesh::morph::MorphWeights;
 use bevy::prelude::*;
 use bevy::render::render_resource::BlendState;
-use uuid::Uuid;
 use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
 use vizij_api_core::Value;
 
@@ -176,19 +175,19 @@ pub struct Bound {
 #[derive(Default)]
 pub struct Bindings {
     /// animatable id → where it lands.
-    pub by_uuid: HashMap<Uuid, Bound>,
+    pub by_id: HashMap<String, Bound>,
     /// element id → the entities its features land on: what a pick tests,
     /// what the glow outlines, what a static feature is set on.
-    pub elements: HashMap<Uuid, ElementTargets>,
+    pub elements: HashMap<String, ElementTargets>,
     /// animatable id → the value last applied to the scene, what a held
     /// component keeps ([`hold`]), and what a pose that has not changed
     /// since leaves alone.
-    shown: HashMap<Uuid, Decoded>,
+    shown: HashMap<String, Decoded>,
     /// The animatables that share their target — an entity's feature, a
     /// morph target — with another, one of them binding it whole: each lands
     /// over the others, so every one lands every frame, as the last landed
     /// is what shows.
-    contended: HashSet<Uuid>,
+    contended: HashSet<String>,
     /// Whether something other than the pose landed on the scene since the
     /// last frame (a static feature): the next frame lands the whole pose
     /// again, over it.
@@ -265,7 +264,7 @@ pub enum ViewEvent {
     /// reloads.
     SetSelection {
         face_id: String,
-        elements: Vec<Uuid>,
+        elements: Vec<String>,
     },
     /// Hold rig outputs of the face against its device: a held animatable,
     /// or one component of it, keeps the value it shows while the device
@@ -294,7 +293,7 @@ pub enum ViewEvent {
     /// indexed; a reload shows whatever its GLB carries.
     SetStaticFeature {
         face_id: String,
-        element_id: Uuid,
+        element_id: String,
         feature: String,
         value: Value,
     },
@@ -370,7 +369,7 @@ pub struct ViewEvents(pub Mutex<Receiver<ViewEvent>>);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Picked {
     pub face_id: String,
-    pub element_id: Option<Uuid>,
+    pub element_id: Option<String>,
 }
 
 /// The picks (pointer presses on faces) since a consumer last drained them.
@@ -387,7 +386,7 @@ struct Placements(HashMap<String, Option<IRect>>);
 /// Static feature values waiting for their face to be indexed, by face id
 /// ([`ViewEvent::SetStaticFeature`]).
 #[derive(Resource, Default)]
-struct PendingStatics(HashMap<String, Vec<(Uuid, String, Value)>>);
+struct PendingStatics(HashMap<String, Vec<(String, String, Value)>>);
 
 /// Whether every requested face is ready ([`Face::ready`]) — and at least
 /// one is. What a snapshot waits for before it captures.
@@ -1426,7 +1425,7 @@ fn index_faces(
                 }
             }
             elements.insert(
-                element.id,
+                element.id.clone(),
                 ElementTargets {
                     node,
                     mesh: own_mesh,
@@ -1456,9 +1455,9 @@ fn index_faces(
             shaded.insert(mesh);
         }
 
-        let mut by_uuid = HashMap::new();
+        let mut by_id = HashMap::new();
         for (
-            uuid,
+            id,
             Binding {
                 node_name,
                 feature,
@@ -1497,8 +1496,8 @@ fn index_faces(
                     (mesh, None)
                 }
             };
-            by_uuid.insert(
-                *uuid,
+            by_id.insert(
+                id.clone(),
                 Bound {
                     entity,
                     feature: feature.clone(),
@@ -1511,12 +1510,12 @@ fn index_faces(
         log::info!(
             "face {}: scene indexed, {} bindings over {} elements",
             face.id,
-            by_uuid.len(),
+            by_id.len(),
             face.meta.elements.len(),
         );
-        let contended = contended(&by_uuid);
+        let contended = contended(&by_id);
         face.bindings = Bindings {
-            by_uuid,
+            by_id,
             elements,
             shown: HashMap::new(),
             contended,
@@ -1619,22 +1618,22 @@ fn apply_statics(
     }
 }
 
-/// The animatables of `by_uuid` whose target — entity, feature, morph
+/// The animatables of `by_id` whose target — entity, feature, morph
 /// target — another one lands on too, one of them binding it whole: per-axis
 /// animatables alone each set their own component, so they do not contend.
-fn contended(by_uuid: &HashMap<Uuid, Bound>) -> HashSet<Uuid> {
+fn contended(by_id: &HashMap<String, Bound>) -> HashSet<String> {
     let target = |bound: &Bound| (bound.entity, bound.feature.clone(), bound.morph_index);
     // Per target: how many land on it, and whether one binds it whole.
     let mut sharing = HashMap::new();
-    for bound in by_uuid.values() {
+    for bound in by_id.values() {
         let (count, whole) = sharing.entry(target(bound)).or_insert((0, false));
         *count += 1;
         *whole |= bound.axis.is_none();
     }
-    by_uuid
+    by_id
         .iter()
         .filter(|(_, bound)| matches!(sharing[&target(bound)], (count, true) if count > 1))
-        .map(|(id, _)| *id)
+        .map(|(id, _)| id.clone())
         .collect()
 }
 
@@ -1653,11 +1652,9 @@ fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneF
         let held = holds.of(&face.id);
         let bindings = &mut face.bindings;
         let reland = std::mem::take(&mut bindings.reland);
-        face.rig.visit_pose(|path, value| {
-            let Some(id) = animatable_of(path) else {
-                return;
-            };
-            let Some(bound) = bindings.by_uuid.get(&id) else {
+        face.rig.visit_pose(|id, value| {
+            // The rig keys its pose by bare animatable id.
+            let Some(bound) = bindings.by_id.get(id) else {
                 return;
             };
             let Some(mut decoded) = decode(&bound.feature, bound.axis, value) else {
@@ -1667,7 +1664,7 @@ fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneF
                 let shown = || {
                     bindings
                         .shown
-                        .get(&id)
+                        .get(id)
                         .copied()
                         .or_else(|| scene.read(bound.entity, &bound.feature, bound.morph_index))
                 };
@@ -1677,13 +1674,18 @@ fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneF
                 }
             }
             if !reland
-                && bindings.shown.get(&id) == Some(&decoded)
-                && !bindings.contended.contains(&id)
+                && bindings.shown.get(id) == Some(&decoded)
+                && !bindings.contended.contains(id)
             {
                 return;
             }
             scene.land(&mut bindings.assembled, bound, decoded);
-            bindings.shown.insert(id, decoded);
+            match bindings.shown.get_mut(id) {
+                Some(shown) => *shown = decoded,
+                None => {
+                    bindings.shown.insert(id.to_string(), decoded);
+                }
+            }
         });
     }
 }
@@ -1889,13 +1891,6 @@ impl SceneFeatures<'_, '_> {
 /// Toasty, whose tilts are order-sensitive.
 fn euler_zyx([x, y, z]: [f32; 3]) -> Quat {
     Quat::from_rotation_z(z) * Quat::from_rotation_y(y) * Quat::from_rotation_x(x)
-}
-
-/// The animatable a rig key names: the rig keys its pose by bare animatable
-/// id, so a namespaced or field-selected path — one holding a `/` or a `.`,
-/// which no id does — is no animatable.
-fn animatable_of(path: &str) -> Option<Uuid> {
-    Uuid::parse_str(path).ok()
 }
 
 fn as_f32(value: &Value) -> Option<f32> {
@@ -2178,12 +2173,12 @@ mod tests {
         world.init_resource::<Assets<StandardMaterial>>();
         world.init_resource::<Holds>();
         let node = world.spawn(Transform::default()).id();
-        let id = Uuid::new_v4();
+        let id = "eye".to_string();
         let rig = vizij_arora_hal::RigHal::new();
         let drive = |value: [f32; 3]| {
             arora_hal::Hal::try_send(
                 &rig,
-                &arora_types::data::StateChange::set(id.to_string().as_str(), vec3(value)),
+                &arora_types::data::StateChange::set(id.as_str(), vec3(value)),
             )
         };
         let bound = Bound {
@@ -2200,7 +2195,7 @@ mod tests {
                 rig: rig.clone(),
                 slot: 0,
                 bindings: Bindings {
-                    by_uuid: HashMap::from([(id, bound)]),
+                    by_id: HashMap::from([(id.clone(), bound)]),
                     indexed: true,
                     ..Default::default()
                 },
@@ -2250,15 +2245,18 @@ mod tests {
             axis,
             morph_index: None,
         };
-        let ids: Vec<Uuid> = (0..5).map(|_| Uuid::new_v4()).collect();
-        let by_uuid = HashMap::from([
-            (ids[0], bound(a, Some(0))),
-            (ids[1], bound(a, Some(1))),
-            (ids[2], bound(b, None)),
-            (ids[3], bound(b, Some(2))),
-            (ids[4], bound(a, Some(2))),
+        let ids: Vec<String> = (0..5).map(|i| format!("animatable{i}")).collect();
+        let by_id = HashMap::from([
+            (ids[0].clone(), bound(a, Some(0))),
+            (ids[1].clone(), bound(a, Some(1))),
+            (ids[2].clone(), bound(b, None)),
+            (ids[3].clone(), bound(b, Some(2))),
+            (ids[4].clone(), bound(a, Some(2))),
         ]);
-        assert_eq!(contended(&by_uuid), HashSet::from([ids[2], ids[3]]));
+        assert_eq!(
+            contended(&by_id),
+            HashSet::from([ids[2].clone(), ids[3].clone()])
+        );
     }
 
     #[test]

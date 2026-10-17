@@ -412,13 +412,9 @@ pub fn drain_picks() -> Result<JsValue, JsValue> {
 /// Vizij does not declare glows nothing.
 #[wasm_bindgen(js_name = setSelection)]
 pub fn set_selection(vizij_id: String, element_ids: Vec<String>) -> Result<(), JsValue> {
-    let elements = element_ids
-        .iter()
-        .map(|id| parse_uuid(id, "element id"))
-        .collect::<Result<_, _>>()?;
     send(ViewEvent::SetSelection {
         face_id: vizij_id,
-        elements,
+        elements: element_ids,
     })
 }
 
@@ -445,14 +441,10 @@ pub fn set_static_feature(
         .map_err(|e| JsValue::from_str(&format!("{feature}: {e}")))?;
     send(ViewEvent::SetStaticFeature {
         face_id: vizij_id,
-        element_id: parse_uuid(element_id, "element id")?,
+        element_id: element_id.to_string(),
         feature,
         value,
     })
-}
-
-fn parse_uuid(id: &str, what: &str) -> Result<Uuid, JsValue> {
-    Uuid::parse_str(id).map_err(|_| JsValue::from_str(&format!("{id:?} is no {what}")))
 }
 
 /// Parse hold targets (`<animatable id>` or `<animatable id>:<component>`).
@@ -473,7 +465,7 @@ pub fn memory_bytes() -> f64 {
 
 /// What a GLB declares, without loading it: `{ faceId, rigPrefix, rootBounds,
 /// elements: [{ id, name, kind, material, morphTargets }], animatables:
-/// { <uuid>: { node, feature } }, graphs: [{ id, kind }], programs: [{ id,
+/// { <id>: { node, feature } }, graphs: [{ id, kind }], programs: [{ id,
 /// label, graph }], activeProgramId, neutralInputs, poses,
 /// poseGroups, rigInputs, animations, metadata }` — what a page needs to build
 /// its controls and name the face's paths. `poses`, `poseGroups`, `rigInputs`
@@ -490,9 +482,9 @@ fn describe_json(meta: &FaceMeta) -> serde_json::Value {
     let mut animatables: Vec<(String, serde_json::Value)> = meta
         .animatables
         .iter()
-        .map(|(uuid, binding)| {
+        .map(|(id, binding)| {
             (
-                uuid.to_string(),
+                id.clone(),
                 serde_json::json!({ "node": binding.node_name, "feature": binding.feature_name() }),
             )
         })
