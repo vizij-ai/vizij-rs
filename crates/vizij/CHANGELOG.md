@@ -38,7 +38,9 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   carries changes through the face's graphs and runs and moves nothing that
   time drives: the springs, dampers and slews of its graphs,
   programs and skills hold with the clocks, oscillators, noise and
-  animations (vizij-graph-core 3). They used to jump to their targets.
+  animations (vizij-graph-core 3); an edit that reaches one of them is its
+  new target, shown once time passes. They used to jump to their targets.
+  A `say` run follows its audio, which plays in real time.
 - **Breaking — the next release is 1.0.0.** A face is ready —
   `Face::ready`, a new field, `view::all_faces_ready` (what the snapshot
   harness waits for) and the browser module's `ready` — once the GPU has

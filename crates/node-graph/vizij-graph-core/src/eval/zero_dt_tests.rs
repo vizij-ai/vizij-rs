@@ -482,3 +482,82 @@ fn an_ik_node_solves_again_only_when_its_target_changes() {
     step(&mut rt, &spec, 0.0);
     assert_ne!(joints(&rt), solved, "a new target is solved for");
 }
+
+/// An IK pose node solves again for a new orientation at the same position:
+/// the orientation is part of what it solves for. The two targets are the
+/// sample arm's tip at one set of joints and with its last joint, which
+/// turns about the tip's own axis, turned further.
+#[cfg(feature = "urdf_ik")]
+#[test]
+fn an_ik_pose_node_solves_again_for_a_new_rotation() {
+    let (_, sweep) = kinematics_cases()
+        .into_iter()
+        .find(|(kind, _)| *kind == "urdffk")
+        .expect("the FK case");
+    let arm = sweep
+        .nodes
+        .iter()
+        .find(|node| node.id == "node")
+        .expect("the FK node")
+        .params
+        .clone();
+    let value_json = |value: Value| serde_json::to_value(value).expect("a value serializes");
+    let tip = |joints: [f32; 6]| {
+        let spec = spec(json!({
+            "nodes": [
+                { "id": "joints", "type": "constant",
+                  "params": { "value": value_json(vocab::vector(joints.to_vec())) } },
+                { "id": "fk", "type": "urdffk", "params": serde_json::to_value(&arm).expect("params") },
+            ],
+            "edges": [edge("joints", "fk", "joints")],
+        }));
+        let mut rt = GraphRuntime::default();
+        step(&mut rt, &spec, DT);
+        let port = |name: &str| rt.outputs["fk"][name].value.clone();
+        (port("position"), port("rotation"))
+    };
+    let bent = [0.0, 0.3, 0.0, 0.4, 0.2, 0.0];
+    let (position, rotation) = tip(bent);
+    let (turned_position, turned) = tip([0.0, 0.3, 0.0, 0.4, 0.2, 0.5]);
+    let near = |a: &Value, b: &Value| {
+        let (a, b) = (
+            vocab::as_vec3(a).expect("vec3"),
+            vocab::as_vec3(b).expect("vec3"),
+        );
+        a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-5)
+    };
+    assert!(
+        near(&position, &turned_position),
+        "turning the last joint keeps the tip"
+    );
+    assert_ne!(rotation, turned, "and turns it");
+
+    let mut params = serde_json::to_value(&arm).expect("params");
+    params["max_iters"] = json!(512);
+    params["tol_pos"] = json!(1e-3);
+    params["tol_rot"] = json!(1e-2);
+    let mut spec = spec(json!({
+        "nodes": [
+            { "id": "position", "type": "constant", "params": { "value": value_json(position) } },
+            { "id": "rotation", "type": "constant", "params": { "value": value_json(rotation) } },
+            { "id": "seed", "type": "constant",
+              "params": { "value": value_json(vocab::vector(bent.to_vec())) } },
+            { "id": "node", "type": "urdfikpose", "params": params },
+        ],
+        "edges": [
+            edge("position", "node", "target_pos"),
+            edge("rotation", "node", "target_rot"),
+            edge("seed", "node", "seed"),
+        ],
+    }));
+    let joints = |rt: &GraphRuntime| rt.outputs["node"]["out"].value.clone();
+    let mut rt = GraphRuntime::default();
+    step(&mut rt, &spec, DT);
+    let solved = joints(&rt);
+    step(&mut rt, &spec, 0.0);
+    assert_eq!(joints(&rt), solved, "an unchanged pose keeps its solution");
+
+    spec.nodes[1].params.value = Some(turned);
+    step(&mut rt, &spec, 0.0);
+    assert_ne!(joints(&rt), solved, "a new rotation is solved for");
+}

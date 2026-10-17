@@ -24,9 +24,7 @@ All notable changes to `vizij-graph-core`. The format follows
   its last solution rather than solving again. An unseeded solve starts from
   the node's last solution, and solving a redundant chain again from it lands
   on another solution, so the joints moved on every evaluation with nothing
-  they depend on changed. `UrdfKinematicsState` keeps the last solve in a
-  field private to the crate, so it is built through
-  `UrdfKinematicsState::new` only.
+  they depend on changed.
 
 ## [2.6.0] - 2026-10-13
 
