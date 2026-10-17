@@ -2640,4 +2640,56 @@ mod animation_tests {
             "the animation moves the gaze: {resting} → {played}"
         );
     }
+
+    /// The keys Quori's animations play on, named from its glTF document
+    /// alone — the browser module's `channelKeys` — are the keys its loaded
+    /// face keys each track by ([`load_animations`], `moduleAnimation`).
+    /// Needs `VIZIJ_FIXTURES`; skipped otherwise.
+    #[test]
+    fn quoris_document_names_the_keys_its_animations_play_on() {
+        let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
+            eprintln!("VIZIJ_FIXTURES unset — skipping the Quori channel keys test");
+            return;
+        };
+        let glb = std::fs::read(std::path::Path::new(&fixtures).join("Quori_Current_Extended.glb"))
+            .expect("read the Quori GLB");
+
+        let meta = FaceMeta::from_glb_bytes(&glb).expect("read Quori");
+        let loaded = meta.bundle.channel_keys();
+        let played: Vec<(String, String)> = meta
+            .bundle
+            .animations
+            .iter()
+            .flat_map(|authored| animation::module_animation(authored, &loaded).tracks)
+            .map(|track| (track.name, track.animatable_id))
+            .collect();
+
+        let json_length = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+        let gltf: serde_json::Value =
+            serde_json::from_slice(&glb[20..20 + json_length]).expect("the GLB's JSON chunk");
+        let keys = Bundle::from_gltf_json(&gltf)
+            .expect("Quori carries a bundle")
+            .channel_keys();
+        let named: Vec<(String, String)> = played
+            .iter()
+            .map(|(channel, _)| (channel.clone(), keys.key(channel)))
+            .collect();
+        assert_eq!(named, played);
+        let rig = |channel: &str| (channel.to_string(), format!("rig/quori_latest/{channel}"));
+        assert_eq!(
+            named,
+            [
+                "gaze/left_right",
+                "gaze/left_right_copy",
+                "gaze/up_down",
+                "mouth/smile",
+                "poses/pose_d_concerned_d.weight",
+                "poses/pose_d_happy_d.weight",
+                "poses/pose_d_neutral_d.weight",
+                "poses/pose_d_sad_d.weight",
+                "poses/pose_d_surprise_d.weight",
+            ]
+            .map(rig)
+        );
+    }
 }

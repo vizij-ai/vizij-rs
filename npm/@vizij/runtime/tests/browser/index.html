@@ -168,6 +168,7 @@
         devices.get(id).readValues([vizij.ANIMATION_PLAYERS_PATH])[vizij.ANIMATION_PLAYERS_PATH],
       ),
     moduleAnimation: (id, animation) => devices.get(id).moduleAnimation(animation),
+    channelKeys: (gltf, channels) => vizij.channelKeys(gltf, channels),
     step: (id, dtMs) => devices.get(id).step(dtMs),
     // Take the device clock from the page's frames (`manual(false)` hands
     // it back): while the test holds it, only `advance` steps the devices.

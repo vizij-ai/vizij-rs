@@ -31,6 +31,10 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   profile declares keeps that profile's range; types are unchanged.
   `face::declare_keys` takes the rig's ranges, which `face::rig_ranges` reads
   off the bundle.
+- The browser module's `channelKeys(gltf, channels)`: the store key each
+  animation track channel drives on the Vizij whose glTF JSON document is
+  `gltf`, without loading it — one key per channel, resolved through the
+  bundle's rig as the loaded Vizij's `moduleAnimation` keys the track.
 
 ### Changed
 

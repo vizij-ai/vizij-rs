@@ -525,6 +525,7 @@ interface WasmBindings {
   skills(): Skill[];
   skillSource(id: string): object | null;
   composeVizij(gltf_json: string, options_json?: string): object;
+  channelKeys(gltf_json: string, channels: string[]): string[];
   behaviorValue(graph_json: string): object;
   outputKeys(graph_json: string): string[];
   runEdits(run: string, from_json: string, to_json: string): object;
@@ -880,7 +881,9 @@ export class Runtime {
    * id, name and duration (seconds), and `moduleAnimation`, the module's
    * `AnimationClip` with each track keyed by the store key its channel
    * names through this Vizij's rig, as the Vizij's own animations are
-   * loaded. Pass it on: `invoke("load_animation", { clip:
+   * loaded ({@link channelKeys} names the same keys from the Vizij's glTF
+   * document); on a device from {@link startRuntime}, which has no Vizij,
+   * a channel is its own key. Pass it on: `invoke("load_animation", { clip:
    * moduleAnimation })`.
    */
   moduleAnimation(animation: Animation): ModuleAnimation {
@@ -1267,6 +1270,32 @@ export async function composeVizij(
     JSON.stringify(gltf),
     options ? JSON.stringify(options) : undefined,
   );
+}
+
+/**
+ * The store key each of `channels` — animation track channels
+ * ({@link AnimationTrack.channel}) — drives on the Vizij whose glTF JSON
+ * document is `gltf` (its `VIZIJ_bundle` read as {@link composeVizij} reads
+ * it), without loading it: one key per channel, in order, the key
+ * {@link Runtime.moduleAnimation} gives the track once the Vizij is loaded.
+ * A channel resolves through the bundle's rig: to itself when it is a rig
+ * input's path; to the rig input at `rig/<faceId>/<channel>`; to the input
+ * the rig names it by (its input node's id without `input_`, or that id's
+ * `direct_` or `pose_control_` alias); else to `rig/<faceId>/<channel>`
+ * regardless (the bare channel when the bundle names no `faceId`). A
+ * channel under `rig/` is never prefixed again. What a page drives on a
+ * device from {@link startRuntime} over {@link composeVizij}'s graph, where
+ * the Vizij is not loaded, to move it as its animations do. Rejects a
+ * document that carries no `VIZIJ_bundle`. Calls {@link init} if it has not
+ * run yet.
+ */
+export async function channelKeys(
+  gltf: object,
+  channels: string[],
+  input?: InitInput,
+): Promise<string[]> {
+  await init(input);
+  return bindings().channelKeys(JSON.stringify(gltf), channels);
 }
 
 /**
