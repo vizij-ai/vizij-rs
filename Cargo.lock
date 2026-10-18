@@ -10490,13 +10490,14 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-behavior"
-version = "7.0.0"
+version = "7.1.0"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
  "arora-module",
  "arora-simple-data-store",
  "arora-types",
+ "crossbeam-channel",
  "log",
  "serde",
  "serde_json",

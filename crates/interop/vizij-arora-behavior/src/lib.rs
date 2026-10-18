@@ -297,6 +297,59 @@ pub struct ProcessingGraph {
     /// Halts requested since the last tick; applied by the next tick, which
     /// owns the store.
     pending_halts: Vec<TaskId>,
+    /// The store keys the graph leaves out of its writes ([`KeyHolds`]).
+    held: HashSet<Key>,
+    /// Where [`KeyHolds`] handles send their holds and releases: the sending
+    /// end each handle clones.
+    hold_sender: crossbeam_channel::Sender<HoldEdit>,
+    /// Where the next tick takes the holds and releases from.
+    hold_edits: crossbeam_channel::Receiver<HoldEdit>,
+}
+
+/// A handle on the store keys a [`ProcessingGraph`] holds. A held key is
+/// left out of what the graph writes to the store — its behavior's outputs,
+/// its runs', and the unset of a spawned run's keys when the run ends — so
+/// it keeps whatever a client writes to it. The graph reads a held key like
+/// any other, so what it computes from the key follows the client's value.
+/// A hold or a release takes effect at the graph's next tick: released, a
+/// key the graph writes every tick takes its value again, and one it
+/// dropped a single write of (an unset) keeps the client's. A halted run's
+/// status is the run's lifecycle, which every reader of the run relies on:
+/// it is written whatever holds it. Holding a key the graph does not write
+/// changes nothing. Clones hold through the same graph
+/// ([`ProcessingGraph::key_holds`]).
+#[derive(Clone, Debug)]
+pub struct KeyHolds {
+    edits: crossbeam_channel::Sender<HoldEdit>,
+}
+
+/// A change to the keys a [`ProcessingGraph`] holds, sent by a
+/// [`KeyHolds`] handle.
+#[derive(Debug)]
+enum HoldEdit {
+    Hold(Vec<Key>),
+    /// The keys to release; `None` releases every held key.
+    Release(Option<Vec<Key>>),
+}
+
+impl KeyHolds {
+    /// Hold `keys` from the graph's next tick on: the graph no longer writes
+    /// them, so each keeps the value a client writes.
+    pub fn hold(&self, keys: impl IntoIterator<Item = Key>) {
+        self.send(HoldEdit::Hold(keys.into_iter().collect()));
+    }
+
+    /// Return `keys` to the graph — every held key when `None` — from its
+    /// next tick on, which writes them again where it writes them.
+    pub fn release(&self, keys: Option<Vec<Key>>) {
+        self.send(HoldEdit::Release(keys));
+    }
+
+    /// A graph that is gone writes nothing: an edit sent to it has nothing
+    /// left to hold, so the send's failure is not an error.
+    fn send(&self, edit: HoldEdit) {
+        let _ = self.edits.send(edit);
+    }
 }
 
 /// Normalize and deserialize a Vizij graph spec from JSON (any form the spec
@@ -387,6 +440,7 @@ impl ProcessingGraph {
     /// The spec is lowered — and the input paths derived — at the first tick.
     pub fn from_spec(spec: GraphSpec) -> Result<Self, String> {
         let graph = graph_codec::encode(&spec)?;
+        let (hold_sender, hold_edits) = crossbeam_channel::unbounded();
         let mut this = Self {
             main: graph.root,
             graph,
@@ -399,9 +453,48 @@ impl ProcessingGraph {
             run_order: Vec::new(),
             fragments: HashMap::new(),
             pending_halts: Vec::new(),
+            held: HashSet::new(),
+            hold_sender,
+            hold_edits,
         };
         this.install_runner();
         Ok(this)
+    }
+
+    /// A handle that holds store keys against this graph's writes
+    /// ([`KeyHolds`]). Every handle holds through this graph, whichever
+    /// made the hold.
+    pub fn key_holds(&self) -> KeyHolds {
+        KeyHolds {
+            edits: self.hold_sender.clone(),
+        }
+    }
+
+    /// Apply the holds and releases sent since the last tick, in the order
+    /// they were sent.
+    fn take_hold_edits(&mut self) {
+        while let Ok(edit) = self.hold_edits.try_recv() {
+            match edit {
+                HoldEdit::Hold(keys) => self.held.extend(keys),
+                HoldEdit::Release(Some(keys)) => {
+                    for key in &keys {
+                        self.held.remove(key);
+                    }
+                }
+                HoldEdit::Release(None) => self.held.clear(),
+            }
+        }
+    }
+
+    /// Write `change` to `store`, less the keys the graph holds.
+    fn write(&self, store: &dyn DataStore, mut change: StateChange) -> Result<(), BehaviorError> {
+        if !self.held.is_empty() {
+            change.set.retain(|key, _| !self.held.contains(key));
+            change.unset.retain(|key| !self.held.contains(key));
+        }
+        store.write(change).map_err(|e| BehaviorError {
+            message: e.to_string(),
+        })
     }
 
     /// Make the runner the graph's root: a `layers` holding the main
@@ -697,6 +790,7 @@ impl ProcessingGraph {
                 continue;
             };
             if run.owned_keys.is_empty() {
+                // The run's lifecycle, written whatever holds its key.
                 let mut change = StateChange::new();
                 change
                     .set
@@ -722,9 +816,7 @@ impl ProcessingGraph {
         if !run.owned_keys.is_empty() {
             let mut change = StateChange::new();
             change.unset.extend(run.owned_keys);
-            store.write(change).map_err(|e| BehaviorError {
-                message: e.to_string(),
-            })?;
+            self.write(store, change)?;
         }
         Ok(())
     }
@@ -794,6 +886,9 @@ impl ProcessingGraph {
         call_bridge: &mut dyn CallBridge,
         dt: f32,
     ) -> Result<(), BehaviorError> {
+        // The holds and releases sent since the last tick hold from this one.
+        self.take_hold_edits();
+
         // Halts requested since the last tick: write each halted run's
         // terminal status and prune its fragment — this phase owns the store.
         self.process_halts(store)?;
@@ -824,7 +919,8 @@ impl ProcessingGraph {
         evaluate_writes_with_functions(&mut self.rt, &self.spec, &mut functions)
             .map_err(|message| BehaviorError { message })?;
 
-        // Write the graph's outputs back to the store.
+        // Write the graph's outputs back to the store, but for the keys it
+        // holds.
         let writes = std::mem::take(&mut self.rt.writes);
         let mut change = StateChange::new();
         for op in writes.into_vec() {
@@ -832,9 +928,7 @@ impl ProcessingGraph {
                 .set
                 .insert(Key::new(op.path.to_string()), Some(op.value));
         }
-        store.write(change).map_err(|e| BehaviorError {
-            message: e.to_string(),
-        })?;
+        self.write(store, change)?;
 
         // The runs the graph's spawn nodes requested, started now that the
         // evaluation is over. The graph keeps no handle, so the runs are its
@@ -2861,5 +2955,245 @@ mod tests {
             .retain(|field| field.id == run::run_behavior::ids::run_behavior::NAME);
         assert!(graph.spawn(call, RunPolicy::Concurrent).is_err());
         assert_eq!(vizij_nodes(&graph), nodes_before);
+    }
+
+    /// A chain: `sensor/x` passed through to `actuator/y`, and `actuator/y`
+    /// doubled into `actuator/z` — a key the graph both writes and reads.
+    fn doubling_chain() -> GraphSpec {
+        parse_spec(
+            &json!({
+                "nodes": [
+                    { "id": "x", "type": "input", "params": { "path": "sensor/x" } },
+                    { "id": "y", "type": "output", "params": { "path": "actuator/y" } },
+                    { "id": "y_in", "type": "input", "params": { "path": "actuator/y", "value": 0.0 } },
+                    { "id": "two", "type": "constant", "params": { "value": 2.0 } },
+                    { "id": "twice", "type": "multiply" },
+                    { "id": "z", "type": "output", "params": { "path": "actuator/z" } }
+                ],
+                "edges": [
+                    { "from": { "node_id": "x" }, "to": { "node_id": "y", "input": "in" } },
+                    { "from": { "node_id": "y_in" }, "to": { "node_id": "twice", "input": "operand_0" } },
+                    { "from": { "node_id": "two" }, "to": { "node_id": "twice", "input": "operand_1" } },
+                    { "from": { "node_id": "twice" }, "to": { "node_id": "z", "input": "in" } }
+                ]
+            })
+            .to_string(),
+        )
+        .expect("the chain parses")
+    }
+
+    /// A held key keeps the value a client writes against the graph's
+    /// output on it, whatever the graph computes; what the graph computes
+    /// from the key follows the client's value. Released, the key takes the
+    /// graph's value again at the next tick.
+    #[test]
+    fn a_held_key_keeps_the_client_s_value_against_the_graph_until_released() {
+        let store = SimpleDataStore::new();
+        let mut graph = ProcessingGraph::from_spec(doubling_chain()).expect("from_spec");
+        let holds = graph.key_holds();
+        let mut bridge = NoopBridge;
+        store
+            .write(StateChange::set("sensor/x", float(0.5)))
+            .unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read(&store, "actuator/y"), Some(float(0.5)));
+
+        holds.hold([Key::from("actuator/y")]);
+        store
+            .write(StateChange::set("actuator/y", float(0.9)))
+            .unwrap();
+        for x in [0.5, 0.25] {
+            store.write(StateChange::set("sensor/x", float(x))).unwrap();
+            graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+            assert_eq!(read(&store, "actuator/y"), Some(float(0.9)), "held");
+            assert_eq!(
+                read(&store, "actuator/z"),
+                Some(float(1.8)),
+                "the graph reads the client's value"
+            );
+        }
+
+        holds.release(Some(vec![Key::from("actuator/y")]));
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(
+            read(&store, "actuator/y"),
+            Some(float(0.25)),
+            "released, the graph writes it again"
+        );
+    }
+
+    /// A key a run writes is held like one the main behavior writes: the
+    /// run's output leaves it to the client until it is released.
+    #[test]
+    fn a_held_key_keeps_the_client_s_value_against_a_run() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        let mut bridge = NoopBridge;
+        store
+            .write(StateChange::set("sensor/x", float(0.75)))
+            .unwrap();
+        let program = parse_spec(
+            &json!({
+                "nodes": [
+                    { "id": "c", "type": "constant", "params": { "value": 0.6 } },
+                    { "id": "out", "type": "output", "params": { "path": "program/out" } }
+                ],
+                "edges": [
+                    { "from": { "node_id": "c" }, "to": { "node_id": "out", "input": "in" } }
+                ]
+            })
+            .to_string(),
+        )
+        .expect("the program parses");
+        spawn_behavior(&mut graph, "program", &program);
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read(&store, "program/out"), Some(float(0.6)));
+
+        let holds = graph.key_holds();
+        holds.hold([Key::from("program/out")]);
+        store
+            .write(StateChange::set("program/out", float(0.1)))
+            .unwrap();
+        for _ in 0..3 {
+            graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+            assert_eq!(read(&store, "program/out"), Some(float(0.1)), "held");
+        }
+        assert_eq!(
+            read(&store, "actuator/y"),
+            Some(float(0.75)),
+            "the main behavior writes on"
+        );
+
+        holds.release(None);
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read(&store, "program/out"), Some(float(0.6)), "released");
+    }
+
+    /// Holding a key the graph does not write changes nothing: the graph
+    /// writes its outputs as before, and the key keeps whatever a client
+    /// writes, as it would unheld.
+    #[test]
+    fn holding_a_key_the_graph_does_not_write_changes_nothing() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        let mut bridge = NoopBridge;
+        graph.key_holds().hold([Key::from("nobody/writes")]);
+        store
+            .write(StateChange::set("sensor/x", float(0.75)))
+            .unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read(&store, "actuator/y"), Some(float(0.75)));
+        assert_eq!(read(&store, "nobody/writes"), None);
+        store
+            .write(StateChange::set("nobody/writes", float(0.3)))
+            .unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read(&store, "nobody/writes"), Some(float(0.3)));
+        assert_eq!(read(&store, "actuator/y"), Some(float(0.75)));
+    }
+
+    /// The interpreter is `Send` and `Sync` whether or not anything holds
+    /// through it, and so is a hold handle.
+    #[test]
+    fn the_interpreter_and_its_key_holds_are_send_and_sync() {
+        fn send_and_sync<T: Send + Sync>() {}
+        send_and_sync::<ProcessingGraph>();
+        send_and_sync::<KeyHolds>();
+    }
+
+    /// A spawned run's keys are unset when it ends, but for a held one,
+    /// which keeps the client's value — also once released, since nothing
+    /// writes it again. The run's status, its lifecycle, is unset like any
+    /// key it held.
+    #[test]
+    fn a_held_key_of_a_spawned_run_keeps_the_client_s_value_when_the_run_ends() {
+        let call = look_at();
+        let parameter = call.args[0].id;
+        let spec = parse_spec(
+            &serde_json::json!({
+                "nodes": [
+                    { "id": "x", "type": "input",
+                      "params": { "path": "cmd/x", "value": 0.0 } },
+                    { "id": "spawn", "type": "spawn",
+                      "params": {
+                          "function": call.id.to_string(),
+                          "module": call.module_id.unwrap().to_string(),
+                          "record_keys": [parameter.to_string()],
+                      } },
+                ],
+                "edges": [
+                    { "from": { "node_id": "x" },
+                      "to": { "node_id": "spawn", "input": "args_0" } },
+                ],
+            })
+            .to_string(),
+        )
+        .expect("the spec parses");
+        let store = SimpleDataStore::new();
+        let mut graph = ProcessingGraph::from_spec(spec).expect("from_spec");
+        let holds = graph.key_holds();
+        let mut bridge = RunBridge::new(vec![task::running(), task::success()]);
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        store.write(StateChange::set("cmd/x", float(0.5))).unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        let run = graph
+            .runs
+            .values()
+            .next()
+            .expect("the change spawned a run");
+        let status = run.status_key.clone();
+        // Its update key: the call's arguments, which a client may write.
+        let kept = run
+            .owned_keys
+            .iter()
+            .find(|key| **key != status)
+            .expect("the run holds a key besides its status")
+            .clone();
+        let update = Value::Structure(Structure {
+            id: call.id,
+            fields: vec![StructureField {
+                id: parameter,
+                value: Box::new(float(0.25)),
+            }],
+        });
+
+        holds.hold([kept.clone()]);
+        let mut change = StateChange::new();
+        change.set.insert(kept.clone(), Some(update.clone()));
+        store.write(change).unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert!(graph.runs.is_empty(), "the run ended");
+        assert_eq!(read_key(&store, &status), None, "its status is unset");
+        assert_eq!(read_key(&store, &kept), Some(update.clone()), "held");
+
+        holds.release(None);
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read_key(&store, &kept), Some(update));
+    }
+
+    /// A halted run's status is written whatever holds it: the halt is the
+    /// run's lifecycle, which every reader of the run relies on.
+    #[test]
+    fn a_halted_run_s_status_is_written_whatever_holds_it() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        let mut bridge = RunBridge::new(Vec::new());
+        store
+            .write(StateChange::set("sensor/x", float(0.75)))
+            .unwrap();
+        let handle = graph
+            .spawn(look_at(), RunPolicy::Concurrent)
+            .expect("spawn");
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read_key(&store, &handle.status), Some(task::running()));
+
+        graph.key_holds().hold([handle.status.clone()]);
+        graph.halt(handle.id).expect("halt");
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read_key(&store, &handle.status), Some(task::failure()));
     }
 }

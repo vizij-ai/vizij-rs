@@ -9,7 +9,7 @@ use anyhow::{anyhow, Result};
 use arora_types::data::{DataStore, Key, StateChange};
 use vizij_api_core::value::{float, Value};
 use vizij_arora_behavior::{gaze, speech, viseme};
-use vizij_arora_behavior::{parse_spec, ProcessingGraph};
+use vizij_arora_behavior::{parse_spec, KeyHolds, ProcessingGraph};
 use vizij_arora_hal::RigHal;
 use vizij_arora_host::Bundle;
 pub use vizij_arora_host::ProgramSelect;
@@ -473,11 +473,16 @@ pub fn builder_for(
     speech: Option<arora::HostModule>,
 ) -> Option<arora::AroraBuilder> {
     builder_with_guests(spec, rig, store, embedded_skills, speech, Vec::new())
+        .map(|(builder, _)| builder)
 }
 
 /// [`builder_for`] with wasm modules loaded as guests besides the host-linked
 /// ones: their functions dispatch by id, from a call and from the graph's
-/// `ExternalFunction` nodes, like the host modules'.
+/// `ExternalFunction` nodes, like the host modules'. Returned with the holds
+/// on the device's interpreter ([`KeyHolds`]): the store keys it leaves to
+/// the values clients write — every write the face's composition makes
+/// goes through it, its graphs', its program and skill runs' and its
+/// animation source's.
 pub fn builder_with_guests(
     spec: &str,
     rig: RigHal,
@@ -485,7 +490,7 @@ pub fn builder_with_guests(
     embedded_skills: &[(String, serde_json::Value)],
     speech: Option<arora::HostModule>,
     guests: Vec<GuestModule>,
-) -> Option<arora::AroraBuilder> {
+) -> Option<(arora::AroraBuilder, KeyHolds)> {
     let rig_prefix = rig_prefix_of(spec);
     // Studio's targets land in both of their forms (`studio::TargetForms`).
     #[cfg(feature = "studio")]
@@ -543,6 +548,7 @@ pub fn builder_with_guests(
         speech::say::ids::say::FUNCTION,
         speech::say_fragment_from(embedded_skills, &rig_prefix),
     );
+    let holds = graph.key_holds();
     let builder = arora::Arora::builder()
         .with_hal(Box::new(rig))
         .with_host_module(rest::host_module(store.clone_box()))
@@ -559,7 +565,7 @@ pub fn builder_with_guests(
     let builder = guests.into_iter().fold(builder, |builder, (header, wasm)| {
         builder.with_module(header, wasm)
     });
-    Some(builder)
+    Some((builder, holds))
 }
 
 /// Load `bundle`'s animations into a built device's animation module, through
@@ -2914,5 +2920,114 @@ mod animation_tests {
             ]
             .map(rig)
         );
+    }
+
+    /// A held key keeps the value a page writes against each of the face's
+    /// writers — its graph, its program, its animation — and what the face
+    /// computes from it follows the page's value; released, the key takes
+    /// its writer's value again at the next step. Holding a key nothing
+    /// writes changes nothing.
+    #[test]
+    fn a_held_key_keeps_the_page_s_value_against_each_writer() {
+        let bundle = Bundle::from_bundle_json(&serde_json::json!({
+            "metadata": { "faceId": "f", "activeMotionGraphId": "program" },
+            "graphs": [
+                { "kind": "rig", "spec": { "nodes": [
+                    { "id": "x", "type": "input", "params": { "path": "rig/f/x", "value": 0.0 } },
+                    { "id": "two", "type": "constant", "params": { "value": 2.0 } },
+                    { "id": "twice", "type": "multiply" },
+                    { "id": "twice_out", "type": "output", "params": { "path": "rig/f/twice" } },
+                    { "id": "c", "type": "constant", "params": { "value": 0.5 } },
+                    { "id": "graph_out", "type": "output", "params": { "path": "rig/f/graph" } },
+                ], "edges": [
+                    { "from": { "node_id": "x" }, "to": { "node_id": "twice", "input": "operand_0" } },
+                    { "from": { "node_id": "two" }, "to": { "node_id": "twice", "input": "operand_1" } },
+                    { "from": { "node_id": "twice" }, "to": { "node_id": "twice_out", "input": "in" } },
+                    { "from": { "node_id": "c" }, "to": { "node_id": "graph_out", "input": "in" } },
+                ] } },
+                { "kind": "motiongraph", "id": "program", "spec": { "nodes": [
+                    { "id": "c", "type": "constant", "params": { "value": 0.75 } },
+                    { "id": "out", "type": "output", "params": { "path": "rig/f/program" } },
+                ], "edges": [
+                    { "from": { "node_id": "c" }, "to": { "node_id": "out", "input": "in" } },
+                ] } },
+            ],
+            "animations": [
+                { "id": "ramp", "clip": { "duration": 10, "tracks": [
+                    { "channel": "x", "keyframes": [
+                        { "time": 0, "value": 0 }, { "time": 10, "value": 1 },
+                    ] },
+                ] } },
+            ],
+        }));
+        let spec = bundle
+            .compose(&["rig"], &ProgramSelect::None, true, &[])
+            .expect("compose")
+            .to_string();
+        let (builder, holds) = builder_with_guests(
+            &spec,
+            RigHal::new(),
+            BlackboardStore::new(),
+            &[],
+            None,
+            Vec::new(),
+        )
+        .expect("build the device");
+        let mut arora = builder.build().expect("build arora");
+        load_animations(&mut arora, &bundle).expect("load the face's animations");
+        spawn_program(&mut arora, &bundle, &ProgramSelect::Auto)
+            .expect("spawn the program")
+            .expect("the bundle names one");
+        step_for(&mut arora, 0.05);
+        play(&mut arora, "ramp");
+        step_for(&mut arora, 1.0);
+        let animated = read(&arora, "rig/f/x").expect("the animation writes x");
+        assert!(animated > 0.05, "the ramp moves x ({animated})");
+        assert_eq!(read(&arora, "rig/f/graph"), Some(0.5));
+        assert_eq!(read(&arora, "rig/f/program"), Some(0.75));
+
+        let written = |arora: &arora::Arora, values: &[(&str, f32)]| {
+            let mut change = StateChange::new();
+            for (path, value) in values {
+                change.set.insert(Key::from(*path), Some(float(*value)));
+            }
+            arora.store().write(change).expect("write");
+        };
+        let held = [
+            ("rig/f/x", 0.05),
+            ("rig/f/graph", 0.1),
+            ("rig/f/program", 0.2),
+        ];
+        holds.hold(
+            held.iter()
+                .map(|(path, _)| Key::from(*path))
+                .chain([Key::from("rig/f/nobody")]),
+        );
+        written(&arora, &held);
+        step_for(&mut arora, 0.5);
+        for (path, value) in held {
+            assert_eq!(
+                read(&arora, path),
+                Some(value),
+                "{path} keeps the page's value"
+            );
+        }
+        assert_eq!(
+            read(&arora, "rig/f/twice"),
+            Some(0.1),
+            "the graph computes from the page's value"
+        );
+        assert_eq!(read(&arora, "rig/f/nobody"), None);
+
+        holds.release(Some(vec![Key::from("rig/f/x")]));
+        arora.step(Duration::from_millis(10)).expect("step");
+        let x = read(&arora, "rig/f/x").expect("x");
+        assert!(x > animated, "the animation writes x again ({x})");
+        assert_eq!(read(&arora, "rig/f/graph"), Some(0.1), "still held");
+
+        holds.release(None);
+        arora.step(Duration::from_millis(10)).expect("step");
+        assert_eq!(read(&arora, "rig/f/graph"), Some(0.5));
+        assert_eq!(read(&arora, "rig/f/program"), Some(0.75));
     }
 }
