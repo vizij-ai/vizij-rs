@@ -18,26 +18,47 @@
  * device's run loop, which are no gesture contexts.
  *
  * A halt is silence: the module ABI has no halt, so a run the interpreter
- * prunes simply stops being polled. `IDLE_STOP_MS` without a poll stops the
- * audio, so halting a `say` run (a conversation's interruption) silences it
- * within that bound — or within `HALT_POLLS` of the polls' own interval when
- * the page polls slower than that (a page at a few frames a second polls
- * hundreds of milliseconds apart, and one missed frame is not a halt). A
- * custom {@link Play} hook must keep the same rule.
+ * prunes simply stops being polled, and a page that stops stepping its
+ * device (a hidden tab, a stopped device) stops polling every run. The
+ * player stops its audio once it has gone unpolled for longer than its halt
+ * bound, by this rule, which a custom {@link Play} hook must keep:
+ * - The halt bound is `IDLE_STOP_MS`, or `HALT_POLLS` of the page's poll
+ *   interval when the page polls slower than that: a page at a few frames a
+ *   second polls hundreds of milliseconds apart, and one missed frame is not
+ *   a halt.
+ * - The poll interval is measured between two consecutive polls of one
+ *   playback, and kept for the page: a playback's wait for its first poll is
+ *   judged against the pace the page's earlier playbacks measured. The wait
+ *   from `play` to the first poll is no interval of the page's, since `play`
+ *   is called between two steps, when the synthesis lands.
+ * - Until the page has measured its poll interval, no playback stops
+ *   unpolled, so a halt before then lets the audio play out. The pace of a
+ *   page that has not yet polled one playback twice is unknown, and any bound
+ *   short of it would stop a slow page's playback before its first poll.
  */
 
-/** How long playback goes on unpolled before it stops itself, when the
- * polls come at least this often. */
+/** The halt bound while the page polls at least this often. */
 export const IDLE_STOP_MS = 250;
 
-/** How many of the polls' own intervals without a poll mean a halt, where
+/** How many of the page's poll intervals without a poll mean a halt, where
  * that is longer than `IDLE_STOP_MS`. */
 export const HALT_POLLS = 4;
 
-// The polls' interval in milliseconds: the widest recent gap, forgetting a
-// one-off hiccup. The page's, not one playback's: a new playback's first
-// gap must already be judged against it.
-let pollInterval = 0;
+// The page's poll interval in milliseconds, `null` until two polls of one
+// playback have measured it: the widest recent gap, forgetting a one-off
+// hiccup over the polls that follow.
+let pollInterval: number | null = null;
+
+/** The halt bound, `null` while the page's poll interval is unmeasured. */
+function haltBound(): number | null {
+  return pollInterval === null ? null : Math.max(IDLE_STOP_MS, HALT_POLLS * pollInterval);
+}
+
+/** Record a gap between two consecutive polls of one playback. */
+function measure(gap: number): void {
+  pollInterval =
+    pollInterval === null || gap > pollInterval ? gap : 0.9 * pollInterval + 0.1 * gap;
+}
 
 /** A speech mark, as the provider hands them to the hook. */
 export interface SpeechMark {
@@ -77,7 +98,9 @@ export const play: Play = (bytes, marks) => {
   let startedAt: number | null = null;
   let ended = false;
   let failure: unknown = null;
+  // When the playback was last polled; until its first poll, when it started.
   let lastPoll = performance.now();
+  let polled = false;
 
   const stop = () => {
     ended = true;
@@ -91,8 +114,8 @@ export const play: Play = (bytes, marks) => {
     }
   };
   const watchdog = setInterval(() => {
-    const bound = Math.max(IDLE_STOP_MS, HALT_POLLS * pollInterval);
-    if (performance.now() - lastPoll > bound) stop();
+    const bound = haltBound();
+    if (bound !== null && performance.now() - lastPoll > bound) stop();
   }, IDLE_STOP_MS / 2);
 
   const start = () => {
@@ -131,8 +154,8 @@ export const play: Play = (bytes, marks) => {
 
   return function playhead() {
     const now = performance.now();
-    const gap = now - lastPoll;
-    pollInterval = gap > pollInterval ? gap : 0.9 * pollInterval + 0.1 * gap;
+    if (polled) measure(now - lastPoll);
+    polled = true;
     lastPoll = now;
     if (failure) throw failure;
     if (ended) return null;

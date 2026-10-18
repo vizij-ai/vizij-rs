@@ -82,7 +82,7 @@
   // 400 ms of it. The device polls the playhead inside its step, so a test's
   // `window.vizijPlayback.onPoll` runs there: what a page does from inside a
   // step.
-  window.vizijPlayback = { calls: [], onPoll: null };
+  window.vizijPlayback = { calls: [], onPoll: null, playheads: [] };
   const scriptedPlay = (bytes, marks) => {
     let start;
     const call = { bytes: bytes.length, marks: marks.length, polls: 0, at: [] };
@@ -96,6 +96,24 @@
       return t > 260 ? null : t;
     };
   };
+
+  // The package's own player (`audio: "page"`), on the page's wall clock
+  // and Web Audio, each call kept as the scripted hook's are, with every
+  // poll's wall time and playhead (`null` once the playback ended or
+  // stopped); `playheads` keeps each call's playhead, for a test to poll.
+  const pagePlay = (bytes, marks) => {
+    const playhead = vizij.playAudio(bytes, marks);
+    const call = { bytes: bytes.length, marks: marks.length, polls: 0, at: [] };
+    window.vizijPlayback.calls.push(call);
+    window.vizijPlayback.playheads.push(playhead);
+    return () => {
+      const t = playhead();
+      call.polls += 1;
+      call.at.push([performance.now(), t]);
+      return t;
+    };
+  };
+  const players = { scripted: scriptedPlay, page: pagePlay };
 
   // Resolves on the first animation frame where `ready(id)` reads true.
   const nextReady = (id) =>
@@ -113,14 +131,26 @@
       return seen;
     },
     memory: () => vizij.memoryBytes(),
+    // Resumes the page's AudioContext on the next press on the canvas, the
+    // user gesture the autoplay policy asks for; resolves once it runs.
+    unlockAudioOnPress: () =>
+      new Promise((resolve, reject) =>
+        canvas.addEventListener("pointerdown", () => vizij.unlockAudio().then(resolve, reject), {
+          once: true,
+        }),
+      ),
     // Loading under an id already shown is a reload: the new device takes
     // over and the previous one is disposed.
+    // `audio: "scripted"` speaks into the scripted hook from the /tts
+    // stand-in, `audio: "page"` into the package's player from /audible/tts.
     async load(id, url, options) {
-      const scripted = options && options.audio === "scripted";
+      const play = players[options?.audio];
       const device = await vizij.loadVizij(id, await glb(url), {
         ...options,
-        audio: scripted ? scriptedPlay : options?.audio,
-        speechApiUrl: scripted ? location.origin : options?.speechApiUrl,
+        audio: play ?? options?.audio,
+        speechApiUrl: play
+          ? `${location.origin}${play === pagePlay ? "/audible" : ""}`
+          : options?.speechApiUrl,
       });
       devices.get(id)?.dispose();
       devices.set(id, device);
