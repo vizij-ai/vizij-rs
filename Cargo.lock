@@ -341,9 +341,9 @@ dependencies = [
 
 [[package]]
 name = "arora"
-version = "12.2.0"
+version = "13.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d161017d5858de3a94e1c9551549a14ade0f9027ee1bae976a97fd8483b2e306"
+checksum = "e0fb0256f497f8e26e37559602f796a1417d98e22b55fa44182b2403ed49c253"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -352,6 +352,7 @@ dependencies = [
  "arora-bridge-ws",
  "arora-engine",
  "arora-hal",
+ "arora-registry",
  "arora-simple-data-store",
  "arora-studio-bridge-client",
  "arora-types",
@@ -365,6 +366,7 @@ dependencies = [
  "log",
  "ratatui",
  "rustls",
+ "serde",
  "serde_json",
  "sysinfo",
  "tokio",
@@ -374,9 +376,9 @@ dependencies = [
 
 [[package]]
 name = "arora-behavior"
-version = "9.1.1"
+version = "9.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "911028415596de5229e56b9fa300d8ee4880e5e910cc53e7b8870f4ad6df4219"
+checksum = "d9c8cde7d2164906bd6bfa5d95bc114546070afe6f57de327946fe6c700c4a18"
 dependencies = [
  "arora-types",
  "semver",
@@ -386,32 +388,30 @@ dependencies = [
 
 [[package]]
 name = "arora-behavior-tree"
-version = "8.0.0"
+version = "9.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acfce91424289d615ac53a2fdc5920eae11e7b6d211044c24031a5c20923aba9"
+checksum = "b377e5f28ef2e6d3e72bf232f59667dab24c7aecbb14a79d79c7fab2fa8ec9af"
 dependencies = [
- "anyhow",
  "arora-behavior",
  "arora-behavior-tree-types",
  "arora-buffers",
- "arora-module-rust",
- "arora-registry",
  "arora-types",
  "derive_more",
  "lazy_static",
  "quick-xml 0.40.1",
+ "regex",
  "semver",
  "serde",
+ "serde_json",
  "serde_yaml",
- "tokio",
  "uuid",
 ]
 
 [[package]]
 name = "arora-behavior-tree-types"
-version = "2.0.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fe86ffb84c0ea3a28eaf4e5ff96093d30f269d0ddb3322558846adda622c014"
+checksum = "30af8e40ed591dfe35f680d6e64fbba4618f6703441d0237ce23cc3965beb48b"
 dependencies = [
  "arora-behavior",
  "arora-types",
@@ -491,9 +491,9 @@ dependencies = [
 
 [[package]]
 name = "arora-engine"
-version = "5.2.0"
+version = "5.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e691e0cf9a720107fb3212c5192fc75bd4b320f323a041ebdac7a4da23511b7e"
+checksum = "c4f05885786f50523b4610565eb055af65bd4a7741bfb22957d514b579b154db"
 dependencies = [
  "anyhow",
  "arora-buffers",
@@ -522,14 +522,15 @@ dependencies = [
 
 [[package]]
 name = "arora-hal"
-version = "4.2.0"
+version = "4.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86776e3161582e144b602350a995407cd331afcd2058c2ad23ed8c3856f4ca1b"
+checksum = "d596e135d4e749e87f476fb3878b0f538e9445bcac0c73f351165dea684df1a8"
 dependencies = [
  "arora-types",
  "async-trait",
  "futures-channel",
  "futures-core",
+ "futures-util",
  "serde",
  "sha2",
 ]
@@ -546,26 +547,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arora-module-core"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ed89456d0a5321bbfcea3da6db6107ebe3b8dc5ae7383ef0a2a5b76196b3a8d"
-dependencies = [
- "arora-registry",
- "arora-types",
- "arora-vfs",
- "bytes",
- "convert_case 0.11.0",
- "derive_more",
- "semver",
- "serde",
- "serde_json",
- "serde_yaml",
- "tokio",
- "uuid",
-]
-
-[[package]]
 name = "arora-module-macros"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -576,33 +557,6 @@ dependencies = [
  "quote",
  "serde_yaml",
  "syn 3.0.5",
- "uuid",
-]
-
-[[package]]
-name = "arora-module-rust"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "121b0ab342b8eea5513e6a46d4c7480491397f6119e541e2f36c70d563aeae54"
-dependencies = [
- "anyhow",
- "arora-module-core",
- "arora-registry",
- "arora-types",
- "arora-vfs",
- "async-recursion",
- "clap",
- "convert_case 0.11.0",
- "derive_more",
- "itertools 0.14.0",
- "lazy_static",
- "proc-macro2",
- "quote",
- "semver",
- "serde",
- "serde_json",
- "serde_yaml",
- "tokio",
  "uuid",
 ]
 
@@ -647,9 +601,9 @@ dependencies = [
 
 [[package]]
 name = "arora-studio-bridge-client"
-version = "9.1.0"
+version = "10.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02e6f752f2daf48916ab67369d97723ddbdd9929a399e97f1fbad842216442e9"
+checksum = "655847e03688015f32d2a3dc0b14ea94499680c33aa0e143730928a518a0f3a0"
 dependencies = [
  "arora-bridge",
  "arora-types",
@@ -709,27 +663,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "arora-vfs"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c007ee20c55b8c04e5cfa56fa704b29cb35f2f3bfa4d654dcb7874a74f6a5130"
-dependencies = [
- "async-recursion",
- "derive_more",
- "serde",
- "sha2",
-]
-
-[[package]]
 name = "arora-web"
-version = "9.0.1"
+version = "10.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9546a38ef336fc439e757e37bda5e29f3b53f935c92093c18f9ce824de4d597e"
+checksum = "dc62c73203b314b7feed7937d2baf886b206654826f4315ea7b1e093033d9f2e"
 dependencies = [
  "arora",
  "arora-behavior",
  "arora-bridge",
  "arora-engine",
+ "arora-registry",
  "arora-types",
  "console_error_panic_hook",
  "futures",
@@ -3252,15 +3195,6 @@ name = "convert_case"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
-dependencies = [
- "unicode-segmentation",
-]
-
-[[package]]
-name = "convert_case"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "affbf0190ed2caf063e3def54ff444b449371d55c58e513a95ab98eca50adb49"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -9344,9 +9278,9 @@ dependencies = [
 
 [[package]]
 name = "studio-bridge-msgs"
-version = "6.1.0"
+version = "7.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1825d994f48bcd87426d89439591df4ba455f0edb5347bc12b99d37a342fdde3"
+checksum = "6fc586adeaecd20cd3c5691ab29d1421f101df68f8cdca9ce74b832a84b9f7cd"
 dependencies = [
  "arora-types",
  "chrono",

@@ -442,10 +442,12 @@ mod counted {
     impl BehaviorInterpreter for Graph {
         fn tick(&mut self, ctx: &mut BehaviorContext) -> Result<BehaviorStatus, BehaviorError> {
             let store = ctx.store;
+            let functions = ctx.functions;
             let mut bridge = Bridge(&mut *ctx.call_bridge);
             let mut inner = BehaviorContext {
                 store,
                 call_bridge: &mut bridge,
+                functions,
             };
             IN_TICK.with(|t| t.set(true));
             let status = count(&TICK, || self.0.tick(&mut inner));
