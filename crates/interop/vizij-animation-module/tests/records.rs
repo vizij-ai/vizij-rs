@@ -32,7 +32,7 @@ fn the_module_and_the_structures_it_names_have_records_in_the_vizij_scope() {
     assert_eq!(module.parent, VIZIJ.id);
     assert_eq!(
         block_on(registry.resolve_id(&animation::ids::MODULE)).unwrap(),
-        "vizij.vizij-animation"
+        "vizij.animation"
     );
     assert!(
         registry

@@ -10,7 +10,7 @@ import { loadAnimationModule } from "../dist/index.js";
 const { headerJson, wasmBytes, records } = await loadAnimationModule();
 
 const header = JSON.parse(headerJson);
-assert.equal(header.name, "vizij-animation");
+assert.equal(header.name, "animation");
 const exported = header.exports.map((e) => e.name);
 for (const fn of ["load_animation", "create_player", "add_instance", "step"]) {
   assert.ok(exported.includes(fn), `header exports ${fn}`);

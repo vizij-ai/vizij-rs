@@ -847,7 +847,7 @@ fn guest<T>(f: impl FnOnce(&mut AnimationModule) -> T) -> T {
 /// acting on the guest global.
 #[arora_module::module(
     id = "76697a69-6a00-0000-0d00-000000000000",
-    name = "vizij-animation",
+    name = "animation",
     version = "2.0.0",
     author = "Semio",
     license = "Proprietary",
