@@ -165,6 +165,10 @@ for (const { vizijId, elementId } of drainPicks()) {
 }
 quori.hold([mouthOpenId, `${eyeOffsetId}:x`]); // keep what shows while the device writes on
 quori.release();                               // follow the device again
+const weight = quori.path("poses/pose_d_happy_d.weight");
+quori.holdKeys([weight]);   // the face's behavior no longer writes it…
+quori.setValue(weight, 0.8); // …so the edit stands, and drives the pose
+quori.releaseKeys();         // its writers write it again from the next step
 setStaticFeature("quori", plateId, "color", { r: 0.2, g: 0.4, b: 0.8 }); // in place, no reload
 
 // A structural edit: the authoring world exported to GLB bytes, reloaded.
@@ -183,6 +187,16 @@ quori.dispose(); // the previous scene drew until the new one was ready
   `:b`); the device and its store run on untouched.
 - Selection and holds belong to the Vizij's slot: they carry over a reload
   and go with `unloadVizij`.
+- `holdKeys(keys)` holds store keys — rig inputs, pose weights, a program's
+  inputs, any key the face's behavior writes — at the values clients write:
+  from the next step until `releaseKeys(keys?)`, the face's graphs, its
+  program and skill runs and its animations leave them alone, while
+  `setValue`, `writeValues` and the rest module's `reset` still write them.
+  What the graphs compute from a held key follows the client's value, and a
+  released key the behavior writes every step takes its writer's value at
+  the next step. Holding a key the behavior does not write changes nothing.
+  Keys are full store paths (`quori.path(…)`). Key holds are the device's,
+  one set whoever holds: a reloaded Vizij starts with none.
 
 `startRuntime(graphSpec)` gives a device with no Vizij — a graph on a store,
 nothing drawn — for a bench or a graph run in Node; every `Runtime` method

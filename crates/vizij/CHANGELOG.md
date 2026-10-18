@@ -10,6 +10,11 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Added
 
+- The browser module's `holdKeys(keys)` and `releaseKeys(keys?)` on a
+  Vizij's device: held store keys keep the values clients write, against
+  every write of the face's composition — its graphs, its program and skill
+  runs, its animations — until released.
+
 - Captions over the face (feature `captions`, on by default): the face
   standard's `standard/vizij/caption/{text,speaker}` shows at the bottom of
   each face's rectangle, in eight-word chunks held long enough to read and
@@ -45,6 +50,8 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   animations (vizij-graph-core 3); an edit that reaches one of them is its
   new target, shown once time passes. They used to jump to their targets.
   A `say` run follows its audio, which plays in real time.
+- `face::builder_with_guests` returns the device's `KeyHolds` with its
+  builder.
 - **Breaking — the next release is 1.0.0.** A face is ready —
   `Face::ready`, a new field, `view::all_faces_ready` (what the snapshot
   harness waits for) and the browser module's `ready` — once the GPU has

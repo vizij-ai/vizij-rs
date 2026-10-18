@@ -30,7 +30,9 @@
  * An authoring page edits what it shows in place: {@link drainPicks}
  * reports presses on elements and misses, {@link setSelection} glows the
  * selected elements, {@link Runtime.hold} keeps rig outputs against the
- * device, {@link setStaticFeature} sets a static feature without a reload,
+ * device, {@link Runtime.holdKeys} keeps the store keys it edits against
+ * the Vizij's behavior, {@link setStaticFeature} sets a static feature
+ * without a reload,
  * and a structural edit reloads the Vizij from its exported GLB bytes with
  * {@link loadVizij}, the previous scene drawing until the new one is ready.
  */
@@ -491,6 +493,8 @@ interface WasmVizijRuntime {
   moduleAnimation(animation_json: string): ModuleAnimation;
   hold(paths: string[]): void;
   release(paths?: string[]): void;
+  holdKeys(keys: string[]): void;
+  releaseKeys(keys?: string[]): void;
   free(): void;
 }
 
@@ -918,6 +922,32 @@ export class Runtime {
     this.inner.release(paths);
   }
 
+  /**
+   * Hold store keys at the values clients write: from the next step until
+   * {@link releaseKeys}, the Vizij's own behavior — its graphs, its program
+   * and skill runs, its animations — does not write them, while a client's
+   * write ({@link setValue}, {@link writeValues}, the rest module's
+   * `reset`) still does. What the graphs compute from a held key follows
+   * the client's value: a held pose weight drives the pose it weighs. A
+   * held key no client has written keeps the value it had, and holding a
+   * key the behavior does not write changes nothing. Keys are full store
+   * paths (`rt.path("poses/<id>.weight")`). The holds are the device's, one
+   * set whoever holds: a reloaded Vizij starts with none. Where {@link hold} keeps what the view
+   * shows of an output, this keeps a key's value in the store, for every
+   * reader of the key.
+   */
+  holdKeys(keys: string[]): void {
+    this.inner.holdKeys(keys);
+  }
+
+  /** Return held keys to the Vizij's behavior; omitted, every held key,
+   * whoever held it. A key the behavior writes every step — a graph's
+   * output, a run's, an animation's — takes its writer's value at the next
+   * step. */
+  releaseKeys(keys?: string[]): void {
+    this.inner.releaseKeys(keys);
+  }
+
   /** Release the wasm-side device. The instance is unusable afterwards; a
    * Vizij's device is disposed after {@link unloadVizij}. */
   dispose(): void {
@@ -969,7 +999,9 @@ export async function mount(
  * reloads a structurally edited Vizij from its exported GLB bytes: the
  * previous scene keeps drawing until the new one is ready (so
  * {@link ready} reads false meanwhile), its placement, view, selection and
- * holds carry over, and the page disposes the previous {@link Runtime}.
+ * view holds ({@link Runtime.hold}) carry over — the new device holds no
+ * keys ({@link Runtime.holdKeys}) — and the page disposes the previous
+ * {@link Runtime}.
  */
 export async function loadVizij(
   vizijId: string,
@@ -987,7 +1019,8 @@ export async function loadVizij(
 }
 
 /** Take the Vizij down: its scene, its camera, its GLB, its selection and
- * holds. Dispose its {@link Runtime} afterwards. */
+ * view holds. Its device keeps its key holds until its {@link Runtime} is
+ * disposed, which follows. */
 export function unloadVizij(vizijId: string): void {
   bindings().unloadVizij(vizijId);
 }

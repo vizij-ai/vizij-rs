@@ -4,6 +4,20 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [7.1.0] - 2026-10-18
+
+### Added
+
+- `ProcessingGraph::key_holds`: a `KeyHolds` handle on the store keys the
+  graph holds. A held key is left out of what the graph writes to the
+  store — its behavior's outputs, its runs', and the unset of a spawned
+  run's keys when it ends — so it keeps whatever a client writes to it. The
+  graph reads a held key like any other, so what it computes from the key
+  follows the client's value. A hold or a release takes effect at the
+  graph's next tick: released, a key the graph writes every tick takes its
+  value again. A halted run's status is written whatever holds it. Holding
+  a key the graph does not write changes nothing.
+
 ## [7.0.0] - 2026-10-17
 
 ### Changed
