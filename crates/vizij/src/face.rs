@@ -3030,4 +3030,184 @@ mod animation_tests {
         assert_eq!(read(&arora, "rig/f/graph"), Some(0.5));
         assert_eq!(read(&arora, "rig/f/program"), Some(0.75));
     }
+
+    /// The interpreter's LOAD and EDIT, queued on the device and applied by a
+    /// step at a zero dt — what a page's `loadGraph` and `applyGraphEdits`
+    /// take on a device nothing steps — answer from that step, and the graph
+    /// they leave runs in it with no time elapsed: the animation holds. The
+    /// swap keeps what is not the graph: the program run runs on, the
+    /// animation plays on once time passes, and a held key keeps the page's
+    /// value against the new graph's writes.
+    #[test]
+    fn a_load_or_edit_applied_at_a_zero_dt_step_runs_in_it_and_keeps_the_rest() {
+        use std::future::Future;
+        use std::task::{Context, Poll};
+        use vizij_arora_behavior::{
+            encode_edit_call, encode_load_call, parse_spec, parse_spec_diff, run,
+        };
+        let face = |rig: serde_json::Value| {
+            Bundle::from_bundle_json(&serde_json::json!({
+                "metadata": { "faceId": "f", "activeMotionGraphId": "program" },
+                "graphs": [
+                    { "kind": "rig", "spec": rig },
+                    { "kind": "motiongraph", "id": "program", "spec": { "nodes": [
+                        { "id": "c", "type": "constant", "params": { "value": 0.75 } },
+                        { "id": "out", "type": "output", "params": { "path": "rig/f/program" } },
+                    ], "edges": [
+                        { "from": { "node_id": "c" }, "to": { "node_id": "out", "input": "in" } },
+                    ] } },
+                ],
+                "animations": [
+                    { "id": "ramp", "clip": { "duration": 10, "tracks": [
+                        { "channel": "x", "keyframes": [
+                            { "time": 0, "value": 0 }, { "time": 10, "value": 1 },
+                        ] },
+                    ] } },
+                ],
+            }))
+        };
+        // The rig input `rig/f/x`, and `value` written to each of `outputs`.
+        let rig = |value: f32, outputs: &[&str]| {
+            let mut nodes = vec![
+                serde_json::json!({ "id": "x", "type": "input", "params": { "path": "rig/f/x", "value": 0.0 } }),
+                serde_json::json!({ "id": "c", "type": "constant", "params": { "value": value } }),
+            ];
+            let mut edges = Vec::new();
+            for (i, path) in outputs.iter().enumerate() {
+                let id = format!("out{i}");
+                nodes.push(
+                    serde_json::json!({ "id": id, "type": "output", "params": { "path": path } }),
+                );
+                edges.push(serde_json::json!({
+                    "from": { "node_id": "c" }, "to": { "node_id": id, "input": "in" },
+                }));
+            }
+            serde_json::json!({ "nodes": nodes, "edges": edges })
+        };
+        let composed = |bundle: &Bundle| {
+            bundle
+                .compose(&["rig"], &ProgramSelect::None, true, &[])
+                .expect("compose")
+                .to_string()
+        };
+        let time = |arora: &arora::Arora| {
+            arora
+                .store()
+                .read(&[Key::from(arora_behavior::built_in::TIME)])
+                .into_iter()
+                .next()
+                .flatten()
+        };
+        // Queue `call` as a page's operation is queued, take one step at a
+        // zero dt, and read the reply that step gave.
+        let at_a_zero_dt_step = |arora: &mut arora::Arora, call: Call| {
+            use arora::Caller;
+            let caller = arora.caller();
+            let mut reply = Box::pin(async move { caller.call(call).await });
+            let mut cx = Context::from_waker(std::task::Waker::noop());
+            assert!(
+                reply.as_mut().poll(&mut cx).is_pending(),
+                "queued, not answered"
+            );
+            arora.step(Duration::ZERO).expect("a step at a zero dt");
+            match reply.as_mut().poll(&mut cx) {
+                Poll::Ready(answer) => answer,
+                Poll::Pending => panic!("the zero-dt step answers the call"),
+            }
+        };
+
+        let bundle = face(rig(0.5, &["rig/f/graph"]));
+        let (builder, holds) = builder_with_guests(
+            &composed(&bundle),
+            RigHal::new(),
+            BlackboardStore::new(),
+            &[],
+            None,
+            Vec::new(),
+        )
+        .expect("build the device");
+        let mut arora = builder.build().expect("build arora");
+        load_animations(&mut arora, &bundle).expect("load the face's animations");
+        let program = spawn_program(&mut arora, &bundle, &ProgramSelect::Auto)
+            .expect("spawn the program")
+            .expect("the bundle names one");
+        step_for(&mut arora, 0.05);
+        play(&mut arora, "ramp");
+        step_for(&mut arora, 1.0);
+        assert_eq!(read(&arora, "rig/f/graph"), Some(0.5));
+        holds.hold([Key::from("rig/f/held")]);
+        let mut page = StateChange::new();
+        page.set.insert(Key::from("rig/f/held"), Some(float(0.1)));
+        arora.store().write(page).expect("write");
+
+        let before = time(&arora);
+        let x = read(&arora, "rig/f/x").expect("the animation writes x");
+        let spec = composed(&face(rig(0.25, &["rig/f/loaded", "rig/f/held"])));
+        at_a_zero_dt_step(
+            &mut arora,
+            encode_load_call(&parse_spec(&spec).expect("spec")).expect("LOAD"),
+        )
+        .expect("the LOAD answers");
+        assert_eq!(time(&arora), before, "no time elapsed");
+        assert_eq!(
+            read(&arora, "rig/f/loaded"),
+            Some(0.25),
+            "the loaded graph ran"
+        );
+        assert_eq!(
+            read(&arora, "rig/f/held"),
+            Some(0.1),
+            "a held key keeps the page's value against the new graph"
+        );
+        assert_eq!(
+            read(&arora, "rig/f/program"),
+            Some(0.75),
+            "the program runs on"
+        );
+        assert_eq!(
+            run::runs(arora.store()),
+            vec![(program, "program".to_string())]
+        );
+        assert_eq!(
+            read(&arora, "rig/f/x"),
+            Some(x),
+            "the animation holds at a zero dt"
+        );
+        arora.step(Duration::from_millis(10)).expect("step");
+        let moved = read(&arora, "rig/f/x").expect("x");
+        assert!(
+            moved > x,
+            "the animation plays on once time passes ({x} -> {moved})"
+        );
+
+        let edits = serde_json::json!({
+            "upsert_nodes": [
+                { "id": "edit_c", "type": "constant", "params": { "value": 0.375 } },
+                { "id": "edit_out", "type": "output", "params": { "path": "rig/f/edited" } },
+            ],
+            "upsert_edges": [
+                { "from": { "node_id": "edit_c" }, "to": { "node_id": "edit_out", "input": "in" } },
+            ],
+        });
+        at_a_zero_dt_step(
+            &mut arora,
+            encode_edit_call(&parse_spec_diff(&edits.to_string()).expect("edits")).expect("EDIT"),
+        )
+        .expect("the EDIT answers");
+        assert_eq!(read(&arora, "rig/f/edited"), Some(0.375), "the edit ran");
+        assert_eq!(
+            read(&arora, "rig/f/loaded"),
+            Some(0.25),
+            "the rest of the graph runs on"
+        );
+        assert_eq!(read(&arora, "rig/f/held"), Some(0.1), "still held");
+
+        holds.release(None);
+        arora.step(Duration::from_millis(10)).expect("step");
+        assert_eq!(
+            read(&arora, "rig/f/held"),
+            Some(0.25),
+            "released, the graph writes it"
+        );
+    }
 }

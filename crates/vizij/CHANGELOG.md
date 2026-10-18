@@ -43,6 +43,18 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- The browser module's operations that change a device settle on a device
+  nothing steps: `loadGraph`, `applyGraphEdits`, `call`, `invoke`, `spawn`
+  and `halt`, and `setValue`/`writeValues` with them. While no `run()` is
+  going, a `step(0)` in the next microtask applies them, shared by the
+  operations and writes of one turn, in the order they were issued. The
+  graph a `loadGraph` or an `applyGraphEdits` leaves has run once in that
+  step when its promise resolves. A page that steps in the same turn
+  applies them with its own step; under `run()` the run's next step applies
+  them, and the page adds no step. `listKeys` and `describeMethods` answer
+  at once, with no step. A call issued from inside a step, by a callback the
+  device makes, is an ordinary call: the next step applies it, a `step(0)`
+  once the current step has ended while no `run()` is going (arora-web 10.2).
 - Builds on arora 13 and, in the browser module, arora-web 10: the device's
   behavior-tree interpreter receives its method index at each tick
   (arora-behavior-tree 9). Nothing a face, a page or a bridge client sees

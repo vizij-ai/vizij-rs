@@ -79,8 +79,10 @@
   // ending after 260 ms; what it received is kept for the test to read. The
   // crossfade smoother runs on `arora/dt`, so a shape's weight rises with the
   // device time it stays current: at a quarter speed a 100 ms mark lasts
-  // 400 ms of it.
-  window.vizijPlayback = { calls: [] };
+  // 400 ms of it. The device polls the playhead inside its step, so a test's
+  // `window.vizijPlayback.onPoll` runs there: what a page does from inside a
+  // step.
+  window.vizijPlayback = { calls: [], onPoll: null };
   const scriptedPlay = (bytes, marks) => {
     let start;
     const call = { bytes: bytes.length, marks: marks.length, polls: 0, at: [] };
@@ -90,6 +92,7 @@
       const t = (clock.now - start) / 4;
       call.polls += 1;
       call.at.push([Math.round(clock.now), Math.round(t)]);
+      window.vizijPlayback.onPoll?.();
       return t > 260 ? null : t;
     };
   };

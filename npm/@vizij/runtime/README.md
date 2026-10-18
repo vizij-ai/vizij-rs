@@ -60,10 +60,28 @@ an Arora device has — a page here, a remote on a bridge, Semio Studio:
 - `loadGraph(spec)` and `applyGraphEdits(edits)` are the interpreter's LOAD
   and EDIT of a Vizij graph.
 
-Each operation that reaches the device is enqueued before it returns and
-applied at the device's next step, which its promise waits for: under
-`run()` just `await` it; a page that drives the device with `step` steps
-after issuing it. A `step(0)` advances no time: it carries changes through the
+Each operation that changes the device (`call`, `invoke`, `spawn`, `halt`,
+`loadGraph`, `applyGraphEdits`) is queued before it returns, and its promise
+resolves once a step has applied it. Just `await` it:
+- **No `run()` going:** a step with no time in it, a `step(0)`, applies it in
+  the next microtask. A device nothing steps settles every operation, so
+  `await quori.loadGraph(spec)` resolves with the new graph already run once.
+  The operations and the `setValue`/`writeValues` of one turn share that
+  step, applied in the order they were issued. A page that calls `step`
+  in the same turn applies them with its own step instead.
+- **Under `run()`:** the run's next step applies it, and the page adds no
+  step.
+- **`listKeys` and `describeMethods`:** these never step. They answer at
+  once from the device as it is, and don't see an operation still queued.
+
+A call issued from inside a step (from a page callback the device calls,
+such as the `audio` hook's playhead) is an ordinary call. A step can't nest
+another, so the next step applies it: a `step(0)` once the current step has
+ended, or under `run()` the run's next step. A write from inside a step is
+carried by the current step, or by the next one if it lands after the
+current step has written out its changes.
+
+A `step(0)` advances no time: it carries changes through the
 Vizij's graphs and runs and moves nothing that time drives —
 clocks, oscillators, noise, springs, dampers, slews and animations hold — so
 a paused Vizij shows each edit as it is made, wherever the face computes
@@ -252,8 +270,8 @@ await quori.invoke("unload_animation", { anim });                              /
 ```
 
 A stopped player still writes its first frame at its weight: a client that
-wants an animation to let go of its keys gives it weight 0. Each call
-applies at the device's next step, in the order the calls were issued.
+wants an animation to let go of its keys gives it weight 0. The calls apply
+in the order they were issued.
 `moduleAnimation(animation)` turns an animation in `describe`'s shape into
 the module's `AnimationClip`, each track keyed by the store key its channel
 names through this Vizij's rig, as the Vizij's own are loaded.

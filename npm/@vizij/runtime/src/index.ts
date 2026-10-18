@@ -763,10 +763,12 @@ export class Runtime {
   /**
    * Call a module function by id: an Arora `Call` naming its `module_id`
    * and function `id`, its `args` as `{ id, value }` pairs. Every operation
-   * of this surface that reaches the device is enqueued before it returns
-   * and applied inside the device's **next** step, so its promise resolves
-   * only after that step runs: under `run()` just `await` it; a direct
-   * driver calls {@link step} after issuing it.
+   * of this surface that changes the device is queued before it returns, and
+   * its promise resolves once a step has applied it. When no `run()` is
+   * going, a step with no time in it (`step(0)`) applies it in the next
+   * microtask. The operations and store writes of one turn share that step,
+   * applied in the order issued, unless the page calls {@link step} in the
+   * same turn. Under `run()`, the run's next step applies it.
    */
   call(call: RuntimeCall): Promise<RuntimeCallResult> {
     const json = typeof call === "string" ? call : JSON.stringify(call);
@@ -819,14 +821,15 @@ export class Runtime {
 
   /** The keys the device holds or describes, under `prefix` when given,
    * each with what its store says of it — Arora's ListKeys. A run's keys
-   * are listed under {@link BEHAVIOR_RUNS} and its kin. */
+   * are listed under {@link BEHAVIOR_RUNS} and its kin. Answered at once,
+   * with no step. */
   listKeys(prefix?: string): Promise<KeyInfo[]> {
     return this.inner.listKeys(prefix);
   }
 
   /** The methods the device describes, under `prefix` when given, with
    * their parameters and return type — Arora's DescribeMethods: what
-   * {@link invoke} calls by name. */
+   * {@link invoke} calls by name. Answered at once, with no step. */
   describeMethods(prefix?: string): Promise<MethodDescription[]> {
     return this.inner.describeMethods(prefix);
   }
@@ -834,8 +837,9 @@ export class Runtime {
   /**
    * Replace the device's running graph **in place**: the spec reaches the
    * interpreter as the interpreter module's LOAD, so the store, the modules
-   * and the device survive the swap, and the runs keep running. Applied at
-   * the device's next step, which the promise waits for.
+   * and the device survive the swap, and the runs keep running. The promise
+   * resolves once the step that applies it, as {@link call}'s, has run the
+   * new graph.
    */
   loadGraph(graph: GraphSpecInput): Promise<void> {
     const json = typeof graph === "string" ? graph : JSON.stringify(graph);
@@ -847,15 +851,18 @@ export class Runtime {
    * with a spec-level graph diff (`upsert_nodes` / `remove_nodes` /
    * `upsert_edges` / `remove_edges`): the nodes it leaves alone keep their
    * runtime state. {@link runEdits} builds the edits that change a run's
-   * behavior. Applied at the device's next step, which the promise waits
-   * for.
+   * behavior. The promise resolves once the step that applies it, as
+   * {@link call}'s, has run the edited graph.
    */
   applyGraphEdits(edits: GraphEditsInput): Promise<void> {
     const json = typeof edits === "string" ? edits : JSON.stringify(edits);
     return this.inner.applyGraphEdits(json).then(() => undefined);
   }
 
-  /** Write one key, in any `ValueInput` form. */
+  /**
+   * Write one key, in any `ValueInput` form. The store holds it at once; the
+   * step that carries it to the face is {@link call}'s.
+   */
   setValue(path: string, value: ValueInput): void {
     this.inner.setValue(path, JSON.stringify(toValueJSON(value)));
   }

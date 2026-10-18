@@ -37,7 +37,6 @@ use std::cell::RefCell;
 use std::sync::mpsc::Sender;
 use std::sync::Mutex;
 
-use arora::{Caller, LocalCaller};
 use arora_types::call::Call;
 use arora_types::data::Key;
 use arora_web::AroraWeb;
@@ -252,7 +251,6 @@ pub fn load_vizij(
     }
     face::spawn_program(&mut arora, &meta.bundle, &config.program)
         .map_err(|e| JsValue::from_str(&format!("{e:#}")))?;
-    let caller = arora.caller();
     let rig_prefix = meta.bundle.rig_prefix();
     let channel_keys = meta.bundle.channel_keys();
     // The bytes move into the App's asset source; the copy wasm-bindgen made
@@ -268,7 +266,6 @@ pub fn load_vizij(
         vizij_id,
         rig_prefix,
         inner: AroraWeb::from(arora),
-        caller,
         holds,
         channel_keys,
     })
@@ -593,15 +590,17 @@ pub fn run_edits(run: &str, from_json: &str, to_json: &str) -> Result<JsValue, J
 /// interpreter module's LOAD and EDIT of a Vizij graph (`loadGraph`,
 /// `applyGraphEdits`), and the page's holds on store keys against the
 /// Vizij's behavior (`holdKeys`, `releaseKeys`).
+///
+/// An operation that changes the device settles as `AroraWeb`'s do: while no
+/// `run` is ongoing, a step at a zero dt applies it, shared by the operations
+/// and store writes of one turn, in the order they were issued, unless the
+/// page steps in the same turn; while `run` owns the device, the run's next
+/// step does. `listKeys` and `describeMethods` answer at once, with no step.
 #[wasm_bindgen]
 pub struct VizijRuntime {
     vizij_id: String,
     rig_prefix: String,
     inner: AroraWeb,
-    /// Dispatches the interpreter module's LOAD and EDIT calls into the
-    /// device — enqueued at once, applied at the next step, resolved on that
-    /// step's reply. Usable while `run` owns the device.
-    caller: LocalCaller,
     /// The store keys the device's interpreter leaves to the page
     /// ([`hold_keys`](Self::hold_keys)).
     holds: KeyHolds,
@@ -637,12 +636,10 @@ impl VizijRuntime {
         let arora = builder
             .build()
             .map_err(|e| JsValue::from_str(&format!("arora build failed: {e:?}")))?;
-        let caller = arora.caller();
         Ok(VizijRuntime {
             vizij_id: String::new(),
             rig_prefix: String::new(),
             inner: AroraWeb::from(arora),
-            caller,
             holds,
             channel_keys: ChannelKeys::default(),
         })
@@ -768,9 +765,8 @@ impl VizijRuntime {
     }
 
     /// Call a module function through the device: `call_json` is an Arora
-    /// `Call` as JSON, naming its module and its function by id. Dispatched
-    /// inside the **next** step, so the promise (of the `CallResult` as
-    /// JSON) resolves once that step has run.
+    /// `Call` as JSON, naming its module and its function by id. The promise
+    /// resolves to the `CallResult` as JSON once the call is applied.
     pub fn call(&self, call_json: &str) -> js_sys::Promise {
         self.inner.call(call_json)
     }
@@ -806,21 +802,22 @@ impl VizijRuntime {
     }
 
     /// The keys the device holds or describes, under `prefix` when given,
-    /// each with its meta: Arora's ListKeys.
+    /// each with its meta: Arora's ListKeys, answered at once.
     #[wasm_bindgen(js_name = listKeys)]
     pub fn list_keys(&self, prefix: Option<String>) -> js_sys::Promise {
         self.inner.list_keys(prefix)
     }
 
     /// The methods the device describes, under `prefix` when given, with
-    /// their signatures: Arora's DescribeMethods.
+    /// their signatures: Arora's DescribeMethods, answered at once.
     #[wasm_bindgen(js_name = describeMethods)]
     pub fn describe_methods(&self, prefix: Option<String>) -> js_sys::Promise {
         self.inner.describe_methods(prefix)
     }
 
     /// Replace the device's running graph **in place**: the store, the
-    /// modules and the device survive the swap. Applied at the next step.
+    /// modules and the device survive the swap, and the runs run on. The
+    /// promise resolves once the step that applies it has run the new graph.
     #[wasm_bindgen(js_name = loadGraph)]
     pub fn load_graph(&self, graph_json: &str) -> js_sys::Promise {
         let call = match parse_spec(graph_json).and_then(|spec| encode_load_call(&spec)) {
@@ -832,7 +829,8 @@ impl VizijRuntime {
 
     /// Edit the running graph **in place**: `edits_json` is a spec-level
     /// diff (`upsert_nodes`, `remove_nodes`, `upsert_edges`, `remove_edges`).
-    /// Unchanged nodes keep their state. Applied at the next step.
+    /// Unchanged nodes keep their state. The promise resolves once the step
+    /// that applies it has run the edited graph.
     #[wasm_bindgen(js_name = applyGraphEdits)]
     pub fn apply_graph_edits(&self, edits_json: &str) -> js_sys::Promise {
         let call = match parse_spec_diff(edits_json).and_then(|diff| encode_edit_call(&diff)) {
@@ -842,11 +840,20 @@ impl VizijRuntime {
         self.dispatch(call)
     }
 
-    /// Dispatch `call` through the in-process caller; the promise resolves
-    /// to the `CallResult` as JSON after the step that applies it.
+    /// Dispatch `call` through the device's in-process caller, settled as
+    /// `AroraWeb`'s own operations are; the promise resolves to the
+    /// `CallResult` as JSON.
     fn dispatch(&self, call: Call) -> js_sys::Promise {
-        dispatch_with(self.caller.clone(), call, |result| {
-            serde_json::to_string(&result).map_err(|e| format!("serialize call result: {e}"))
+        use arora::Caller;
+        let caller = self.inner.caller();
+        let applied = self.inner.complete(async move { caller.call(call).await });
+        wasm_bindgen_futures::future_to_promise(async move {
+            let result = applied
+                .await
+                .map_err(|e| JsValue::from_str(&format!("call failed: {e}")))?;
+            serde_json::to_string(&result)
+                .map(|json| JsValue::from_str(&json))
+                .map_err(|e| JsValue::from_str(&format!("serialize call result: {e}")))
         })
     }
 
@@ -917,42 +924,6 @@ impl VizijRuntime {
 fn to_js<T: serde::Serialize + ?Sized>(value: &T) -> Result<JsValue, JsValue> {
     let json = serde_json::to_string(value).map_err(|e| JsValue::from_str(&e.to_string()))?;
     js_sys::JSON::parse(&json)
-}
-
-/// Dispatch `call` through `caller`; `finish` turns the reply into the JSON
-/// the promise resolves to.
-///
-/// `LocalCaller::call` enqueues the call synchronously inside `call()` — its
-/// future is only the reply — but `call()` itself runs at the composed
-/// future's first poll, and the promise machinery first polls in a
-/// microtask, after the current JS turn. The one poll here runs it now, so
-/// the call is enqueued **before this returns** and a manual driver can
-/// dispatch and step in the same turn. Parking on the throwaway waker loses
-/// no wakeup: the reply channel re-registers its waker on every poll.
-fn dispatch_with(
-    caller: LocalCaller,
-    call: Call,
-    finish: impl FnOnce(arora_types::call::CallResult) -> Result<String, String> + 'static,
-) -> js_sys::Promise {
-    use std::future::Future;
-    use std::task::{Context, Poll, Waker};
-
-    let mut pending = Box::pin(async move { caller.call(call).await });
-    // Ready on the first poll = the device is gone (the enqueue failed);
-    // an applied call can only resolve through a later step.
-    let first = pending
-        .as_mut()
-        .poll(&mut Context::from_waker(Waker::noop()));
-    wasm_bindgen_futures::future_to_promise(async move {
-        let result = match first {
-            Poll::Ready(result) => result,
-            Poll::Pending => pending.await,
-        }
-        .map_err(|e| JsValue::from_str(&format!("call failed: {e}")))?;
-        finish(result)
-            .map(|json| JsValue::from_str(&json))
-            .map_err(|e| JsValue::from_str(&e))
-    })
 }
 
 /// `window.devicePixelRatio`, 1 where there is no window.
