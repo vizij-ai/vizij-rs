@@ -3,8 +3,10 @@ name = "vizij-arora"
 version = "0.0.0"
 edition.workspace = true
 publish = false
-description = "Vizij/Arora value interop: identity passthroughs over the shared Value and the Shape.meta sidecar helpers."
+description = "Vizij/Arora interop: the vizij record scope, identity passthroughs over the shared Value and the Shape.meta sidecar helpers."
 
 [dependencies]
+# 3.8 is the first with `record::scope::Scope`.
+arora-types = "3.8"
 vizij-api-core = { path = "../../api/vizij-api-core" }
 serde_json = { workspace = true }

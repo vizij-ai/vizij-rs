@@ -1,4 +1,7 @@
-//! Vizij/Arora value interop.
+//! Vizij/Arora interop.
+//!
+//! [`VIZIJ`] is the scope vizij's Arora records live in: every module vizij
+//! declares states it, and its types' records land there with it.
 //!
 //! Vizij and Arora share one runtime value type: `arora_types::value::Value`,
 //! re-exported (with its vizij vocabulary of type ids, constructors, and
@@ -14,7 +17,19 @@
 
 use std::collections::HashMap;
 
+use arora_types::record::scope::Scope;
 use vizij_api_core::{Shape, Value};
+
+// ---- record scope -------------------------------------------------------------
+
+/// The `vizij` scope: the folder at the registry root that vizij's module and
+/// type records live in, so a vizij record's scoped name is `@vizij/<name>`.
+/// Its id leads with the ASCII of "vizij", as vizij's fixed record ids do,
+/// and `f01d` marks a folder.
+pub const VIZIJ: Scope = Scope {
+    id: arora_types::Uuid::from_u128(0x76697a69_6a00_0000_f01d_000000000000),
+    handle: "vizij",
+};
 
 // ---- passthroughs ---------------------------------------------------------------
 

@@ -30,6 +30,22 @@ the store record, typed client stubs, and the wasm guest's entry points. The
 boundary types derive `AroraType` with the ids and versions of their records.
 There is no `module.yaml`, `build.rs` or generated source in the crate.
 
+The module's records live in the `vizij` scope (`vizij_arora::VIZIJ`, which
+the declaration states): the module record, `vizij.vizij-animation`, and the
+records of the structures its functions name. A header names a structure by
+id alone, so a device that loads the module from its header alone does not
+describe the exports taking or returning one (`step_values`,
+`player_states`, …) and a behavior cannot call them; a device given the
+records describes every export. The `records` example writes them in the
+layout a module directory's `records/` carries:
+
+```text
+cargo run -q -p vizij-animation-module --example records -- <directory>
+```
+
+`npm/@vizij/animation-module` ships them as `artifact/records/` and as the
+`records` map `arora-web`'s `withRecords` takes.
+
 ### Declared schema
 
 | type | shape |
