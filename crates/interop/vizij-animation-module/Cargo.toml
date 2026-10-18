@@ -9,14 +9,19 @@ description = "vizij-animation-core packaged as an Arora wasm module (build once
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-arora-module = "2"
-arora-types = "3"
+# arora-module 2.2 takes a declaration's `scope`; arora-types 3.8 derives the
+# boundary types' records.
+arora-module = "2.2"
+arora-types = "3.8"
 vizij-animation-core = { path = "../../animation/vizij-animation-core" }
 vizij-arora = { path = "../vizij-arora" }
 vizij-api-core = { path = "../../api/vizij-api-core" }
 
 [dev-dependencies]
 arora-engine = "5"
-arora-types = "3"
+# The `records` example writes the module's records with arora-registry 2.1's
+# `add_declared_module` and `write_records_to_yaml_dir`; its registry is async.
+arora-registry = "2.1"
+futures = "0.3"
 serde_json = "1"
 vizij-arora = { path = "../vizij-arora" }

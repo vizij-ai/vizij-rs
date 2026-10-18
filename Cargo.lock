@@ -536,9 +536,8 @@ dependencies = [
 
 [[package]]
 name = "arora-module"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd136f1386690efadf7c6d63e53c9dda78336a8ab8b1d2db9ef8cfbfed6b616f"
+version = "2.2.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=feat%2Fderive-type-records#c131691907d739080d2f08c0fa44acda283370ed"
 dependencies = [
  "arora-buffers",
  "arora-module-macros",
@@ -567,9 +566,8 @@ dependencies = [
 
 [[package]]
 name = "arora-module-macros"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4201fc86aab50aaba4d8ad7f4acfbbdb8679130eb886cba274df0689b675de4d"
+version = "3.0.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=feat%2Fderive-type-records#c131691907d739080d2f08c0fa44acda283370ed"
 dependencies = [
  "arora-types",
  "proc-macro2",
@@ -624,19 +622,14 @@ dependencies = [
 
 [[package]]
 name = "arora-registry"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "757a8a60f687711273375e194fa2bfa7c87220e2d108048998b13971fafb06f5"
+version = "2.1.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=feat%2Fderive-type-records#c131691907d739080d2f08c0fa44acda283370ed"
 dependencies = [
- "anyhow",
  "arora-types",
  "async-trait",
  "derive_more",
  "semver",
- "serde",
  "serde_yaml",
- "tokio",
- "url",
  "uuid",
 ]
 
@@ -684,9 +677,8 @@ dependencies = [
 
 [[package]]
 name = "arora-types"
-version = "3.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0673e4117052c7b4bf9a565ed85be00e0046ce1551ff1268829be15282ea9233"
+version = "3.8.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=feat%2Fderive-type-records#c131691907d739080d2f08c0fa44acda283370ed"
 dependencies = [
  "arora-types-derive",
  "async-trait",
@@ -702,9 +694,8 @@ dependencies = [
 
 [[package]]
 name = "arora-types-derive"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a9e9f62d1d25bd3a3a4cff9b7468933e367f808a743e9234fbeb1f2590393ef"
+version = "2.0.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=feat%2Fderive-type-records#c131691907d739080d2f08c0fa44acda283370ed"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10434,7 +10425,9 @@ version = "0.0.0"
 dependencies = [
  "arora-engine",
  "arora-module",
+ "arora-registry",
  "arora-types",
+ "futures",
  "serde_json",
  "vizij-animation-core",
  "vizij-api-core",
@@ -10484,6 +10477,7 @@ dependencies = [
 name = "vizij-arora"
 version = "0.0.0"
 dependencies = [
+ "arora-types",
  "serde_json",
  "vizij-api-core",
 ]

@@ -36,6 +36,23 @@ js-sys = "0.3"
 anyhow = "1"
 serde-wasm-bindgen = "0.6"
 
+# TODO: drop this patch once arora-types 3.8, arora-module 2.2 and
+# arora-registry 2.1 are on crates.io (semio-ai/arora-sdk#368). Until then the
+# records of a declared module come from that pull request's branch; the
+# crates that need them require those versions, so the build fails rather
+# than falling back to crates.io if the patch stops applying.
+[patch.crates-io]
+arora-types = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/derive-type-records" }
+arora-module = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/derive-type-records" }
+arora-registry = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/derive-type-records" }
+
+# arora-module's buffers come from crates.io, where the branch's 3.0.0 is
+# published unchanged: built from the git checkout, their build script runs
+# `cargo metadata` on the arora-sdk workspace, which stable cargo cannot parse
+# (its `artifact` dependencies need `-Z bindeps`). It also keeps one
+# arora-buffers for the guest and the engine.
+[patch."https://github.com/semio-ai/arora-sdk"]
+arora-buffers = "3.0.0"
 
 [profile.release]
 opt-level = "s"

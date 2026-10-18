@@ -3,7 +3,9 @@
 //! The module's interface is declared in Rust: [`animation`] carries the
 //! module and function ids, the header a `module.yaml` is written from, the
 //! store record and the guest entry points; the boundary types derive
-//! [`AroraType`] with the ids and versions of their records.
+//! [`AroraType`] with the ids and versions of their records. The module and
+//! its types' records live in the [`vizij_arora::VIZIJ`] scope; the
+//! `records` example writes them in the layout a device loads them from.
 //!
 //! The module's state — the animation [`Engine`], the key-to-track index and
 //! the transport commands buffered for the next step — is an
@@ -850,7 +852,8 @@ fn guest<T>(f: impl FnOnce(&mut AnimationModule) -> T) -> T {
     author = "Semio",
     license = "Proprietary",
     description = "vizij-animation-core as an Arora wasm module",
-    executable_mime = "application/wasm"
+    executable_mime = "application/wasm",
+    scope = vizij_arora::VIZIJ
 )]
 pub mod animation {
     use super::{
