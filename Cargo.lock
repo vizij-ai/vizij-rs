@@ -537,7 +537,8 @@ dependencies = [
 [[package]]
 name = "arora-module"
 version = "2.2.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=feat%2Fderive-type-records#c131691907d739080d2f08c0fa44acda283370ed"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36fc9f71bb6bc55fde9661c5ae5a8613d137f7cd9196c7de2687f9da13a7e5da"
 dependencies = [
  "arora-buffers",
  "arora-module-macros",
@@ -567,7 +568,8 @@ dependencies = [
 [[package]]
 name = "arora-module-macros"
 version = "3.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=feat%2Fderive-type-records#c131691907d739080d2f08c0fa44acda283370ed"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4df8aec9dbaac1f2a3df867311c95ceed763724d93bc80a54d2d4324993c810"
 dependencies = [
  "arora-types",
  "proc-macro2",
@@ -623,7 +625,8 @@ dependencies = [
 [[package]]
 name = "arora-registry"
 version = "2.1.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=feat%2Fderive-type-records#c131691907d739080d2f08c0fa44acda283370ed"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e67420c39aa7f1099ae259660231406f6c5500ada487ce169e6e2de53c20a62"
 dependencies = [
  "arora-types",
  "async-trait",
@@ -678,7 +681,8 @@ dependencies = [
 [[package]]
 name = "arora-types"
 version = "3.8.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=feat%2Fderive-type-records#c131691907d739080d2f08c0fa44acda283370ed"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95b3f779504bdb183114c5f02637f2124fb3854e136e0f83718fbdd55087115d"
 dependencies = [
  "arora-types-derive",
  "async-trait",
@@ -695,7 +699,8 @@ dependencies = [
 [[package]]
 name = "arora-types-derive"
 version = "2.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=feat%2Fderive-type-records#c131691907d739080d2f08c0fa44acda283370ed"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1129ac194fb81bfd5dff2b77a01fa8150f5d7ec8d3907420036ac58f2a21a091"
 dependencies = [
  "proc-macro2",
  "quote",
