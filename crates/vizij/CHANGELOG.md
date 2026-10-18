@@ -43,6 +43,10 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- Builds on arora 13 and, in the browser module, arora-web 10: the device's
+  behavior-tree interpreter receives its method index at each tick
+  (arora-behavior-tree 9). Nothing a face, a page or a bridge client sees
+  changes.
 - A device stepped with no time in it — the browser module's `step(0)` —
   carries changes through the face's graphs and runs and moves nothing that
   time drives: the springs, dampers and slews of its graphs,
