@@ -30,9 +30,11 @@ the store record, typed client stubs, and the wasm guest's entry points. The
 boundary types derive `AroraType` with the ids and versions of their records.
 There is no `module.yaml`, `build.rs` or generated source in the crate.
 
-The module's records live in the `vizij` scope (`vizij_arora::VIZIJ`, which
-the declaration states): the module record, `vizij.vizij-animation`, and the
-records of the structures its functions name. A header names a structure by
+The module is named `animation` and its records live in the `vizij` scope
+(`vizij_arora::VIZIJ`, which the declaration states), so its scoped name is
+`@vizij/animation` and its module record's path `vizij.animation`; the scope
+already says vizij, so the name does not repeat it. The records are the module
+record and the records of the structures its functions name. A header names a structure by
 id alone, so a device that loads the module from its header alone does not
 describe the exports taking or returning one (`step_values`,
 `player_states`, …) and a behavior cannot call them; a device given the
