@@ -275,13 +275,25 @@ pub fn vizij_face_profile() -> Profile {
     // far they turn, which a mapping aiming them at a point in space reads.
     // Each rests where the face authors it, at these when it authors none.
     // No tier — the tiers grade controls.
-    for (path, rest) in [
-        (standard::LIPSYNC_GAIN, 1.0),
-        (standard::GAZE_EYE_SPACING, standard::GAZE_EYE_SPACING_REST),
-        (standard::GAZE_RANGE, standard::GAZE_RANGE_REST),
+    let (min_range, max_range) = standard::GAZE_RANGE_SPAN;
+    for (path, rest, min, max) in [
+        (standard::LIPSYNC_GAIN, 1.0, 0.0, None),
+        (
+            standard::GAZE_EYE_SPACING,
+            standard::GAZE_EYE_SPACING_REST,
+            0.0,
+            None,
+        ),
+        (
+            standard::GAZE_RANGE,
+            standard::GAZE_RANGE_REST,
+            min_range,
+            Some(max_range),
+        ),
     ] {
         keys.push(ProfileKey {
-            min: Some(0.0),
+            min: Some(min),
+            max,
             default_value: Some(Value::F32(rest as f32)),
             ..ProfileKey::input(path, Type::F32)
         });
@@ -684,11 +696,12 @@ mod tests {
         );
         // The face's settings: non-negative `f32` inputs outside the control
         // tiers, each resting where a face that authors none rests — the
-        // lipsync gain at 1, the eyes 6 cm apart and turning ±0.78 rad.
-        for (path, rest) in [
-            (standard::LIPSYNC_GAIN, 1.0),
-            (standard::GAZE_EYE_SPACING, 0.06),
-            (standard::GAZE_RANGE, 0.78),
+        // lipsync gain at 1, the eyes 6 cm apart and turning ±0.78 rad, of
+        // at most 0.9 rad.
+        for (path, rest, min, max) in [
+            (standard::LIPSYNC_GAIN, 1.0, 0.0, None),
+            (standard::GAZE_EYE_SPACING, 0.06, 0.0, None),
+            (standard::GAZE_RANGE, 0.78, 0.01, Some(0.9)),
         ] {
             let setting = face
                 .keys
@@ -697,7 +710,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("the face's setting {path}"));
             assert_eq!(setting.kind.as_deref(), Some("input"), "{path}");
             assert_eq!(setting.value_type, Some(Type::F32), "{path}");
-            assert_eq!(setting.min, Some(0.0), "{path}");
+            assert_eq!((setting.min, setting.max), (Some(min), max), "{path}");
             assert_eq!(setting.tier(), None, "{path}: a setting, in no tier");
             assert_eq!(setting.default_value, Some(Value::F32(rest)), "{path}");
         }
@@ -889,7 +902,7 @@ mod tests {
         let readable = [
             ros.paths_of("input"),
             face.paths_of("output"),
-            standard::FACE_SETTINGS.to_vec(),
+            vec![standard::GAZE_EYE_SPACING, standard::GAZE_RANGE],
         ]
         .concat();
         let unreadable: Vec<&str> = consumed

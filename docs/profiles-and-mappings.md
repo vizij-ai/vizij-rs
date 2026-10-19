@@ -100,9 +100,9 @@ A mapping is Vizij content, the same for every face, so what it needs to know
 of one face it reads from the face: the face's
 [settings](face-standard.md#settings), such as how far apart its eyes are and
 how far they turn. The face authors each as the default of an input node on
-the setting's path, in its adaptation, and composition rests the mapping's
-input on that path at the face's value; a face that authors none rests at the
-profile's. Tuning a mapping to a face is thereby the face's own content, not
+the setting's path, in its adaptation, and composition rests every mapping's
+input on that path at the face's value; a face that authors none, or a value
+not of the setting's type, rests at the profile's. Tuning a mapping to a face is thereby the face's own content, not
 an embedded fork of the mapping.
 
 The GLB entry kind for an embedded mapping is still spelled

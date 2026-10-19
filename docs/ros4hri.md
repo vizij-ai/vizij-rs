@@ -93,10 +93,11 @@ serves it); this table summarizes it.
   [eye spacing and gaze range](face-standard.md#settings) under its prefix,
   turns each eye toward the target from its own centre, and maps an angle of
   ±range onto an eye position of ±1 — the incumbent's 6 cm and ±0.78 rad for
-  a face that authors neither. It reads the range clamped to [0.01, 0.9] rad:
-  its arctangent, a rational approximation accurate to 1 % up to 0.8 rad,
-  peaks at 0.94 rad, so a wider range would leave the eyes short of their
-  travel's end.
+  a face that authors neither. It reads each within the span the profile
+  declares: the spacing from 0 and the range in [0.01, 0.9] rad — its
+  arctangent, a rational approximation accurate to 1 % up to 0.8 rad, peaks
+  at 0.94 rad, so a wider range would leave the eyes short of their travel's
+  end.
 - **Lips** — played, never written by the mapping. The face's lipsync is
   the viseme players' ([skills](skills.md): `play_viseme`, `say`), which
   write the face standard's viseme weights themselves; a mapping writing
@@ -295,8 +296,8 @@ input**, subscribed at `/<namespace>/keys/<path>` as the `std_msgs` type the
 `hri_msgs/Expression` types them); a free input outside the profile takes the
 type its default declares: `Float32` for a number, the graph's number type. The
 keys are **device-global**:
-the mapping prefixes only what it *writes* (`rig/<faceId>/standard/vizij/…`),
-never what it reads, so the topic carries no face id. The store keeps the last
+the mapping prefixes only the face's paths (`rig/<faceId>/standard/vizij/…`),
+never the ROS4HRI keys it reads, so the topic carries no face id. The store keeps the last
 value, so one message holds a shape until the next one.
 
 Make the face happy through the expression's valence and hold it, then

@@ -40,17 +40,17 @@ assert.deepEqual(
 // The face's settings, outside the tiers: the lipsync gain its adaptation
 // scales the viseme weights by, resting at 1, and how far apart its eyes are
 // and how far they turn, which the ROS4HRI mapping aims them with, resting at
-// the incumbent's 6 cm and 0.78 rad.
-for (const [suffix, rest] of [
-  ["lipsync/gain", 1],
-  ["gaze/eye_spacing", 0.06],
-  ["gaze/range", 0.78],
+// the incumbent's 6 cm and 0.78 rad, the range within [0.01, 0.9].
+for (const [suffix, rest, min, max] of [
+  ["lipsync/gain", 1, 0, undefined],
+  ["gaze/eye_spacing", 0.06, 0, undefined],
+  ["gaze/range", 0.78, 0.01, 0.9],
 ]) {
   const setting = face.keys.find((k) => k.path === `rig/quori/standard/vizij/${suffix}`);
   assert.ok(setting, `vizij-face declares ${suffix}`);
   assert.deepEqual(
-    [setting.kind, setting.value_type, setting.min, setting.meta],
-    ["input", "f32", 0, undefined],
+    [setting.kind, setting.value_type, setting.min, setting.max, setting.meta],
+    ["input", "f32", min, max, undefined],
   );
   assert.ok(Math.abs(setting.default_value.f32 - rest) < 1e-6, `${suffix} rests at ${rest}`);
 }

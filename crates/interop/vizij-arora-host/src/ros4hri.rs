@@ -145,15 +145,13 @@ const ANCHOR_RADIUS: f64 = 0.6;
 /// Blink cycle length / pulse width, seconds.
 const BLINK_PERIOD: f64 = 8.0;
 const BLINK_WIDTH: f64 = 0.2;
-/// The gaze ranges the mapping's arctangent honours, radians. Its rational
-/// approximation peaks at 0.94 rad, so a wider range would leave the eyes
-/// short of their travel's end; the floor keeps the normalization finite.
-const GAZE_RANGE_SPAN: (f64, f64) = (0.01, 0.9);
 
 /// The composable ROS4HRI mapping source: the canonical mapping asset
 /// ([`MAPPING_JSON`]) with `rig_prefix` applied. The prefix is prepended to
-/// every written control path (faces namespace their rig inputs, e.g.
-/// `rig/quori_latest/`); pass `""` for unprefixed controls.
+/// every face-standard path it writes or reads — the face's controls, its
+/// speech state and settings, which faces namespace under their rig (e.g.
+/// `rig/quori_latest/`) — and the ROS4HRI keys stay device-scoped; pass
+/// `""` for unprefixed controls.
 pub fn ros4hri_source(rig_prefix: &str) -> (String, Json) {
     let mut spec: Json = serde_json::from_str(MAPPING_JSON).expect("mappings/ros4hri.json parses");
     apply_rig_prefix(&mut spec, rig_prefix);
@@ -172,9 +170,11 @@ pub fn generate() -> Json {
     build("").1
 }
 
-/// Prepend `rig_prefix` to every path the mapping writes (its `output`
-/// nodes) — the face-scoped `vizij-face` profile. Input paths — the
-/// device-scoped `ros4hri` profile a bridge writes — stay untouched.
+/// Prepend `rig_prefix` to every face-standard path the mapping reads or
+/// writes (`standard/vizij/*`, the face-scoped `vizij-face` profile: the
+/// controls it writes, the speech state and settings it reads). The ROS4HRI
+/// paths — the device-scoped `ros4hri` profile a bridge writes and
+/// publishes — stay untouched.
 pub fn apply_rig_prefix(spec: &mut Json, rig_prefix: &str) {
     standard::prefix_controls(spec, rig_prefix);
 }
@@ -356,11 +356,15 @@ fn build(rig_prefix: &str) -> (String, Json) {
     // of either side of the face's centre, and how far they turn, the angle
     // an eye position of ±1 stands for — settings the face authors, read
     // under its prefix.
-    let spacing = g.input(
+    // Each is read within the span the profile declares for it: a spacing
+    // below 0 would cross the eyes' lines of sight, a range outside its span
+    // would leave the eyes short of their travel's end or divide by zero.
+    let authored_spacing = g.input(
         "in/gaze/eye_spacing",
         standard::GAZE_EYE_SPACING,
         json!(standard::GAZE_EYE_SPACING_REST),
     );
+    let spacing = g.max("gaze/eye_spacing", &authored_spacing, &zero);
     let half = g.constant(0.5);
     let half_spacing = g.mul("gaze/half_spacing", &spacing, &half);
     let authored_range = g.input(
@@ -368,7 +372,7 @@ fn build(rig_prefix: &str) -> (String, Json) {
         standard::GAZE_RANGE,
         json!(standard::GAZE_RANGE_REST),
     );
-    let (min_range, max_range) = GAZE_RANGE_SPAN;
+    let (min_range, max_range) = standard::GAZE_RANGE_SPAN;
     let range = g.clamp("gaze/range", &authored_range, min_range, max_range);
 
     let y_left = g.add("gaze/left/y", &gy, &half_spacing);

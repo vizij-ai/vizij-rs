@@ -117,21 +117,28 @@ pub const GAZE_TARGET_Y: &str = "standard/vizij/gaze/target/y";
 pub const GAZE_TARGET_WEIGHT: &str = "standard/vizij/gaze/target/weight";
 
 /// The distance between the centres of the face's eyes, metres, as the
-/// robot shows them: the baseline a mapping aiming the eyes at a point in
-/// space verges them over — each eye turns toward the point from its own
-/// centre, half this distance either side of the face's. A setting of the
-/// face ([`FACE_SETTINGS`]): rests at the value the face's adaptation is
-/// authored with, 0.06 unless it says otherwise, and a deployment whose
+/// robot shows them, at least 0: the baseline a mapping aiming the eyes at a
+/// point in space verges them over — each eye turns toward the point from
+/// its own centre, half this distance either side of the face's. A setting
+/// of the face ([`FACE_SETTINGS`]): rests at the value the face's adaptation
+/// is authored with, 0.06 unless it says otherwise, and a deployment whose
 /// display shows the face larger or smaller overrides it by writing the key.
 pub const GAZE_EYE_SPACING: &str = "standard/vizij/gaze/eye_spacing";
 
 /// How far the face's eyes turn, radians: the gaze angle off the face's axis
-/// at which an eye reaches the end of its travel. A mapping aiming the eyes
-/// at a point in space turns an angle of ±range into an eye position of ±1.
-/// A setting of the face ([`FACE_SETTINGS`]): rests at the value the face's
-/// adaptation is authored with, 0.78 unless it says otherwise, and a
-/// deployment overrides it by writing the key.
+/// at which an eye reaches the end of its travel, from 0.01 to 0.9. A
+/// mapping aiming the eyes at a point in space turns an angle of ±range into
+/// an eye position of ±1. A setting of the face ([`FACE_SETTINGS`]): rests
+/// at the value the face's adaptation is authored with, 0.78 unless it says
+/// otherwise, and a deployment overrides it by writing the key.
 pub const GAZE_RANGE: &str = "standard/vizij/gaze/range";
+
+/// The span [`GAZE_RANGE`] runs over, radians. Above it a mapping's
+/// arctangent cannot be trusted to reach the end of the eyes' travel — the
+/// ROS4HRI mapping's rational approximation peaks at 0.94 rad — and the
+/// floor keeps the normalization finite. The profile declares it as the
+/// key's range, and the ROS4HRI mapping reads the range clamped to it.
+pub(crate) const GAZE_RANGE_SPAN: (f64, f64) = (0.01, 0.9);
 
 /// Where [`GAZE_EYE_SPACING`] rests when the face authors none, metres.
 pub(crate) const GAZE_EYE_SPACING_REST: f64 = 0.06;

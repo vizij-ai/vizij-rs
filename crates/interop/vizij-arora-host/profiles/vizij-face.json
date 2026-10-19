@@ -1280,7 +1280,8 @@
       "path": "standard/vizij/gaze/range",
       "kind": "input",
       "value_type": "f32",
-      "min": 0.0,
+      "min": 0.01,
+      "max": 0.9,
       "default_value": {
         "f32": 0.7799999713897705
       }

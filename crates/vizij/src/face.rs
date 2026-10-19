@@ -344,16 +344,21 @@ fn walk_free_inputs(spec: &str, profiled: &ProfileKeys) -> Vec<FreeInput> {
                 let ty = key.value_type.clone().unwrap_or(ty);
                 // A face's setting rests where the face authors it, when the
                 // face authors a value of the setting's type: that is what
-                // makes it the face's. Every other key a profile types rests
-                // at the profile's rest, whatever a graph authored, so a
-                // control rests the same on every face.
-                let authored = default.filter(|value| {
-                    value.conforms_to(&ty)
-                        && vizij_arora_host::standard::FACE_SETTINGS
-                            .iter()
-                            .any(|setting| path.ends_with(setting))
-                });
-                (ty, authored.or_else(|| key.default_value.clone()))
+                // makes it the face's (the rule `Bundle::sources` rests a
+                // mapping's input on it by). Every other key a profile types
+                // rests at the profile's rest, whatever a graph authored, so
+                // a control rests the same on every face.
+                let setting = vizij_arora_host::standard::FACE_SETTINGS
+                    .iter()
+                    .any(|setting| path.ends_with(setting));
+                let rest = if setting {
+                    default
+                        .filter(|value| value.conforms_to(&ty))
+                        .or_else(|| key.default_value.clone())
+                } else {
+                    key.default_value.clone().or(default)
+                };
+                (ty, rest)
             }
             None => (ty, default),
         };
@@ -813,6 +818,8 @@ mod tests {
                 .of_type(Type::F32)
                 .resting_at(Value::F32(rest))
         };
+        // The gaze range declares its span; the others only a floor.
+        let range = |rest| setting(rest).range(0.01, 0.9);
         let declared = |nodes: serde_json::Value| {
             let spec = compose_sources(&[(
                 "standard-adaptation".to_string(),
@@ -837,13 +844,13 @@ mod tests {
                 { "id": "b", "type": "input", "params": { "path": "rig/f/standard/vizij/lipsync/gain", "value": 0.8 } },
                 { "id": "c", "type": "input", "params": { "path": "rig/f/standard/vizij/gaze/eye_spacing" } },
             ])),
-            vec![Some(setting(0.5)), Some(setting(0.8)), Some(setting(0.06)),]
+            vec![Some(range(0.5)), Some(setting(0.8)), Some(setting(0.06))]
         );
         assert_eq!(
             declared(serde_json::json!([
                 { "id": "a", "type": "input", "params": { "path": "rig/f/standard/vizij/gaze/range", "value": "wide" } },
             ]))[0],
-            Some(setting(0.78))
+            Some(range(0.78))
         );
     }
 
@@ -1781,6 +1788,23 @@ mod tests {
         stage(&arora, standard::GAZE_EYE_SPACING, float(0.06));
         stage(&arora, standard::GAZE_RANGE, float(0.78));
         assert_eyes(settled_eyes(&mut arora, target), incumbent, "overridden");
+
+        // Each is read within the span the profile declares: a range past
+        // 0.9 rad as 0.9, one of 0 as 0.01 — the eyes at the ends of their
+        // travel rather than undefined — and a spacing below 0 as none.
+        for (spacing, range, (read_spacing, read_range)) in [
+            (0.06, 2.0, (0.06, 0.9)),
+            (0.06, 0.0, (0.06, 0.01)),
+            (-0.06, 0.78, (0.0, 0.78)),
+        ] {
+            stage(&arora, standard::GAZE_EYE_SPACING, float(spacing));
+            stage(&arora, standard::GAZE_RANGE, float(range));
+            assert_eyes(
+                settled_eyes(&mut arora, target),
+                aimed(target, read_spacing, read_range),
+                &format!("spacing {spacing}, range {range}"),
+            );
+        }
     }
 
     /// The shape a viseme player's feedback record names.
