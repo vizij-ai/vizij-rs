@@ -1022,8 +1022,20 @@ export async function getNodeSchemas(): Promise<Registry> {
   return JSON.parse(raw) as Registry;
 }
 
-function describePort(port: PortSpec): string {
-  const status = port.optional ? "optional" : "required";
+function describeInput(port: PortSpec): string {
+  const status = port.required
+    ? "required"
+    : port.optional
+      ? "optional"
+      : "default when unwired";
+  return describePortStatus(port, status);
+}
+
+function describeOutput(port: PortSpec): string {
+  return describePortStatus(port, port.optional ? "optional" : "required");
+}
+
+function describePortStatus(port: PortSpec, status: string): string {
   const doc = port.doc && port.doc.trim().length > 0 ? ` — ${port.doc}` : "";
   return `    • ${port.label} [${port.id}:${port.ty}] (${status})${doc}`;
 }
@@ -1077,7 +1089,7 @@ export async function logNodeSchemaDocs(node?: NodeType | string): Promise<void>
     if (entry.inputs.length || entry.variadic_inputs) {
       lines.push("  Inputs:");
       for (const port of entry.inputs) {
-        lines.push(describePort(port));
+        lines.push(describeInput(port));
       }
       if (entry.variadic_inputs) {
         const variadic: VariadicSpec = entry.variadic_inputs;
@@ -1095,7 +1107,7 @@ export async function logNodeSchemaDocs(node?: NodeType | string): Promise<void>
     if (entry.outputs.length || entry.variadic_outputs) {
       lines.push("  Outputs:");
       for (const port of entry.outputs) {
-        lines.push(describePort(port));
+        lines.push(describeOutput(port));
       }
       if (entry.variadic_outputs) {
         const variadic: VariadicSpec = entry.variadic_outputs;

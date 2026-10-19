@@ -4,10 +4,18 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [7.2.0] - 2026-10-19
 
 ### Changed
 
+- `ProcessingGraph`'s LOAD and EDIT lower the graph they leave at once and
+  refuse it when vizij-graph-core's `GraphSpec::validate` does, with the
+  error naming the node at fault (a `BehaviorError`, which reaches a caller
+  of the interpreter module as the call's error). An EDIT is refused whole:
+  the running graph, its runs and the lowered spec stay as they were. Such a
+  graph used to be installed, then failed every tick, base graph and runs
+  together, until a later LOAD or EDIT replaced it. A graph that evaluates
+  is accepted as before. Requires vizij-graph-core 3.1.
 - Licensed under Apache-2.0, where it was MIT OR Apache-2.0. Releases up
   to 7.1.0 keep the licence they were published under.
 

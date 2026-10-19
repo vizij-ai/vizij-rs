@@ -4,7 +4,25 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [3.1.0] - 2026-10-19
+
+### Added
+
+- `GraphSpec::validate`: refuses a graph that would fail every evaluation,
+  before it is installed. The checks are the ones evaluation would fail on
+  anyway: an edge to a node the graph lacks, two edges into one input, two
+  nodes sharing an id, a cycle, and a node leaving a required input with
+  neither an edge nor an inline default. The error names the node, and the
+  port for a required input. What a graph needs only at evaluation time,
+  such as a value staged on an input path, is not checked.
+- `schema::required_inputs(kind)` and `NodeSignature::required_inputs`: the
+  input ports a node of `kind` cannot evaluate without — every input of
+  `Clamp`, `Remap`, `CenteredRemap` and `PiecewiseRemap`, `UrdfFk`'s
+  `joints`, `UrdfIkPosition`'s `target_pos`, and `UrdfIkPose`'s `target_pos`
+  and `target_rot`. Every other input reads a default when unwired. A test
+  holds the list to the evaluator: each node kind fails without each input
+  the list names and evaluates without any other. A registry serialized to
+  JSON marks each of these ports `"required": true`.
 
 ### Changed
 

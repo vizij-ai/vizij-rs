@@ -302,6 +302,13 @@ export interface PortSpec {
   doc?: string;
   /** Whether the port may be omitted by callers. */
   optional?: boolean;
+  /**
+   * Set on an input port a node cannot evaluate without: a graph leaving it
+   * with neither an edge nor an inline default fails every evaluation, so the
+   * runtime refuses to load it. A port that is neither `optional` nor
+   * `required` reads a default (most often zero) when unwired.
+   */
+  required?: boolean;
 }
 
 /** Schema for a variadic group of ports. */

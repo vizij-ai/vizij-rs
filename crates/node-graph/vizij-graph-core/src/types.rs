@@ -543,4 +543,37 @@ impl GraphSpec {
 
         Ok(map)
     }
+
+    /// Whether this graph can be evaluated: the checks whose failure would
+    /// fail every evaluation of it, made before it is installed rather than at
+    /// its first evaluation.
+    ///
+    /// It refuses a graph where:
+    /// - an edge names a node the graph lacks, or two edges feed one input;
+    /// - two nodes share an id, or the edges form a cycle;
+    /// - a node leaves one of its [required inputs](crate::schema::required_inputs)
+    ///   with neither an edge nor an inline default.
+    ///
+    /// The error names the node and, for a required input, the port. What a
+    /// graph needs only at evaluation time, such as a value staged on an input
+    /// path, is not checked: it can arrive before the graph next evaluates.
+    pub fn validate(&self) -> Result<(), String> {
+        let connections = self.input_connections()?;
+        crate::topo::topo_order(&self.nodes, &self.edges)?;
+        for node in &self.nodes {
+            let wired = connections.get(&node.id);
+            for port in crate::schema::required_inputs(&node.kind) {
+                let satisfied = wired
+                    .and_then(|inputs| inputs.get(*port))
+                    .is_some_and(|input| input.node_id.is_some() || input.default_value.is_some());
+                if !satisfied {
+                    return Err(format!(
+                        "node '{}' ({:?}) needs its input '{port}': it has no edge and no default",
+                        node.id, node.kind,
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
 }

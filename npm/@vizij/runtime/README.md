@@ -58,7 +58,12 @@ an Arora device has — a page here, a remote on a bridge, Semio Studio:
 - `readValues`, `writeValues`, `setValue`, `snapshot` and `drainChanges`
   read and write its store;
 - `loadGraph(spec)` and `applyGraphEdits(edits)` are the interpreter's LOAD
-  and EDIT of a Vizij graph.
+  and EDIT of a Vizij graph. A graph that would fail every evaluation is
+  refused, and the promise rejects naming the node at fault: a node leaving
+  a `required` input (as `@vizij/node-graph`'s registry marks it) with
+  neither an edge nor an inline default, an edge to a missing node, two
+  edges into one input, two nodes sharing an id, or a cycle. The running
+  graph and its runs go on as they were.
 
 Each operation that changes the device (`call`, `invoke`, `spawn`, `halt`,
 `loadGraph`, `applyGraphEdits`) is queued before it returns, and its promise

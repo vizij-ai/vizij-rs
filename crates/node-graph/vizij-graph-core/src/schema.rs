@@ -69,7 +69,12 @@ pub struct ParamSpec {
     pub max: Option<f64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A node type's ports, parameters and documentation.
+///
+/// Serialized, each input port a node of this type cannot evaluate without
+/// ([`required_inputs`]) carries `"required": true`. `optional: false` alone
+/// does not make a port required: most nodes read an unwired input as zero.
+#[derive(Debug, Clone, Deserialize)]
 pub struct NodeSignature {
     pub type_id: NodeType,
     pub name: &'static str,
@@ -83,6 +88,91 @@ pub struct NodeSignature {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub variadic_outputs: Option<VariadicSpec>,
     pub params: Vec<ParamSpec>,
+}
+
+impl NodeSignature {
+    /// The input ports a node of this type cannot evaluate without
+    /// ([`required_inputs`]).
+    pub fn required_inputs(&self) -> &'static [&'static str] {
+        required_inputs(&self.type_id)
+    }
+}
+
+impl Serialize for NodeSignature {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        /// An input port, marked when the node cannot evaluate without it.
+        #[derive(Serialize)]
+        struct Input<'a> {
+            #[serde(flatten)]
+            port: &'a PortSpec,
+            #[serde(skip_serializing_if = "std::ops::Not::not")]
+            required: bool,
+        }
+
+        #[derive(Serialize)]
+        struct Signature<'a> {
+            type_id: &'a NodeType,
+            name: &'a str,
+            category: &'a str,
+            doc: &'a str,
+            inputs: Vec<Input<'a>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            variadic_inputs: &'a Option<VariadicSpec>,
+            outputs: &'a [PortSpec],
+            #[serde(skip_serializing_if = "Option::is_none")]
+            variadic_outputs: &'a Option<VariadicSpec>,
+            params: &'a [ParamSpec],
+        }
+
+        let required = self.required_inputs();
+        Signature {
+            type_id: &self.type_id,
+            name: self.name,
+            category: self.category,
+            doc: self.doc,
+            inputs: self
+                .inputs
+                .iter()
+                .map(|port| Input {
+                    port,
+                    required: required.contains(&port.id),
+                })
+                .collect(),
+            variadic_inputs: &self.variadic_inputs,
+            outputs: &self.outputs,
+            variadic_outputs: &self.variadic_outputs,
+            params: &self.params,
+        }
+        .serialize(serializer)
+    }
+}
+
+/// The input ports a node of `kind` cannot evaluate without: with neither an
+/// edge nor an inline default on one of them, its evaluation fails, and the
+/// whole graph's with it. Every other input reads as a default when unwired
+/// (most as zero), or changes what the node does without failing it.
+///
+/// [`GraphSpec::validate`](crate::types::GraphSpec::validate) refuses a graph
+/// that leaves one of them unwired.
+pub fn required_inputs(kind: &NodeType) -> &'static [&'static str] {
+    match kind {
+        NodeType::Clamp => &["in", "min", "max"],
+        NodeType::Remap => &["in", "in_min", "in_max", "out_min", "out_max"],
+        NodeType::CenteredRemap => &[
+            "in",
+            "in_low",
+            "in_anchor",
+            "in_high",
+            "out_low",
+            "out_anchor",
+            "out_high",
+        ],
+        NodeType::PiecewiseRemap => &["in", "input_breakpoints", "output_breakpoints"],
+        NodeType::UrdfIkPosition => &["target_pos"],
+        NodeType::UrdfIkPose => &["target_pos", "target_rot"],
+        NodeType::UrdfFk => &["joints"],
+        _ => &[],
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

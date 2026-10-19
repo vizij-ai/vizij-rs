@@ -839,7 +839,12 @@ export class Runtime {
    * interpreter as the interpreter module's LOAD, so the store, the modules
    * and the device survive the swap, and the runs keep running. The promise
    * resolves once the step that applies it, as {@link call}'s, has run the
-   * new graph.
+   * new graph. A graph that would fail every evaluation is refused and the
+   * promise rejects naming the node at fault: a node leaving a required
+   * input (`required` in `@vizij/node-graph`'s registry) with neither an edge
+   * nor an inline default, an edge to a node the graph lacks, two edges into
+   * one input, two nodes sharing an id, or a cycle. The running graph and its
+   * runs then go on as they were.
    */
   loadGraph(graph: GraphSpecInput): Promise<void> {
     const json = typeof graph === "string" ? graph : JSON.stringify(graph);
@@ -852,7 +857,9 @@ export class Runtime {
    * `upsert_edges` / `remove_edges`): the nodes it leaves alone keep their
    * runtime state. {@link runEdits} builds the edits that change a run's
    * behavior. The promise resolves once the step that applies it, as
-   * {@link call}'s, has run the edited graph.
+   * {@link call}'s, has run the edited graph. An edit leaving a graph
+   * {@link loadGraph} would refuse is refused whole, and the running graph
+   * and its runs go on as they were.
    */
   applyGraphEdits(edits: GraphEditsInput): Promise<void> {
     const json = typeof edits === "string" ? edits : JSON.stringify(edits);

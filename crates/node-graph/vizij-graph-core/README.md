@@ -89,6 +89,7 @@ for write in runtime.writes.iter() {
 ## Usage
 
 1. **Load or construct a `GraphSpec`.** Use `serde_json` to parse JSON, or build specs programmatically during tests.
+   - `spec.validate()` refuses a graph that would fail every evaluation — an edge to a missing node, two edges into one input, two nodes sharing an id, a cycle, or a node leaving one of its `schema::required_inputs` with neither an edge nor an inline default — naming the node at fault. A host checks it before installing a graph.
 2. **Create and reuse a `GraphRuntime`.** It retains node-local state (`Spring`, `Slew`, etc.), staged inputs, and cached outputs across frames.
 3. **Stage host inputs.**
    ```rust

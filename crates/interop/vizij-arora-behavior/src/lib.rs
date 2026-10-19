@@ -263,13 +263,14 @@ impl TaskFragment {
 pub struct ProcessingGraph {
     /// The retained shared-model graph — the editable source of truth. Edits
     /// ([`load`](BehaviorInterpreter::load), [`apply`](BehaviorInterpreter::apply))
-    /// mutate this; the evaluator's [`spec`](Self::spec) is re-lowered from it
-    /// when [`dirty`](Self::dirty).
+    /// replace it and re-lower the evaluator's [`spec`](Self::spec) from it at
+    /// once; a run coming or going re-lowers in place, or marks it
+    /// [`dirty`](Self::dirty) for the next tick.
     graph: Graph,
     /// The main behavior's root: the runner's first child, before the runs.
     main: Option<Uuid>,
     /// The lowered Vizij spec the evaluator runs — [`graph_codec::decode`] of
-    /// [`graph`](Self::graph), rebuilt on the next tick after an edit.
+    /// [`graph`](Self::graph), rebuilt at each edit.
     spec: GraphSpec,
     /// Whether [`graph`](Self::graph) changed since [`spec`](Self::spec) was
     /// last lowered.
@@ -848,12 +849,13 @@ impl ProcessingGraph {
 
     /// Re-lower the evaluator's spec from the retained graph and refresh the
     /// input paths, keeping the runtime warm and the plan-cache version
-    /// monotonic. Applied at the next tick after an edit, so a lowering problem
-    /// surfaces there (the store-carrying phase), per the [`BehaviorInterpreter`]
-    /// contract.
+    /// monotonic. A spec that fails [`GraphSpec::validate`] is refused, and
+    /// the evaluator keeps the spec it has.
     fn lower(&mut self) -> Result<(), BehaviorError> {
         let mut spec =
             graph_codec::decode(&self.graph).map_err(|message| BehaviorError { message })?;
+        spec.validate()
+            .map_err(|message| BehaviorError { message })?;
         self.inputs = Inputs::of(&spec);
         // Carry the version forward before re-caching. A freshly decoded spec
         // restarts at version 0 (→ 1 after `with_cache`); bumping from the
@@ -864,6 +866,28 @@ impl ProcessingGraph {
         self.spec = spec.with_cache();
         self.dirty = false;
         Ok(())
+    }
+
+    /// Install `graph`, with `main` as its main behavior and the nodes in
+    /// `added` [`place`](Self::place)d, if the spec it lowers to — the runs
+    /// included — passes [`GraphSpec::validate`]. LOAD and EDIT lower at once,
+    /// so a graph that would fail every evaluation is refused, with the error
+    /// naming the node at fault, and the running graph and its lowered spec
+    /// stay as they were.
+    fn replace_validated(
+        &mut self,
+        graph: Graph,
+        main: Option<Uuid>,
+        added: &[Uuid],
+    ) -> Result<(), BehaviorError> {
+        let previous = (
+            std::mem::replace(&mut self.graph, graph),
+            std::mem::replace(&mut self.main, main),
+        );
+        self.place(added);
+        self.install_runner();
+        self.lower()
+            .inspect_err(|_| (self.graph, self.main) = previous)
     }
 
     /// Set the `function id -> module id` map used to dispatch `ExternalFunction` nodes.
@@ -893,9 +917,8 @@ impl ProcessingGraph {
         // terminal status and prune its fragment — this phase owns the store.
         self.process_halts(store)?;
 
-        // An edit landed since the last lowering: rebuild the spec from the
-        // retained graph against this tick, so the edit (and any lowering
-        // problem it introduced) takes effect here.
+        // A run came or went in a way its own lowering could not take in
+        // place: rebuild the spec from the retained graph against this tick.
         if self.dirty {
             self.lower()?;
         }
@@ -1286,8 +1309,9 @@ impl BehaviorInterpreter for ProcessingGraph {
     /// recompose never rebuilds the device (VIZ-57).
     ///
     /// `graph` is the shared model's [`graph_codec`] form of the new Vizij graph.
-    /// It becomes the retained graph and lowers at the next tick, while the graph
-    /// runtime is kept **warm**: nodes that survive the swap keep their
+    /// It becomes the retained graph and is lowered at once, refused when it
+    /// fails [`GraphSpec::validate`] (the running graph then stays), while the
+    /// graph runtime is kept **warm**: nodes that survive the swap keep their
     /// integration state (springs/dampers/URDF chains) and the graph clock stays
     /// continuous, so a recompose does not restart every stateful node. The
     /// store and the `function -> module` map are untouched — the store
@@ -1347,7 +1371,7 @@ impl BehaviorInterpreter for ProcessingGraph {
         }
         graph.links.extend(links);
         let runner = graph_codec::composite_id(RUNNER);
-        self.main = match graph.root {
+        let main = match graph.root {
             // A graph read back from this interpreter: its main behavior is
             // its runner's first child.
             Some(root) if root == runner => graph
@@ -1373,18 +1397,17 @@ impl BehaviorInterpreter for ProcessingGraph {
                 ))
             }
         };
-        self.graph = graph;
-        self.install_runner();
-        self.dirty = true;
-        Ok(())
+        self.replace_validated(graph, main, &[])
     }
 
     /// Edit the running Vizij graph — the interpreter module's EDIT entry point,
     /// reached through the engine like LOAD. Applies the [`GraphDiff`] to the
-    /// retained graph (add/remove nodes and links) and re-lowers at the next
-    /// tick. Unedited nodes keep their id, so their runtime state survives the
-    /// edit — an add/remove of one node does not restart the rest. The store and
-    /// the `function -> module` map are untouched.
+    /// retained graph (add/remove nodes and links) and re-lowers it at once.
+    /// An edit leaving a graph that fails [`GraphSpec::validate`] is refused
+    /// whole: the running graph stays as it was. Unedited nodes keep their
+    /// id, so their runtime state survives the edit — an add/remove of one
+    /// node does not restart the rest. The store and the `function -> module`
+    /// map are untouched.
     ///
     /// An added node keeps the place its parent's `children` give it; one no
     /// composite holds is [`place`](Self::place)d. A new root is the main
@@ -1392,16 +1415,14 @@ impl BehaviorInterpreter for ProcessingGraph {
     fn apply(&mut self, diff: GraphDiff) -> Result<(), BehaviorError> {
         let added: Vec<Uuid> = diff.add_nodes.iter().map(|node| node.id).collect();
         let root = diff.set_root;
-        self.graph.apply(diff).map_err(|e| BehaviorError {
+        let mut graph = self.graph.clone();
+        graph.apply(diff).map_err(|e| BehaviorError {
             message: format!("graph diff: {e}"),
         })?;
-        if let Some(root) = root.filter(|root| *root != graph_codec::composite_id(RUNNER)) {
-            self.main = Some(root);
-        }
-        self.place(&added);
-        self.install_runner();
-        self.dirty = true;
-        Ok(())
+        let main = root
+            .filter(|root| *root != graph_codec::composite_id(RUNNER))
+            .or(self.main);
+        self.replace_validated(graph, main, &added)
     }
 
     /// Spawn `call` as a concurrent task run — the interpreter module's SPAWN
@@ -2824,6 +2845,146 @@ mod tests {
             "the halts pruned both runs"
         );
         assert_eq!(vizij_nodes(&graph), 2, "the main graph remains");
+    }
+
+    /// A Remap of [0, 1] onto [0, 10], its bounds inline defaults.
+    fn remap_node() -> serde_json::Value {
+        json!({
+            "id": "remap", "type": "remap",
+            "input_defaults": {
+                "in_min": { "value": 0.0 }, "in_max": { "value": 1.0 },
+                "out_min": { "value": 0.0 }, "out_max": { "value": 10.0 }
+            }
+        })
+    }
+
+    /// The edit putting [`remap_node`] between the passthrough's input and
+    /// its output, its `in` edge left out unless `wired`.
+    fn remap_edit(wired: bool) -> graph_codec::GraphSpecDiff {
+        let mut edges = vec![
+            json!({ "from": { "node_id": "remap" }, "to": { "node_id": "out", "input": "in" } }),
+        ];
+        if wired {
+            edges.push(
+                json!({ "from": { "node_id": "in" }, "to": { "node_id": "remap", "input": "in" } }),
+            );
+        }
+        parse_spec_diff(
+            &json!({
+                "upsert_nodes": [
+                    remap_node(),
+                    { "id": "out", "type": "output", "params": { "path": "actuator/y" } }
+                ],
+                "upsert_edges": edges
+            })
+            .to_string(),
+        )
+        .expect("the edit parses")
+    }
+
+    /// A LOAD whose graph leaves a node's required input unwired is refused,
+    /// naming the node and the port: the running graph and its runs go on.
+    #[test]
+    fn a_load_leaving_a_required_input_unwired_is_refused() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        let (_, handle, moving) = moving_run(&mut graph, &store, 3);
+        let nodes = vizij_nodes(&graph);
+
+        let unwired = parse_spec(
+            &json!({
+                "nodes": [
+                    remap_node(),
+                    { "id": "out", "type": "output", "params": { "path": "actuator/b" } }
+                ],
+                "edges": [
+                    { "from": { "node_id": "remap" }, "to": { "node_id": "out", "input": "in" } }
+                ]
+            })
+            .to_string(),
+        )
+        .expect("the graph parses");
+        let error = graph
+            .load(graph_codec::encode(&unwired).expect("encode"))
+            .expect_err("Remap has no 'in'");
+        assert!(error.message.contains("'remap'"), "{}", error.message);
+        assert!(error.message.contains("'in'"), "{}", error.message);
+        assert_eq!(vizij_nodes(&graph), nodes, "nothing of the load landed");
+
+        store
+            .write(StateChange::set("sensor/x", float(0.25)))
+            .unwrap();
+        graph
+            .tick_store(&store, &mut NoopBridge, 0.1)
+            .expect("the running graph still ticks");
+        assert_eq!(
+            read(&store, "actuator/y"),
+            Some(float(0.25)),
+            "the main graph is the one that ran before"
+        );
+        assert_eq!(read(&store, "actuator/b"), None);
+        let next = f32_at(&store, "out");
+        assert!(moving < next, "the run moves on: {moving} → {next}");
+        assert_eq!(read_key(&store, &handle.status), Some(task::running()));
+    }
+
+    /// An EDIT leaving a node's required input unwired is refused whole: the
+    /// running graph keeps every node and edge the edit would have replaced,
+    /// and its runs go on.
+    #[test]
+    fn an_edit_leaving_a_required_input_unwired_is_refused_whole() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        let (_, handle, moving) = moving_run(&mut graph, &store, 3);
+        let nodes = vizij_nodes(&graph);
+
+        let error = graph
+            .apply(graph_codec::spec_diff_to_graph_diff(&remap_edit(false)).expect("translate"))
+            .expect_err("the edit leaves Remap's 'in' unwired");
+        assert!(error.message.contains("'remap'"), "{}", error.message);
+        assert!(error.message.contains("'in'"), "{}", error.message);
+        assert_eq!(vizij_nodes(&graph), nodes, "nothing of the edit landed");
+
+        store
+            .write(StateChange::set("sensor/x", float(0.25)))
+            .unwrap();
+        graph
+            .tick_store(&store, &mut NoopBridge, 0.1)
+            .expect("the running graph still ticks");
+        assert_eq!(
+            read(&store, "actuator/y"),
+            Some(float(0.25)),
+            "the output still reads the input, by the edge the edit would have replaced"
+        );
+        let next = f32_at(&store, "out");
+        assert!(moving < next, "the run moves on: {moving} → {next}");
+        assert_eq!(read_key(&store, &handle.status), Some(task::running()));
+    }
+
+    /// The same edit with the required input wired is applied, beside a live
+    /// run.
+    #[test]
+    fn a_complete_edit_is_applied() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        let (_, handle, moving) = moving_run(&mut graph, &store, 3);
+
+        graph
+            .apply(graph_codec::spec_diff_to_graph_diff(&remap_edit(true)).expect("translate"))
+            .expect("every required input is wired");
+        store
+            .write(StateChange::set("sensor/x", float(0.25)))
+            .unwrap();
+        graph
+            .tick_store(&store, &mut NoopBridge, 0.1)
+            .expect("the edited graph ticks");
+        assert_eq!(read(&store, "actuator/y"), Some(float(2.5)), "remapped");
+        let next = f32_at(&store, "out");
+        assert!(moving < next, "the run moves on: {moving} → {next}");
+        assert_eq!(read_key(&store, &handle.status), Some(task::running()));
     }
 
     /// run::edit changes a running behavior in place: the nodes the new
