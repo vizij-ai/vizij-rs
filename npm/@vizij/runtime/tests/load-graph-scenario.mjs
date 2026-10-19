@@ -92,8 +92,11 @@ export async function loadGraphSettles(vizij) {
     same(read("out/held"), { f32: 0.375 }, "released, the new graph writes it");
 
     // `run()` steps the device: the run's next step applies the LOAD and
-    // the EDIT. With a long period, an operation issued just after the run's
-    // first step waits for its second.
+    // the EDIT, and the page adds no step. A step at a zero dt would apply an
+    // operation in the microtasks after it is issued, and the run's next step
+    // waits on a timer, which no microtask lets through: so the operation is
+    // still unapplied once those microtasks have run, however late the
+    // run's timer fires on a loaded page.
     const period = 300;
     const running = device.run(period);
     await sleep(50);
@@ -102,7 +105,8 @@ export async function loadGraphSettles(vizij) {
       ["applyGraphEdits under run()", () => device.applyGraphEdits(adds("ran_edit", 0.875, "out/ran_edit")), "out/ran_edit", 0.875],
     ]) {
       const settled = pending();
-      await sleep(0);
+      await Promise.resolve();
+      await Promise.resolve();
       same(read(path), null, `${what}: no step of the page's applied it`);
       await within(settled, what, period * 4);
       same(read(path), { f32: value }, `${what}: the run's step applied it and ran it`);
