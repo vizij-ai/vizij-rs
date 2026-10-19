@@ -719,7 +719,7 @@ pub fn registry() -> Registry {
         type_id: Spring,
         name: "Spring",
         category: "Transitions",
-        doc: "Integrates a critically damped spring toward the Target; a zero or non-finite dt holds its value and velocity.",
+        doc: "Moves toward the Target as a damped spring of the given stiffness, damping and mass, solved exactly for any dt; a zero or non-finite dt holds its value and velocity, and so does a non-finite Target.",
         inputs: vec![PortSpec {
             id: "in",
             ty: PortType::Vector,

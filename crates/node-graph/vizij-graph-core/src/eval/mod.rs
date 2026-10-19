@@ -41,6 +41,8 @@ mod external_function_tests;
 #[cfg(test)]
 mod required_inputs_tests;
 #[cfg(test)]
+mod spring_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod zero_dt_tests;

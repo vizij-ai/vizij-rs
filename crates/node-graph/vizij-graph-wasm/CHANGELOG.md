@@ -6,6 +6,11 @@ All notable changes to `vizij-graph-wasm`. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Built on vizij-graph-core 3.1.1: a `Spring` steps exactly for any `dt` and
+  keeps a finite state.
+
 ### Changed
 
 - **Breaking:** built on vizij-graph-core 3. An `eval_all` with no `step`

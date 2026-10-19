@@ -843,6 +843,87 @@ fn eval_oscillator(
 
     single_output(outputs, value)
 }
+/// How a damped spring moves in `dt` seconds toward a target that holds for
+/// the step: the exact solution of `m·x″ = −k·(x − target) − c·x′`, as the
+/// linear map taking the displacement from the target and the velocity at
+/// the step's start to those at its end. Being exact, it is right for any
+/// `dt`: one long step lands where as many short ones would, so a frame that
+/// comes late — a page shown again, a slow load — leaves the spring where
+/// that much time would have, and no step can make it diverge. The map is
+/// computed in `f64`; the state stays `f32`.
+struct SpringStep {
+    /// The displacement's share in the next displacement.
+    dd: f64,
+    /// The velocity's share in the next displacement.
+    dv: f64,
+    /// The displacement's share in the next velocity.
+    vd: f64,
+    /// The velocity's share in the next velocity.
+    vv: f64,
+}
+
+impl SpringStep {
+    /// The step of `dt` seconds of a spring of `stiffness` k, `damping` c
+    /// and `mass` m, all finite, k and c non-negative and m positive.
+    ///
+    /// With ω² = k/m and the decay rate a = c/2m, the displacement d and
+    /// velocity v move as `d(t) = e^(−at)·(d₀·C(t) + (v₀ + a·d₀)·S(t))` and
+    /// `v(t) = e^(−at)·(v₀·C(t) − (a·v₀ + ω²·d₀)·S(t))`, where C and S are
+    /// `cos(βt)` and `sin(βt)/β` for an underdamped spring (β² = ω² − a²),
+    /// `cosh(βt)` and `sinh(βt)/β` for an overdamped one (β² = a² − ω²), and
+    /// 1 and t at critical damping, which both forms tend to. An overdamped
+    /// spring's terms are taken as its two decaying modes, `e^(−(a∓β)t)`, so
+    /// none overflows however long the step.
+    fn over(stiffness: f32, damping: f32, mass: f32, dt: f32) -> Self {
+        let omega2 = f64::from(stiffness) / f64::from(mass);
+        let a = f64::from(damping) / (2.0 * f64::from(mass));
+        let t = f64::from(dt);
+        let q = omega2 - a * a;
+        // e^(−at)·C and e^(−at)·S.
+        let (even, odd) = if q > 0.0 {
+            let beta = q.sqrt();
+            let decay = (-a * t).exp();
+            let phase = beta * t;
+            let sinc = if phase > 1.0e-6 {
+                phase.sin() / beta
+            } else {
+                t
+            };
+            (decay * phase.cos(), decay * sinc)
+        } else {
+            let beta = (-q).sqrt();
+            // The fast and slow modes' rates, a ± β; the slow one, a − β,
+            // as ω²/(a + β), which does not cancel when β nears a.
+            let fast = a + beta;
+            let slow = if fast > 0.0 { omega2 / fast } else { 0.0 };
+            let slow_decay = (-slow * t).exp();
+            let fast_decay = (-fast * t).exp();
+            // sinh(βt)/β·e^(−at) = e^(−(a−β)t)·(1 − e^(−2βt))/2β.
+            let sinh = if beta * t > 1.0e-6 {
+                -(-2.0 * beta * t).exp_m1() / (2.0 * beta)
+            } else {
+                t
+            };
+            (0.5 * (slow_decay + fast_decay), slow_decay * sinh)
+        };
+        Self {
+            dd: even + a * odd,
+            dv: odd,
+            vd: -omega2 * odd,
+            vv: even - a * odd,
+        }
+    }
+
+    /// The displacement and velocity at the step's end, from those at its
+    /// start.
+    fn apply(&self, displacement: f64, velocity: f64) -> (f64, f64) {
+        (
+            self.dd * displacement + self.dv * velocity,
+            self.vd * displacement + self.vv * velocity,
+        )
+    }
+}
+
 fn eval_stateful(
     kind: &NodeType,
     rt: &mut GraphRuntime,
@@ -884,20 +965,30 @@ fn eval_stateful(
 
             // No time passes at a zero dt, so the spring holds its position
             // and velocity: a new target is recorded, not reached.
-            if dt > 0.0 {
-                let inv_mass = 1.0 / mass;
-                for ((pos, vel), target) in state
-                    .position
-                    .iter_mut()
-                    .zip(state.velocity.iter_mut())
-                    .zip(state.target.iter())
-                {
-                    let displacement = *pos - *target;
-                    let spring_force = -stiffness * displacement;
-                    let damping_force = -damping * *vel;
-                    let acceleration = (spring_force + damping_force) * inv_mass;
-                    *vel += acceleration * dt;
-                    *pos += *vel * dt;
+            let step = (dt > 0.0).then(|| SpringStep::over(stiffness, damping, mass, dt));
+            for ((pos, vel), target) in state
+                .position
+                .iter_mut()
+                .zip(state.velocity.iter_mut())
+                .zip(state.target.iter())
+            {
+                // A target that is not a number is nowhere to move toward:
+                // the spring holds.
+                if !target.is_finite() {
+                    continue;
+                }
+                if let Some(step) = &step {
+                    let (displacement, velocity) =
+                        step.apply(f64::from(*pos - *target), f64::from(*vel));
+                    *pos = *target + displacement as f32;
+                    *vel = velocity as f32;
+                }
+                // A state that is not a number — seeded from a target that
+                // was not one — would stay so whatever the target did next:
+                // the spring starts again at rest on its target.
+                if !(pos.is_finite() && vel.is_finite()) {
+                    *pos = *target;
+                    *vel = 0.0;
                 }
             }
 
