@@ -95,12 +95,19 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
         .bindings
         .by_id
         .values()
+        .flatten()
         .find(|bound| bound.feature == FeatureKind::Translation)
         .map(|bound| bound.entity)
         .expect("a translation binding");
     assert!(
         app.world().get::<Transform>(translated).is_some(),
         "the bound entity carries no transform"
+    );
+    // InnerFace and the four lids share a material, and its colour.
+    assert_eq!(
+        face.bindings.by_id["c627bc47-95bb-4a89-a67c-e6a6e76bef8d"].len(),
+        5,
+        "the shared colour lands on each element that shares it"
     );
     let element_ids: std::collections::HashSet<&String> =
         face.meta.elements.iter().map(|e| &e.id).collect();

@@ -402,11 +402,13 @@ export interface VizijDescription {
     material: string | null;
     morphTargets: string[];
   }[];
-  /** animatable UUID → the node it drives and the feature (`translation`,
+  /** animatable id → the nodes it drives and the feature (`translation`,
    * `rotation`, `scale`, `color`, `opacity`, …, a component of one by
    * Semio Studio's per-axis name — `translation.x`, `rotation.r`,
-   * `color.g` — or a morph target's name). */
-  animatables: Record<string, { node: string; feature: string }>;
+   * `color.g` — or a morph target's name). `nodes` lists every node, in the
+   * GLB's order: shapes that share a material share its colour and opacity
+   * animatables. `node` is the first of them. */
+  animatables: Record<string, { node: string; nodes: string[]; feature: string }>;
   /** The bundle's graph entries — its rig, pose driver, programs, … — each
    * with the `id` it carries (`null` for one without) and its `kind`. */
   graphs: { id: string | null; kind: string }[];

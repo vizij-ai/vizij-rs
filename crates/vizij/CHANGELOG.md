@@ -84,6 +84,15 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Fixed
 
+- An animatable that several elements share moves every one of them, as
+  the three.js view does: shapes that share a material share its colour and
+  opacity animatables, and a pose write to one recolours them all. It used
+  to move only the last element the GLB lists. `Binding::node_names` lists
+  every element an animatable drives (it was `node_name`), the view's
+  `Bindings::by_id` holds a place per element, and the browser module's
+  `describe` lists them in each animatable's `nodes`. An element that binds
+  an animatable another binds to a different feature is skipped, with a
+  warning.
 - A face whose RobotData ids are no UUIDs loads: an element's and an
   animatable's id is any string, as the published three.js line reads it.
   It used to fail with "bad RobotData on node …: UUID parsing failed".

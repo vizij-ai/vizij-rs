@@ -557,7 +557,7 @@ mod tests {
     fn studio_face() -> (FaceMeta, Uuid, Uuid) {
         let (x, color) = (Uuid::new_v4(), Uuid::new_v4());
         let binding = |feature, axis, rest| Binding {
-            node_name: "GltfNode0".into(),
+            node_names: vec!["GltfNode0".into()],
             feature,
             axis,
             rest,
