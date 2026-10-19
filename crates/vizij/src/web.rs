@@ -10,7 +10,10 @@
 //! each device's pose on its own frame, so a step's writes draw one frame
 //! later. The page owns the pacing: Bevy's frames run on
 //! `requestAnimationFrame`, which a hidden tab halts, while a device under
-//! `run` keeps stepping on its timer.
+//! `run` keeps stepping on its timer. A Vizij's device keeps no time until
+//! the Vizij is first drawn ([`ready`]): its steps carry the page's changes
+//! at a zero dt, and its time starts at that frame, so the face's springs,
+//! programs and animations start from rest where the page first shows them.
 //!
 //! Values cross the boundary as JSON in the Arora `Value` vocabulary
 //! (`{"f32": 0.75}`), calls as Arora `Call`s, and a task run as the run
@@ -33,14 +36,18 @@
 //! device share the module, so the holds are the device's interpreter's,
 //! reached from the page.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 use std::sync::mpsc::Sender;
 use std::sync::Mutex;
 
 use arora_types::call::Call;
 use arora_types::data::Key;
 use arora_web::AroraWeb;
+use bevy::platform::time::Instant;
 use bevy::prelude::*;
+use futures::channel::oneshot;
+use futures::future::{self, Either};
 use uuid::Uuid;
 use vizij_arora_behavior::{
     encode_edit_call, encode_load_call, parse_spec, parse_spec_diff, KeyHolds,
@@ -65,12 +72,16 @@ struct Page {
 
 thread_local! {
     static PAGE: RefCell<Option<Page>> = const { RefCell::new(None) };
+    /// The `run`s waiting for their Vizij to be drawn, by Vizij id: the
+    /// App's report starts each once its Vizij is ready.
+    static DRAWN: RefCell<Vec<(String, oneshot::Sender<()>)>> = const { RefCell::new(Vec::new()) };
 }
 
-/// What the App reports back each frame: the Vizijs that are ready,
-/// the picks since the page last drained them, and where each Vizij's safe
-/// area lies (CSS pixels, `[x, y, width, height]` from the canvas's corner).
-static READY: Mutex<Vec<String>> = Mutex::new(Vec::new());
+/// What the App reports back each frame: the Vizijs that are ready, each
+/// with the moment of the frame that first reported it so, the picks since
+/// the page last drained them, and where each Vizij's safe area lies (CSS
+/// pixels, `[x, y, width, height]` from the canvas's corner).
+static READY: Mutex<Vec<(String, Instant)>> = Mutex::new(Vec::new());
 static PICKS: Mutex<Vec<Picked>> = Mutex::new(Vec::new());
 static SAFE_AREAS: Mutex<Vec<(String, [f32; 4])>> = Mutex::new(Vec::new());
 
@@ -82,13 +93,28 @@ fn report(
     areas: Res<SafeAreas>,
 ) {
     if let Ok(mut ready) = READY.lock() {
-        ready.clear();
-        ready.extend(
-            faces
+        let now = Instant::now();
+        let before = std::mem::take(&mut *ready);
+        ready.extend(faces.iter().filter(|face| face.ready).map(|face| {
+            let since = before
                 .iter()
-                .filter(|face| face.ready)
-                .map(|face| face.id.clone()),
-        );
+                .find(|(id, _)| *id == face.id)
+                .map_or(now, |(_, since)| *since);
+            (face.id.clone(), since)
+        }));
+        // Start the runs whose Vizij this frame draws; drop those nobody
+        // awaits any more.
+        DRAWN.with(|drawn| {
+            let waiting = std::mem::take(&mut *drawn.borrow_mut());
+            let (start, wait): (Vec<_>, Vec<_>) = waiting
+                .into_iter()
+                .filter(|(_, run)| !run.is_canceled())
+                .partition(|(id, _)| ready.iter().any(|(ready, _)| ready == id));
+            *drawn.borrow_mut() = wait;
+            for (_, run) in start {
+                let _ = run.send(());
+            }
+        });
     }
     if !picks.0.is_empty() {
         if let Ok(mut out) = PICKS.lock() {
@@ -265,7 +291,9 @@ pub fn load_vizij(
     Ok(VizijRuntime {
         vizij_id,
         rig_prefix,
-        inner: AroraWeb::from(arora),
+        inner: Rc::new(AroraWeb::from(arora)),
+        started: Rc::new(Cell::new(false)),
+        waiting: RefCell::new(None),
         holds,
         channel_keys,
     })
@@ -288,8 +316,26 @@ pub fn unload_vizij(vizij_id: String) -> Result<(), JsValue> {
 /// request replaces or takes down.
 fn not_ready(vizij_id: &str) {
     if let Ok(mut ready) = READY.lock() {
-        ready.retain(|id| id != vizij_id);
+        ready.retain(|(id, _)| id != vizij_id);
     }
+}
+
+/// When the Vizij was first drawn, as the App last reported; `None` while it
+/// is not ready.
+fn drawn_since(vizij_id: &str) -> Option<Instant> {
+    READY.lock().ok().and_then(|ready| {
+        ready
+            .iter()
+            .find(|(id, _)| id == vizij_id)
+            .map(|(_, since)| *since)
+    })
+}
+
+/// Resolves at the App's report of the frame that draws the Vizij first.
+fn when_drawn(vizij_id: &str) -> oneshot::Receiver<()> {
+    let (drawn, wait) = oneshot::channel();
+    DRAWN.with(|waiting| waiting.borrow_mut().push((vizij_id.to_string(), drawn)));
+    wait
 }
 
 /// Draw the Vizij into a rectangle of the canvas, in CSS pixels relative to
@@ -378,15 +424,13 @@ pub fn safe_area(vizij_id: String) -> Result<JsValue, JsValue> {
 /// it was drawn, each with its pipeline compiled — or, should something keep
 /// that from happening, 600 frames (ten seconds at 60 Hz) have gone by and
 /// the console says what held it back. From then on it draws in its place,
-/// its device's pose showing. False while a reload's new scene loads,
+/// its device's pose showing, and its device's time runs from that frame
+/// ([`VizijRuntime::step`]). False while a reload's new scene loads,
 /// compiles and draws for the first time; the previous scene draws
 /// meanwhile.
 #[wasm_bindgen]
 pub fn ready(vizij_id: String) -> bool {
-    READY
-        .lock()
-        .map(|ready| ready.contains(&vizij_id))
-        .unwrap_or(false)
+    drawn_since(&vizij_id).is_some()
 }
 
 /// The pointer presses on Vizijs since the last drain, oldest first, as
@@ -597,11 +641,20 @@ pub fn run_edits(run: &str, from_json: &str, to_json: &str) -> Result<JsValue, J
 /// page steps in the same turn; while `run` owns the device, the run's next
 /// step does. `releaseKeys` takes the same step. `listKeys` and
 /// `describeMethods` answer at once, with no step.
+///
+/// The device's time starts at its Vizij's first drawn frame ([`ready`]):
+/// until then a step advances no time, and a `run` waits for that frame.
 #[wasm_bindgen]
 pub struct VizijRuntime {
     vizij_id: String,
     rig_prefix: String,
-    inner: AroraWeb,
+    inner: Rc<AroraWeb>,
+    /// Whether the device's time has started: its Vizij has been drawn, or
+    /// it has none.
+    started: Rc<Cell<bool>>,
+    /// A `run` waiting for the Vizij to be drawn: dropping it gives the run
+    /// up.
+    waiting: RefCell<Option<oneshot::Sender<()>>>,
     /// The store keys the device's interpreter leaves to the page
     /// ([`hold_keys`](Self::hold_keys)).
     holds: KeyHolds,
@@ -640,7 +693,10 @@ impl VizijRuntime {
         Ok(VizijRuntime {
             vizij_id: String::new(),
             rig_prefix: String::new(),
-            inner: AroraWeb::from(arora),
+            inner: Rc::new(AroraWeb::from(arora)),
+            // Nothing to draw: its time starts with it.
+            started: Rc::new(Cell::new(true)),
+            waiting: RefCell::new(None),
             holds,
             channel_keys: ChannelKeys::default(),
         })
@@ -729,8 +785,27 @@ impl VizijRuntime {
     /// computes without time; one that reaches a smoother is its new target,
     /// shown once time passes. A `say` run follows its audio, which plays in
     /// real time. Unavailable while `run` owns the device.
+    ///
+    /// Until its Vizij is first drawn ([`ready`]) every step is a step of 0,
+    /// whatever `dt_ms` says, and the first step after advances the time
+    /// since that frame, at most `dt_ms`: the device's time starts where
+    /// the page first shows the face, not where the page created it.
     pub fn step(&self, dt_ms: f64) -> Result<(), JsValue> {
-        self.inner.step(dt_ms)
+        self.inner.step(self.device_dt(dt_ms))
+    }
+
+    /// The time a step of `dt_ms` advances the device by.
+    fn device_dt(&self, dt_ms: f64) -> f64 {
+        if self.started.get() {
+            return dt_ms;
+        }
+        match drawn_since(&self.vizij_id) {
+            None => 0.0,
+            Some(since) => {
+                self.started.set(true);
+                dt_ms.min(since.elapsed().as_secs_f64() * 1_000.0)
+            }
+        }
     }
 
     /// Hand the device its own loop at `period_ms` (default ~100 Hz) until
@@ -738,13 +813,45 @@ impl VizijRuntime {
     /// behavior tick does not end the loop — it stands as `behaviorError`
     /// until a tick recovers; the promise rejects only if the runtime itself
     /// fails.
+    ///
+    /// Called before its Vizij is first drawn ([`ready`]), the loop starts
+    /// at that frame, so its first step advances the time since: until
+    /// then the device stays the page's, as before a `run`, its operations
+    /// settling at a zero dt. `stop` in the meantime gives the run up, and
+    /// the promise resolves.
     pub fn run(&self, period_ms: Option<f64>) -> js_sys::Promise {
-        self.inner.run(period_ms)
+        if self.started.get() || drawn_since(&self.vizij_id).is_some() {
+            self.started.set(true);
+            return self.inner.run(period_ms);
+        }
+        if self
+            .waiting
+            .borrow()
+            .as_ref()
+            .is_some_and(|waiting| !waiting.is_canceled())
+        {
+            return js_sys::Promise::reject(&JsValue::from_str("the device is already running"));
+        }
+        let drawn = when_drawn(&self.vizij_id);
+        let (waiting, given_up) = oneshot::channel::<()>();
+        *self.waiting.borrow_mut() = Some(waiting);
+        let inner = self.inner.clone();
+        let started = self.started.clone();
+        wasm_bindgen_futures::future_to_promise(async move {
+            // `stop`, or the device's `free`, drops the waiting end first.
+            let Either::Left((Ok(()), _)) = future::select(drawn, given_up).await else {
+                return Ok(JsValue::UNDEFINED);
+            };
+            started.set(true);
+            wasm_bindgen_futures::JsFuture::from(inner.run(period_ms)).await
+        })
     }
 
     /// Reclaim the device from `run`: the loop ends at its next step
-    /// boundary and `step` works again.
+    /// boundary and `step` works again. A `run` still waiting for its Vizij
+    /// to be drawn is given up.
     pub fn stop(&self) {
+        self.waiting.borrow_mut().take();
         self.inner.stop()
     }
 
