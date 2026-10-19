@@ -249,10 +249,9 @@ answers the Studio client's `retrieveGlb` (`GET_MODEL_GLB`).
 `--ros2` attaches [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2)
 with its ROS4HRI exposure preset:
 
-- the typed face topics — `/robot_face/{expression,look_at}` and
-  `/expressive_face/look_at` — routed onto the `ros4hri` profile's
-  `standard/ros4hri/*` keys, and `/robot_face/speech` (`std_msgs/String`)
-  publishing what the face is saying, empty at rest. An expression command
+- the typed face topics — `/robot_face/{expression,look_at}` — routed onto the
+  `ros4hri` profile's `standard/ros4hri/*` keys, and `/robot_face/speech`
+  (`std_msgs/String`) publishing what the face is saying, empty at rest. An expression command
   naming an expression shows that expression alone at its arousal as the
   intensity (clamped to 0..1, so a calm, negative arousal shows none); one
   with an empty name blends the expressions by its valence and arousal

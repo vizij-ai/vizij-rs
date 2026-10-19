@@ -42,8 +42,8 @@ stays with the face.
 > **The ROS side lives in
 > [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2),
 > not this repo.** Its `ExposureProfile::ros4hri()` preset subscribes the typed
-> face topics — PAL's `/robot_face/{expression,look_at}` and IIIA's
-> `/expressive_face/look_at` — and routes their fields onto these keys,
+> face topics — PAL's `/robot_face/{expression,look_at}` — and routes their
+> fields onto these keys,
 > publishes the [face image](#driving-a-key-from-ros-2) on
 > `/robot_face/image_raw[/compressed]` and [what the face is
 > saying](#speaking-through-the-standard-skill) on `/robot_face/speech`
