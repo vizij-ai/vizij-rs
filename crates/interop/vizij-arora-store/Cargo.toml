@@ -3,6 +3,7 @@ name = "vizij-arora-store"
 version = "0.0.0"
 edition.workspace = true
 publish = false
+license = "Apache-2.0"
 description = "Vizij's Blackboard exposed as an Arora DataStore (arora-types)."
 
 [dependencies]

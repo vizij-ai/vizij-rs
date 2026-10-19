@@ -3,6 +3,7 @@ name = "vizij-animation-module"
 version = "0.0.0"
 edition = "2021"
 publish = false
+license = "Apache-2.0"
 description = "vizij-animation-core packaged as an Arora wasm module (build once, run in any Arora runtime)."
 
 [lib]

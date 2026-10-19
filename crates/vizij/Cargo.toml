@@ -3,6 +3,7 @@ name = "vizij"
 version = "0.2.0"
 edition = { workspace = true }
 publish = false
+license = "Apache-2.0"
 description = "Vizij: an arora with a head. One crate: the Bevy view rendering a GLB face and the arora device driving it, as a library on every target (desktop, browser, Android) and as the `vizij` binary on desktop."
 
 # The desktop packages the release workflow builds (release-vizij.yml): a .deb

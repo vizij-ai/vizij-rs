@@ -850,7 +850,7 @@ fn guest<T>(f: impl FnOnce(&mut AnimationModule) -> T) -> T {
     name = "animation",
     version = "2.0.0",
     author = "Semio",
-    license = "Proprietary",
+    license = "Apache-2.0",
     description = "vizij-animation-core as an Arora wasm module",
     executable_mime = "application/wasm",
     scope = vizij_arora::VIZIJ

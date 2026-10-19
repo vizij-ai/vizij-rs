@@ -2,7 +2,7 @@
   "name": "@vizij/wasm-loader",
   "version": "0.1.5",
   "description": "Shared loader utilities for Vizij wasm packages",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/vizij-ai/vizij-rs"
