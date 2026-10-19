@@ -8,6 +8,14 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ## [Unreleased]
 
+### Changed
+
+- The browser module's `loadGraph` and `applyGraphEdits`, and the
+  interpreter module's LOAD and EDIT over any bridge, refuse a graph that
+  would fail every evaluation, such as one leaving a `remap`'s `in` unwired,
+  with an error naming the node and the port. The face's running graph and
+  its program and skill runs go on as they were.
+
 ### Added
 
 - The browser module's `holdKeys(keys)` and `releaseKeys(keys?)` on a

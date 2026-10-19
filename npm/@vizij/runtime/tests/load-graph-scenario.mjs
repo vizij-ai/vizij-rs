@@ -2,7 +2,8 @@
 // with no time in it applies each, and the graph it leaves runs in that same
 // step. Under `run()` the run's next step applies them, and the page adds no
 // step. The swap keeps what is not the graph: a run runs on, and a held key
-// keeps the page's value.
+// keeps the page's value. A graph that would fail every evaluation is
+// refused, and what runs goes on.
 //
 // One scenario for both suites: `tests/load-graph.mjs` runs it in Node,
 // `tests/browser/load-graph.mjs` in a page. It throws on the first failure.
@@ -90,6 +91,39 @@ export async function loadGraphSettles(vizij) {
     device.releaseKeys();
     device.step(16);
     same(read("out/held"), { f32: 0.375 }, "released, the new graph writes it");
+
+    // A LOAD or an EDIT leaving a Remap's `in` unwired would fail every
+    // step, the run's with it: it is refused, naming the node and the port,
+    // and the graph that ran and the run go on.
+    const unwired = {
+      nodes: [
+        { id: "unwired", type: "remap" },
+        { id: "unwired_out", type: "output", params: { path: "out/unwired" } },
+      ],
+      edges: [{ from: { node_id: "unwired" }, to: { node_id: "unwired_out", input: "in" } }],
+    };
+    for (const [what, refused] of [
+      ["applyGraphEdits", () => device.applyGraphEdits({ upsert_nodes: unwired.nodes, upsert_edges: unwired.edges })],
+      ["loadGraph", () => device.loadGraph(unwired)],
+    ]) {
+      device.setValue("out/swapped", { f32: 0 });
+      device.setValue("out/program", { f32: 0 });
+      const error = await within(
+        refused().then(
+          () => null,
+          (e) => String(e),
+        ),
+        what,
+      );
+      check(error !== null, `${what} of an unwired Remap is refused`);
+      check(error.includes("'unwired'") && error.includes("'in'"), `${what} names the node and the port: ${error}`);
+      device.step(16);
+      same(read("out/unwired"), null, `${what}: nothing of the refused graph ran`);
+      same(read("out/swapped"), { f32: 0.375 }, `${what}: the graph that ran runs on`);
+      same(read("out/program"), { f32: 0.75 }, `${what}: the run runs on`);
+      same(vizij.runStatus(read(run.status)), "running", `${what}: the run still runs`);
+      same(device.behaviorError, undefined, `${what}: the behavior stays healthy`);
+    }
 
     // `run()` steps the device: the run's next step applies the LOAD and
     // the EDIT, and the page adds no step. A step at a zero dt would apply an

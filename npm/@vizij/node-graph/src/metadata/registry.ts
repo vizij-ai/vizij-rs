@@ -1056,21 +1056,24 @@ const registry: Registry = {
           "ty": "float",
           "label": "In",
           "doc": "Value to clamp.",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "min",
           "ty": "float",
           "label": "Min",
           "doc": "Lower bound.",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "max",
           "ty": "float",
           "label": "Max",
           "doc": "Upper bound.",
-          "optional": false
+          "optional": false,
+          "required": true
         }
       ],
       "outputs": [
@@ -1095,35 +1098,40 @@ const registry: Registry = {
           "ty": "float",
           "label": "In",
           "doc": "Value to remap.",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "in_min",
           "ty": "float",
           "label": "In Min",
           "doc": "Lower bound of the input range.",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "in_max",
           "ty": "float",
           "label": "In Max",
           "doc": "Upper bound of the input range.",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "out_min",
           "ty": "float",
           "label": "Out Min",
           "doc": "Lower bound of the output range.",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "out_max",
           "ty": "float",
           "label": "Out Max",
           "doc": "Upper bound of the output range.",
-          "optional": false
+          "optional": false,
+          "required": true
         }
       ],
       "outputs": [
@@ -1148,49 +1156,56 @@ const registry: Registry = {
           "ty": "float",
           "label": "In",
           "doc": "Value to remap.",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "in_low",
           "ty": "float",
           "label": "In Low",
           "doc": "Reference point for values below the anchor.",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "in_anchor",
           "ty": "float",
           "label": "In Anchor",
           "doc": "Anchor point separating the low/high spans.",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "in_high",
           "ty": "float",
           "label": "In High",
           "doc": "Reference point for values above the anchor.",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "out_low",
           "ty": "float",
           "label": "Out Low",
           "doc": "Output mapped to In Low.",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "out_anchor",
           "ty": "float",
           "label": "Out Anchor",
           "doc": "Output corresponding to the anchor.",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "out_high",
           "ty": "float",
           "label": "Out High",
           "doc": "Output mapped to In High.",
-          "optional": false
+          "optional": false,
+          "required": true
         }
       ],
       "outputs": [
@@ -1215,21 +1230,24 @@ const registry: Registry = {
           "ty": "float",
           "label": "In",
           "doc": "Value to remap.",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "input_breakpoints",
           "ty": "vector",
           "label": "Input Breakpoints",
           "doc": "Ordered numeric domain breakpoints (length ≥ 2).",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "output_breakpoints",
           "ty": "vector",
           "label": "Output Breakpoints",
           "doc": "Output values paired element-wise with Input Breakpoints.",
-          "optional": false
+          "optional": false,
+          "required": true
         }
       ],
       "outputs": [
@@ -2515,7 +2533,8 @@ const registry: Registry = {
           "ty": "vec3",
           "label": "Target Position",
           "doc": "World-space XYZ target (meters).",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "seed",
@@ -2602,14 +2621,16 @@ const registry: Registry = {
           "ty": "vec3",
           "label": "Target Position",
           "doc": "World-space XYZ target (meters).",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "target_rot",
           "ty": "vector",
           "label": "Target Rotation",
           "doc": "Target quaternion (x, y, z, w).",
-          "optional": false
+          "optional": false,
+          "required": true
         },
         {
           "id": "seed",
@@ -2705,7 +2726,8 @@ const registry: Registry = {
           "ty": "any",
           "label": "Joint Values",
           "doc": "Record or array of joint angles (radians).",
-          "optional": false
+          "optional": false,
+          "required": true
         }
       ],
       "outputs": [
