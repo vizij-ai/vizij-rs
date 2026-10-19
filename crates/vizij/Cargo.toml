@@ -209,7 +209,7 @@ console_log = "1"
 getrandom = { version = "0.4", features = ["wasm_js"] }
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
-# The frame_cost example's instruction counter (perf events).
+# The frame_cost and load_cost examples' instruction counter (perf events).
 libc = "0.2"
 
 [dev-dependencies]
