@@ -11,7 +11,7 @@ module](../crates/interop/vizij-arora-host/src/standard.rs), which is the
 authoritative source; this page mirrors it. As data, the same vocabulary is
 the **`vizij-face` profile**
 ([`profiles/vizij-face.json`](../crates/interop/vizij-arora-host/profiles/vizij-face.json)):
-an interface of 96 typed paths, face-scoped — every face carries its own copy
+an interface of 98 typed paths, face-scoped — every face carries its own copy
 under its rig prefix — with each key's tier, FACS action unit, and ARKit
 blendshape as metadata. See [profiles and mappings](profiles-and-mappings.md).
 
@@ -54,7 +54,8 @@ tier, without grading them.
 | `standard/vizij/gaze/target/weight` | `[0, 1]` | how strongly the eyes hold the target: 0 not at all, 1 fully; rests at 0 |
 
 Per-eye positions (rather than a single gaze vector) let a mapping command
-vergence; the ROS4HRI mapping computes them from a face-frame target.
+vergence; the ROS4HRI mapping computes them from a face-frame target, with
+the face's [eye spacing and gaze range](#settings).
 
 The **blink** is a level, not a trigger. Whoever blinks the face shapes each
 blink over time — the close and the reopen, about 0.2 s in all — and the face
@@ -147,8 +148,9 @@ Vizij ships as [skills](skills.md) — `play_viseme(shape, weight)`, one shape
 through a lipsync envelope, and `say(text, voice)`, whose run streams the
 visemes of the speech it synthesizes through the same driver.
 
-The **lipsync gain**, at `standard/vizij/lipsync/gain`, is a setting of the
-face rather than a control: how strongly it shows the viseme weights. The
+The **lipsync gain**, at `standard/vizij/lipsync/gain`, is a
+[setting](#settings) of the face rather than a control: how strongly it shows
+the viseme weights. The
 face's adaptation multiplies every viseme weight by it before mapping it onto
 a pose, each pose clamped to [0, 1]. A face whose mouth shapes read too strong
 or too weak is tuned once rather than on every call, and a caller's weight
@@ -231,6 +233,40 @@ its author chooses (a listening pose, an averted gaze while thinking) or not at
 all, and nothing in the standard writes them on its own. ROS4HRI has no
 counterpart the mapping reads.
 
+## Settings
+
+| Path | Type | Rests at | Meaning |
+|---|---|---|---|
+| `standard/vizij/lipsync/gain` | f32 ≥ 0 | 1 | how strongly the face shows the viseme weights (see [Visemes](#visemes)) |
+| `standard/vizij/gaze/eye_spacing` | f32 ≥ 0, metres | 0.06 | the distance between the centres of the face's eyes, as the robot shows them |
+| `standard/vizij/gaze/range` | f32 ≥ 0, radians | 0.78 | the gaze angle off the face's axis at which an eye reaches the end of its travel |
+
+A setting says what the face is like rather than what it is told to do. The
+face authors it in its own graphs: an `input` node on the setting's path, in
+its standard adaptation, whose default is the face's value —
+
+```json
+{ "id": "in_gaze_range", "type": "input",
+  "params": { "path": "rig/<faceId>/standard/vizij/gaze/range", "value": 0.6 } }
+```
+
+— and a face that authors none rests at the table's value. A mapping composed
+over the face reads the setting under the face's prefix and rests it where
+the face does, so a mapping is tuned to a face by the face's own content,
+never by a forked copy of the mapping: the mapping is the same for every face,
+the setting is what differs. A deployment overrides a setting by writing the
+key, and a `reset` returns it to the face's value. Nothing animates a setting.
+The profile declares each as an `input` in no tier, so none counts toward a
+face's compliance level.
+
+The eye settings are what a mapping aiming the eyes at a point in space needs
+to know of the face. The ROS4HRI mapping turns each eye toward the point from
+its own centre, half the spacing to either side of the face's, and maps an
+angle of ±range onto an eye position of ±1. The values a face authoring none
+rests at are the incumbent ROS4HRI face's, which the shipped faces share. The
+spacing is the eyes' distance as displayed, so a deployment whose display
+shows the face larger or smaller writes it.
+
 ## Caption
 
 | Path | Type | Meaning |
@@ -269,7 +305,9 @@ target's among them, `GAZE_TARGET_X` and `GAZE_TARGET_Y`) and the path
 helpers (`expression_path`, `viseme_path`, `face_path`, `conversation_path`),
 the name sets (`expression_names()` — `ROS4HRI_EXPRESSION_NAMES` then
 `VIZIJ_EXPRESSION_NAMES` — `VISEME_SHAPES`, `CONVERSATION_STATES`), the
-caption's (`CAPTION_TEXT`, `CAPTION_SPEAKER`, `CAPTION_SPEAKER_SELF`), plus
+settings (`LIPSYNC_GAIN`, `GAZE_EYE_SPACING`, `GAZE_RANGE`, listed as
+`FACE_SETTINGS`), the caption's (`CAPTION_TEXT`, `CAPTION_SPEAKER`,
+`CAPTION_SPEAKER_SELF`), plus
 `controls_for_au(code)` (the lateralized pair or single control an AU drives)
 and `control_for_arkit(name)`. Callers should build paths through these rather
 than hand-format strings.

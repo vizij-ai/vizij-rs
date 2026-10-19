@@ -10,6 +10,17 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- A face's settings — its lipsync gain, eye spacing and gaze range
+  (`vizij_arora_host::standard::FACE_SETTINGS`) — rest in the store at the
+  value the face's graphs author, so `reset` returns them to the face's own
+  value. Every other key a profile types rests at the profile's rest, as
+  before.
+
+- The ROS4HRI mapping aims the eyes with the face's eye spacing and gaze
+  range (`standard/vizij/gaze/{eye_spacing,range}`), which a face authors in
+  its adaptation and a deployment overrides by writing the key; a face
+  authoring neither is aimed as before.
+
 - The browser module's `loadGraph` and `applyGraphEdits`, and the
   interpreter module's LOAD and EDIT over any bridge, refuse a graph that
   would fail every evaluation, such as one leaving a `remap`'s `in` unwired,

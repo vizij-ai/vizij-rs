@@ -12,8 +12,8 @@ import {
 } from "../dist/runtime/src/index.js";
 
 // The shipped profiles, summarized: the face standard (face-scoped — 91
-// controls, the lipsync gain, the caption and its speaker, and the two speech
-// state keys it reports) and
+// controls, the face's three settings, the caption and its speaker, and the
+// two speech state keys it reports) and
 // the ROS4HRI interface (device-scoped — 10 named command keys, the streamed
 // viseme among them as one code rather than a weight per shape, with its time
 // and duration, and the closed caption's text and speaker; and the speech
@@ -22,14 +22,14 @@ const listed = await profiles();
 assert.deepEqual(
   listed.map((p) => [p.id, p.scope, p.keys]),
   [
-    ["vizij-face", "face", 96],
+    ["vizij-face", "face", 98],
     ["ros4hri", "device", 12],
   ],
 );
 
 // A face-scoped profile is addressed to the face: every path takes the prefix.
 const face = await profile("vizij-face", "rig/quori/");
-assert.equal(face.keys.length, 96);
+assert.equal(face.keys.length, 98);
 assert.ok(face.keys.every((k) => k.path.startsWith("rig/quori/standard/vizij/")));
 // What the face reports rather than takes: the current viseme and the
 // utterance being spoken, output keys outside the control tiers.
@@ -37,13 +37,23 @@ assert.deepEqual(
   face.keys.filter((k) => k.kind === "output").map((k) => k.path),
   ["rig/quori/standard/vizij/viseme", "rig/quori/standard/vizij/speech"],
 );
-// A setting of the face, outside the tiers: the lipsync gain its adaptation
-// scales the viseme weights by, resting at 1.
-const gain = face.keys.find((k) => k.path === "rig/quori/standard/vizij/lipsync/gain");
-assert.deepEqual(
-  [gain.kind, gain.value_type, gain.min, gain.default_value, gain.meta],
-  ["input", "f32", 0, { f32: 1 }, undefined],
-);
+// The face's settings, outside the tiers: the lipsync gain its adaptation
+// scales the viseme weights by, resting at 1, and how far apart its eyes are
+// and how far they turn, which the ROS4HRI mapping aims them with, resting at
+// the incumbent's 6 cm and 0.78 rad.
+for (const [suffix, rest] of [
+  ["lipsync/gain", 1],
+  ["gaze/eye_spacing", 0.06],
+  ["gaze/range", 0.78],
+]) {
+  const setting = face.keys.find((k) => k.path === `rig/quori/standard/vizij/${suffix}`);
+  assert.ok(setting, `vizij-face declares ${suffix}`);
+  assert.deepEqual(
+    [setting.kind, setting.value_type, setting.min, setting.meta],
+    ["input", "f32", 0, undefined],
+  );
+  assert.ok(Math.abs(setting.default_value.f32 - rest) < 1e-6, `${suffix} rests at ${rest}`);
+}
 const jaw = face.keys.find((k) => k.path.endsWith("/face/jaw_open"));
 assert.deepEqual(jaw.meta, { au: 26, arkit: "jawOpen", tier: "muscle" });
 assert.equal(jaw.value_type, "f32");
@@ -95,8 +105,9 @@ assert.equal(await profile("nope"), null);
 
 // The shipped mappings, and the ROS4HRI graph with the face's paths prefixed:
 // it reads the device-scoped ROS4HRI commands and writes the face's controls,
-// and the speech channel runs the other way — the face's speech state in,
-// the ROS4HRI speech state out — the prefix landing on the face's side only.
+// the speech channel runs the other way — the face's speech state in, the
+// ROS4HRI speech state out — and the gaze aims the eyes with the face's eye
+// settings, the prefix landing on the face's side only.
 assert.deepEqual((await mappings()).map((m) => m.id), ["ros4hri"]);
 const graph = await mapping("ros4hri", "rig/quori/");
 const outputs = graph.nodes.filter((n) => n.type === "output").map((n) => n.params.path);
@@ -114,11 +125,14 @@ assert.ok(
     (p) =>
       p.startsWith("standard/ros4hri/") ||
       p === "rig/quori/standard/vizij/speech" ||
-      p === "rig/quori/standard/vizij/viseme",
+      p === "rig/quori/standard/vizij/viseme" ||
+      p === "rig/quori/standard/vizij/gaze/eye_spacing" ||
+      p === "rig/quori/standard/vizij/gaze/range",
   ),
 );
-assert.ok(inputs.includes("rig/quori/standard/vizij/speech"));
-assert.ok(inputs.includes("rig/quori/standard/vizij/viseme"));
+for (const path of ["speech", "viseme", "gaze/eye_spacing", "gaze/range"]) {
+  assert.ok(inputs.includes(`rig/quori/standard/vizij/${path}`), `the mapping reads ${path}`);
+}
 assert.equal(await mapping("nope"), null);
 
 // The deprecated names are the same functions.
