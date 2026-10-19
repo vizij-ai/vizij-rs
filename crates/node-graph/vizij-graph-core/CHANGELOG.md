@@ -4,6 +4,25 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [3.1.1] - 2026-10-19
+
+### Fixed
+
+- `Spring` moves by the exact solution of a damped spring over each step,
+  for a target that holds through the step. One long step lands where as
+  many short ones would, for any stiffness, damping and mass, so a late
+  frame — a page shown again after its timers were throttled, a slow load —
+  leaves the spring where that much time would have. It used to integrate
+  with semi-implicit Euler, which diverges once a step is longer than a
+  bound its parameters set — 0.15 s for the mouth and brow springs of
+  Quori's program, 0.23 s for its eye spring: under steps of a second they
+  grew to infinity and then NaN, which the spring then kept for good.
+- `Spring` keeps a finite state. A component whose target is not finite
+  holds its position and velocity, and one whose state is not finite —
+  seeded from a target that was not — starts again at rest on its target.
+  Its doc no longer calls it critically damped; how it is damped is its
+  parameters'.
+
 ## [3.1.0] - 2026-10-19
 
 ### Added
