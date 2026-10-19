@@ -49,6 +49,7 @@ const stepFor = (ms) => {
 };
 const read = (path) => runtime.readValues([path])[path]?.f32;
 const x = () => read("face/x");
+const animated = () => runtime.readValues(["face/x"])["face/x"];
 
 // --- the module's declared functions are the device's described methods ------
 const header = JSON.parse(headerJson);
@@ -81,7 +82,7 @@ assert.deepEqual(
   { id: converted.id, name: converted.name, duration: converted.duration },
   { id: "ramp", name: "Ramp", duration: 1 },
 );
-const anim = await invoke("load_animation", { clip: converted.moduleAnimation });
+const anim = await invoke("load_clip", { clip: converted.moduleAnimation });
 const player = await invoke("create_player", { name: "ramp" });
 const instance = await invoke("add_instance_with_weight", { player, anim, weight: { f32: 0 } });
 await invoke("stop", { player });
@@ -100,6 +101,9 @@ state = playerNamed("ramp");
 assert.equal(state.state, "playing");
 assert.ok(state.time > 0.2 && state.time < 0.45, `playhead at ${state.time}`);
 assert.ok(Math.abs(x() - state.time) < 0.05, `linear ramp: ${x()} at ${state.time}`);
+// The module plays numbers as f64; a key that declares no type takes Vizij's
+// number, an f32.
+assert.ok("f32" in animated(), `the key holds an f32: ${JSON.stringify(animated())}`);
 
 // --- paused: the playhead holds, the speed is kept, a seek moves the pose ----
 await invoke("pause", { player });
@@ -147,7 +151,7 @@ const inverted = runtime.moduleAnimation({
   ],
 });
 assert.deepEqual(
-  await invoke("reload_animation", { anim, clip: inverted.moduleAnimation }),
+  await invoke("reload_clip", { anim, clip: inverted.moduleAnimation }),
   { bool: true },
 );
 state = playerNamed("ramp");

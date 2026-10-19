@@ -1,0 +1,10 @@
+[package]
+name = "vizij-animation-artifact"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+description = "Writes @vizij/animation-module's artifact/: arora-animation-module's module directory (header, records and guest)."
+
+[dependencies]
+# `module-dir`: the module directory's header, records and guest file.
+arora-animation-module = { version = "1", features = ["module-dir"] }

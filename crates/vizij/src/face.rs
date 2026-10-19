@@ -590,7 +590,7 @@ pub fn builder_with_guests(
 
 /// Load `bundle`'s animations into a built device's animation module, through
 /// the module's declared functions — the calls any client sends to load an
-/// animation. Per animation, in the bundle's order: `load_animation` (its
+/// animation. Per animation, in the bundle's order: `load_clip` (its
 /// tracks keyed by the store keys their channels name through the face's
 /// rig, [`animation::module_animation`]), `create_player` named after the
 /// animation's id, `add_instance_with_weight` at 0, and `stop`. Each is then
@@ -598,9 +598,9 @@ pub fn builder_with_guests(
 /// its instance, then `play` — finding its player by name in
 /// `player_states`. Call it before the device's first step.
 pub fn load_animations(arora: &mut arora::Arora, bundle: &Bundle) -> Result<()> {
+    use arora_animation_module::animation::ids;
     use arora_types::call::Call;
     use arora_types::value::{StructureField, Value as AValue};
-    use vizij_animation_module::animation::ids;
 
     let mut call = |function: uuid::Uuid, args: Vec<(uuid::Uuid, AValue)>| {
         let ret = arora
@@ -617,7 +617,9 @@ pub fn load_animations(arora: &mut arora::Arora, bundle: &Bundle) -> Result<()> 
             })
             .map_err(|e| anyhow!("{e}"))?
             .ret;
+        // The module answers a call it refuses with `u32::MAX`.
         match ret {
+            AValue::U32(u32::MAX) => Err(anyhow!("the animation module refused {function}")),
             AValue::U32(id) => Ok(id),
             other => Err(anyhow!("expected an id, got {other}")),
         }
@@ -626,8 +628,8 @@ pub fn load_animations(arora: &mut arora::Arora, bundle: &Bundle) -> Result<()> 
     for authored in &bundle.animations {
         let clip = animation::module_animation(authored, &keys);
         let anim = call(
-            ids::load_animation::FUNCTION,
-            vec![(ids::load_animation::CLIP, clip.into())],
+            ids::load_clip::FUNCTION,
+            vec![(ids::load_clip::CLIP, clip.into())],
         )?;
         let player = call(
             ids::create_player::FUNCTION,
@@ -2621,10 +2623,10 @@ mod tests {
 mod animation_tests {
     use std::time::Duration;
 
+    use arora_animation_module::animation::ids;
+    use arora_animation_module::PlayerState;
     use arora_types::call::Call;
     use arora_types::value::{StructureField, Value as AValue};
-    use vizij_animation_module::animation::ids;
-    use vizij_animation_module::PlayerState;
     use vizij_api_core::value::as_float;
 
     use super::*;
@@ -2758,7 +2760,9 @@ mod animation_tests {
             .compose(&["rig"], &ProgramSelect::None, true, &[])
             .expect("compose")
             .to_string();
-        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
+        let store = BlackboardStore::new();
+        declare_keys(&store, &spec, &[], &[], &InputRanges::default());
+        let mut arora = builder_for(&spec, RigHal::new(), store, &[], None)
             .expect("build the device")
             .with_start_time(start)
             .build()
@@ -2831,7 +2835,9 @@ mod animation_tests {
     /// `play_at` counts on the device's clock: the animation source steps the
     /// module with `arora/time`, so a player anchored at a device time starts
     /// there even when the module's own count of its steps is elsewhere —
-    /// here, a client stepped it once directly.
+    /// here, a client stepped it once directly, a second on from the
+    /// device's 100 ms. The module's players never move back, so the anchor
+    /// is one the device reaches after that second.
     #[test]
     fn play_at_starts_a_face_animation_at_the_device_time_it_names() {
         let mut arora = ramp_face();
@@ -2841,23 +2847,20 @@ mod animation_tests {
             ids::step::FUNCTION,
             vec![(ids::step::DT_NS, AValue::U64(1_000_000_000))],
         );
-        play_at(&mut arora, "ramp", 300_000_000);
+        play_at(&mut arora, "ramp", 1_300_000_000);
 
-        // Device time 200 ms: before the anchor, the player holds.
-        step_for(&mut arora, 0.1);
+        // Device time 1.2 s: before the anchor, the player waits at its
+        // start, playing.
+        step_for(&mut arora, 1.1);
         let state = player(&mut arora, "ramp");
-        assert_eq!(state.state, "stopped", "{state:?}");
+        assert_eq!((state.state.as_str(), state.waiting), ("playing", true));
         assert_eq!(state.time_ns, 0);
 
-        // Device time 450 ms: 150 ms after the anchor.
+        // Device time 1.45 s: 150 ms after the anchor.
         step_for(&mut arora, 0.25);
         let state = player(&mut arora, "ramp");
-        assert_eq!(state.state, "playing", "{state:?}");
-        assert!(
-            state.time_ns.abs_diff(150_000_000) < 1_000,
-            "150 ms after the anchor, got {} ns",
-            state.time_ns
-        );
+        assert_eq!((state.state.as_str(), state.waiting), ("playing", false));
+        assert_eq!(state.time_ns, 150_000_000, "150 ms after the anchor");
     }
 
     /// On a device whose clock starts far from zero — at a Unix time, as
@@ -2875,21 +2878,18 @@ mod animation_tests {
 
         // A zero-dt step applies the anchor and brings it no closer.
         arora.step(Duration::ZERO).expect("a step at a zero dt");
-        // Device time start + 200 ms: before the anchor, the player holds.
+        // Device time start + 200 ms: before the anchor, the player waits at
+        // its start, playing.
         step_for(&mut arora, 0.1);
         let state = player(&mut arora, "ramp");
-        assert_eq!(state.state, "stopped", "{state:?}");
+        assert_eq!((state.state.as_str(), state.waiting), ("playing", true));
         assert_eq!(state.time_ns, 0);
 
         // Device time start + 450 ms: 150 ms after the anchor.
         step_for(&mut arora, 0.25);
         let state = player(&mut arora, "ramp");
-        assert_eq!(state.state, "playing", "{state:?}");
-        assert!(
-            state.time_ns.abs_diff(150_000_000) < 1_000,
-            "150 ms after the anchor, got {} ns",
-            state.time_ns
-        );
+        assert_eq!((state.state.as_str(), state.waiting), ("playing", false));
+        assert_eq!(state.time_ns, 150_000_000, "150 ms after the anchor");
 
         arora.step(Duration::ZERO).expect("a step at a zero dt");
         let held = player(&mut arora, "ramp");
@@ -2898,6 +2898,23 @@ mod animation_tests {
             ("playing", state.time_ns),
             "a zero-dt step moves no player"
         );
+    }
+
+    /// The module plays a number as an `F64`; the animation writes it in the
+    /// type the face declares for its key, the rig input's `F32`.
+    #[test]
+    fn a_face_animation_writes_its_key_in_the_key_s_declared_type() {
+        let mut arora = ramp_face();
+        step_for(&mut arora, 0.1);
+        play(&mut arora, "ramp");
+        step_for(&mut arora, 0.5);
+        let written = arora
+            .store()
+            .read(&[Key::from("rig/f/x")])
+            .into_iter()
+            .next()
+            .flatten();
+        assert!(matches!(written, Some(AValue::F32(_))), "{written:?}");
     }
 
     /// The native device plays the animations the bundle of the demo face
@@ -3188,7 +3205,7 @@ mod animation_tests {
             .animations
             .iter()
             .flat_map(|authored| animation::module_animation(authored, &loaded).tracks)
-            .map(|track| (track.name, track.animatable_id))
+            .map(|track| (track.name, track.target))
             .collect();
 
         let json_length = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;

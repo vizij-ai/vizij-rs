@@ -134,7 +134,7 @@ try {
       ],
     },
   );
-  const anim = await invoke("load_animation", { clip: moduleAnimation });
+  const anim = await invoke("load_clip", { clip: moduleAnimation });
   const look = await invoke("create_player", { name: LOOK });
   await invoke("add_instance", { player: look, anim });
   assert.deepEqual(
@@ -172,11 +172,11 @@ try {
       keyframes: [{ time: 0, value: 0, interpolation: null }],
     })),
   };
-  // `AnimationClip.tracks`, and `AnimTrack`'s `name` (its channel) and
-  // `animatable_id` (its key), by field id.
-  const CLIP_TRACKS = "76697a69-6a00-0000-0100-000000000003";
-  const TRACK_NAME = "76697a69-6a00-0000-0101-000000000002";
-  const TRACK_KEY = "76697a69-6a00-0000-0101-000000000003";
+  // `Clip.tracks`, and `ClipTrack`'s `name` (its channel) and `target` (its
+  // key), by field id.
+  const CLIP_TRACKS = "76697a69-6a00-0000-0200-000000000003";
+  const TRACK_NAME = "76697a69-6a00-0000-0201-000000000002";
+  const TRACK_KEY = "76697a69-6a00-0000-0201-000000000003";
   const fields = (record) => new Map(record.fields.map(({ id, value }) => [id, value]));
   const keyed = [];
   for (const animation of [...animations, probe]) {

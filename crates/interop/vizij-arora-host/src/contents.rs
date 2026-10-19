@@ -92,6 +92,13 @@ pub struct Keyframe {
     pub time: f64,
     pub value: f64,
     pub interpolation: Option<String>,
+    /// The slope the curve arrives at this point with, in value units per
+    /// second: glTF's `CUBICSPLINE` in-tangent, which a `cubic` segment
+    /// ending here takes.
+    pub in_tangent: Option<f64>,
+    /// The slope the curve leaves this point with, in value units per
+    /// second, which a `cubic` segment starting here takes.
+    pub out_tangent: Option<f64>,
 }
 
 fn string(json: &Json, key: &str) -> Option<String> {
@@ -214,6 +221,8 @@ pub fn animation(json: &Json) -> Option<Animation> {
                         time: number(keyframe, "time")?,
                         value: number(keyframe, "value")?,
                         interpolation: string(keyframe, "interpolation"),
+                        in_tangent: number(keyframe, "inTangent"),
+                        out_tangent: number(keyframe, "outTangent"),
                     })
                 })
                 .collect();
@@ -316,7 +325,7 @@ mod tests {
         let bundle = json!({ "animations": [
             { "id": "wave", "clip": { "id": "inner", "name": "Wave", "tracks": [
                 { "channel": "gaze/x", "interpolation": "cubic", "keyframes": [
-                    { "time": 2.5, "value": 1 },
+                    { "time": 2.5, "value": 1, "inTangent": -0.5, "outTangent": null },
                     { "time": 0, "value": 0, "interpolation": "step" },
                     { "time": "late", "value": 3 },
                 ] },
@@ -340,11 +349,15 @@ mod tests {
                     time: 0.0,
                     value: 0.0,
                     interpolation: Some("step".into()),
+                    in_tangent: None,
+                    out_tangent: None,
                 },
                 Keyframe {
                     time: 2.5,
                     value: 1.0,
                     interpolation: None,
+                    in_tangent: Some(-0.5),
+                    out_tangent: None,
                 },
             ]
         );
@@ -359,7 +372,8 @@ mod tests {
         let bundle = json!({ "animations": [
             { "id": "wave", "clip": { "name": "Wave", "duration": 2, "tracks": [
                 { "channel": "gaze/x", "interpolation": "step", "keyframes": [
-                    { "time": 0, "value": 0 }, { "time": 2, "value": 1, "interpolation": "linear" },
+                    { "time": 0, "value": 0, "outTangent": 2 },
+                    { "time": 2, "value": 1, "interpolation": "linear", "inTangent": 0.25 },
                 ] },
             ] } },
         ] });

@@ -1,6 +1,6 @@
 /**
- * Node entrypoint for `@vizij/animation-module`: the vizij animation engine
- * packaged as an Arora wasm module, shipped as importable assets. The default
+ * Node entrypoint for `@vizij/animation-module`: Arora's animation module
+ * (`arora-animation-module`) as a wasm guest, shipped as importable assets. The default
  * export condition reads the artifact from the package directory; browsers
  * (the `browser` condition) fetch it instead.
  *

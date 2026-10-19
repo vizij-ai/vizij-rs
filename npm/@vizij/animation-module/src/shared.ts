@@ -32,5 +32,4 @@ export { records } from "./records.generated.js";
  * itself; loaders use the inlined {@link headerJson} instead. */
 export const headerUrl = new URL("../artifact/header.json", import.meta.url);
 
-/** URL of the packaged module executable (`wasm32-wasip1`). */
-export const wasmUrl = new URL("../artifact/vizij_animation_module.wasm", import.meta.url);
+export { wasmUrl } from "./wasm-url.generated.js";

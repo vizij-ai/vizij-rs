@@ -33,9 +33,11 @@ file summarises, it does not replace, those sources.
   `vizij-graph-wasm`, and npm `@vizij/node-graph`.
 - **Interop (Arora) stack**: `crates/interop/*` adapts the Vizij stacks onto
   Arora runtime seams — `vizij-arora` (Value interop), `vizij-arora-store`,
-  `vizij-arora-hal`, `vizij-arora-behavior`, and `vizij-animation-module` (npm
-  `@vizij/animation-module`); `crates/vizij` is the view and the device on every
-  target, and its `web` module is npm `@vizij/runtime`.
+  `vizij-arora-hal` and `vizij-arora-behavior`; a device's animations play
+  through Arora's `arora-animation-module`, host-linked, whose guest npm
+  `@vizij/animation-module` ships (its `artifact/` written by
+  `vizij-animation-artifact`); `crates/vizij` is the view and the device on
+  every target, and its `web` module is npm `@vizij/runtime`.
 - **Test fixtures**: `vizij-test-fixtures` crate that exposes the shared JSON
   manifest, mirrored to npm `@vizij/test-fixtures` for browsers.
 - **Support packages**: npm `@vizij/value-json`, `@vizij/wasm-loader`, and

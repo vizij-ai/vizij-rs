@@ -4,6 +4,19 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [7.3.0] - Unreleased
+
+### Changed
+
+- A path-less `output` writes each record's number in the type the store
+  declares for its key (`KeyMeta::ty`): the animation module's `F64` lands
+  on an `F32` rig input as an `F32`, so every reader of a typed key reads
+  its type, which Arora asks of whoever writes the key. A number for an
+  integer type rounds to the nearest integer, held within the type's range;
+  an `F64` on a key that declares no type is written as an `F32`, Vizij's
+  number. Anything but a number, and a path `output`'s value, is written as
+  before. The store's meta is read once a tick, for the records alone.
+
 ## [7.2.0] - 2026-10-19
 
 ### Changed

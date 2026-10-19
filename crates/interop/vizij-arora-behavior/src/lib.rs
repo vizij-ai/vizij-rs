@@ -46,9 +46,9 @@ use arora_behavior::{
 use arora_types::call::{Call, CallBridge, CallResult};
 use arora_types::data::{DataStore, Key, StateChange};
 use arora_types::record::module::frozen;
-use arora_types::value::{Structure, StructureField, Value};
+use arora_types::value::{Structure, StructureField, Type, Value};
 use uuid::Uuid;
-use vizij_api_core::TypedPath;
+use vizij_api_core::{TypedPath, WriteOp};
 use vizij_graph_core::eval::{evaluate_writes_with_functions, GraphRuntime, NodeFunctions};
 pub use vizij_graph_core::task;
 use vizij_graph_core::types::{
@@ -944,14 +944,8 @@ impl ProcessingGraph {
 
         // Write the graph's outputs back to the store, but for the keys it
         // holds.
-        let writes = std::mem::take(&mut self.rt.writes);
-        let mut change = StateChange::new();
-        for op in writes.into_vec() {
-            change
-                .set
-                .insert(Key::new(op.path.to_string()), Some(op.value));
-        }
-        self.write(store, change)?;
+        let writes = std::mem::take(&mut self.rt.writes).into_vec();
+        self.write(store, store_change(store, writes))?;
 
         // The runs the graph's spawn nodes requested, started now that the
         // evaluation is over. The graph keeps no handle, so the runs are its
@@ -982,6 +976,92 @@ impl ProcessingGraph {
         // the graph.
         self.sweep_terminal_runs(store)?;
         Ok(())
+    }
+}
+
+/// The change that writes `writes` to `store`, each key the value its last
+/// write gives it.
+///
+/// A path `output` writes what its port computes, of the type the graph
+/// gives it. The records a path-less `output` applies are a module's
+/// values, such as the animation module's `step`, of the module's own
+/// types, so the graph declares no shape for them: each is written in the
+/// type the store declares for its key ([`conform`]), read once for every
+/// such record in the tick. A key whose type a profile or the face fixes,
+/// an `F32` rig input for one, so holds that type whoever writes it.
+fn store_change(store: &dyn DataStore, writes: Vec<WriteOp>) -> StateChange {
+    let keys: Vec<Key> = writes
+        .iter()
+        .map(|op| Key::new(op.path.to_string()))
+        .collect();
+    let keyed: Vec<Key> = writes
+        .iter()
+        .zip(&keys)
+        .filter(|(op, _)| op.shape.is_none())
+        .map(|(_, key)| key.clone())
+        .collect();
+    let mut declared = if keyed.is_empty() {
+        Vec::new()
+    } else {
+        store.meta(&keyed)
+    }
+    .into_iter();
+    let mut change = StateChange::new();
+    for (op, key) in writes.into_iter().zip(keys) {
+        let value = if op.shape.is_none() {
+            let meta = declared.next().flatten();
+            conform(op.value, meta.as_ref().and_then(|meta| meta.ty.as_ref()))
+        } else {
+            op.value
+        };
+        change.set.insert(key, Some(value));
+    }
+    change
+}
+
+/// A number in the type `declared` states for its key.
+///
+/// - A key declaring a numeric type takes the number in that type: a
+///   fraction for an integer type rounds to the nearest integer, held within
+///   the type's range.
+/// - A key declaring no type takes an `F64` as Vizij's number, an `F32`.
+///
+/// A value already of the declared type, and anything but a number, is
+/// written as it is.
+fn conform(value: Value, declared: Option<&Type>) -> Value {
+    if declared.is_some_and(|ty| value.conforms_to(ty)) {
+        return value;
+    }
+    let number = match value {
+        Value::F32(v) => f64::from(v),
+        Value::F64(v) => v,
+        Value::I8(v) => f64::from(v),
+        Value::I16(v) => f64::from(v),
+        Value::I32(v) => f64::from(v),
+        Value::I64(v) => v as f64,
+        Value::U8(v) => f64::from(v),
+        Value::U16(v) => f64::from(v),
+        Value::U32(v) => f64::from(v),
+        Value::U64(v) => v as f64,
+        _ => return value,
+    };
+    // `as` from a float saturates at the integer type's bounds, NaN to 0.
+    match declared {
+        Some(Type::F32) => Value::F32(number as f32),
+        Some(Type::F64) => Value::F64(number),
+        Some(Type::I8) => Value::I8(number.round() as i8),
+        Some(Type::I16) => Value::I16(number.round() as i16),
+        Some(Type::I32) => Value::I32(number.round() as i32),
+        Some(Type::I64) => Value::I64(number.round() as i64),
+        Some(Type::U8) => Value::U8(number.round() as u8),
+        Some(Type::U16) => Value::U16(number.round() as u16),
+        Some(Type::U32) => Value::U32(number.round() as u32),
+        Some(Type::U64) => Value::U64(number.round() as u64),
+        Some(_) => value,
+        None => match value {
+            Value::F64(v) => Value::F32(v as f32),
+            other => other,
+        },
     }
 }
 
@@ -1800,6 +1880,94 @@ mod tests {
 
         assert_eq!(read(&store, "anim/x"), Some(float(0.75)));
         assert_eq!(read(&store, "anim/y"), Some(float(0.5)));
+    }
+
+    /// A path-less `output` writes each record's number in the type the store
+    /// declares for its key — the animation module's `F64` as the `F32` a rig
+    /// input declares — and an `F64` as Vizij's `F32` on a key that declares
+    /// none. A path `output` writes the value its port computes.
+    #[test]
+    fn a_keyed_record_is_written_in_its_keys_declared_type() {
+        use arora_types::data::KeyMeta;
+        use vizij_arora_store::BlackboardStore;
+
+        const KEY_FIELD: &str = "76697a69-0000-0000-0000-00000000aaaa";
+        const VALUE_FIELD: &str = "76697a69-0000-0000-0000-00000000bbbb";
+        const RECORD_TYPE: &str = "76697a69-0000-0000-0000-00000000cccc";
+
+        let record = |key: &str, value: serde_json::Value| {
+            json!({ "fields": [
+                { "id": KEY_FIELD, "value": { "str": key } },
+                { "id": VALUE_FIELD, "value": value },
+            ]})
+        };
+        let mut spec = json!({
+            "nodes": [
+                { "id": "src", "type": "constant", "params": { "value": {
+                    "structs": { "id": RECORD_TYPE, "elements": [
+                        record("anim/f32", json!({ "f64": 0.25 })),
+                        record("anim/f64", json!({ "f64": 0.1 })),
+                        record("anim/u8", json!({ "f64": 2.6 })),
+                        record("anim/i16", json!({ "f64": -1e9 })),
+                        record("anim/undeclared", json!({ "f64": 0.75 })),
+                        record("anim/text", json!({ "str": "open" })),
+                    ]}
+                }}},
+                { "id": "sink", "type": "output", "params": {
+                    "key_field": KEY_FIELD, "value_field": VALUE_FIELD
+                }},
+                { "id": "one", "type": "constant", "params": { "value": 1.0 } },
+                { "id": "path", "type": "output", "params": { "path": "graph/f64" } },
+            ],
+            "edges": [
+                { "from": { "node_id": "src" }, "to": { "node_id": "sink", "input": "in" } },
+                { "from": { "node_id": "one" }, "to": { "node_id": "path", "input": "in" } },
+            ]
+        });
+        vizij_api_core::json::normalize_graph_spec_value(&mut spec).expect("normalize");
+        let spec: GraphSpec = serde_json::from_value(spec).expect("graph spec");
+
+        let store = BlackboardStore::new();
+        store
+            .set_meta(
+                [
+                    ("anim/f32", Type::F32),
+                    ("anim/f64", Type::F64),
+                    ("anim/u8", Type::U8),
+                    ("anim/i16", Type::I16),
+                    ("anim/text", Type::F32),
+                    ("graph/f64", Type::F64),
+                ]
+                .into_iter()
+                .map(|(key, ty)| (Key::from(key), KeyMeta::new().of_type(ty)))
+                .collect(),
+            )
+            .unwrap();
+        let mut graph = ProcessingGraph::from_spec(spec).expect("from_spec");
+        graph
+            .tick_store(&store, &mut NoopBridge, 0.016)
+            .expect("tick");
+
+        let read = |key: &str| store.read(&[Key::from(key)]).into_iter().next().flatten();
+        assert_eq!(read("anim/f32"), Some(Value::F32(0.25)));
+        assert_eq!(read("anim/f64"), Some(Value::F64(0.1)));
+        assert_eq!(read("anim/u8"), Some(Value::U8(3)), "rounded");
+        assert_eq!(
+            read("anim/i16"),
+            Some(Value::I16(i16::MIN)),
+            "held in range"
+        );
+        assert_eq!(read("anim/undeclared"), Some(Value::F32(0.75)));
+        assert_eq!(
+            read("anim/text"),
+            Some(Value::String("open".into())),
+            "only a number converts"
+        );
+        assert_eq!(
+            read("graph/f64"),
+            Some(float(1.0)),
+            "a path output writes its port's value"
+        );
     }
 
     /// A bridge scripting the spawned function: serves each call from a queue
