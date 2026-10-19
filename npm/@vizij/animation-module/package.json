@@ -2,7 +2,7 @@
   "name": "@vizij/animation-module",
   "version": "4.1.0",
   "description": "vizij-animation-core packaged as an Arora wasm module: the built artifact (wasm + header) as importable assets.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/vizij-ai/vizij-rs"

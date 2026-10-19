@@ -1,6 +1,7 @@
 {
   "name": "vizij-rs-scripts",
   "private": true,
+  "license": "Apache-2.0",
   "packageManager": "pnpm@9.12.2",
   "scripts": {
     "fmt:rust": "bash scripts/hook-tasks.sh fmt-rust",

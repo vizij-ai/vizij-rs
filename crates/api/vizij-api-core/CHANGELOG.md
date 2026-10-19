@@ -4,6 +4,13 @@ All notable changes to `vizij-api-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Licensed under Apache-2.0, where it was MIT OR Apache-2.0. Releases up
+  to 2.1.0 keep the licence they were published under.
+
 ## [2.1.0] - 2026-10-13
 
 ### Added

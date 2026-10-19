@@ -16,6 +16,8 @@ All notable changes to `vizij-graph-wasm`. The format follows
   structural edit and drops the cached plan: vizij-graph-core 2.6 resolves
   what such a selector reads when it plans.
 - Freshened workspace dependencies to current majors.
+- Licensed under Apache-2.0, where it was MIT OR Apache-2.0. Releases up
+  to 1.0.0 keep the licence they were published under.
 
 ## [1.0.0] - 2026-07-10
 

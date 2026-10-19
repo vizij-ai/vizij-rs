@@ -3,6 +3,7 @@ name = "vizij-wasm"
 version = "0.1.0"
 edition = { workspace = true }
 publish = false
+license = "Apache-2.0"
 description = "Vizij's browser module: the `vizij` crate's `web` half linked as a wasm-bindgen cdylib of its own, so the release profile's fat LTO applies to it."
 
 # A cdylib only: cargo applies the profile's LTO to a cdylib, and not to a

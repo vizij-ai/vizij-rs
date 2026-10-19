@@ -2,7 +2,7 @@
 name = "vizij-api-core"
 version = "2.1.0"
 edition = "2021"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 description = "Vizij's shared Value/Shape/TypedPath contract, kept interoperable across the animation and node-graph stacks."
 repository = "https://github.com/vizij-ai/vizij-rs"
 readme = "README.md"

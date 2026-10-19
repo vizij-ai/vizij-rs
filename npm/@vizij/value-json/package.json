@@ -2,7 +2,7 @@
   "name": "@vizij/value-json",
   "version": "0.2.0",
   "description": "Shared Value JSON helpers and types for Vizij wasm wrappers",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/vizij-ai/vizij-rs"

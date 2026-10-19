@@ -2,7 +2,7 @@
   "name": "@vizij/node-graph",
   "version": "0.12.0",
   "description": "WASM bindings for Vizij node-graph core.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/vizij-ai/vizij-rs"

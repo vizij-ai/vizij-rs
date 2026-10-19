@@ -3,6 +3,7 @@ name = "vizij-bundle"
 version = "0.1.0"
 edition = { workspace = true }
 publish = false
+license = "Apache-2.0"
 description = "The Vizij face-bundle tool: inspect, unpack, pack, and validate the VIZIJ_bundle carried by a face GLB."
 
 [dependencies]

@@ -3,6 +3,7 @@ name = "vizij-glb-migrate"
 version = "0.1.1"
 edition = "2021"
 publish = false
+license = "Apache-2.0"
 description = "Rewrites the Value-bearing JSON embedded in Vizij face-bundle .glb files to canonical arora Value serde"
 
 [dependencies]

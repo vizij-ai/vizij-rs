@@ -4,6 +4,13 @@ All notable changes to `vizij-animation-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Licensed under Apache-2.0, where it was MIT OR Apache-2.0. Releases up
+  to 5.0.0 keep the licence they were published under.
+
 ## [5.0.0] - 2026-10-08
 
 ### Breaking
