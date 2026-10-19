@@ -124,7 +124,9 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
 /// F32, the graph's number), except for a key a shipped profile
 /// types — the face standard's (`f32`) or ROS4HRI's, typed as the `hri_msgs`
 /// field a ROS 2 bridge writes it from — which takes the type and rest its
-/// profile states;
+/// profile states, but for the face's settings
+/// ([`FACE_SETTINGS`](vizij_arora_host::standard::FACE_SETTINGS)), which rest
+/// at the value the face authors when it authors one of their type;
 /// vector-valued inputs stay out (they travel as typed topics, e.g. the gaze
 /// target). Built-in keys stay out.
 ///
@@ -185,7 +187,8 @@ struct FreeInput {
 /// a shipped profile declares (the face standard's, under the prefix the
 /// face's standard controls live under, or ROS4HRI's), of the type and in the
 /// range that profile states — and rests at its authored default, or a
-/// profile key at the profile's. `neutral` (the bundle's
+/// profile key at the profile's but for a setting of the face, which rests
+/// at the value the face authors. `neutral` (the bundle's
 /// neutral pose, [`Bundle::neutral_stage_writes`]) moves the rest of the
 /// keys it names, and gives a rig key that is no free input its rest alone:
 /// the standard inputs feed the rig through the adaptation, so a reset that
@@ -286,7 +289,8 @@ pub fn declare_keys(
 
 /// Each free input with its type, its authored default and its authored
 /// range, if any (see [`free_inputs`]) — for a key of `profiled`, the type
-/// and default its profile states.
+/// its profile states, and the default its profile states unless the key is
+/// one of the face's settings the graph authors a default for.
 fn walk_free_inputs(spec: &str, profiled: &ProfileKeys) -> Vec<FreeInput> {
     use arora_types::value::Type;
     let Ok(spec) = serde_json::from_str::<serde_json::Value>(spec) else {
@@ -336,10 +340,21 @@ fn walk_free_inputs(spec: &str, profiled: &ProfileKeys) -> Vec<FreeInput> {
             },
         };
         let (ty, default) = match profiled.get(&path) {
-            Some(key) => (
-                key.value_type.clone().unwrap_or(ty),
-                key.default_value.clone().or(default),
-            ),
+            Some(key) => {
+                let ty = key.value_type.clone().unwrap_or(ty);
+                // A face's setting rests where the face authors it, when the
+                // face authors a value of the setting's type: that is what
+                // makes it the face's. Every other key a profile types rests
+                // at the profile's rest, whatever a graph authored, so a
+                // control rests the same on every face.
+                let authored = default.filter(|value| {
+                    value.conforms_to(&ty)
+                        && vizij_arora_host::standard::FACE_SETTINGS
+                            .iter()
+                            .any(|setting| path.ends_with(setting))
+                });
+                (ty, authored.or_else(|| key.default_value.clone()))
+            }
             None => (ty, default),
         };
         // An optional range: both bounds, the upper above the lower.
@@ -780,6 +795,55 @@ mod tests {
                 Some(f32_key(0.0, 1.0, 0.5)),
                 Some(f32_key(0.0, 1.0, 0.0)),
             ]
+        );
+    }
+
+    /// A face's settings rest where the face authors them, so a reset
+    /// returns the face's own value rather than the standard's: the gaze
+    /// range and the lipsync gain its adaptation authors; the eye spacing,
+    /// read with no default, and a setting authored with a value of another
+    /// type, at the profile's.
+    #[test]
+    fn a_face_s_settings_rest_where_the_face_authors_them() {
+        use arora_types::data::KeyMeta;
+        use arora_types::value::Type;
+        let setting = |rest| {
+            KeyMeta::new()
+                .editable()
+                .of_type(Type::F32)
+                .resting_at(Value::F32(rest))
+        };
+        let declared = |nodes: serde_json::Value| {
+            let spec = compose_sources(&[(
+                "standard-adaptation".to_string(),
+                serde_json::json!({ "nodes": nodes, "edges": [] }),
+            )])
+            .unwrap()
+            .to_string();
+            let store = BlackboardStore::new();
+            declare_keys(&store, &spec, &[], &[], &InputRanges::default());
+            store.meta(
+                &[
+                    standard::GAZE_RANGE,
+                    standard::LIPSYNC_GAIN,
+                    standard::GAZE_EYE_SPACING,
+                ]
+                .map(|path| Key::from(format!("rig/f/{path}"))),
+            )
+        };
+        assert_eq!(
+            declared(serde_json::json!([
+                { "id": "a", "type": "input", "params": { "path": "rig/f/standard/vizij/gaze/range", "value": 0.5 } },
+                { "id": "b", "type": "input", "params": { "path": "rig/f/standard/vizij/lipsync/gain", "value": 0.8 } },
+                { "id": "c", "type": "input", "params": { "path": "rig/f/standard/vizij/gaze/eye_spacing" } },
+            ])),
+            vec![Some(setting(0.5)), Some(setting(0.8)), Some(setting(0.06)),]
+        );
+        assert_eq!(
+            declared(serde_json::json!([
+                { "id": "a", "type": "input", "params": { "path": "rig/f/standard/vizij/gaze/range", "value": "wide" } },
+            ]))[0],
+            Some(setting(0.78))
         );
     }
 
@@ -1613,6 +1677,110 @@ mod tests {
         stage(&arora, ros4hri::GAZE_TARGET_KEY, vec3([0.05, 0.5, 0.0]));
         settle(&mut arora);
         assert!(read_f32(&arora, standard::LEFT_EYE_POS_X).abs() < 0.01);
+    }
+
+    /// The eye positions the mapping aims at `target` (meters, face frame)
+    /// for eyes `spacing` meters apart turning `range` radians: each eye's
+    /// angle from its own centre through the mapping's rational arctangent,
+    /// `r / (1 + 0.28 r²)`, over the range, clamped — `[left x, right x, y]`.
+    fn aimed(target: [f32; 3], spacing: f32, range: f32) -> [f32; 3] {
+        let [x, y, z] = target;
+        let angle = |num: f32| {
+            let r = num / x;
+            (r / (1.0 + 0.28 * r * r) / range).clamp(-1.0, 1.0)
+        };
+        [angle(y + spacing / 2.0), angle(y - spacing / 2.0), angle(z)]
+    }
+
+    /// The eye positions a device settles at for `target`.
+    fn settled_eyes(arora: &mut arora::Arora, target: [f32; 3]) -> [f32; 3] {
+        stage(arora, ros4hri::GAZE_TARGET_KEY, vec3(target));
+        settle(arora);
+        [
+            standard::LEFT_EYE_POS_X,
+            standard::RIGHT_EYE_POS_X,
+            standard::LEFT_EYE_POS_Y,
+        ]
+        .map(|path| read_f32(arora, path))
+    }
+
+    fn assert_eyes(eyes: [f32; 3], expected: [f32; 3], what: &str) {
+        for (eye, expected) in eyes.into_iter().zip(expected) {
+            assert!(
+                (eye - expected).abs() < 1e-3,
+                "{what}: eyes {eyes:?}, expected {expected:?}"
+            );
+        }
+    }
+
+    /// A face that authors no eye settings is aimed as the incumbent face
+    /// aims its eyes: 6 cm apart, ±0.78 rad → ±1.
+    #[test]
+    fn ros4hri_gaze_aims_a_face_authoring_no_eye_settings_as_the_incumbent() {
+        let mut arora = ros4hri_device();
+        for target in [[1.0, 0.3, 0.2], [0.5, -0.2, -0.1], [2.0, 0.05, 0.4]] {
+            assert_eyes(
+                settled_eyes(&mut arora, target),
+                aimed(target, 0.06, 0.78),
+                &format!("target {target:?}"),
+            );
+        }
+    }
+
+    /// A face's adaptation that authors its eye settings aims its eyes by
+    /// them: farther apart, the eyes verge more; turning less far, they
+    /// reach the end of their travel sooner. A deployment writing a setting
+    /// overrides the face's value.
+    #[test]
+    fn ros4hri_gaze_aims_the_eyes_by_the_face_s_settings() {
+        let bundle = vizij_arora_host::Bundle::from_bundle_json(&serde_json::json!({
+            "graphs": [{
+                "id": "face_standard_adaptation",
+                "kind": "standard-adaptation",
+                "spec": {
+                    "nodes": [
+                        { "id": "spacing", "type": "input",
+                          "params": { "path": standard::GAZE_EYE_SPACING, "value": 0.1 } },
+                        { "id": "range", "type": "input",
+                          "params": { "path": standard::GAZE_RANGE, "value": 0.5 } },
+                    ],
+                    "edges": [],
+                },
+            }]
+        }));
+        let spec = bundle
+            .compose(
+                &["standard-adaptation"],
+                &vizij_arora_host::ProgramSelect::None,
+                false,
+                &[ros4hri_source("")],
+            )
+            .expect("compose the face with the mapping")
+            .to_string();
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
+            .expect("build the device over the composed face")
+            .build()
+            .expect("build arora");
+
+        let target = [1.0, 0.3, 0.2];
+        let eyes = settled_eyes(&mut arora, target);
+        assert_eyes(eyes, aimed(target, 0.1, 0.5), "the face's settings");
+        let incumbent = aimed(target, 0.06, 0.78);
+        assert!(
+            eyes[0] - eyes[1] > incumbent[0] - incumbent[1] + 0.05,
+            "eyes 10 cm apart verge more: {eyes:?} against {incumbent:?}"
+        );
+        // Turning ±0.5 rad, an eye reaches the end of its travel at a target
+        // the incumbent's ±0.78 rad leaves short of it.
+        let side = [1.0, 0.7, 0.0];
+        let reached = settled_eyes(&mut arora, side)[0];
+        assert!(reached > 0.999, "the eye at its travel's end: {reached}");
+        assert!(aimed(side, 0.06, 0.78)[0] < 0.95);
+
+        // A deployment writing the settings overrides the face's.
+        stage(&arora, standard::GAZE_EYE_SPACING, float(0.06));
+        stage(&arora, standard::GAZE_RANGE, float(0.78));
+        assert_eyes(settled_eyes(&mut arora, target), incumbent, "overridden");
     }
 
     /// The shape a viseme player's feedback record names.

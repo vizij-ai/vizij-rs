@@ -1671,11 +1671,51 @@
       "params": {}
     },
     {
-      "id": "const/0.03",
+      "id": "in/gaze/eye_spacing",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/gaze/eye_spacing",
+        "value": 0.06
+      }
+    },
+    {
+      "id": "const/0.5",
       "type": "constant",
       "params": {
-        "value": 0.03
+        "value": 0.5
       }
+    },
+    {
+      "id": "gaze/half_spacing",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "in/gaze/range",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/gaze/range",
+        "value": 0.78
+      }
+    },
+    {
+      "id": "const/0.01",
+      "type": "constant",
+      "params": {
+        "value": 0.01
+      }
+    },
+    {
+      "id": "const/0.9",
+      "type": "constant",
+      "params": {
+        "value": 0.9
+      }
+    },
+    {
+      "id": "gaze/range",
+      "type": "clamp",
+      "params": {}
     },
     {
       "id": "gaze/left/y",
@@ -1718,13 +1758,6 @@
       "id": "gaze/left/yaw/atan",
       "type": "divide",
       "params": {}
-    },
-    {
-      "id": "const/0.78",
-      "type": "constant",
-      "params": {
-        "value": 0.78
-      }
     },
     {
       "id": "gaze/left/yaw/normalized",
@@ -7164,6 +7197,51 @@
     },
     {
       "from": {
+        "node_id": "in/gaze/eye_spacing"
+      },
+      "to": {
+        "node_id": "gaze/half_spacing",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.5"
+      },
+      "to": {
+        "node_id": "gaze/half_spacing",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/gaze/range"
+      },
+      "to": {
+        "node_id": "gaze/range",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.01"
+      },
+      "to": {
+        "node_id": "gaze/range",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.9"
+      },
+      "to": {
+        "node_id": "gaze/range",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
         "node_id": "gaze/y"
       },
       "to": {
@@ -7173,7 +7251,7 @@
     },
     {
       "from": {
-        "node_id": "const/0.03"
+        "node_id": "gaze/half_spacing"
       },
       "to": {
         "node_id": "gaze/left/y",
@@ -7191,7 +7269,7 @@
     },
     {
       "from": {
-        "node_id": "const/0.03"
+        "node_id": "gaze/half_spacing"
       },
       "to": {
         "node_id": "gaze/right/y",
@@ -7299,7 +7377,7 @@
     },
     {
       "from": {
-        "node_id": "const/0.78"
+        "node_id": "gaze/range"
       },
       "to": {
         "node_id": "gaze/left/yaw/normalized",
@@ -7434,7 +7512,7 @@
     },
     {
       "from": {
-        "node_id": "const/0.78"
+        "node_id": "gaze/range"
       },
       "to": {
         "node_id": "gaze/right/yaw/normalized",
@@ -7569,7 +7647,7 @@
     },
     {
       "from": {
-        "node_id": "const/0.78"
+        "node_id": "gaze/range"
       },
       "to": {
         "node_id": "gaze/pitch/normalized",

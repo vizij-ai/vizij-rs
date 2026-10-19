@@ -63,7 +63,7 @@ Vizij ships two:
 
 | profile | scope | keys | declared by |
 |---|---|---|---|
-| `vizij-face` | face | 96 — gaze, lids & blink, the gaze target on the face's frame and its weight, 27 expressions, 15 visemes, 36 muscle-tier controls, 3 conversation states, the lipsync gain, the caption and its speaker; and the 2 speech-state keys it reports (the current viseme, the utterance) | the [face standard](face-standard.md) |
+| `vizij-face` | face | 98 — gaze, lids & blink, the gaze target on the face's frame and its weight, 27 expressions, 15 visemes, 36 muscle-tier controls, 3 conversation states, the face's 3 settings (the lipsync gain, the eye spacing, the gaze range), the caption and its speaker; and the 2 speech-state keys it reports (the current viseme, the utterance) | the [face standard](face-standard.md) |
 | `ros4hri` | device | 12 — expression name/valence/arousal, gaze target and frame, the streamed viseme with its time and duration, the closed caption's text and speaker; and the 2 speech-state keys it reports (the utterance, its current viseme) | the [ROS4HRI key contract](ros4hri.md#the-standardros4hri-key-contract) |
 
 Both are generated from the Rust constants
@@ -96,6 +96,15 @@ the later one wins. A face may **embed** a mapping
 (`vizij-bundle add-standard`) as its pinned copy, which then replaces the
 built-in of the same id.
 
+A mapping is Vizij content, the same for every face, so what it needs to know
+of one face it reads from the face: the face's
+[settings](face-standard.md#settings), such as how far apart its eyes are and
+how far they turn. The face authors each as the default of an input node on
+the setting's path, in its adaptation, and composition rests the mapping's
+input on that path at the face's value; a face that authors none rests at the
+profile's. Tuning a mapping to a face is thereby the face's own content, not
+an embedded fork of the mapping.
+
 The GLB entry kind for an embedded mapping is still spelled
 `standard-profile`: faces in the wild carry that string and the authoring app
 writes it, so the wire format keeps it until a read-both migration lands.
@@ -118,10 +127,10 @@ the declared profiles, the shipped ROS4HRI mapping shows:
 
 | profile | declares | mapping touches | |
 |---|---|---|---|
-| `ros4hri` | 8 | 7 | `gaze/frame` is consumed by the `look_at` skill, not the mapping |
-| `vizij-face` | 92 | 31 | the 15 viseme weights belong to the viseme players; the 36 muscle-tier controls, the blink, the gaze target on the face's frame and its weight, `concerned`, `sleepy` and the 3 conversation states have no ROS4HRI command the mapping reads; the lipsync gain is a setting of the face |
+| `ros4hri` | 12 | 11 | it reads 9 of the 10 commands — `gaze/frame` is consumed by the `look_at` skill, not the mapping — and writes the 2 speech-state keys |
+| `vizij-face` | 98 | 37 | it writes 33 of the 96 inputs, and reads the 2 speech-state keys and the eye spacing and gaze range it aims the eyes with; the 15 viseme weights belong to the viseme players; the 36 muscle-tier controls, the blink, the gaze target on the face's frame and its weight, `concerned`, `sleepy` and the 3 conversation states have no ROS4HRI command the mapping reads; the lipsync gain is a setting the face's adaptation reads |
 
-Every path the mapping writes is declared.
+Every path the mapping reads or writes is declared.
 
 A lifted surface is a bootstrap, never the source of truth: a mapping only
 touches the part of a profile it needs, so the surface can be a strict subset

@@ -305,6 +305,13 @@ impl Bundle {
     /// the face's embedded mappings, the built-in `mappings` it does not
     /// embed, the animation source, and the `select`ed program. What
     /// [`contended_outputs`] reads.
+    ///
+    /// A mapping reads the face's settings ([`standard::FACE_SETTINGS`]) at
+    /// the rest the face authors: where a base graph reads a setting with a
+    /// default, every input of a mapping on that setting rests there instead
+    /// of at the mapping's own default. A key has one rest, and a setting's
+    /// is the face's — the mapping is shared by every face, the setting says
+    /// what this one is like.
     pub fn sources(
         &self,
         wanted: &[&str],
@@ -318,18 +325,19 @@ impl Bundle {
             .filter(|(kind, _)| wanted.contains(&kind.as_str()))
             .map(|(kind, spec)| (kind.clone(), spec.clone()))
             .collect();
+        let settings = self.authored_settings(&sources);
         // The face's own embedded mappings compose unconditionally, and each
         // suppresses the built-in mapping of the same id: an embedded copy is
         // the author's pinned override of the shipped mapping.
         for (id, spec) in &self.standard_mappings {
-            sources.push((mappings::embedded_graph_id(id), spec.clone()));
+            sources.push((mappings::embedded_graph_id(id), resting_at(spec, &settings)));
         }
         for (id, spec) in mappings {
             if self.standard_mappings.iter().any(|(e, _)| e == id) {
                 log::info!("embedded standard mapping {id} overrides the built-in");
                 continue;
             }
-            sources.push((id.clone(), spec.clone()));
+            sources.push((id.clone(), resting_at(spec, &settings)));
         }
         if with_animations {
             sources.push(animations_source());
@@ -339,6 +347,29 @@ impl Bundle {
             sources.push((format!("program::{id}"), spec.clone()));
         }
         sources
+    }
+
+    /// The rest each of the face's settings takes in `base`, by store path
+    /// under the face's prefix: the default the first input node reading it
+    /// authors. A setting no base graph reads, or reads with no default, is
+    /// absent.
+    fn authored_settings(&self, base: &[(String, Json)]) -> HashMap<String, Json> {
+        let prefix = self.rig_prefix();
+        standard::FACE_SETTINGS
+            .iter()
+            .filter_map(|setting| {
+                let path = format!("{prefix}{setting}");
+                let rest = base
+                    .iter()
+                    .flat_map(|(_, spec)| nodes_of(spec))
+                    .filter(|node| is_input(node))
+                    .find(|node| input_path(node) == Some(path.as_str()))?
+                    .pointer("/params/value")
+                    .filter(|value| !value.is_null())?
+                    .clone();
+                Some((path, rest))
+            })
+            .collect()
     }
 
     /// Every store path the bundle's graphs read (their `input` nodes) — its
@@ -609,6 +640,46 @@ pub fn contended_outputs(sources: &[(String, Json)]) -> Vec<Contention> {
         .filter(|(_, sources)| sources.len() > 1)
         .map(|(path, sources)| Contention { path, sources })
         .collect()
+}
+
+/// `spec` with each input node on a path of `rests` resting at its value.
+fn resting_at(spec: &Json, rests: &HashMap<String, Json>) -> Json {
+    let mut spec = spec.clone();
+    if rests.is_empty() {
+        return spec;
+    }
+    for node in spec
+        .get_mut("nodes")
+        .and_then(Json::as_array_mut)
+        .into_iter()
+        .flatten()
+    {
+        if !is_input(node) {
+            continue;
+        }
+        let Some(rest) = input_path(node).and_then(|path| rests.get(path)) else {
+            continue;
+        };
+        let rest = rest.clone();
+        if let Some(params) = node.get_mut("params").and_then(Json::as_object_mut) {
+            params.insert("value".to_string(), rest);
+        }
+    }
+    spec
+}
+
+/// Whether `node` is an `input` node.
+fn is_input(node: &Json) -> bool {
+    node.get("type")
+        .and_then(Json::as_str)
+        .is_some_and(|t| t.eq_ignore_ascii_case("input"))
+}
+
+/// The trimmed `params.path` an input node reads.
+fn input_path(node: &Json) -> Option<&str> {
+    node.pointer("/params/path")
+        .and_then(Json::as_str)
+        .map(str::trim)
 }
 
 fn nodes_of(spec: &Json) -> impl Iterator<Item = &Json> {
@@ -1131,6 +1202,60 @@ mod tests {
         // …and built-ins the face does not embed are untouched (the
         // suppression is per mapping id, not a global kill switch).
         assert!(ids.contains(&"gaze_only::g"));
+    }
+
+    /// A mapping reads the face's settings at the rest the face authors: the
+    /// built-in ROS4HRI mapping's gaze range rests at the value the face's
+    /// adaptation gives it, and its eye spacing, which the face leaves
+    /// unauthored, at the mapping's own. A face authoring neither leaves the
+    /// mapping as it ships; an input the face reads that is no setting keeps
+    /// the mapping's rest too.
+    #[test]
+    fn a_mapping_reads_the_face_s_settings_at_the_face_s_rest() {
+        use arora_types::value::Value;
+        let mut bundle = bundle_json();
+        bundle["metadata"]["faceId"] = json!("f");
+        let gaze_range = format!("rig/f/{}", standard::GAZE_RANGE);
+        let eye_spacing = format!("rig/f/{}", standard::GAZE_EYE_SPACING);
+        let speech = format!("rig/f/{}", standard::SPEECH);
+        let adaptation =
+            |nodes: Json| json!({ "kind": "standard-adaptation", "spec": graph(nodes, json!([])) });
+        // The rest the composed mapping's input on `path` takes.
+        let mapping_rest = |bundle: &Json, path: &str| {
+            let composed = Bundle::from_bundle_json(bundle)
+                .compose(
+                    &["rig", "standard-adaptation"],
+                    &ProgramSelect::None,
+                    false,
+                    &[ros4hri::ros4hri_source("rig/f/")],
+                )
+                .unwrap();
+            let composed = composed["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|n| {
+                    n["id"].as_str().unwrap().starts_with("ros4hri::")
+                        && n["params"]["path"] == path
+                })
+                .unwrap_or_else(|| panic!("the mapping reads {path}"))["params"]["value"]
+                .clone();
+            vizij_api_core::json::parse_value(composed).expect("a rest value")
+        };
+
+        assert_eq!(mapping_rest(&bundle, &gaze_range), Value::F32(0.78));
+        assert_eq!(mapping_rest(&bundle, &eye_spacing), Value::F32(0.06));
+
+        bundle["graphs"]
+            .as_array_mut()
+            .unwrap()
+            .push(adaptation(json!([
+                { "id": "range", "type": "input", "params": { "path": gaze_range, "value": 0.5 } },
+                { "id": "said", "type": "input", "params": { "path": speech, "value": "hello" } },
+            ])));
+        assert_eq!(mapping_rest(&bundle, &gaze_range), Value::F32(0.5));
+        assert_eq!(mapping_rest(&bundle, &eye_spacing), Value::F32(0.06));
+        assert_eq!(mapping_rest(&bundle, &speech), Value::String(String::new()));
     }
 
     /// A declared profile is read back typed; a malformed entry is dropped

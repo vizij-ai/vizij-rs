@@ -87,9 +87,16 @@ serves it); this table summarizes it.
   `standard/vizij/expression/<name>` for ROS4HRI's 25 names; the standard's
   expressions beyond them (`concerned`, `sleepy`) have no ROS4HRI name and are
   left to other writers.
-- **Gaze** — `gaze/target` maps to per-eye positions with vergence, the
-  incumbent ±0.78 rad → ±1 normalization, and a center fallback for targets at
-  or behind the face plane (x ≤ 0.1 m).
+- **Gaze** — `gaze/target` maps to per-eye positions with vergence and a
+  center fallback for targets at or behind the face plane (x ≤ 0.1 m). The
+  eyes are the face's: the mapping reads the face's
+  [eye spacing and gaze range](face-standard.md#settings) under its prefix,
+  turns each eye toward the target from its own centre, and maps an angle of
+  ±range onto an eye position of ±1 — the incumbent's 6 cm and ±0.78 rad for
+  a face that authors neither. It reads the range clamped to [0.01, 0.9] rad:
+  its arctangent, a rational approximation accurate to 1 % up to 0.8 rad,
+  peaks at 0.94 rad, so a wider range would leave the eyes short of their
+  travel's end.
 - **Lips** — played, never written by the mapping. The face's lipsync is
   the viseme players' ([skills](skills.md): `play_viseme`, `say`), which
   write the face standard's viseme weights themselves; a mapping writing
@@ -123,7 +130,10 @@ serves it); this table summarizes it.
   inhibits the blink in proportion to its weight.
 
 All continuous channels pass through a ~200 ms exponential smoother — the
-incumbent ROS4HRI face's dynamics.
+incumbent ROS4HRI face's dynamics. The smoothing, the blink's cadence and the
+circumplex belong to the mapping, not the face: how a ROS4HRI command plays
+out in time and which expressions an affect names are the same on every face,
+while the eyes it aims are each face's own.
 
 ### The viseme channel is a spawn
 
@@ -516,7 +526,9 @@ programs and skills, so any of those overrides it on a path they share.
   that copy instead: the embedded mapping is the author's pinned override of
   the shipped one, always composed, and the built-in of the same id is not
   composed for that face. Other mappings are unaffected — the suppression is
-  per mapping id.
+  per mapping id. A face whose eyes differ from the incumbent's needs no
+  copy: it authors its [eye settings](face-standard.md#settings), which the
+  shipped mapping reads.
 
 ## Embedding and editing the mapping
 
@@ -526,8 +538,9 @@ Rust reads it (and regenerates it from the node-graph builder; a test fails if
 the committed file drifts), so it is programmatically available *and* separately
 editable and exportable.
 
-The asset reads by channel. Node ids are hierarchical: `in/…` are the
-`ros4hri` profile's keys it consumes, `out/…` the `vizij-face` controls it
+The asset reads by channel. Node ids are hierarchical: `in/…` are the keys
+it consumes — the `ros4hri` profile's, and the face's speech state and eye
+settings — `out/…` the `vizij-face` controls it
 produces (named by control, `out/expression/happy`, `out/left_eye/pos/x`),
 and `expression/…`, `gaze/…`, `viseme/…`, `blink/…` the computation
 of each channel — `expression/happy/kernel` is the circumplex weight of the
@@ -549,12 +562,13 @@ is a diff of the behavior.
   authoring app to embed.
 - **Reconcile it against the profiles** with `vizij-bundle surface`: the
   mapping reads 9 of the profile's 10 command keys (`gaze/frame` belongs to
-  the `look_at` skill) and writes 33 of the face standard's 94 inputs (the 15
-  viseme weights are written by the `play_viseme` runs it spawns; the muscle
-  tier, the blink, the standard's gaze target (a point on the face's frame)
-  and its weight, the expressions beyond ROS4HRI's and the conversation state
-  have no ROS4HRI command the mapping reads; and the lipsync gain is a setting
-  of the face).
+  the `look_at` skill), and of the face standard's its 2 speech-state keys
+  and its eye spacing and gaze range; it writes 33 of the face standard's 96
+  inputs (the 15 viseme weights are written by the `play_viseme` runs it
+  spawns; the muscle tier, the blink, the standard's gaze target (a point on
+  the face's frame) and its weight, the expressions beyond ROS4HRI's and the
+  conversation state have no ROS4HRI command the mapping reads; and the
+  face's settings are the face's).
 
 ## Progressive compliance
 
