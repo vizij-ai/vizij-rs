@@ -1231,9 +1231,9 @@ export async function mappings(input?: InitInput): Promise<Mapping[]> {
 /**
  * A standard mapping's graph as a spec object, ready to compose into a
  * running device's graph or to embed into a face GLB. `rigPrefix` (e.g.
- * `"rig/quori_latest/"`) is prepended to the control paths the mapping
- * writes; omit it for the unprefixed graph. `null` for an unknown id (see
- * {@link mappings}).
+ * `"rig/quori_latest/"`) is prepended to the face-standard paths the mapping
+ * reads and writes (`standard/vizij/*`); omit it for the unprefixed graph.
+ * `null` for an unknown id (see {@link mappings}).
  */
 export async function mapping(
   id: string,

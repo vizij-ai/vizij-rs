@@ -41,9 +41,10 @@ pub const STANDARD_MAPPINGS: [StandardMapping; 1] = [StandardMapping {
     id: "ros4hri",
     title: "ROS4HRI",
     description: "Drives the standard face controls from the standard/ros4hri/* keys: \
-                  expression names and valence/arousal, gaze targets with vergence, idle \
-                  blink, and the incumbent's ~200 ms smoothing; relays the face's speech \
-                  state to the ROS4HRI speech key.",
+                  expression names and valence/arousal, gaze targets with vergence over \
+                  the face's eye spacing and gaze range, idle blink, and the incumbent's \
+                  ~200 ms smoothing; relays the face's speech state to the ROS4HRI \
+                  speech key.",
     asset_json: ros4hri::MAPPING_JSON,
     generate: ros4hri::generate,
 }];
@@ -60,7 +61,8 @@ pub fn embedded_graph_id(mapping_id: &str) -> String {
 }
 
 /// A mapping's graph as a composable source, with the face's rig prefix
-/// applied to the written control paths. `None` for an unknown id.
+/// applied to the face-standard paths it reads and writes. `None` for an
+/// unknown id.
 pub fn standard_mapping_source(id: &str, rig_prefix: &str) -> Option<(String, Json)> {
     let mapping = standard_mapping(id)?;
     let mut spec: Json = serde_json::from_str(mapping.asset_json).ok()?;

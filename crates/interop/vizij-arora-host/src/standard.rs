@@ -29,7 +29,9 @@
 //!   speaking, or it is thinking: state a face may react to, not a pose.
 //!
 //! Beside the face's own vocabulary, the **caption** is text the host shows
-//! over the face — a command of its display, not of its rig.
+//! over the face — a command of its display, not of its rig — and the
+//! face's **settings** ([`FACE_SETTINGS`]) say what the face is like: its
+//! lipsync gain, how far apart its eyes are and how far they turn.
 //!
 //! Everything is an `f32` weight in [0, 1] unless a constant says otherwise.
 
@@ -113,6 +115,37 @@ pub const GAZE_TARGET_Y: &str = "standard/vizij/gaze/target/y";
 /// applies it wherever it implements the target, in its program or in its
 /// standard adaptation.
 pub const GAZE_TARGET_WEIGHT: &str = "standard/vizij/gaze/target/weight";
+
+/// The distance between the centres of the face's eyes, metres, as the
+/// robot shows them, at least 0: the baseline a mapping aiming the eyes at a
+/// point in space verges them over — each eye turns toward the point from
+/// its own centre, half this distance either side of the face's. A setting
+/// of the face ([`FACE_SETTINGS`]): rests at the value the face's adaptation
+/// is authored with, 0.06 unless it says otherwise, and a deployment whose
+/// display shows the face larger or smaller overrides it by writing the key.
+pub const GAZE_EYE_SPACING: &str = "standard/vizij/gaze/eye_spacing";
+
+/// How far the face's eyes turn, radians: the gaze angle off the face's axis
+/// at which an eye reaches the end of its travel, from 0.01 to 0.9. A
+/// mapping aiming the eyes at a point in space turns an angle of ±range into
+/// an eye position of ±1. A setting of the face ([`FACE_SETTINGS`]): rests
+/// at the value the face's adaptation is authored with, 0.78 unless it says
+/// otherwise, and a deployment overrides it by writing the key.
+pub const GAZE_RANGE: &str = "standard/vizij/gaze/range";
+
+/// The span [`GAZE_RANGE`] runs over, radians. Above it a mapping's
+/// arctangent cannot be trusted to reach the end of the eyes' travel — the
+/// ROS4HRI mapping's rational approximation peaks at 0.94 rad — and the
+/// floor keeps the normalization finite. The profile declares it as the
+/// key's range, and the ROS4HRI mapping reads the range clamped to it.
+pub(crate) const GAZE_RANGE_SPAN: (f64, f64) = (0.01, 0.9);
+
+/// Where [`GAZE_EYE_SPACING`] rests when the face authors none, metres.
+pub(crate) const GAZE_EYE_SPACING_REST: f64 = 0.06;
+
+/// Where [`GAZE_RANGE`] rests when the face authors none, radians: the
+/// incumbent ROS4HRI face's ±0.78 rad → ±1.
+pub(crate) const GAZE_RANGE_REST: f64 = 0.78;
 
 // --- Semantic tier: expressions --------------------------------------------
 
@@ -207,8 +240,18 @@ pub const VISEME: &str = "standard/vizij/viseme";
 /// weight keeps its meaning; the gain is the face's rendering of it. Rests at
 /// the gain the face's adaptation is authored with, 1 unless it says
 /// otherwise, and a deployment overrides it by writing the key. A setting,
-/// not a control: nothing animates it.
+/// not a control ([`FACE_SETTINGS`]): nothing animates it.
 pub const LIPSYNC_GAIN: &str = "standard/vizij/lipsync/gain";
+
+/// The face's settings: what a face is like rather than what it is told to
+/// do. Each rests at the value the face's own graphs author — the default of
+/// an input node on its path, in the face's adaptation — so the face states
+/// it once, as asset content, and a mapping composed over the face reads the
+/// face's value instead of carrying one of its own
+/// ([`crate::Bundle::sources`]). A deployment overrides one by writing the
+/// key. Nothing animates a setting, and none is in a tier: the tiers grade
+/// what a face can be posed with.
+pub const FACE_SETTINGS: [&str; 3] = [LIPSYNC_GAIN, GAZE_EYE_SPACING, GAZE_RANGE];
 
 /// The utterance being spoken, the face's speech state: the text of a `say`
 /// run from the moment its audio starts playing — whether or not synthesis

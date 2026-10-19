@@ -281,12 +281,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Fetch the face GLBs
+      - name: Fetch the face GLBs and their adaptation sidecars
         # Each face pinned to the commit its reference or test was written
         # against, so a re-export cannot move what a test reads: Quori,
         # Toasty and the Quori and Hugo the sidecar test grafts onto from
         # vizij-web, Quori's Blender export from vizij-web at the commit its
-        # reference was rendered from, and Emy from its own repository.
+        # reference was rendered from, and Emy from its own repository. The
+        # standard-adaptation sidecars the tests graft come from vizij-web
+        # too, where each lives beside its GLB, pinned the same way.
         run: |
           mkdir -p fixtures
           base="https://raw.githubusercontent.com/vizij-ai/vizij-web/8f9ea2965c6415904ad4e0f87639a370eff0c4d8/apps/vizij-authoring/public/assets"
@@ -294,6 +296,10 @@ jobs:
           curl -fsSL "$base/Toasty_Current.glb" -o fixtures/Toasty_Current.glb
           curl -fsSL "$base/Quori_Current.glb" -o fixtures/Quori_Current.glb
           curl -fsSL "$base/Hugo_Current.glb" -o fixtures/Hugo_Current.glb
+          sidecars="https://raw.githubusercontent.com/vizij-ai/vizij-web/e4cefed0cec0f4debb0f36a89b1fc73a5d92a911/apps/vizij-authoring/public/assets"
+          for face in Quori_Current_Extended Quori_Current Hugo_Current; do
+            curl -fsSL "$sidecars/$face.standard-adaptation.json" -o "fixtures/$face.standard-adaptation.json"
+          done
           blender="https://raw.githubusercontent.com/vizij-ai/vizij-web/866ae9d33dfcf38e70b7f6112c979f27f7fae21f/apps/vizij-authoring/public/assets"
           curl -fsSL "$blender/Quori_Latest_Blender_Export.glb" -o fixtures/Quori_Latest_Blender_Export.glb
           emy="https://raw.githubusercontent.com/SaraCooperAmun/vizij_ros_face_launcher/c538974ef24e40a2d2e251768a5e48f148b5bf1f/emy_glbs/emy.glb"
@@ -316,6 +322,10 @@ jobs:
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
         run: cargo test -p vizij --lib the_sidecars_drive_their_faces -- --nocapture
+      - name: Map the action units through Quori's reference adaptation
+        env:
+          VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
+        run: cargo test -p vizij --lib quori_s_adaptation_maps_the_action_units -- --nocapture
       - name: Play Quori's animations on the native device
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures

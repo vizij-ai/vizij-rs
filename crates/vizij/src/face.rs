@@ -124,7 +124,9 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
 /// F32, the graph's number), except for a key a shipped profile
 /// types — the face standard's (`f32`) or ROS4HRI's, typed as the `hri_msgs`
 /// field a ROS 2 bridge writes it from — which takes the type and rest its
-/// profile states;
+/// profile states, but for the face's settings
+/// ([`FACE_SETTINGS`](vizij_arora_host::standard::FACE_SETTINGS)), which rest
+/// at the value the face authors when it authors one of their type;
 /// vector-valued inputs stay out (they travel as typed topics, e.g. the gaze
 /// target). Built-in keys stay out.
 ///
@@ -185,7 +187,8 @@ struct FreeInput {
 /// a shipped profile declares (the face standard's, under the prefix the
 /// face's standard controls live under, or ROS4HRI's), of the type and in the
 /// range that profile states — and rests at its authored default, or a
-/// profile key at the profile's. `neutral` (the bundle's
+/// profile key at the profile's but for a setting of the face, which rests
+/// at the value the face authors. `neutral` (the bundle's
 /// neutral pose, [`Bundle::neutral_stage_writes`]) moves the rest of the
 /// keys it names, and gives a rig key that is no free input its rest alone:
 /// the standard inputs feed the rig through the adaptation, so a reset that
@@ -286,7 +289,8 @@ pub fn declare_keys(
 
 /// Each free input with its type, its authored default and its authored
 /// range, if any (see [`free_inputs`]) — for a key of `profiled`, the type
-/// and default its profile states.
+/// its profile states, and the default its profile states unless the key is
+/// one of the face's settings the graph authors a default for.
 fn walk_free_inputs(spec: &str, profiled: &ProfileKeys) -> Vec<FreeInput> {
     use arora_types::value::Type;
     let Ok(spec) = serde_json::from_str::<serde_json::Value>(spec) else {
@@ -336,10 +340,26 @@ fn walk_free_inputs(spec: &str, profiled: &ProfileKeys) -> Vec<FreeInput> {
             },
         };
         let (ty, default) = match profiled.get(&path) {
-            Some(key) => (
-                key.value_type.clone().unwrap_or(ty),
-                key.default_value.clone().or(default),
-            ),
+            Some(key) => {
+                let ty = key.value_type.clone().unwrap_or(ty);
+                // A face's setting rests where the face authors it, when the
+                // face authors a value of the setting's type: that is what
+                // makes it the face's (the rule `Bundle::sources` rests a
+                // mapping's input on it by). Every other key a profile types
+                // rests at the profile's rest, whatever a graph authored, so
+                // a control rests the same on every face.
+                let setting = vizij_arora_host::standard::FACE_SETTINGS
+                    .iter()
+                    .any(|setting| path.ends_with(setting));
+                let rest = if setting {
+                    default
+                        .filter(|value| value.conforms_to(&ty))
+                        .or_else(|| key.default_value.clone())
+                } else {
+                    key.default_value.clone().or(default)
+                };
+                (ty, rest)
+            }
             None => (ty, default),
         };
         // An optional range: both bounds, the upper above the lower.
@@ -780,6 +800,57 @@ mod tests {
                 Some(f32_key(0.0, 1.0, 0.5)),
                 Some(f32_key(0.0, 1.0, 0.0)),
             ]
+        );
+    }
+
+    /// A face's settings rest where the face authors them, so a reset
+    /// returns the face's own value rather than the standard's: the gaze
+    /// range and the lipsync gain its adaptation authors; the eye spacing,
+    /// read with no default, and a setting authored with a value of another
+    /// type, at the profile's.
+    #[test]
+    fn a_face_s_settings_rest_where_the_face_authors_them() {
+        use arora_types::data::KeyMeta;
+        use arora_types::value::Type;
+        let setting = |rest| {
+            KeyMeta::new()
+                .editable()
+                .of_type(Type::F32)
+                .resting_at(Value::F32(rest))
+        };
+        // The gaze range declares its span; the others only a floor.
+        let range = |rest| setting(rest).range(0.01, 0.9);
+        let declared = |nodes: serde_json::Value| {
+            let spec = compose_sources(&[(
+                "standard-adaptation".to_string(),
+                serde_json::json!({ "nodes": nodes, "edges": [] }),
+            )])
+            .unwrap()
+            .to_string();
+            let store = BlackboardStore::new();
+            declare_keys(&store, &spec, &[], &[], &InputRanges::default());
+            store.meta(
+                &[
+                    standard::GAZE_RANGE,
+                    standard::LIPSYNC_GAIN,
+                    standard::GAZE_EYE_SPACING,
+                ]
+                .map(|path| Key::from(format!("rig/f/{path}"))),
+            )
+        };
+        assert_eq!(
+            declared(serde_json::json!([
+                { "id": "a", "type": "input", "params": { "path": "rig/f/standard/vizij/gaze/range", "value": 0.5 } },
+                { "id": "b", "type": "input", "params": { "path": "rig/f/standard/vizij/lipsync/gain", "value": 0.8 } },
+                { "id": "c", "type": "input", "params": { "path": "rig/f/standard/vizij/gaze/eye_spacing" } },
+            ])),
+            vec![Some(range(0.5)), Some(setting(0.8)), Some(setting(0.06))]
+        );
+        assert_eq!(
+            declared(serde_json::json!([
+                { "id": "a", "type": "input", "params": { "path": "rig/f/standard/vizij/gaze/range", "value": "wide" } },
+            ]))[0],
+            Some(range(0.78))
         );
     }
 
@@ -1615,6 +1686,127 @@ mod tests {
         assert!(read_f32(&arora, standard::LEFT_EYE_POS_X).abs() < 0.01);
     }
 
+    /// The eye positions the mapping aims at `target` (meters, face frame)
+    /// for eyes `spacing` meters apart turning `range` radians: each eye's
+    /// angle from its own centre through the mapping's rational arctangent,
+    /// `r / (1 + 0.28 r²)`, over the range, clamped — `[left x, right x, y]`.
+    fn aimed(target: [f32; 3], spacing: f32, range: f32) -> [f32; 3] {
+        let [x, y, z] = target;
+        let angle = |num: f32| {
+            let r = num / x;
+            (r / (1.0 + 0.28 * r * r) / range).clamp(-1.0, 1.0)
+        };
+        [angle(y + spacing / 2.0), angle(y - spacing / 2.0), angle(z)]
+    }
+
+    /// The eye positions a device settles at for `target`.
+    fn settled_eyes(arora: &mut arora::Arora, target: [f32; 3]) -> [f32; 3] {
+        stage(arora, ros4hri::GAZE_TARGET_KEY, vec3(target));
+        settle(arora);
+        [
+            standard::LEFT_EYE_POS_X,
+            standard::RIGHT_EYE_POS_X,
+            standard::LEFT_EYE_POS_Y,
+        ]
+        .map(|path| read_f32(arora, path))
+    }
+
+    fn assert_eyes(eyes: [f32; 3], expected: [f32; 3], what: &str) {
+        for (eye, expected) in eyes.into_iter().zip(expected) {
+            assert!(
+                (eye - expected).abs() < 1e-3,
+                "{what}: eyes {eyes:?}, expected {expected:?}"
+            );
+        }
+    }
+
+    /// A face that authors no eye settings is aimed as the incumbent face
+    /// aims its eyes: 6 cm apart, ±0.78 rad → ±1.
+    #[test]
+    fn ros4hri_gaze_aims_a_face_authoring_no_eye_settings_as_the_incumbent() {
+        let mut arora = ros4hri_device();
+        for target in [[1.0, 0.3, 0.2], [0.5, -0.2, -0.1], [2.0, 0.05, 0.4]] {
+            assert_eyes(
+                settled_eyes(&mut arora, target),
+                aimed(target, 0.06, 0.78),
+                &format!("target {target:?}"),
+            );
+        }
+    }
+
+    /// A face's adaptation that authors its eye settings aims its eyes by
+    /// them: farther apart, the eyes verge more; turning less far, they
+    /// reach the end of their travel sooner. A deployment writing a setting
+    /// overrides the face's value.
+    #[test]
+    fn ros4hri_gaze_aims_the_eyes_by_the_face_s_settings() {
+        let bundle = vizij_arora_host::Bundle::from_bundle_json(&serde_json::json!({
+            "graphs": [{
+                "id": "face_standard_adaptation",
+                "kind": "standard-adaptation",
+                "spec": {
+                    "nodes": [
+                        { "id": "spacing", "type": "input",
+                          "params": { "path": standard::GAZE_EYE_SPACING, "value": 0.1 } },
+                        { "id": "range", "type": "input",
+                          "params": { "path": standard::GAZE_RANGE, "value": 0.5 } },
+                    ],
+                    "edges": [],
+                },
+            }]
+        }));
+        let spec = bundle
+            .compose(
+                &["standard-adaptation"],
+                &vizij_arora_host::ProgramSelect::None,
+                false,
+                &[ros4hri_source("")],
+            )
+            .expect("compose the face with the mapping")
+            .to_string();
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
+            .expect("build the device over the composed face")
+            .build()
+            .expect("build arora");
+
+        let target = [1.0, 0.3, 0.2];
+        let eyes = settled_eyes(&mut arora, target);
+        assert_eyes(eyes, aimed(target, 0.1, 0.5), "the face's settings");
+        let incumbent = aimed(target, 0.06, 0.78);
+        assert!(
+            eyes[0] - eyes[1] > incumbent[0] - incumbent[1] + 0.05,
+            "eyes 10 cm apart verge more: {eyes:?} against {incumbent:?}"
+        );
+        // Turning ±0.5 rad, an eye reaches the end of its travel at a target
+        // the incumbent's ±0.78 rad leaves short of it.
+        let side = [1.0, 0.7, 0.0];
+        let reached = settled_eyes(&mut arora, side)[0];
+        assert!(reached > 0.999, "the eye at its travel's end: {reached}");
+        assert!(aimed(side, 0.06, 0.78)[0] < 0.95);
+
+        // A deployment writing the settings overrides the face's.
+        stage(&arora, standard::GAZE_EYE_SPACING, float(0.06));
+        stage(&arora, standard::GAZE_RANGE, float(0.78));
+        assert_eyes(settled_eyes(&mut arora, target), incumbent, "overridden");
+
+        // Each is read within the span the profile declares: a range past
+        // 0.9 rad as 0.9, one of 0 as 0.01 — the eyes at the ends of their
+        // travel rather than undefined — and a spacing below 0 as none.
+        for (spacing, range, (read_spacing, read_range)) in [
+            (0.06, 2.0, (0.06, 0.9)),
+            (0.06, 0.0, (0.06, 0.01)),
+            (-0.06, 0.78, (0.0, 0.78)),
+        ] {
+            stage(&arora, standard::GAZE_EYE_SPACING, float(spacing));
+            stage(&arora, standard::GAZE_RANGE, float(range));
+            assert_eyes(
+                settled_eyes(&mut arora, target),
+                aimed(target, read_spacing, read_range),
+                &format!("spacing {spacing}, range {range}"),
+            );
+        }
+    }
+
     /// The shape a viseme player's feedback record names.
     fn fed_back_viseme(arora: &arora::Arora, path: &str) -> Option<String> {
         match read_value(arora, path)? {
@@ -2020,19 +2212,31 @@ mod tests {
     /// graphs + the ROS4HRI mapping, no autoplay — the idle program would
     /// contend on gaze paths), its neutral pose staged.
     fn adapted_quori(fixtures: &str) -> arora::Arora {
-        adapted_quori_with(fixtures, quori_adaptation())
+        adapted_quori_with(fixtures, quori_adaptation(fixtures))
     }
 
-    /// Quori's committed adaptation sidecar.
-    pub(super) fn quori_adaptation() -> serde_json::Value {
-        let sidecar = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../fixtures/faces/quori/standard-adaptation.json"
+    /// Quori's adaptation sidecar under `fixtures`, the one vizij-web keeps
+    /// beside `Quori_Current_Extended.glb`.
+    pub(super) fn quori_adaptation(fixtures: &str) -> serde_json::Value {
+        adaptation_sidecar(fixtures, "Quori_Current_Extended.glb")
+    }
+
+    /// The standard-adaptation sidecar of the face `glb` under `fixtures`:
+    /// `<face>.standard-adaptation.json`, the name vizij-web keeps it under
+    /// beside the GLB, which is the adaptation's source of truth.
+    fn adaptation_sidecar(fixtures: &str, glb: &str) -> serde_json::Value {
+        let name = format!(
+            "{}.standard-adaptation.json",
+            glb.strip_suffix(".glb").unwrap_or(glb)
         );
-        vizij_bundle::from_sidecar(
-            &std::fs::read_to_string(sidecar).expect("read the adaptation sidecar"),
-        )
-        .expect("parse the adaptation sidecar")
+        let sidecar = std::path::Path::new(fixtures).join(name);
+        let text = std::fs::read_to_string(&sidecar).unwrap_or_else(|e| {
+            panic!(
+                "read the adaptation sidecar {}: {e} — fetch it from vizij-web beside its GLB",
+                sidecar.display()
+            )
+        });
+        vizij_bundle::from_sidecar(&text).expect("parse the adaptation sidecar")
     }
 
     /// `Quori_Current_Extended.glb` under `fixtures` with `spec` grafted in
@@ -2075,9 +2279,9 @@ mod tests {
     }
 
     /// End-to-end over the real demo face ([`adapted_quori`]): drive the
-    /// ROS4HRI keys through to Quori's pose plane. Needs the GLB: set
-    /// `VIZIJ_FIXTURES` to a directory holding it (the snapshot-regression
-    /// convention); skipped otherwise.
+    /// ROS4HRI keys through to Quori's pose plane. Needs the GLB and its
+    /// adaptation sidecar: set `VIZIJ_FIXTURES` to a directory holding both
+    /// (the snapshot-regression convention); skipped otherwise.
     #[test]
     fn ros4hri_drives_the_adapted_quori() {
         let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
@@ -2257,7 +2461,7 @@ mod tests {
         // The adaptation without the outputs the muscle tier adds — onto
         // the rig's own standard inputs and the lids' translation — renders
         // the face the same.
-        let mut before = quori_adaptation();
+        let mut before = quori_adaptation(&fixtures);
         let muscle: std::collections::HashSet<String> = before["nodes"]
             .as_array()
             .expect("nodes")
@@ -2316,10 +2520,11 @@ mod tests {
         }
     }
 
-    /// Faces whose rigs predate the standard, each with the adaptation
-    /// sidecar committed for it: grafted with the bundler, a standard control
-    /// reaches the face's own pose weight, blink or eye. Needs the GLBs under
-    /// `VIZIJ_FIXTURES`; a face absent there is skipped.
+    /// Faces whose rigs predate the standard, each with its adaptation
+    /// sidecar: grafted with the bundler, a standard control reaches the
+    /// face's own pose weight, blink or eye. Needs the GLBs and their
+    /// sidecars under `VIZIJ_FIXTURES`; a face whose GLB is absent there is
+    /// skipped.
     #[test]
     fn the_sidecars_drive_their_faces() {
         let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
@@ -2327,11 +2532,10 @@ mod tests {
             return;
         };
         type Reach<'a> = (&'a str, &'a str, f32);
-        // (GLB, sidecar, face id, [(standard control set to 1, face input, the value it reaches)]).
-        let faces: [(&str, &str, &str, &[Reach]); 2] = [
+        // (GLB, face id, [(standard control set to 1, face input, the value it reaches)]).
+        let faces: [(&str, &str, &[Reach]); 2] = [
             (
                 "Quori_Current.glb",
-                "quori/Quori_Current.standard-adaptation.json",
                 "quori_latest",
                 &[
                     ("expression/happy", "poses/pose_happy.weight", 1.0),
@@ -2344,7 +2548,6 @@ mod tests {
             ),
             (
                 "Hugo_Current.glb",
-                "hugo/Hugo_Current.standard-adaptation.json",
                 "hugo_latest_blender_export",
                 &[
                     ("expression/happy", "poses/pose_happy.weight", 1.0),
@@ -2366,19 +2569,12 @@ mod tests {
             studio: false,
             speech: None,
         };
-        for (glb, sidecar, face_id, controls) in faces {
+        for (glb, face_id, controls) in faces {
             let Ok(bytes) = std::fs::read(std::path::Path::new(&fixtures).join(glb)) else {
                 eprintln!("{glb} not under VIZIJ_FIXTURES — skipped");
                 continue;
             };
-            let sidecar = format!(
-                "{}/../../fixtures/faces/{sidecar}",
-                env!("CARGO_MANIFEST_DIR")
-            );
-            let spec = vizij_bundle::from_sidecar(
-                &std::fs::read_to_string(&sidecar).expect("read the adaptation sidecar"),
-            )
-            .expect("parse the adaptation sidecar");
+            let spec = adaptation_sidecar(&fixtures, glb);
             let mut face = vizij_bundle::Face::parse(&bytes).expect("parse the GLB");
             face.add_graph(
                 "standard-adaptation",
@@ -2472,9 +2668,9 @@ mod animation_tests {
             .unwrap_or_else(|| panic!("no player named {id}"))
     }
 
-    /// What a transport sends to play an animation: weight, then play.
-    fn play(arora: &mut arora::Arora, id: &str) {
-        let state = player(arora, id);
+    /// Weigh in the instance of `state`'s player at full weight, as a
+    /// transport does before it plays an animation.
+    fn weigh_in(arora: &mut arora::Arora, state: &PlayerState) {
         call(
             arora,
             ids::set_weight::FUNCTION,
@@ -2487,11 +2683,33 @@ mod animation_tests {
                 (ids::set_weight::WEIGHT, AValue::F32(1.0)),
             ],
         );
+    }
+
+    /// What a transport sends to play an animation: weight, then play.
+    fn play(arora: &mut arora::Arora, id: &str) {
+        let state = player(arora, id);
+        weigh_in(arora, &state);
         call(
             arora,
             ids::play::FUNCTION,
             vec![(ids::play::PLAYER, AValue::U32(state.player))],
         );
+    }
+
+    /// What a transport sends to start an animation at the device time
+    /// `time_ns`: weight, then `play_at`.
+    fn play_at(arora: &mut arora::Arora, id: &str, time_ns: u64) {
+        let state = player(arora, id);
+        weigh_in(arora, &state);
+        let anchored = call(
+            arora,
+            ids::play_at::FUNCTION,
+            vec![
+                (ids::play_at::PLAYER, AValue::U32(state.player)),
+                (ids::play_at::TIME_NS, AValue::U64(time_ns)),
+            ],
+        );
+        assert_eq!(anchored, AValue::U32(state.player));
     }
 
     fn read(arora: &arora::Arora, path: &str) -> Option<f32> {
@@ -2514,6 +2732,12 @@ mod animation_tests {
     /// A one-rig-input face whose animation ramps it, composed and built,
     /// its animations loaded.
     fn ramp_face() -> arora::Arora {
+        ramp_face_starting_at(Duration::ZERO)
+    }
+
+    /// [`ramp_face`] on a device whose clock reads `start` before its first
+    /// step.
+    fn ramp_face_starting_at(start: Duration) -> arora::Arora {
         let bundle = Bundle::from_bundle_json(&serde_json::json!({
             "metadata": { "faceId": "f" },
             "graphs": [{ "kind": "rig", "spec": { "nodes": [
@@ -2536,6 +2760,7 @@ mod animation_tests {
             .to_string();
         let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
             .expect("build the device")
+            .with_start_time(start)
             .build()
             .expect("build arora");
         load_animations(&mut arora, &bundle).expect("load the face's animations");
@@ -2603,6 +2828,78 @@ mod animation_tests {
         );
     }
 
+    /// `play_at` counts on the device's clock: the animation source steps the
+    /// module with `arora/time`, so a player anchored at a device time starts
+    /// there even when the module's own count of its steps is elsewhere —
+    /// here, a client stepped it once directly.
+    #[test]
+    fn play_at_starts_a_face_animation_at_the_device_time_it_names() {
+        let mut arora = ramp_face();
+        step_for(&mut arora, 0.1);
+        call(
+            &mut arora,
+            ids::step::FUNCTION,
+            vec![(ids::step::DT_NS, AValue::U64(1_000_000_000))],
+        );
+        play_at(&mut arora, "ramp", 300_000_000);
+
+        // Device time 200 ms: before the anchor, the player holds.
+        step_for(&mut arora, 0.1);
+        let state = player(&mut arora, "ramp");
+        assert_eq!(state.state, "stopped", "{state:?}");
+        assert_eq!(state.time_ns, 0);
+
+        // Device time 450 ms: 150 ms after the anchor.
+        step_for(&mut arora, 0.25);
+        let state = player(&mut arora, "ramp");
+        assert_eq!(state.state, "playing", "{state:?}");
+        assert!(
+            state.time_ns.abs_diff(150_000_000) < 1_000,
+            "150 ms after the anchor, got {} ns",
+            state.time_ns
+        );
+    }
+
+    /// On a device whose clock starts far from zero — at a Unix time, as
+    /// devices sharing a wall clock's reference start — a `play_at` start
+    /// lands at the device time it names, and a step at a zero dt moves no
+    /// player: it neither brings an anchored start forward nor advances a
+    /// player that plays.
+    #[test]
+    fn play_at_counts_on_a_device_clock_that_starts_far_from_zero() {
+        let start = Duration::from_secs(1_760_000_000);
+        let start_ns = u64::try_from(start.as_nanos()).expect("in u64 nanoseconds");
+        let mut arora = ramp_face_starting_at(start);
+        step_for(&mut arora, 0.1);
+        play_at(&mut arora, "ramp", start_ns + 300_000_000);
+
+        // A zero-dt step applies the anchor and brings it no closer.
+        arora.step(Duration::ZERO).expect("a step at a zero dt");
+        // Device time start + 200 ms: before the anchor, the player holds.
+        step_for(&mut arora, 0.1);
+        let state = player(&mut arora, "ramp");
+        assert_eq!(state.state, "stopped", "{state:?}");
+        assert_eq!(state.time_ns, 0);
+
+        // Device time start + 450 ms: 150 ms after the anchor.
+        step_for(&mut arora, 0.25);
+        let state = player(&mut arora, "ramp");
+        assert_eq!(state.state, "playing", "{state:?}");
+        assert!(
+            state.time_ns.abs_diff(150_000_000) < 1_000,
+            "150 ms after the anchor, got {} ns",
+            state.time_ns
+        );
+
+        arora.step(Duration::ZERO).expect("a step at a zero dt");
+        let held = player(&mut arora, "ramp");
+        assert_eq!(
+            (held.state.as_str(), held.time_ns),
+            ("playing", state.time_ns),
+            "a zero-dt step moves no player"
+        );
+    }
+
     /// The native device plays the animations the bundle of the demo face
     /// carries. Needs `VIZIJ_FIXTURES` (see
     /// `ros4hri_drives_the_adapted_quori`); skipped otherwise.
@@ -2652,11 +2949,12 @@ mod animation_tests {
         );
     }
 
-    /// Quori as a page runs it, with its committed standard adaptation: its
+    /// Quori as a page runs it, with its standard adaptation: its
     /// graphs composed over its neutral pose, its active program running
     /// through the adaptation, and an animation playing.
     fn running_quori(fixtures: &str) -> (arora::Arora, LoadedFace) {
-        let glb = super::tests::adapted_quori_glb(fixtures, super::tests::quori_adaptation());
+        let glb =
+            super::tests::adapted_quori_glb(fixtures, super::tests::quori_adaptation(fixtures));
         let config = FaceConfig {
             wanted: ["rig", "pose-driver", "pose", "standard-adaptation"]
                 .map(String::from)

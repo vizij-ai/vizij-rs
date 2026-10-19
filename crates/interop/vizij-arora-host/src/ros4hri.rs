@@ -17,9 +17,13 @@
 //!   ([`ROS4HRI_EXPRESSION_NAMES`]). The standard's expressions beyond them
 //!   have no ROS4HRI name, so the mapping leaves them to other writers.
 //! - **Gaze** — `gaze/target` (vec3, meters, face frame: x forward, y left,
-//!   z up) maps to per-eye positions with vergence, the incumbent ±0.78 rad →
-//!   ±1 normalization, and a center fallback for targets at or behind the
-//!   face plane (x ≤ 0.1).
+//!   z up) maps to per-eye positions with vergence and a center fallback for
+//!   targets at or behind the face plane (x ≤ 0.1). How far apart the eyes
+//!   are and how far they turn are the face's own settings
+//!   ([`standard::GAZE_EYE_SPACING`], [`standard::GAZE_RANGE`]), read under
+//!   its rig prefix: each eye aims from its own centre, and an angle of
+//!   ±range is an eye position of ±1 — the incumbent's 6 cm and ±0.78 rad for
+//!   a face that authors neither.
 //! - **Blink** — an idle generator (≈8 s cycle, deterministically jittered,
 //!   0.2 s parabolic pulse) drives the eyelids; the `asleep` expression
 //!   closes them and inhibits the blink in proportion to its weight. The
@@ -45,7 +49,11 @@
 //!   which the host shows over the face.
 //!
 //! All continuous channels pass through a ~200 ms exponential smoother (the
-//! incumbent ROS4HRI face's dynamics). The graph is generated data: it
+//! incumbent ROS4HRI face's dynamics). The smoothing, the blink's cadence and
+//! the circumplex are the mapping's own: how a ROS4HRI command plays out in
+//! time and which expressions an affect names are the same on every face.
+//! What depends on the face — its eyes — is the face's to say. The graph is
+//! generated data: it
 //! composes exactly like [`crate::animations_source`], after the face's own
 //! graphs and before any playing program, so a performance overrides it,
 //! last-writer-wins.
@@ -137,15 +145,13 @@ const ANCHOR_RADIUS: f64 = 0.6;
 /// Blink cycle length / pulse width, seconds.
 const BLINK_PERIOD: f64 = 8.0;
 const BLINK_WIDTH: f64 = 0.2;
-/// Half the interocular distance, meters — the vergence offset.
-const HALF_IOD: f64 = 0.03;
-/// The incumbent's gaze normalization: ±0.78 rad maps to ±1.
-const GAZE_RANGE_RAD: f64 = 0.78;
 
 /// The composable ROS4HRI mapping source: the canonical mapping asset
 /// ([`MAPPING_JSON`]) with `rig_prefix` applied. The prefix is prepended to
-/// every written control path (faces namespace their rig inputs, e.g.
-/// `rig/quori_latest/`); pass `""` for unprefixed controls.
+/// every face-standard path it writes or reads — the face's controls, its
+/// speech state and settings, which faces namespace under their rig (e.g.
+/// `rig/quori_latest/`) — and the ROS4HRI keys stay device-scoped; pass
+/// `""` for unprefixed controls.
 pub fn ros4hri_source(rig_prefix: &str) -> (String, Json) {
     let mut spec: Json = serde_json::from_str(MAPPING_JSON).expect("mappings/ros4hri.json parses");
     apply_rig_prefix(&mut spec, rig_prefix);
@@ -164,17 +170,19 @@ pub fn generate() -> Json {
     build("").1
 }
 
-/// Prepend `rig_prefix` to every path the mapping writes (its `output`
-/// nodes) — the face-scoped `vizij-face` profile. Input paths — the
-/// device-scoped `ros4hri` profile a bridge writes — stay untouched.
+/// Prepend `rig_prefix` to every face-standard path the mapping reads or
+/// writes (`standard/vizij/*`, the face-scoped `vizij-face` profile: the
+/// controls it writes, the speech state and settings it reads). The ROS4HRI
+/// paths — the device-scoped `ros4hri` profile a bridge writes and
+/// publishes — stay untouched.
 pub fn apply_rig_prefix(spec: &mut Json, rig_prefix: &str) {
     standard::prefix_controls(spec, rig_prefix);
 }
 
 /// `atan(num / den)` under `prefix`, via the rational approximation
-/// `r / (1 + 0.28 r²)` (≤1 % error inside the clamped gaze range), normalized
-/// by the incumbent's ±0.78 rad → ±1 and clamped.
-fn gaze_angle(g: &mut GraphBuilder, prefix: &str, num: &str, den: &str) -> String {
+/// `r / (1 + 0.28 r²)` (≤1 % error up to 0.8 rad), normalized by the face's
+/// gaze range — `range` rad → 1 — and clamped.
+fn gaze_angle(g: &mut GraphBuilder, prefix: &str, num: &str, den: &str, range: &str) -> String {
     let id = |step: &str| format!("{prefix}/{step}");
     let ratio = g.div(&id("ratio"), num, den);
     let ratio2 = g.mul(&id("ratio2"), &ratio, &ratio);
@@ -183,8 +191,7 @@ fn gaze_angle(g: &mut GraphBuilder, prefix: &str, num: &str, den: &str) -> Strin
     let one = g.constant(1.0);
     let denominator = g.add(&id("denominator"), &correction, &one);
     let atan = g.div(&id("atan"), &ratio, &denominator);
-    let range = g.constant(GAZE_RANGE_RAD);
-    let normalized = g.div(&id("normalized"), &atan, &range);
+    let normalized = g.div(&id("normalized"), &atan, range);
     g.clamp(&id("angle"), &normalized, -1.0, 1.0)
 }
 
@@ -345,12 +352,34 @@ fn build(rig_prefix: &str) -> (String, Json) {
         &[("lhs", &gx), ("rhs", &min_x)],
     );
 
-    let iod = g.constant(HALF_IOD);
-    let y_left = g.add("gaze/left/y", &gy, &iod);
-    let y_right = g.sub("gaze/right/y", &gy, &iod);
-    let yaw_left = gaze_angle(g, "gaze/left/yaw", &y_left, &gx);
-    let yaw_right = gaze_angle(g, "gaze/right/yaw", &y_right, &gx);
-    let pitch = gaze_angle(g, "gaze/pitch", &gz, &gx);
+    // The face's eyes: how far apart they are, which each eye aims from half
+    // of either side of the face's centre, and how far they turn, the angle
+    // an eye position of ±1 stands for — settings the face authors, read
+    // under its prefix.
+    // Each is read within the span the profile declares for it: a spacing
+    // below 0 would cross the eyes' lines of sight, a range outside its span
+    // would leave the eyes short of their travel's end or divide by zero.
+    let authored_spacing = g.input(
+        "in/gaze/eye_spacing",
+        standard::GAZE_EYE_SPACING,
+        json!(standard::GAZE_EYE_SPACING_REST),
+    );
+    let spacing = g.max("gaze/eye_spacing", &authored_spacing, &zero);
+    let half = g.constant(0.5);
+    let half_spacing = g.mul("gaze/half_spacing", &spacing, &half);
+    let authored_range = g.input(
+        "in/gaze/range",
+        standard::GAZE_RANGE,
+        json!(standard::GAZE_RANGE_REST),
+    );
+    let (min_range, max_range) = standard::GAZE_RANGE_SPAN;
+    let range = g.clamp("gaze/range", &authored_range, min_range, max_range);
+
+    let y_left = g.add("gaze/left/y", &gy, &half_spacing);
+    let y_right = g.sub("gaze/right/y", &gy, &half_spacing);
+    let yaw_left = gaze_angle(g, "gaze/left/yaw", &y_left, &gx, &range);
+    let yaw_right = gaze_angle(g, "gaze/right/yaw", &y_right, &gx, &range);
+    let pitch = gaze_angle(g, "gaze/pitch", &gz, &gx, &range);
 
     for (eye, yaw, path_x, path_y) in [
         (
@@ -548,21 +577,25 @@ mod tests {
     /// The mapping reads the ROS4HRI command keys and writes the face's
     /// controls; the speech channel runs the other way, reading the face's
     /// speech state (per face, under the rig prefix) and writing the
-    /// device-scoped ROS4HRI speech keys — and nothing else crosses over.
+    /// device-scoped ROS4HRI speech keys; and the gaze channel reads the
+    /// face's eye settings, per face too — nothing else crosses over.
     #[test]
     fn source_reads_ros4hri_keys_and_relays_the_speech_state() {
         let spec = spec();
-        let speech_in = [
-            format!("rig/test_face/{}", standard::SPEECH),
-            format!("rig/test_face/{}", standard::VISEME),
-        ];
+        let face_in = [
+            standard::SPEECH,
+            standard::VISEME,
+            standard::GAZE_EYE_SPACING,
+            standard::GAZE_RANGE,
+        ]
+        .map(|path| format!("rig/test_face/{path}"));
         for node in spec["nodes"].as_array().unwrap() {
             let path = node["params"]["path"].as_str();
             match node["type"].as_str() {
                 Some("input") => {
                     let path = path.unwrap();
                     assert!(
-                        path.starts_with(ROS4HRI_PREFIX) || speech_in.iter().any(|p| p == path),
+                        path.starts_with(ROS4HRI_PREFIX) || face_in.iter().any(|p| p == path),
                         "unexpected input {path}"
                     );
                 }
@@ -635,6 +668,43 @@ mod tests {
             .find(|n| n["id"] == when["from"]["node_id"])
             .unwrap();
         assert_eq!(source["params"]["path"], VISEME_TIME_KEY);
+    }
+
+    /// The gaze channel aims the eyes with the face's own settings, under its
+    /// prefix, resting where a face that authors none rests: the incumbent's
+    /// eyes 6 cm apart, turning ±0.78 rad. The mapping carries no eye
+    /// geometry of its own.
+    #[test]
+    fn the_gaze_reads_the_face_s_eye_settings() {
+        let spec = spec();
+        let input = |path: &str| {
+            spec["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|n| n["type"] == "input" && n["params"]["path"] == path)
+                .unwrap_or_else(|| panic!("the mapping reads {path}"))["params"]["value"]
+                .as_f64()
+                .unwrap()
+        };
+        assert_eq!(
+            input(&format!("rig/test_face/{}", standard::GAZE_EYE_SPACING)),
+            0.06
+        );
+        assert_eq!(
+            input(&format!("rig/test_face/{}", standard::GAZE_RANGE)),
+            0.78
+        );
+        for constant in ["const/0.03", "const/0.78"] {
+            assert!(
+                !spec["nodes"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|n| n["id"] == constant),
+                "the mapping holds {constant}"
+            );
+        }
     }
 
     #[test]

@@ -2,7 +2,7 @@
   "id": "vizij-face",
   "version": "v1",
   "title": "Vizij face standard",
-  "description": "The portable face interface: gaze, lids, blink and the gaze target with its weight, 27 named expressions, 15 visemes, 36 muscle controls keyed to FACS action units and ARKit blendshapes (35 named per FACS/ARKit, plus the de-facto jaw-open path), and the conversation state (speaking, user speaking, thinking); its lipsync gain; the caption shown over it and who says it; and the speech state the face reports, its current viseme and the utterance being spoken.",
+  "description": "The portable face interface: gaze, lids, blink and the gaze target with its weight, 27 named expressions, 15 visemes, 36 muscle controls keyed to FACS action units and ARKit blendshapes (35 named per FACS/ARKit, plus the de-facto jaw-open path), and the conversation state (speaking, user speaking, thinking); its settings, the lipsync gain, the eyes' spacing and how far they turn; the caption shown over it and who says it; and the speech state the face reports, its current viseme and the utterance being spoken.",
   "scope": "face",
   "keys": [
     {
@@ -1265,6 +1265,25 @@
       "min": 0.0,
       "default_value": {
         "f32": 1.0
+      }
+    },
+    {
+      "path": "standard/vizij/gaze/eye_spacing",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "default_value": {
+        "f32": 0.05999999865889549
+      }
+    },
+    {
+      "path": "standard/vizij/gaze/range",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.01,
+      "max": 0.9,
+      "default_value": {
+        "f32": 0.7799999713897705
       }
     },
     {

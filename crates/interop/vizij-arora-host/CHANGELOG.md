@@ -4,10 +4,41 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [7.5.0] - 2026-10-19
 
 ### Changed
 
+- `animations_source` feeds the device's `arora/time` to the animation
+  module's `step` as its `time_ns`, beside `arora/dt`: `play_at(player, t)`
+  counts `t` on the device's clock, where it counted from the module's first
+  step.
+
+## [7.4.0] - 2026-10-19
+
+### Added
+
+- `standard::GAZE_EYE_SPACING` (`standard/vizij/gaze/eye_spacing`, metres)
+  and `standard::GAZE_RANGE` (`standard/vizij/gaze/range`, radians): how far
+  apart the face's eyes are and how far they turn, settings of the face like
+  its lipsync gain. The `vizij-face` profile declares both as inputs with no
+  tier, the spacing from 0 and resting at 0.06, the range in [0.01, 0.9] and
+  resting at 0.78; it has 98 keys.
+- `standard::FACE_SETTINGS`: the face's settings — the lipsync gain, the
+  eye spacing and the gaze range.
+
+### Changed
+
+- The ROS4HRI mapping aims the eyes with the face's eye spacing and gaze
+  range, read under the face's rig prefix, where it held 6 cm and ±0.78 rad
+  as constants. A face that authors neither is aimed as before. The mapping
+  reads each within the span the profile declares: the spacing from 0, and
+  the gaze range in [0.01, 0.9] rad, the span its arctangent reaches the end
+  of an eye's travel over.
+- `Bundle::sources` (and so `Bundle::compose`) rests a mapping's input on
+  one of the face's settings at the default the face's base graphs author
+  for it when that is of the setting's type, else at the `vizij-face`
+  profile's rest, so a face states a setting once, in its adaptation, and
+  every mapping composed over it reads that value.
 - Licensed under Apache-2.0, where it was MIT OR Apache-2.0. Releases up
   to 7.3.0 keep the licence they were published under.
 

@@ -270,13 +270,34 @@ pub fn vizij_face_profile() -> Profile {
     for state in CONVERSATION_STATES {
         keys.push(ProfileKey::weight(standard::conversation_path(state)).with_tier("conversation"));
     }
-    // A setting of the face rather than a control: the gain its adaptation
-    // scales the viseme weights by. No tier — the tiers grade controls.
-    keys.push(ProfileKey {
-        min: Some(0.0),
-        default_value: Some(Value::F32(1.0)),
-        ..ProfileKey::input(standard::LIPSYNC_GAIN, Type::F32)
-    });
+    // The face's settings rather than controls: the gain its adaptation
+    // scales the viseme weights by, and how far apart its eyes are and how
+    // far they turn, which a mapping aiming them at a point in space reads.
+    // Each rests where the face authors it, at these when it authors none.
+    // No tier — the tiers grade controls.
+    let (min_range, max_range) = standard::GAZE_RANGE_SPAN;
+    for (path, rest, min, max) in [
+        (standard::LIPSYNC_GAIN, 1.0, 0.0, None),
+        (
+            standard::GAZE_EYE_SPACING,
+            standard::GAZE_EYE_SPACING_REST,
+            0.0,
+            None,
+        ),
+        (
+            standard::GAZE_RANGE,
+            standard::GAZE_RANGE_REST,
+            min_range,
+            Some(max_range),
+        ),
+    ] {
+        keys.push(ProfileKey {
+            min: Some(min),
+            max,
+            default_value: Some(Value::F32(rest as f32)),
+            ..ProfileKey::input(path, Type::F32)
+        });
+    }
     // The caption the host shows over the face, and who says it: a command
     // of the face's display, read by the host rather than the face's graphs.
     // No tier.
@@ -295,7 +316,8 @@ pub fn vizij_face_profile() -> Profile {
                       target with its weight, 27 named expressions, 15 visemes, 36 muscle controls keyed \
                       to FACS action units and ARKit blendshapes (35 named per \
                       FACS/ARKit, plus the de-facto jaw-open path), and the conversation \
-                      state (speaking, user speaking, thinking); its lipsync gain; the \
+                      state (speaking, user speaking, thinking); its settings, the \
+                      lipsync gain, the eyes' spacing and how far they turn; the \
                       caption shown over it and who says it; and the speech state the \
                       face reports, its current viseme and the utterance being spoken."
             .into(),
@@ -662,7 +684,7 @@ mod tests {
         assert_eq!(tier("viseme"), 15);
         assert_eq!(tier("muscle"), 36);
         assert_eq!(tier("conversation"), 3);
-        assert_eq!(face.keys.len(), 96);
+        assert_eq!(face.keys.len(), 98);
         assert_eq!(
             face.tiers(),
             ["gaze", "expression", "viseme", "muscle", "conversation"]
@@ -672,12 +694,30 @@ mod tests {
             [standard::VISEME, standard::SPEECH],
             "the speech state the face reports, outside the control tiers"
         );
-        let gain = face
-            .keys
-            .iter()
-            .find(|k| k.path == standard::LIPSYNC_GAIN)
-            .expect("the face's lipsync gain");
-        assert_eq!(gain.kind.as_deref(), Some("input"));
+        // The face's settings: non-negative `f32` inputs outside the control
+        // tiers, each resting where a face that authors none rests — the
+        // lipsync gain at 1, the eyes 6 cm apart and turning ±0.78 rad, of
+        // at most 0.9 rad.
+        for (path, rest, min, max) in [
+            (standard::LIPSYNC_GAIN, 1.0, 0.0, None),
+            (standard::GAZE_EYE_SPACING, 0.06, 0.0, None),
+            (standard::GAZE_RANGE, 0.78, 0.01, Some(0.9)),
+        ] {
+            let setting = face
+                .keys
+                .iter()
+                .find(|k| k.path == path)
+                .unwrap_or_else(|| panic!("the face's setting {path}"));
+            assert_eq!(setting.kind.as_deref(), Some("input"), "{path}");
+            assert_eq!(setting.value_type, Some(Type::F32), "{path}");
+            assert_eq!((setting.min, setting.max), (Some(min), max), "{path}");
+            assert_eq!(setting.tier(), None, "{path}: a setting, in no tier");
+            assert_eq!(setting.default_value, Some(Value::F32(rest)), "{path}");
+        }
+        assert_eq!(
+            standard::FACE_SETTINGS.map(|path| face.paths().contains(&path)),
+            [true; 3]
+        );
         // The caption is a command of the face's display: a string input, in
         // no tier.
         for path in [standard::CAPTION_TEXT, standard::CAPTION_SPEAKER] {
@@ -686,8 +726,6 @@ mod tests {
             assert_eq!(caption.value_type, Some(Type::String), "{path}");
             assert_eq!(caption.tier(), None, "{path}");
         }
-        assert_eq!(gain.tier(), None, "a setting, outside the control tiers");
-        assert_eq!(gain.default_value, Some(Value::F32(1.0)));
         assert_eq!(face.scope, Scope::Face);
     }
 
@@ -838,7 +876,7 @@ mod tests {
 
     /// The shipped mapping reads the whole `ros4hri` command surface but
     /// `gaze/frame` (the look_at skill consumes it), plus the face's speech
-    /// state, and
+    /// state and its gaze settings, and
     /// writes the whole `vizij-face` control surface but what ROS4HRI has no
     /// channel for, plus the ROS4HRI speech state — and nothing either profile
     /// does not declare on that side. Which keys are declared and unmapped is
@@ -849,7 +887,8 @@ mod tests {
         let ros = ros4hri_profile();
         let face = vizij_face_profile();
 
-        // What the mapping reads: the ROS4HRI inputs and the face's outputs.
+        // What the mapping reads: the ROS4HRI inputs, the face's outputs, and
+        // the face's settings its gaze channel aims the eyes with.
         let consumed = surface(&spec, Side::Input, "ros4hri", Scope::Device);
         let unread: Vec<&str> = ros
             .paths_of("input")
@@ -857,7 +896,15 @@ mod tests {
             .filter(|p| !consumed.paths().contains(p))
             .collect();
         assert_eq!(unread, [ros4hri::GAZE_FRAME_KEY]);
-        let readable = [ros.paths_of("input"), face.paths_of("output")].concat();
+        for setting in [standard::GAZE_EYE_SPACING, standard::GAZE_RANGE] {
+            assert!(consumed.paths().contains(&setting), "{setting} unread");
+        }
+        let readable = [
+            ros.paths_of("input"),
+            face.paths_of("output"),
+            vec![standard::GAZE_EYE_SPACING, standard::GAZE_RANGE],
+        ]
+        .concat();
         let unreadable: Vec<&str> = consumed
             .paths()
             .into_iter()
@@ -878,8 +925,8 @@ mod tests {
         // in space), the expressions ROS4HRI does not name, the lipsync
         // surface (the viseme players own it), the muscle tier (ROS4HRI
         // commands no action units), the conversation state, and the face's
-        // lipsync gain (a setting of the face, not a command). The caption,
-        // in no tier, is written: a closed caption relays to it.
+        // settings (what the face is like, not a command). The caption, in
+        // no tier, is written: a closed caption relays to it.
         let beyond_ros4hri: Vec<String> = standard::VIZIJ_EXPRESSION_NAMES
             .iter()
             .map(|n| standard::expression_path(n))
