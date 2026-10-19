@@ -1,5 +1,14 @@
 # @vizij/animation
 
+## 3.0.1
+
+### Patch Changes
+
+- 0528ebe: Licensed under Apache-2.0, where the package said MIT. The animation module's header (`@vizij/animation-module`'s `artifact/header.json`) states `"license": "Apache-2.0"` too, where it said `"Proprietary"`. Releases already published keep the licence they were published under.
+- Updated dependencies [0528ebe]
+  - @vizij/value-json@0.2.1
+  - @vizij/wasm-loader@0.1.6
+
 ## 3.0.0
 
 ### Major Changes
