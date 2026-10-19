@@ -35,8 +35,12 @@ vizij-bundle export-skill   look_at -o look_at.json
 - **add-graph** — graft one graph into the bundle, replacing any entry with
   the same id. This is how a face gains a `standard-adaptation` graph (the
   asset-side mapping from `standard/vizij/*` controls onto the face's own pose
-  weights and morphs) without a full unpack/pack cycle — see
-  `fixtures/faces/quori/standard-adaptation.json` for the demo face's.
+  weights and morphs) without a full unpack/pack cycle. Each face vizij-web
+  ships keeps its adaptation as a sidecar beside its GLB —
+  [`Quori_Current_Extended.standard-adaptation.json`](https://github.com/vizij-ai/vizij-web/blob/main/apps/vizij-authoring/public/assets/Quori_Current_Extended.standard-adaptation.json)
+  is the demo face's — and
+  [packs](https://github.com/vizij-ai/vizij-web/blob/main/docs/face-adaptations.md)
+  the GLB from it.
 - **add-standard** — embed a shipped standard mapping (e.g. `ros4hri`) into
   the face: the mapping's control paths get the face's rig prefix, and it
   grafts under a stable id (`standard::<mapping>`), so re-running updates the

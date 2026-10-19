@@ -2020,19 +2020,31 @@ mod tests {
     /// graphs + the ROS4HRI mapping, no autoplay — the idle program would
     /// contend on gaze paths), its neutral pose staged.
     fn adapted_quori(fixtures: &str) -> arora::Arora {
-        adapted_quori_with(fixtures, quori_adaptation())
+        adapted_quori_with(fixtures, quori_adaptation(fixtures))
     }
 
-    /// Quori's committed adaptation sidecar.
-    pub(super) fn quori_adaptation() -> serde_json::Value {
-        let sidecar = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../fixtures/faces/quori/standard-adaptation.json"
+    /// Quori's adaptation sidecar under `fixtures`, the one vizij-web keeps
+    /// beside `Quori_Current_Extended.glb`.
+    pub(super) fn quori_adaptation(fixtures: &str) -> serde_json::Value {
+        adaptation_sidecar(fixtures, "Quori_Current_Extended.glb")
+    }
+
+    /// The standard-adaptation sidecar of the face `glb` under `fixtures`:
+    /// `<face>.standard-adaptation.json`, the name vizij-web keeps it under
+    /// beside the GLB, which is the adaptation's source of truth.
+    fn adaptation_sidecar(fixtures: &str, glb: &str) -> serde_json::Value {
+        let name = format!(
+            "{}.standard-adaptation.json",
+            glb.strip_suffix(".glb").unwrap_or(glb)
         );
-        vizij_bundle::from_sidecar(
-            &std::fs::read_to_string(sidecar).expect("read the adaptation sidecar"),
-        )
-        .expect("parse the adaptation sidecar")
+        let sidecar = std::path::Path::new(fixtures).join(name);
+        let text = std::fs::read_to_string(&sidecar).unwrap_or_else(|e| {
+            panic!(
+                "read the adaptation sidecar {}: {e} — fetch it from vizij-web beside its GLB",
+                sidecar.display()
+            )
+        });
+        vizij_bundle::from_sidecar(&text).expect("parse the adaptation sidecar")
     }
 
     /// `Quori_Current_Extended.glb` under `fixtures` with `spec` grafted in
@@ -2075,9 +2087,9 @@ mod tests {
     }
 
     /// End-to-end over the real demo face ([`adapted_quori`]): drive the
-    /// ROS4HRI keys through to Quori's pose plane. Needs the GLB: set
-    /// `VIZIJ_FIXTURES` to a directory holding it (the snapshot-regression
-    /// convention); skipped otherwise.
+    /// ROS4HRI keys through to Quori's pose plane. Needs the GLB and its
+    /// adaptation sidecar: set `VIZIJ_FIXTURES` to a directory holding both
+    /// (the snapshot-regression convention); skipped otherwise.
     #[test]
     fn ros4hri_drives_the_adapted_quori() {
         let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
@@ -2257,7 +2269,7 @@ mod tests {
         // The adaptation without the outputs the muscle tier adds — onto
         // the rig's own standard inputs and the lids' translation — renders
         // the face the same.
-        let mut before = quori_adaptation();
+        let mut before = quori_adaptation(&fixtures);
         let muscle: std::collections::HashSet<String> = before["nodes"]
             .as_array()
             .expect("nodes")
@@ -2316,10 +2328,11 @@ mod tests {
         }
     }
 
-    /// Faces whose rigs predate the standard, each with the adaptation
-    /// sidecar committed for it: grafted with the bundler, a standard control
-    /// reaches the face's own pose weight, blink or eye. Needs the GLBs under
-    /// `VIZIJ_FIXTURES`; a face absent there is skipped.
+    /// Faces whose rigs predate the standard, each with its adaptation
+    /// sidecar: grafted with the bundler, a standard control reaches the
+    /// face's own pose weight, blink or eye. Needs the GLBs and their
+    /// sidecars under `VIZIJ_FIXTURES`; a face whose GLB is absent there is
+    /// skipped.
     #[test]
     fn the_sidecars_drive_their_faces() {
         let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
@@ -2327,11 +2340,10 @@ mod tests {
             return;
         };
         type Reach<'a> = (&'a str, &'a str, f32);
-        // (GLB, sidecar, face id, [(standard control set to 1, face input, the value it reaches)]).
-        let faces: [(&str, &str, &str, &[Reach]); 2] = [
+        // (GLB, face id, [(standard control set to 1, face input, the value it reaches)]).
+        let faces: [(&str, &str, &[Reach]); 2] = [
             (
                 "Quori_Current.glb",
-                "quori/Quori_Current.standard-adaptation.json",
                 "quori_latest",
                 &[
                     ("expression/happy", "poses/pose_happy.weight", 1.0),
@@ -2344,7 +2356,6 @@ mod tests {
             ),
             (
                 "Hugo_Current.glb",
-                "hugo/Hugo_Current.standard-adaptation.json",
                 "hugo_latest_blender_export",
                 &[
                     ("expression/happy", "poses/pose_happy.weight", 1.0),
@@ -2366,19 +2377,12 @@ mod tests {
             studio: false,
             speech: None,
         };
-        for (glb, sidecar, face_id, controls) in faces {
+        for (glb, face_id, controls) in faces {
             let Ok(bytes) = std::fs::read(std::path::Path::new(&fixtures).join(glb)) else {
                 eprintln!("{glb} not under VIZIJ_FIXTURES — skipped");
                 continue;
             };
-            let sidecar = format!(
-                "{}/../../fixtures/faces/{sidecar}",
-                env!("CARGO_MANIFEST_DIR")
-            );
-            let spec = vizij_bundle::from_sidecar(
-                &std::fs::read_to_string(&sidecar).expect("read the adaptation sidecar"),
-            )
-            .expect("parse the adaptation sidecar");
+            let spec = adaptation_sidecar(&fixtures, glb);
             let mut face = vizij_bundle::Face::parse(&bytes).expect("parse the GLB");
             face.add_graph(
                 "standard-adaptation",
@@ -2652,11 +2656,12 @@ mod animation_tests {
         );
     }
 
-    /// Quori as a page runs it, with its committed standard adaptation: its
+    /// Quori as a page runs it, with its standard adaptation: its
     /// graphs composed over its neutral pose, its active program running
     /// through the adaptation, and an animation playing.
     fn running_quori(fixtures: &str) -> (arora::Arora, LoadedFace) {
-        let glb = super::tests::adapted_quori_glb(fixtures, super::tests::quori_adaptation());
+        let glb =
+            super::tests::adapted_quori_glb(fixtures, super::tests::quori_adaptation(fixtures));
         let config = FaceConfig {
             wanted: ["rig", "pose-driver", "pose", "standard-adaptation"]
                 .map(String::from)
