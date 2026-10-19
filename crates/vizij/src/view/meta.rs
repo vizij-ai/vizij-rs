@@ -19,6 +19,7 @@
 //! its own scalar animatable, or a component `<id>.<axis>` of a compound
 //! animatable `<id>` it split on load ([`Binding::axis`]).
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use anyhow::{bail, Context, Result};
@@ -135,12 +136,15 @@ impl FeatureKind {
     }
 }
 
-/// One binding: a store write to the animatable moves `feature` of the
-/// element (glTF node) called `node_name` — the whole feature, or the one
+/// One binding: a store write to the animatable moves `feature` of each
+/// element (glTF node) named in `node_names` — the whole feature, or the one
 /// component `axis` names.
 #[derive(Debug, Clone)]
 pub struct Binding {
-    pub node_name: String,
+    /// Every element the animatable drives, in the order the GLB lists them:
+    /// shapes that share a material share its colour and opacity
+    /// animatables, and one write moves all of them.
+    pub node_names: Vec<String>,
     pub feature: FeatureKind,
     /// The component a scalar animatable drives alone, by its index in the
     /// feature's triple: Studio's per-axis features (`translation.x`). `None`
@@ -488,15 +492,33 @@ impl FaceMeta {
                     (None, None) => feature.rest(kind.axes()),
                     (Some(_), _) => feature.rest(None),
                 };
-                animatables.insert(
-                    animatable,
-                    Binding {
-                        node_name: node_name.clone(),
-                        feature: kind,
-                        axis,
-                        rest,
-                    },
-                );
+                match animatables.entry(animatable) {
+                    Entry::Vacant(entry) => {
+                        entry.insert(Binding {
+                            node_names: vec![node_name.clone()],
+                            feature: kind,
+                            axis,
+                            rest,
+                        });
+                    }
+                    Entry::Occupied(mut entry) => {
+                        let id = entry.key().clone();
+                        let binding = entry.get_mut();
+                        if binding.feature != kind || binding.axis != axis {
+                            log::warn!(
+                                "{node_name}: {feature_name:?} reuses animatable {id:?}, which \
+                                 {} binds to {:?} — skipped",
+                                binding.node_names[0],
+                                binding.feature_name(),
+                            );
+                            continue;
+                        }
+                        if !binding.node_names.contains(&node_name) {
+                            binding.node_names.push(node_name.clone());
+                        }
+                        binding.rest = rest;
+                    }
+                }
             }
 
             let primitive = shape.map(|shape| {
@@ -701,6 +723,33 @@ mod tests {
     #[test]
     fn rejects_non_glb() {
         assert!(FaceMeta::from_glb_bytes(b"not a glb at all....").is_err());
+    }
+
+    /// An animatable several elements share binds every one of them, in the
+    /// GLB's order; one that binds it to another feature is left out.
+    #[test]
+    fn a_shared_animatable_binds_every_element() {
+        let color = serde_json::json!({ "animated": true, "value": { "id": "lid_color", "type": "rgb", "default": { "r": 0.1, "g": 0.2, "b": 0.3 } } });
+        let element = |name: &str, feature: &str| {
+            serde_json::json!({
+                "name": name,
+                "extensions": { "RobotData": {
+                    "id": name, "type": "shape", "features": { feature: color.clone() }
+                } }
+            })
+        };
+        let gltf = serde_json::json!({
+            "nodes": [
+                element("InnerFace", "color"),
+                element("LeftLid", "color"),
+                element("RightLid", "color"),
+                element("Pupil", "emissive"),
+            ]
+        });
+        let meta = FaceMeta::from_gltf_json(&gltf).expect("parses");
+        let binding = &meta.animatables["lid_color"];
+        assert_eq!(binding.node_names, ["InnerFace", "LeftLid", "RightLid"]);
+        assert_eq!(binding.feature, FeatureKind::Color);
     }
 
     /// RobotData ids are any strings: an element and its animatables named

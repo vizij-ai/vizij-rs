@@ -475,7 +475,7 @@ pub fn memory_bytes() -> f64 {
 
 /// What a GLB declares, without loading it: `{ faceId, rigPrefix, rootBounds,
 /// elements: [{ id, name, kind, material, morphTargets }], animatables:
-/// { <id>: { node, feature } }, graphs: [{ id, kind }], programs: [{ id,
+/// { <id>: { node, nodes, feature } }, graphs: [{ id, kind }], programs: [{ id,
 /// label, graph }], activeProgramId, neutralInputs, poses,
 /// poseGroups, rigInputs, animations, metadata }` — what a page needs to build
 /// its controls and name the face's paths. `poses`, `poseGroups`, `rigInputs`
@@ -495,7 +495,11 @@ fn describe_json(meta: &FaceMeta) -> serde_json::Value {
         .map(|(id, binding)| {
             (
                 id.clone(),
-                serde_json::json!({ "node": binding.node_name, "feature": binding.feature_name() }),
+                serde_json::json!({
+                    "node": binding.node_names[0],
+                    "nodes": binding.node_names,
+                    "feature": binding.feature_name(),
+                }),
             )
         })
         .collect();

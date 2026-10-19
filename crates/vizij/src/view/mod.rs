@@ -174,8 +174,9 @@ pub struct Bound {
 /// GLB scene has spawned, empty until then.
 #[derive(Default)]
 pub struct Bindings {
-    /// animatable id → where it lands.
-    pub by_id: HashMap<String, Bound>,
+    /// animatable id → where it lands: one place per element it drives,
+    /// each taking the same value.
+    pub by_id: HashMap<String, Vec<Bound>>,
     /// element id → the entities its features land on: what a pick tests,
     /// what the glow outlines, what a static feature is set on.
     pub elements: HashMap<String, ElementTargets>,
@@ -1459,52 +1460,46 @@ fn index_faces(
         for (
             id,
             Binding {
-                node_name,
+                node_names,
                 feature,
                 axis,
                 ..
             },
         ) in &face.meta.animatables
         {
-            let Some(&(node, _)) = by_name.get(node_name.as_str()) else {
-                continue;
-            };
-            let element = face
-                .meta
-                .elements
+            let bounds: Vec<Bound> = node_names
                 .iter()
-                .find(|e| &e.node_name == node_name);
-            let (entity, morph_index) = match feature {
-                FeatureKind::Translation | FeatureKind::Rotation | FeatureKind::Scale => {
-                    (node, None)
-                }
-                FeatureKind::Morph(target) => {
-                    let Some(&morph_entity) = morph_of.get(node_name) else {
-                        continue;
-                    };
-                    let Some(index) =
-                        element.and_then(|e| e.morph_targets.iter().position(|m| m == target))
-                    else {
-                        continue;
-                    };
-                    (morph_entity, Some(index))
-                }
-                _ => {
-                    let Some(&mesh) = mesh_of.get(node_name) else {
-                        continue;
-                    };
-                    (mesh, None)
-                }
-            };
-            by_id.insert(
-                id.clone(),
-                Bound {
-                    entity,
-                    feature: feature.clone(),
-                    axis: *axis,
-                    morph_index,
-                },
-            );
+                .filter_map(|node_name| {
+                    let &(node, _) = by_name.get(node_name.as_str())?;
+                    let element = face
+                        .meta
+                        .elements
+                        .iter()
+                        .find(|e| &e.node_name == node_name);
+                    let (entity, morph_index) =
+                        match feature {
+                            FeatureKind::Translation
+                            | FeatureKind::Rotation
+                            | FeatureKind::Scale => (node, None),
+                            FeatureKind::Morph(target) => (
+                                *morph_of.get(node_name)?,
+                                Some(element.and_then(|e| {
+                                    e.morph_targets.iter().position(|m| m == target)
+                                })?),
+                            ),
+                            _ => (*mesh_of.get(node_name)?, None),
+                        };
+                    Some(Bound {
+                        entity,
+                        feature: feature.clone(),
+                        axis: *axis,
+                        morph_index,
+                    })
+                })
+                .collect();
+            if !bounds.is_empty() {
+                by_id.insert(id.clone(), bounds);
+            }
         }
 
         log::info!(
@@ -1621,18 +1616,22 @@ fn apply_statics(
 /// The animatables of `by_id` whose target — entity, feature, morph
 /// target — another one lands on too, one of them binding it whole: per-axis
 /// animatables alone each set their own component, so they do not contend.
-fn contended(by_id: &HashMap<String, Bound>) -> HashSet<String> {
+fn contended(by_id: &HashMap<String, Vec<Bound>>) -> HashSet<String> {
     let target = |bound: &Bound| (bound.entity, bound.feature.clone(), bound.morph_index);
     // Per target: how many land on it, and whether one binds it whole.
     let mut sharing = HashMap::new();
-    for bound in by_id.values() {
+    for bound in by_id.values().flatten() {
         let (count, whole) = sharing.entry(target(bound)).or_insert((0, false));
         *count += 1;
         *whole |= bound.axis.is_none();
     }
     by_id
         .iter()
-        .filter(|(_, bound)| matches!(sharing[&target(bound)], (count, true) if count > 1))
+        .filter(|(_, bounds)| {
+            bounds
+                .iter()
+                .any(|bound| matches!(sharing[&target(bound)], (count, true) if count > 1))
+        })
         .map(|(id, _)| id.clone())
         .collect()
 }
@@ -1654,7 +1653,12 @@ fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneF
         let reland = std::mem::take(&mut bindings.reland);
         face.rig.visit_pose(|id, value| {
             // The rig keys its pose by bare animatable id.
-            let Some(bound) = bindings.by_id.get(id) else {
+            // Every place it lands takes the same feature and component:
+            // the first stands for them in decoding and holding.
+            let Some(bounds) = bindings.by_id.get(id) else {
+                return;
+            };
+            let Some(bound) = bounds.first() else {
                 return;
             };
             let Some(mut decoded) = decode(&bound.feature, bound.axis, value) else {
@@ -1679,7 +1683,9 @@ fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneF
             {
                 return;
             }
-            scene.land(&mut bindings.assembled, bound, decoded);
+            for bound in bounds {
+                scene.land(&mut bindings.assembled, bound, decoded);
+            }
             match bindings.shown.get_mut(id) {
                 Some(shown) => *shown = decoded,
                 None => {
@@ -2195,7 +2201,7 @@ mod tests {
                 rig: rig.clone(),
                 slot: 0,
                 bindings: Bindings {
-                    by_id: HashMap::from([(id.clone(), bound)]),
+                    by_id: HashMap::from([(id.clone(), vec![bound])]),
                     indexed: true,
                     ..Default::default()
                 },
@@ -2233,6 +2239,59 @@ mod tests {
         assert_eq!(shown, Vec3::new(4.0, 5.0, 6.0));
     }
 
+    /// An animatable bound to several elements — shapes sharing a material
+    /// share its colour — lands its value on every one of them.
+    #[test]
+    fn an_animatable_lands_on_every_element_it_binds() {
+        use bevy::ecs::system::RunSystemOnce;
+        use vizij_api_core::value::vec3;
+
+        let mut world = World::new();
+        world.init_resource::<Assets<StandardMaterial>>();
+        world.init_resource::<Holds>();
+        let nodes = [
+            world.spawn(Transform::default()).id(),
+            world.spawn(Transform::default()).id(),
+        ];
+        let id = "lids".to_string();
+        let rig = vizij_arora_hal::RigHal::new();
+        let bound = |entity| Bound {
+            entity,
+            feature: FeatureKind::Translation,
+            axis: None,
+            morph_index: None,
+        };
+        world.spawn(Face {
+            id: "face".into(),
+            meta: FaceMeta::default(),
+            asset_path: String::new(),
+            rig: rig.clone(),
+            slot: 0,
+            bindings: Bindings {
+                by_id: HashMap::from([(id.clone(), nodes.map(bound).to_vec())]),
+                indexed: true,
+                ..Default::default()
+            },
+            camera: Entity::PLACEHOLDER,
+            ready: true,
+        });
+
+        let drive = |value: [f32; 3]| {
+            arora_hal::Hal::try_send(
+                &rig,
+                &arora_types::data::StateChange::set(id.as_str(), vec3(value)),
+            )
+        };
+        drive([1.0, 2.0, 3.0]);
+        world.run_system_once(apply_poses).expect("runs");
+        for node in nodes {
+            assert_eq!(
+                world.get::<Transform>(node).unwrap().translation,
+                Vec3::new(1.0, 2.0, 3.0)
+            );
+        }
+    }
+
     /// Animatables contend for a target when one of them binds it whole;
     /// per-axis animatables alone each own their component.
     #[test]
@@ -2247,11 +2306,11 @@ mod tests {
         };
         let ids: Vec<String> = (0..5).map(|i| format!("animatable{i}")).collect();
         let by_id = HashMap::from([
-            (ids[0].clone(), bound(a, Some(0))),
-            (ids[1].clone(), bound(a, Some(1))),
-            (ids[2].clone(), bound(b, None)),
-            (ids[3].clone(), bound(b, Some(2))),
-            (ids[4].clone(), bound(a, Some(2))),
+            (ids[0].clone(), vec![bound(a, Some(0))]),
+            (ids[1].clone(), vec![bound(a, Some(1))]),
+            (ids[2].clone(), vec![bound(b, None)]),
+            (ids[3].clone(), vec![bound(b, Some(2))]),
+            (ids[4].clone(), vec![bound(a, Some(2))]),
         ]);
         assert_eq!(
             contended(&by_id),
