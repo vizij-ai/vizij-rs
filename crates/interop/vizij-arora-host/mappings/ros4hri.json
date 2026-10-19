@@ -1679,6 +1679,11 @@
       }
     },
     {
+      "id": "gaze/eye_spacing",
+      "type": "max",
+      "params": {}
+    },
+    {
       "id": "const/0.5",
       "type": "constant",
       "params": {
@@ -7198,6 +7203,24 @@
     {
       "from": {
         "node_id": "in/gaze/eye_spacing"
+      },
+      "to": {
+        "node_id": "gaze/eye_spacing",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "gaze/eye_spacing",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/eye_spacing"
       },
       "to": {
         "node_id": "gaze/half_spacing",

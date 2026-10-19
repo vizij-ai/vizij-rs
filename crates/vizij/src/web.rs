@@ -1166,9 +1166,9 @@ pub fn mappings() -> Result<JsValue, JsValue> {
 }
 
 /// A standard mapping's graph as a JS object, ready to compose or embed —
-/// its written control paths prefixed with `rig_prefix` (e.g.
-/// `rig/quori_latest/`; empty for the unprefixed graph). `null` for an
-/// unknown id (see [`mappings`]).
+/// the face-standard paths it reads and writes (`standard/vizij/*`)
+/// prefixed with `rig_prefix` (e.g. `rig/quori_latest/`; empty for the
+/// unprefixed graph). `null` for an unknown id (see [`mappings`]).
 #[wasm_bindgen(js_name = mapping)]
 pub fn mapping(id: &str, rig_prefix: &str) -> Result<JsValue, JsValue> {
     match vizij_arora_host::mappings::standard_mapping_source(id, rig_prefix) {

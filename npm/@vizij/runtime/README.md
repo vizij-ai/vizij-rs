@@ -352,9 +352,9 @@ own `standard::ros4hri` copy runs that copy either way.
 
 `profile(id, rigPrefix)` prefixes only a `face`-scoped profile; a `device`
 profile such as `ros4hri` comes back unchanged. `mapping(id, rigPrefix)`
-returns the mapping's node-graph with its written control paths prefixed for
-the target face, ready to compose into a graph spec or embed into a GLB via the
-bundle tool. `standardProfiles()` / `standardProfile()` remain as deprecated
+returns the mapping's node-graph with the face-standard paths it reads and
+writes (`standard/vizij/*`) prefixed for the target face, ready to compose into
+a graph spec or embed into a GLB via the bundle tool. `standardProfiles()` / `standardProfile()` remain as deprecated
 aliases of `mappings()` / `mapping()`.
 
 ## Loading

@@ -239,11 +239,11 @@ counterpart the mapping reads.
 |---|---|---|---|
 | `standard/vizij/lipsync/gain` | f32 ≥ 0 | 1 | how strongly the face shows the viseme weights (see [Visemes](#visemes)) |
 | `standard/vizij/gaze/eye_spacing` | f32 ≥ 0, metres | 0.06 | the distance between the centres of the face's eyes, as the robot shows them |
-| `standard/vizij/gaze/range` | f32 ≥ 0, radians | 0.78 | the gaze angle off the face's axis at which an eye reaches the end of its travel |
+| `standard/vizij/gaze/range` | f32 in [0.01, 0.9], radians | 0.78 | the gaze angle off the face's axis at which an eye reaches the end of its travel |
 
 A setting says what the face is like rather than what it is told to do. The
 face authors it in its own graphs: an `input` node on the setting's path, in
-its standard adaptation, whose default is the face's value —
+its standard adaptation, whose default — an `f32` — is the face's value —
 
 ```json
 { "id": "in_gaze_range", "type": "input",
@@ -265,7 +265,9 @@ its own centre, half the spacing to either side of the face's, and maps an
 angle of ±range onto an eye position of ±1. The values a face authoring none
 rests at are the incumbent ROS4HRI face's, which the shipped faces share. The
 spacing is the eyes' distance as displayed, so a deployment whose display
-shows the face larger or smaller writes it.
+shows the face larger or smaller writes it. The range stops at 0.9 rad, past
+which the mapping's arctangent no longer reaches the end of the eyes' travel;
+the mapping reads a value outside a setting's span at the nearest bound.
 
 ## Caption
 
