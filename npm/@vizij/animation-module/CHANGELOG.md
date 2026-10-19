@@ -1,5 +1,11 @@
 # Changelog
 
+## 4.1.1
+
+### Patch Changes
+
+- 0528ebe: Licensed under Apache-2.0, where the package said MIT. The animation module's header (`@vizij/animation-module`'s `artifact/header.json`) states `"license": "Apache-2.0"` too, where it said `"Proprietary"`. Releases already published keep the licence they were published under.
+
 ## 4.1.0
 
 ### Minor Changes

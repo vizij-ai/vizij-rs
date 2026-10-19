@@ -1,5 +1,25 @@
 # Changelog
 
+## 7.1.0
+
+### Minor Changes
+
+- 9b51cc2: `loadGraph` and `applyGraphEdits` refuse a graph that would fail every evaluation, and the promise rejects with an error naming the node at fault. The graph is refused if it has a node that leaves a required input with neither an edge nor an inline default (a `remap` with no `in`, say), an edge to a node it lacks, two edges into one input, two nodes sharing an id, or a cycle. A refused edit is refused whole: the running graph, its runs and their state go on as they were. Such a graph used to be accepted, then failed the device's every behavior tick, base graph and every run with it, until another load or edit replaced it. A graph that evaluates is accepted as before, including one whose input path has no value staged yet.
+
+  In `@vizij/node-graph`'s registry, an input port a node cannot evaluate without carries `required: true`: the inputs of `clamp`, `remap`, `centeredremap` and `piecewiseremap`, `urdffk`'s `joints`, `urdfikposition`'s `target_pos`, and `urdfikpose`'s `target_pos` and `target_rot`. A port that is neither `optional` nor `required` reads a default (most often zero) when unwired.
+
+- ff1c1f2: `releaseKeys` settles as the device's operations do. On a device with no `run()` going and no `step` from the page, the release asks for a `step(0)` in the next microtask, shared with the same turn's operations and `setValue`/`writeValues`. In that step, a released key that the face's behavior writes takes its writer's value again. Before, the key kept the page's value until something else stepped the device. A page that calls `step` in the same turn applies the release with its own step instead, and under `run()` the run's next step applies it, with no step added.
+- a6eb6ed: A device's operations settle when nothing steps it. `loadGraph`, `applyGraphEdits`, `call`, `invoke`, `spawn` and `halt` resolve on a device with no `run()` going and no `step` from the page. Each is queued before it returns, and a `step(0)` in the next microtask applies it, so `await runtime.loadGraph(spec)` on a `startRuntime()` device resolves with the new graph already run once. That step is shared with the `setValue` and `writeValues` of the same turn, and applies everything in the order it was issued. A `step(0)` moves nothing that time drives: springs, dampers, slews, animations and program clocks hold. A `say` run follows its real-time audio. A page that calls `step` in the same turn applies the operations with its own step instead. Under `run()`, the run's next step applies them, and the page adds no step. `listKeys` and `describeMethods` answer at once, with no step, and do not see an operation still queued. A call issued from a callback the device makes during a step, such as the `audio` hook's playhead, is an ordinary call: a step cannot nest one, so the next step applies it, a `step(0)` once the current step has ended or, under `run()`, the run's next step.
+
+### Patch Changes
+
+- 0528ebe: Licensed under Apache-2.0, where the package said MIT. The animation module's header (`@vizij/animation-module`'s `artifact/header.json`) states `"license": "Apache-2.0"` too, where it said `"Proprietary"`. Releases already published keep the licence they were published under.
+- d7abdab: The browser module builds on arora 13 and arora-web 10. Its surface and what a device does are unchanged.
+- eca26b7: An animatable that several elements share — shapes sharing a material share its colour and opacity — moves every one of them, as the three.js view does; it used to move only the last element the GLB lists. `describe`'s `animatables` entries list every node they drive in `nodes`.
+- Updated dependencies [0528ebe]
+  - @vizij/value-json@0.2.1
+  - @vizij/wasm-loader@0.1.6
+
 ## 7.0.0
 
 ### Major Changes
