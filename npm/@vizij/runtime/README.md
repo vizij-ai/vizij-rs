@@ -104,6 +104,14 @@ and the rest module's `reset` — every key back to the value it rests at
 each input the bundle's neutral pose names to its neutral) — and
 `reset_keys`, for the keys it names.
 
+A Vizij's device keeps no time until the Vizij is drawn. Until `ready`
+first reads true, every step is a `step(0)` whatever its `dtMs`, and the
+first step after advances the time since the frame that drew the Vizij, at
+most its `dtMs`; a `run()` called before then starts its loop at that
+frame. The face's springs, programs and animations start from rest where
+the page first shows them, however long its load and first draw took. A
+device with no Vizij (`startRuntime`) keeps time from its first step.
+
 A Vizij's paths are its own: `quori.rigPrefix` is `rig/<faceId>/` (the
 bundle's `faceId`) and `quori.path(relative)` builds one. `drainPicks()`
 reports pointer presses as `{ vizijId, elementId }` — the slot and the

@@ -712,6 +712,11 @@ export class Runtime {
    * time; one that reaches a smoother is its new target, shown once time
    * passes. A `say` run follows its audio, which plays in real time.
    * Unavailable while `run()` owns the device.
+   *
+   * Until its Vizij is first drawn ({@link ready}), every step is a step of
+   * 0 whatever `dtMs` says, and the first step after advances the time
+   * since that frame, at most `dtMs`: the device's time starts where the
+   * page first shows the face, not where the page created it.
    */
   step(dtMs: number): void {
     this.inner.step(dtMs);
@@ -723,13 +728,19 @@ export class Runtime {
    * failing behavior tick does **not** end the loop — it stands as
    * `behaviorError` until a tick recovers; the returned promise rejects only
    * if the runtime itself fails, and resolves on `stop()`.
+   *
+   * Called before its Vizij is first drawn ({@link ready}), the loop starts
+   * at that frame, its first step advancing the time since. Until then the
+   * device is the page's, as before a `run()`, its operations settling at a
+   * zero dt; `stop()` meanwhile gives the run up and the promise resolves.
    */
   run(periodMs?: number): Promise<void> {
     return this.inner.run(periodMs);
   }
 
   /** Reclaim the device from `run()`: the loop ends at its next step
-   * boundary and `step()` works again. */
+   * boundary and `step()` works again. A `run()` still waiting for its
+   * Vizij to be drawn is given up. */
   stop(): void {
     this.inner.stop();
   }
@@ -1098,7 +1109,8 @@ export function safeArea(vizijId: string): Rect | null {
  * it was drawn, each with its pipeline compiled — or, should something keep
  * that from happening, 600 frames (ten seconds at 60 Hz) have gone by and
  * the console says what held it back. From then on it draws in its place,
- * its device's pose showing. False while a reload's new scene loads,
+ * its device's pose showing, and its device's time runs from that frame
+ * ({@link Runtime.step}). False while a reload's new scene loads,
  * compiles and draws for the first time; the previous scene draws
  * meanwhile. */
 export function ready(vizijId: string): boolean {

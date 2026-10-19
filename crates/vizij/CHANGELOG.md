@@ -10,6 +10,15 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- The browser module's Vizij devices keep no time until their Vizij is
+  first drawn (`ready`). Until then every `step` is a step at a zero dt,
+  whatever dt the page passes; the first step after advances the time since
+  the frame that drew the Vizij, at most the page's dt; and a `run` called
+  before then starts its loop at that frame, or not at all if `stop` comes
+  first. A face's springs, programs and animations start from rest where
+  the page first shows them, however long its load and first draw took. A
+  device with no Vizij (`fromGraph`) keeps time from its first step.
+
 - The animation module's `play_at` counts on the device's clock: the
   animation source steps the module with `arora/time`, so a client that
   schedules a start at a device time gets it there.
