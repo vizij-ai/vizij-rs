@@ -37,101 +37,10 @@ use vizij::face::{self, FaceConfig, LoadedFace, ProgramSelect};
 use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
-mod counter {
-    //! Instructions retired by the calling thread: what a section run on
-    //! this thread costs, and nothing another thread (a GPU driver's, say)
-    //! does meanwhile.
-
-    /// The calling thread's instruction counter, `None` where this example
-    /// reads none.
-    pub fn instructions() -> Option<u64> {
-        imp::instructions()
-    }
-
-    #[cfg(target_os = "macos")]
-    mod imp {
-        extern "C" {
-            /// The kernel's per-thread counters; kind 1 is
-            /// `[instructions, cycles]`.
-            fn thread_selfcounts(kind: i32, buffer: *mut u64, size: usize) -> i32;
-        }
-
-        pub fn instructions() -> Option<u64> {
-            let mut counts = [0u64; 2];
-            // SAFETY: `counts` is the 16 bytes the call is told it may write.
-            let status = unsafe { thread_selfcounts(1, counts.as_mut_ptr(), 16) };
-            (status == 0).then_some(counts[0])
-        }
-    }
-
-    #[cfg(target_os = "linux")]
-    mod imp {
-        use std::cell::Cell;
-
-        /// `perf_event_attr` up to its first published size.
-        #[repr(C)]
-        struct PerfEventAttr {
-            kind: u32,
-            size: u32,
-            config: u64,
-            sample_period: u64,
-            sample_type: u64,
-            read_format: u64,
-            flags: u64,
-            wakeup_events: u32,
-            bp_type: u32,
-            config1: u64,
-        }
-        const PERF_TYPE_HARDWARE: u32 = 0;
-        const PERF_COUNT_HW_INSTRUCTIONS: u64 = 1;
-        const EXCLUDE_KERNEL: u64 = 1 << 5;
-        const EXCLUDE_HV: u64 = 1 << 6;
-
-        thread_local! {
-            /// This thread's counter, opened on first use.
-            static COUNTER: Cell<Option<i32>> = const { Cell::new(None) };
-        }
-
-        fn open() -> Option<i32> {
-            let attr = PerfEventAttr {
-                kind: PERF_TYPE_HARDWARE,
-                size: std::mem::size_of::<PerfEventAttr>() as u32,
-                config: PERF_COUNT_HW_INSTRUCTIONS,
-                sample_period: 0,
-                sample_type: 0,
-                read_format: 0,
-                flags: EXCLUDE_KERNEL | EXCLUDE_HV,
-                wakeup_events: 0,
-                bp_type: 0,
-                config1: 0,
-            };
-            // SAFETY: `attr` outlives the call; pid 0 and cpu -1 count this
-            // thread on any CPU.
-            let fd = unsafe { libc::syscall(libc::SYS_perf_event_open, &attr, 0, -1, -1, 0) };
-            (fd >= 0).then_some(fd as i32)
-        }
-
-        pub fn instructions() -> Option<u64> {
-            let fd = COUNTER.with(|counter| {
-                if counter.get().is_none() {
-                    counter.set(open());
-                }
-                counter.get()
-            })?;
-            let mut count = 0u64;
-            // SAFETY: reads the 8 bytes of `count`.
-            let read = unsafe { libc::read(fd, (&mut count as *mut u64).cast(), 8) };
-            (read == 8).then_some(count)
-        }
-    }
-
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    mod imp {
-        pub fn instructions() -> Option<u64> {
-            None
-        }
-    }
-}
+#[path = "cost/counter.rs"]
+mod counter;
+#[path = "cost/view.rs"]
+mod offscreen;
 
 /// The calling thread's instructions retired so far.
 fn instructions() -> u64 {
@@ -564,7 +473,14 @@ fn main() {
     let glb = std::fs::read(&args.glb).expect("read the GLB");
     let mut devices: Vec<Device> = (0..args.faces).map(|_| device(&glb, &args)).collect();
 
-    let mut app = args.view.then(|| view_app(&glb, &devices));
+    let mut app = args.view.then(|| {
+        let faces: Vec<_> = devices.iter().map(|d| (&d.meta, &d.rig)).collect();
+        let (app, events) = offscreen::view_app(&glb, &faces);
+        // The view reads its events to the end of the run: the channel stays
+        // open.
+        std::mem::forget(events);
+        app
+    });
 
     let mut view_counts = ViewCounts::default();
     let mut tick = 0u64;
@@ -676,103 +592,6 @@ fn main() {
     }
 }
 
-/// The view as the page runs it: one App on one thread, no pipelined
-/// rendering (the browser has none), drawing offscreen.
-fn view_app(glb: &[u8], devices: &[Device]) -> bevy::prelude::App {
-    use bevy::app::ScheduleRunnerPlugin;
-    use bevy::asset::{AssetMetaCheck, AssetPlugin};
-    use bevy::prelude::*;
-    use bevy::render::pipelined_rendering::PipelinedRenderingPlugin;
-    use bevy::render::render_resource::TextureUsages;
-    use bevy::render::RenderPlugin;
-    use bevy::window::ExitCondition;
-    use bevy::winit::WinitPlugin;
-    use vizij::view::snapshot::{ensure_ready, FORMAT};
-    use vizij::view::{
-        self, FaceAssets, OffscreenTarget, ViewEvent, ViewEvents, ViewOptions, ViewPlugin,
-    };
-
-    let (tx, rx) = std::sync::mpsc::channel();
-    let mut app = App::new();
-    FaceAssets::register(&mut app);
-    app.add_plugins(
-        DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: None,
-                exit_condition: ExitCondition::DontExit,
-                ..default()
-            })
-            .set(RenderPlugin {
-                synchronous_pipeline_compilation: true,
-                ..default()
-            })
-            .set(AssetPlugin {
-                meta_check: AssetMetaCheck::Never,
-                ..default()
-            })
-            .disable::<WinitPlugin>()
-            .disable::<PipelinedRenderingPlugin>()
-            .disable::<bevy::log::LogPlugin>(),
-    )
-    .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(
-        1.0 / 60.0,
-    )));
-    let mut target = Image::new_target_texture(WIDTH, HEIGHT, FORMAT, None);
-    target.texture_descriptor.usage |= TextureUsages::COPY_SRC;
-    let handle = app.world_mut().resource_mut::<Assets<Image>>().add(target);
-    app.insert_resource(OffscreenTarget(handle))
-        .insert_resource(ViewEvents(std::sync::Mutex::new(rx)))
-        .insert_resource(ViewOptions {
-            background: Color::BLACK,
-            fit: view::Fit::Contain,
-            zoom: Vec2::ONE,
-            ambient: std::f32::consts::FRAC_PI_2,
-            unlit: false,
-        })
-        .add_plugins(ViewPlugin);
-    for (i, device) in devices.iter().enumerate() {
-        tx.send(ViewEvent::LoadFace {
-            face_id: format!("face{i}"),
-            meta: Box::new(device.meta.clone()),
-            glb: glb.to_vec(),
-            rig: device.rig.clone(),
-        })
-        .unwrap();
-        if devices.len() > 1 {
-            let width = WIDTH as i32 / devices.len() as i32;
-            tx.send(ViewEvent::PlaceFace {
-                face_id: format!("face{i}"),
-                rect: Some(IRect::new(
-                    i as i32 * width,
-                    0,
-                    (i as i32 + 1) * width,
-                    HEIGHT as i32,
-                )),
-            })
-            .unwrap();
-        }
-    }
-    std::mem::forget(tx);
-    ensure_ready(&mut app);
-    for _ in 0..600 {
-        app.update();
-        if view::all_faces_ready(&mut app) {
-            break;
-        }
-    }
-    assert!(view::all_faces_ready(&mut app), "faces never got ready");
-    // Every system on this thread, as in the browser, so this thread's count
-    // is the whole frame's.
-    let single = |world: &mut World| {
-        for (_, schedule) in world.resource_mut::<Schedules>().iter_mut() {
-            schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
-        }
-    };
-    single(app.world_mut());
-    single(app.sub_app_mut(bevy::render::RenderApp).world_mut());
-    app
-}
-
 /// Read the offscreen target back and save it as a PNG: the frame the view
 /// draws next, with the devices left where the run left them.
 fn save_frame(app: &mut bevy::prelude::App, path: &str) {
@@ -793,14 +612,14 @@ fn save_frame(app: &mut bevy::prelude::App, path: &str) {
     for _ in 0..120 {
         app.update();
         if let Some(data) = app.world_mut().resource_mut::<Frame>().0.take() {
-            let row = WIDTH as usize * 4;
+            let row = offscreen::WIDTH as usize * 4;
             let padded = RenderDevice::align_copy_bytes_per_row(row);
             let pixels: Vec<u8> = data
                 .chunks_exact(padded)
                 .flat_map(|line| &line[..row])
                 .copied()
                 .collect();
-            image::RgbaImage::from_raw(WIDTH, HEIGHT, pixels)
+            image::RgbaImage::from_raw(offscreen::WIDTH, offscreen::HEIGHT, pixels)
                 .expect("a frame")
                 .save(path)
                 .expect("save the frame");
@@ -809,9 +628,6 @@ fn save_frame(app: &mut bevy::prelude::App, path: &str) {
     }
     panic!("no frame read back");
 }
-
-const WIDTH: u32 = 763;
-const HEIGHT: u32 = 760;
 
 /// Instructions per part of one view frame, in the order `App::update`
 /// runs them: each main schedule, then each sub-app's extract and update.
