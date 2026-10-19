@@ -217,7 +217,8 @@ quori.dispose(); // the previous scene drew until the new one was ready
   `setValue`, `writeValues` and the rest module's `reset` still write them.
   What the graphs compute from a held key follows the client's value, and a
   released key the behavior writes every step takes its writer's value at
-  the next step. Holding a key the behavior does not write changes nothing.
+  the next step, which the release asks for as an operation does (a
+  `step(0)` on a device nothing steps, the run's next step under `run()`). Holding a key the behavior does not write changes nothing.
   Keys are full store paths (`quori.path(…)`). Key holds are the device's,
   one set whoever holds: a reloaded Vizij starts with none.
 

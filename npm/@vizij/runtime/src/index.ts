@@ -959,7 +959,9 @@ export class Runtime {
   /** Return held keys to the Vizij's behavior; omitted, every held key,
    * whoever held it. A key the behavior writes every step — a graph's
    * output, a run's, an animation's — takes its writer's value at the next
-   * step. */
+   * step, which the release asks for as {@link call} does: on a device
+   * nothing steps, a `step(0)` in the next microtask, shared with the
+   * turn's operations and writes; under {@link run}, the run's next step. */
   releaseKeys(keys?: string[]): void {
     this.inner.releaseKeys(keys);
   }

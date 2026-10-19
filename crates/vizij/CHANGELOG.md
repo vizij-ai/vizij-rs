@@ -21,7 +21,10 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 - The browser module's `holdKeys(keys)` and `releaseKeys(keys?)` on a
   Vizij's device: held store keys keep the values clients write, against
   every write of the face's composition — its graphs, its program and skill
-  runs, its animations — until released.
+  runs, its animations — until released. A release settles as the device's
+  operations do: on a device nothing steps, a step at a zero dt in which
+  the released keys take their writers' values; under `run`, the run's next
+  step.
 
 - Captions over the face (feature `captions`, on by default): the face
   standard's `standard/vizij/caption/{text,speaker}` shows at the bottom of

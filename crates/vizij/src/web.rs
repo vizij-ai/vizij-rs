@@ -595,7 +595,8 @@ pub fn run_edits(run: &str, from_json: &str, to_json: &str) -> Result<JsValue, J
 /// `run` is ongoing, a step at a zero dt applies it, shared by the operations
 /// and store writes of one turn, in the order they were issued, unless the
 /// page steps in the same turn; while `run` owns the device, the run's next
-/// step does. `listKeys` and `describeMethods` answer at once, with no step.
+/// step does. `releaseKeys` takes the same step. `listKeys` and
+/// `describeMethods` answer at once, with no step.
 #[wasm_bindgen]
 pub struct VizijRuntime {
     vizij_id: String,
@@ -701,11 +702,14 @@ impl VizijRuntime {
     /// Return held keys to the Vizij's behavior; omitted, every held key,
     /// whoever held it. A key the behavior writes every step — a graph's
     /// output, a run's, an animation's — takes its writer's value at the
-    /// next step.
+    /// next step: while no `run` is ongoing, a step at a zero dt the release
+    /// asks for, shared with the turn's operations and store writes unless
+    /// the page steps in the same turn; under `run`, the run's next step.
     #[wasm_bindgen(js_name = releaseKeys)]
     pub fn release_keys(&self, keys: Option<Vec<String>>) {
         self.holds
             .release(keys.map(|keys| keys.into_iter().map(Key::from).collect()));
+        self.inner.request_step();
     }
 
     /// The slot this device's Vizij is shown under; an error for a device
