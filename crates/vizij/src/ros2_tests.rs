@@ -349,6 +349,357 @@ async fn the_look_at_skill_serves_the_standard_contract_on_the_vizij_device() {
     }
 }
 
+// The typed peer's view of the face skills' messages: `interaction_skills/
+// SetExpression` and Vizij's `vizij_face_msgs`.
+#[derive(Serialize, Deserialize, Clone)]
+struct Expression {
+    header: Header,
+    expression: String,
+    valence: f32,
+    arousal: f32,
+    confidence: f32,
+}
+#[derive(Serialize, Deserialize, Clone)]
+struct SetExpression {
+    meta: Meta,
+    expression: Expression,
+}
+impl Message for SetExpression {}
+#[derive(Serialize, Deserialize, Clone)]
+struct FacialActionUnits {
+    codes: Vec<u8>,
+    intensities: Vec<f32>,
+}
+#[derive(Serialize, Deserialize, Clone)]
+struct SetFacialActionUnits {
+    meta: Meta,
+    facial_action_units: FacialActionUnits,
+}
+impl Message for SetFacialActionUnits {}
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+struct Viseme {
+    value: u8,
+}
+#[derive(Serialize, Deserialize, Clone)]
+struct SetViseme {
+    meta: Meta,
+    viseme: Viseme,
+}
+impl Message for SetViseme {}
+#[derive(Serialize, Deserialize, Clone)]
+struct RosDuration {
+    sec: i32,
+    nanosec: u32,
+}
+#[derive(Serialize, Deserialize, Clone)]
+struct Timing {
+    start: RosDuration,
+    duration: RosDuration,
+}
+#[derive(Serialize, Deserialize, Clone)]
+struct TimedViseme {
+    viseme: Viseme,
+    timing: Timing,
+}
+#[derive(Serialize, Deserialize, Clone)]
+struct VisemeTimeline {
+    header: Header,
+    visemes: Vec<TimedViseme>,
+}
+#[derive(Serialize, Deserialize, Clone)]
+struct PlayVisemesGoal {
+    meta: Meta,
+    timeline: VisemeTimeline,
+}
+impl Message for PlayVisemesGoal {}
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct PlayVisemesResult {
+    result: SkillResult,
+}
+impl Message for PlayVisemesResult {}
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct PlayVisemesFeedback {
+    viseme: Viseme,
+}
+impl Message for PlayVisemesFeedback {}
+
+/// The face skills over ROS 2, end to end on the real device (the ROS4HRI
+/// mapping composed, every skill fragment registered): a peer publishes
+/// `/skill/set_facial_action_units` and the muscle tier takes the units over
+/// the neutral expression; `/skill/set_expression` then takes the face over,
+/// the units resting; `/skill/play_visemes` plays a timeline, its feedback
+/// reporting the current viseme's code, and succeeds; `/skill/set_viseme`
+/// holds a shape.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "DDS multicast SPDP discovery is unreliable on macOS loopback (rustdds has no \
+              unicast-peer/interface config); this runs on Linux CI. To run locally, ensure an \
+              active multicast-capable interface and use --ignored."
+)]
+async fn the_face_skills_serve_over_ros2() {
+    use futures::StreamExt;
+    use ros2_client::{MessageTypeName, DEFAULT_PUBLISHER_QOS};
+    use vizij_arora_host::standard;
+
+    let _ = env_logger::builder()
+        .parse_filters("warn")
+        .is_test(true)
+        .try_init();
+    let domain_id: u16 = rand::rng().random_range(1..=200);
+
+    let spec = vizij_arora_host::compose_sources(&[vizij_arora_host::ros4hri::ros4hri_source("")])
+        .expect("compose the ros4hri mapping")
+        .to_string();
+    let store = BlackboardStore::new();
+    let bridge = arora_bridge_ros2::Ros2Bridge::new(
+        arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
+            .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri()),
+    )
+    .await;
+    let mut arora = builder_for(&spec, RigHal::new(), store.clone(), &[], None)
+        .expect("build the device")
+        .with_bridge(Box::new(bridge))
+        .build()
+        .expect("build arora");
+
+    let device = async {
+        loop {
+            arora.step(Duration::from_millis(16)).expect("step");
+            tokio::time::sleep(Duration::from_millis(16)).await;
+        }
+    };
+    tokio::pin!(device);
+
+    let read = |path: &str| -> f32 {
+        store
+            .read(&[Key::from(path)])
+            .into_iter()
+            .next()
+            .flatten()
+            .and_then(|v| vizij_api_core::value::as_float(&v))
+            .unwrap_or(f32::NAN)
+    };
+    let meta = || Meta {
+        caller: "test".to_string(),
+        priority: 128,
+    };
+    let header = || Header {
+        stamp: ros2_client::builtin_interfaces::Time::ZERO,
+        frame_id: String::new(),
+    };
+
+    let client_flow = async {
+        let (_ctx, mut node) = create_test_node(domain_id, "face_skills");
+        tokio::spawn(node.spinner().expect("a spinner").spin());
+
+        // Publish `message` on the topic skill until `reached` holds.
+        macro_rules! command_until {
+            ($topic:expr, $package:expr, $ty:expr, $message:ty, $value:expr, $reached:expr) => {{
+                let topic = node
+                    .create_topic(
+                        &Name::parse($topic).expect("a valid topic"),
+                        MessageTypeName::new($package, $ty),
+                        &DEFAULT_PUBLISHER_QOS,
+                    )
+                    .expect("create the topic");
+                let publisher = node
+                    .create_publisher::<$message>(&topic, None)
+                    .expect("create the publisher");
+                tokio::time::timeout(
+                    Duration::from_secs(30),
+                    publisher.wait_for_subscription(&node),
+                )
+                .await
+                .expect("the device subscribes the skill topic");
+                let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+                let mut published = 0;
+                loop {
+                    if published < 5 {
+                        let _ = publisher.async_publish($value).await;
+                        published += 1;
+                    }
+                    tokio::time::sleep(Duration::from_millis(300)).await;
+                    if $reached {
+                        break;
+                    }
+                    assert!(
+                        tokio::time::Instant::now() < deadline,
+                        "{} never took effect",
+                        $topic
+                    );
+                }
+                eprintln!("[client] {} took effect", $topic);
+            }};
+        }
+
+        command_until!(
+            "/skill/set_facial_action_units",
+            "vizij_face_msgs",
+            "SetFacialActionUnits",
+            SetFacialActionUnits,
+            SetFacialActionUnits {
+                meta: meta(),
+                facial_action_units: FacialActionUnits {
+                    codes: vec![12, 26],
+                    intensities: vec![0.8, 0.5],
+                },
+            },
+            (read(&standard::face_path("mouth_smile_left")) - 0.8).abs() < 0.02
+                && (read(standard::MOUTH_JAW_OPEN) - 0.5).abs() < 0.02
+                && read(&standard::expression_path("neutral")) > 0.98
+        );
+
+        command_until!(
+            "/skill/set_expression",
+            "interaction_skills",
+            "SetExpression",
+            SetExpression,
+            SetExpression {
+                meta: meta(),
+                expression: Expression {
+                    header: header(),
+                    expression: "happy".to_string(),
+                    valence: 0.0,
+                    arousal: 1.0,
+                    confidence: 1.0,
+                },
+            },
+            read(&standard::expression_path("happy")) > 0.95
+                && read(&standard::face_path("mouth_smile_left")) < 0.02
+                && read(standard::MOUTH_JAW_OPEN) < 0.02
+        );
+
+        // The timeline action: aa over [0, 0.5 s), oh over [0.5, 1 s).
+        let service_qos = {
+            use ros2_client::ros2::{policy, QosPolicyBuilder};
+            QosPolicyBuilder::new()
+                .reliability(policy::Reliability::Reliable {
+                    max_blocking_time: ros2_client::ros2::Duration::from_millis(100),
+                })
+                .history(policy::History::KeepLast { depth: 16 })
+                .durability(policy::Durability::Volatile)
+                .build()
+        };
+        let qos = ros2_client::action::ActionClientQosPolicies {
+            goal_service: service_qos.clone(),
+            result_service: service_qos.clone(),
+            cancel_service: service_qos.clone(),
+            feedback_subscription: service_qos.clone(),
+            status_subscription: service_qos.clone(),
+        };
+        let client = node
+            .create_action_client::<ros2_client::Action<
+                PlayVisemesGoal,
+                PlayVisemesResult,
+                PlayVisemesFeedback,
+            >>(
+                ServiceMapping::Enhanced,
+                &Name::parse("/skill/play_visemes").expect("a valid action name"),
+                &ros2_client::ActionTypeName::new("vizij_face_msgs", "PlayVisemes"),
+                qos,
+            )
+            .expect("the play_visemes client creates");
+        // Wait for the server as rclpy's `wait_for_server` does: its three
+        // services answer and its feedback and status topics have a matched
+        // publisher. Feedback is volatile, so a goal sent before the feedback
+        // subscription matches the server's writer loses what the run reports
+        // until it does.
+        tokio::time::timeout(Duration::from_secs(30), async {
+            futures::join!(
+                client.goal_client().wait_for_service(&node),
+                client.cancel_client().wait_for_service(&node),
+                client.result_client().wait_for_service(&node),
+                client.feedback_subscription().wait_for_publisher(&node),
+                client.status_subscription().wait_for_publisher(&node),
+            )
+        })
+        .await
+        .expect("the play_visemes server becomes available");
+        let span = |value: u8, start_ms: u32, duration_ms: u32| TimedViseme {
+            viseme: Viseme { value },
+            timing: Timing {
+                start: RosDuration {
+                    sec: 0,
+                    nanosec: start_ms * 1_000_000,
+                },
+                duration: RosDuration {
+                    sec: 0,
+                    nanosec: duration_ms * 1_000_000,
+                },
+            },
+        };
+        let goal = PlayVisemesGoal {
+            meta: meta(),
+            timeline: VisemeTimeline {
+                header: header(),
+                visemes: vec![span(10, 0, 500), span(13, 500, 500)],
+            },
+        };
+        let goal_id = loop {
+            match tokio::time::timeout(Duration::from_secs(2), client.async_send_goal(goal.clone()))
+                .await
+            {
+                Ok(Ok((goal_id, response))) if response.accepted => break goal_id,
+                other => {
+                    eprintln!("[client] send_goal attempt: {other:?}");
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                }
+            }
+        };
+        eprintln!("[client] play_visemes accepted");
+        let mut fed_back = Vec::new();
+        {
+            let feedback = client.feedback_stream(goal_id);
+            tokio::pin!(feedback);
+            let collect = async {
+                while let Some(Ok(feedback)) = feedback.next().await {
+                    let value = feedback.viseme.value;
+                    if fed_back.last() != Some(&value) {
+                        fed_back.push(value);
+                    }
+                    if fed_back.contains(&13) && value == 0 {
+                        break;
+                    }
+                }
+            };
+            let _ = tokio::time::timeout(Duration::from_secs(5), collect).await;
+        }
+        eprintln!("[client] play_visemes fed back {fed_back:?}");
+        assert!(
+            fed_back.contains(&10) && fed_back.contains(&13),
+            "the feedback follows the timeline: {fed_back:?} (feedback publishers matched: {})",
+            client.feedback_subscription().get_publisher_count(&node)
+        );
+        let (status, result) = client
+            .async_request_result(goal_id)
+            .await
+            .expect("the play_visemes result arrives");
+        assert_eq!(status, GoalStatusEnum::Succeeded);
+        assert_eq!(result.result.error_code, 0);
+        eprintln!("[client] play_visemes succeeded");
+
+        command_until!(
+            "/skill/set_viseme",
+            "vizij_face_msgs",
+            "SetViseme",
+            SetViseme,
+            SetViseme {
+                meta: meta(),
+                viseme: Viseme { value: 1 },
+            },
+            read(&standard::viseme_path("PP")) > 0.95
+        );
+    };
+
+    tokio::select! {
+        _ = &mut device => unreachable!("the device loop never returns"),
+        result = tokio::time::timeout(Duration::from_secs(120), client_flow) => {
+            result.expect("the face skills timed out");
+        }
+    }
+}
+
 /// The absolute topic the ROS4HRI profile publishes a whole device key on.
 fn ros4hri_topic_of(key: &str) -> String {
     use arora_bridge_ros2::profile::Flow;

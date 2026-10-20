@@ -128,7 +128,7 @@ the declared profiles, the shipped ROS4HRI mapping shows:
 | profile | declares | mapping touches | |
 |---|---|---|---|
 | `ros4hri` | 12 | 11 | it reads 9 of the 10 commands — `gaze/frame` is consumed by the `look_at` skill, not the mapping — and writes the 2 speech-state keys |
-| `vizij-face` | 98 | 37 | it writes 33 of the 96 inputs, and reads the 2 speech-state keys and the eye spacing and gaze range it aims the eyes with; the 15 viseme weights belong to the viseme players; the 36 muscle-tier controls, the blink, the gaze target on the face's frame and its weight, `concerned`, `sleepy` and the 3 conversation states have no ROS4HRI command the mapping reads; the lipsync gain is a setting the face's adaptation reads |
+| `vizij-face` | 98 | 13 | it writes 8 of the 96 inputs — the eyes, the top lids and the caption — and reads the 2 speech-state keys, the eye spacing and gaze range it aims the eyes with, and the `asleep` weight that inhibits its blink; the 27 expression weights belong to the `set_expression` runs the mapping spawns, the 15 viseme weights to the viseme players; the 36 muscle-tier controls, the blink, the gaze target on the face's frame and its weight, and the 3 conversation states have no ROS4HRI command the mapping reads; the lipsync gain is a setting the face's adaptation reads |
 
 Every path the mapping reads or writes is declared.
 

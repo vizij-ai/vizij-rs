@@ -4,6 +4,19 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [3.2.0] - 2026-10-19
+
+### Added
+
+- `Spawn`'s `spawn_initial` param (`NodeParams::spawn_initial`): when true,
+  the first evaluation spawns with the args it records, and later ones spawn
+  on changes as before — for a graph whose inputs command a state that holds,
+  which is then set from the inputs as loaded. Absent or false, the first
+  evaluation only records them.
+- Integer arrays and `f64` arrays are numeric vectors to the graph's math, as
+  an integer scalar is a number: a call's `Vec<u8>` argument reaches the
+  vector nodes as a vector of its values.
+
 ## [3.1.1] - 2026-10-19
 
 ### Fixed

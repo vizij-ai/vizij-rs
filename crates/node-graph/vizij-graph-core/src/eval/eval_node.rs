@@ -489,7 +489,8 @@ fn set_arg(args: &mut Vec<(Uuid, Value)>, id: Uuid, value: Value) {
 /// args are the `value` param's fields, then the keyed `args` slots — slot
 /// `i` is the parameter whose id is `record_keys[i]` — which win for a
 /// parameter both name. `when` is not passed to the call: a new value of it
-/// makes the same args a new run. The first evaluation only records them.
+/// makes the same args a new run. The first evaluation only records them,
+/// unless the node's `spawn_initial` is set: it then spawns with them too.
 fn eval_spawn(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,
@@ -532,7 +533,7 @@ fn eval_spawn(
                     when,
                 }),
             );
-            false
+            spec.params.spawn_initial.unwrap_or(false)
         }
     };
     if changed {

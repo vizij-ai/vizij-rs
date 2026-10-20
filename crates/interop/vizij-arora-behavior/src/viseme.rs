@@ -1,12 +1,18 @@
-//! The viseme skill: the play_viseme contract's re-export and the fragment
-//! that implements it.
+//! The viseme skills: the play_viseme, set_viseme and play_visemes
+//! contracts' re-exports and the fragments that implement them.
 //!
-//! The behavior is data — `vizij-arora-host`'s play_viseme skill fragment,
-//! grafted per run by the interpreter ([`TaskFragment`]). No module
-//! implements play_viseme: the fragment carries the contract's description,
-//! so the interpreter describes the method — what a bridge discovers
-//! (DescribeMethods) and exposes as an action — and a remote spawns it
-//! through the interpreter module.
+//! The behavior is data — `vizij-arora-host`'s skill fragments, grafted per
+//! run by the interpreter ([`TaskFragment`]). No module implements them: the
+//! fragments carry the contracts' descriptions, so the interpreter describes
+//! the methods — what a bridge discovers (DescribeMethods) and exposes — and
+//! a remote spawns them through the interpreter module.
+//!
+//! The three players are exclusive in one domain, [`LIPS`]: one of their
+//! runs owns the lips at a time, and a new command of any of them takes over
+//! from the run before it, which ends preempted. The say skill stays outside
+//! it: a player spawned while a say run speaks writes after it — runs write
+//! in spawn order — so its shape shows over the speech, and say's lips pick
+//! up again from where the face is once the player ends.
 
 use std::collections::HashMap;
 
@@ -16,7 +22,12 @@ use vizij_arora_host::skills;
 
 use crate::TaskFragment;
 
-pub use vizij_arora_host::skills::{play_viseme, PlayViseme};
+pub use vizij_arora_host::skills::{
+    play_viseme, play_visemes, set_viseme, PlayViseme, PlayVisemes, SetViseme,
+};
+
+/// The exclusivity domain of the lips' players: one owns them at a time.
+pub const LIPS: &str = "lips";
 
 /// play_viseme as the contract describes it.
 fn play_viseme_description() -> frozen::Export {
@@ -27,8 +38,8 @@ fn play_viseme_description() -> frozen::Export {
 
 /// The play_viseme task fragment, parsed from the shipped asset with the
 /// face's rig prefix on the controls it writes — what the device's
-/// interpreter grafts per run. Exclusive: a new call takes over the lips,
-/// the run before it ends preempted.
+/// interpreter grafts per run. Exclusive in [`LIPS`]: a new call takes over
+/// the lips, the run before it ends preempted.
 pub fn play_viseme_fragment(rig_prefix: &str) -> TaskFragment {
     TaskFragment::parse_with_rig_prefix(
         skills::PLAY_VISEME_JSON,
@@ -36,7 +47,7 @@ pub fn play_viseme_fragment(rig_prefix: &str) -> TaskFragment {
         play_viseme_parameters(),
     )
     .expect("the shipped play_viseme asset parses")
-    .exclusive()
+    .exclusive_in(LIPS)
     .described(play_viseme_description())
 }
 
@@ -58,7 +69,9 @@ pub fn play_viseme_fragment_from(
                 log::info!(
                     "play_viseme: the face's embedded skill fragment overrides the built-in"
                 );
-                return fragment.exclusive().described(play_viseme_description());
+                return fragment
+                    .exclusive_in(LIPS)
+                    .described(play_viseme_description());
             }
             Err(e) => {
                 log::warn!("embedded play_viseme fragment refused ({e}); the built-in serves")
@@ -80,6 +93,58 @@ pub fn play_viseme_parameters() -> HashMap<Uuid, String> {
     .zip(skills::PLAY_VISEME_PARAMS)
     .map(|(id, name)| (id, name.to_string()))
     .collect()
+}
+
+/// The parameter `id → name` map the set_viseme fragment serves as
+/// `task/<name>` inputs.
+pub fn set_viseme_parameters() -> HashMap<Uuid, String> {
+    HashMap::from([(
+        set_viseme::ids::set_viseme::VISEME,
+        skills::SET_VISEME_PARAMS[0].to_string(),
+    )])
+}
+
+/// The set_viseme task fragment, with the face's rig prefix on the controls
+/// it writes, exclusive in [`LIPS`].
+pub fn set_viseme_fragment(rig_prefix: &str) -> TaskFragment {
+    let description = set_viseme::descriptions()
+        .remove(&set_viseme::ids::set_viseme::FUNCTION)
+        .expect("the set_viseme contract declares set_viseme");
+    TaskFragment::parse_with_rig_prefix(
+        skills::SET_VISEME_JSON,
+        rig_prefix,
+        set_viseme_parameters(),
+    )
+    .expect("the shipped set_viseme asset parses")
+    .exclusive_in(LIPS)
+    .described(description)
+}
+
+/// The parameter `id → name` map the play_visemes fragment serves as
+/// `task/<name>` inputs.
+pub fn play_visemes_parameters() -> HashMap<Uuid, String> {
+    use play_visemes::ids::play_visemes as ids;
+    [ids::VISEMES, ids::STARTS, ids::DURATIONS]
+        .into_iter()
+        .zip(skills::PLAY_VISEMES_PARAMS)
+        .map(|(id, name)| (id, name.to_string()))
+        .collect()
+}
+
+/// The play_visemes task fragment, with the face's rig prefix on the
+/// controls it writes, exclusive in [`LIPS`].
+pub fn play_visemes_fragment(rig_prefix: &str) -> TaskFragment {
+    let description = play_visemes::descriptions()
+        .remove(&play_visemes::ids::play_visemes::FUNCTION)
+        .expect("the play_visemes contract declares play_visemes");
+    TaskFragment::parse_with_rig_prefix(
+        skills::PLAY_VISEMES_JSON,
+        rig_prefix,
+        play_visemes_parameters(),
+    )
+    .expect("the shipped play_visemes asset parses")
+    .exclusive_in(LIPS)
+    .described(description)
 }
 
 #[cfg(test)]

@@ -4,7 +4,14 @@ All notable changes to `vizij-arora-tts`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [8.0.0] - 2026-10-19
+
+### Breaking
+
+- Built on vizij-arora-behavior 8 (vizij-arora-host 8): the say contract
+  re-exported here (`say`, `Say`, `SILENCE_VISEME`) is vizij-arora-host 8's,
+  so it does not unify with that of a crate built on vizij-arora-host 7. The
+  contract itself is unchanged.
 
 ### Changed
 
