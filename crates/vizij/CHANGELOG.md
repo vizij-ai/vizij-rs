@@ -10,6 +10,17 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- `--ros2` requires `arora-bridge-ros2` 11.1, which speaks ros2-client 0.14
+  (RustDDS 0.14): a reliable writer's send window is
+  `ResourceLimits::max_samples` (8192) rather than its history depth, so a
+  reliable writer (`/diagnostics`, a skill action's feedback, status and
+  result) no longer stalls on a reader behind by one sample. 11's ROS4HRI
+  preset serves
+  `/skill/set_expression` as a topic skill spawning a `set_expression`
+  method; Vizij asks for it on the `standard/ros4hri/expression/*` keys the
+  face's graphs read, as before. The preset's `set_facial_action_units`,
+  `set_viseme` and `play_visemes` skills name methods the device does not
+  describe, so Vizij leaves them out of the profile it serves.
 - The browser module's Vizij devices keep no time until their Vizij is
   first drawn (`ready`). Until then every `step` is a step at a zero dt,
   whatever dt the page passes; the first step after advances the time since

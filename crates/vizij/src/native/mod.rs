@@ -237,13 +237,10 @@ pub async fn attach_bridges(
     #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
     if let Some((namespace, domain)) = &bridges.ros2 {
         let mut config = arora_bridge_ros2::Ros2BridgeConfig::new(namespace.clone(), *domain);
-        // The ROS4HRI exposure profile: the typed face topics fanning onto the
-        // standard keys, the face image on its `image_transport` pair, and the
-        // standard skills — `/skill/look_at`, `/skill/say` — bound to the gaze
-        // and speech task runs the device describes. It is the whole ROS4HRI
-        // surface, so `--no-ros4hri` leaves it out.
+        // The ROS4HRI exposure profile is the whole ROS4HRI surface, so
+        // `--no-ros4hri` leaves it out.
         if ros4hri {
-            config = config.with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
+            config = config.with_profile(ros4hri_profile());
         }
         builder = builder.with_bridge(Box::new(arora_bridge_ros2::Ros2Bridge::new(config).await));
         log::info!(
@@ -599,9 +596,35 @@ pub fn restore_terminal() {
     }
 }
 
-/// The ROS4HRI profile comes from arora-bridge-ros2, which knows nothing of
-/// Vizij, and binds skills by name: each skill it binds is one this device
-/// declares, taking every parameter a goal field is routed to.
+/// The ROS4HRI exposure profile as this device serves it: the typed face
+/// topics fanning onto the standard keys, the face image on its
+/// `image_transport` pair, and the standard skills — `/skill/look_at`,
+/// `/skill/say` — bound to the gaze and speech task runs the device
+/// describes.
+///
+/// The preset comes from arora-bridge-ros2, which knows nothing of Vizij and
+/// binds skills by name. `/skill/set_expression` lands on the
+/// `standard/ros4hri/expression/*` keys the face's graphs read, since the
+/// device describes no `set_expression` method. A skill the preset binds to a
+/// method this device does not describe (`play_visemes`,
+/// `set_facial_action_units`, `set_viseme`) is left out: the bridge would
+/// refuse it at startup, and a ROS graph would list an action nothing serves.
+#[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
+fn ros4hri_profile() -> arora_bridge_ros2::ExposureProfile {
+    let declared = |function: &str| vizij_arora_host::skills::skill(function).is_some();
+    let mut profile = arora_bridge_ros2::ExposureProfile::ros4hri().with_set_expression_on_keys();
+    profile
+        .actions
+        .retain(|binding| declared(&binding.function));
+    profile
+        .topic_skills
+        .retain(|binding| declared(&binding.function));
+    profile
+}
+
+/// The profile this device serves binds skills by name: each skill it binds
+/// is one this device declares, taking every parameter a goal field is
+/// routed to, and the gaze and speech skills are among them.
 #[cfg(all(test, any(feature = "ros2-dds", feature = "ros2-zenoh")))]
 mod ros4hri_profile_tests {
     use arora_types::record::module::frozen::ExportKind;
@@ -641,8 +664,20 @@ mod ros4hri_profile_tests {
             play_viseme::record(Uuid::nil()),
             say::record(Uuid::nil()),
         ];
-        let profile = arora_bridge_ros2::ExposureProfile::ros4hri();
-        assert!(!profile.actions.is_empty(), "the profile binds skills");
+        let profile = super::ros4hri_profile();
+        for skill in [look_at::NAME, say::NAME] {
+            assert!(
+                profile.actions.iter().any(|b| b.function == skill),
+                "the profile binds `{skill}`"
+            );
+        }
+        assert!(
+            profile
+                .topic_skills
+                .iter()
+                .all(|b| b.function != "set_expression"),
+            "set_expression lands on the expression keys, not on a method"
+        );
         for binding in &profile.actions {
             let signature = contracts
                 .iter()
