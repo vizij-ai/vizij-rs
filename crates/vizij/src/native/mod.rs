@@ -240,10 +240,14 @@ pub async fn attach_bridges(
         // The ROS4HRI exposure profile: the typed face topics fanning onto the
         // standard keys, the face image on its `image_transport` pair, and the
         // standard skills — `/skill/look_at`, `/skill/say` — bound to the gaze
-        // and speech task runs the device describes. It is the whole ROS4HRI
-        // surface, so `--no-ros4hri` leaves it out.
+        // and speech task runs the device describes. `/skill/set_expression`
+        // lands on the `standard/ros4hri/expression/*` keys the face's graphs
+        // read: the device describes no `set_expression` method. It is the
+        // whole ROS4HRI surface, so `--no-ros4hri` leaves it out.
         if ros4hri {
-            config = config.with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
+            config = config.with_profile(
+                arora_bridge_ros2::ExposureProfile::ros4hri().with_set_expression_on_keys(),
+            );
         }
         builder = builder.with_bridge(Box::new(arora_bridge_ros2::Ros2Bridge::new(config).await));
         log::info!(

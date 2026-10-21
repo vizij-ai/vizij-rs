@@ -110,8 +110,12 @@ arora = { version = "13", default-features = false }
 # 6.3 is where that profile publishes the face image, so the view declares
 # nothing itself. 10.3 is where a key path escapes into valid ROS 2 name
 # tokens, which a Studio-exported face's UUID keys need; 10.4 is where the
-# profile takes /closed_captions and publishes /diagnostics.
-arora-bridge-ros2 = { version = "10.4", optional = true, default-features = false }
+# profile takes /closed_captions and publishes /diagnostics. 11 serves
+# `/skill/set_expression` as a topic skill unless asked to land it on the
+# expression keys, which the face reads (see native::run). 11.1 speaks
+# ros2-client 0.14 (RustDDS 0.14): a reliable writer's send window is
+# `ResourceLimits::max_samples` (8192) rather than its history depth.
+arora-bridge-ros2 = { version = "11.1", optional = true, default-features = false }
 # The Status enumeration ids the gaze and tts contracts mark their action shapes with.
 arora-behavior-tree-types = "2"
 # The built-in key prefix the ROS 2 input declaration leaves out.
@@ -218,17 +222,16 @@ libc = "0.2"
 [dev-dependencies]
 # The image and diagnostics messages a published frame and report are read
 # back as, so a field landing in the wrong place fails in a unit test rather
-# than at a ROS subscriber.
-arora-msgs-ros2 = "2.2"
+# than at a ROS subscriber. 2.4 is on the ros2-client line the bridge speaks.
+arora-msgs-ros2 = "2.4"
 # The bundler, for the Quori integration test (grafts the standard-adaptation
 # sidecar into the demo GLB before driving it over the ROS4HRI keys).
 vizij-bundle = { path = "../tools/vizij-bundle" }
 # The typed ROS 2 peer of the live action E2E (the semio-ai ros2-client fork;
-# the library imports as `ros2_client`). The same line the bridge speaks: two
-# versions in one build are two crates, and the peer's topics stop typing
-# against the bridge's. 0.13.1 is the floor: before it, `wait_for_subscription`
-# and `wait_for_service` could miss a match under load and wait forever.
-ros2-client = { package = "ros2-client-multi-rmw", version = "0.13.1", default-features = false, features = ["jazzy", "dds"] }
+# the library imports as `ros2_client`). The same line the bridge speaks
+# (0.14, the one arora-bridge-ros2 11.1 requires): two versions in one build
+# are two crates, and the peer's topics stop typing against the bridge's.
+ros2-client = { package = "ros2-client-multi-rmw", version = "0.14", default-features = false, features = ["jazzy", "dds"] }
 rand = "0.9"
 # The wire test's client, on the local bridge's WebSocket, and its GET of
 # the control panel.
