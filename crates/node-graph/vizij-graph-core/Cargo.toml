@@ -33,6 +33,10 @@ vizij-test-fixtures = { path = "../../test-fixtures/vizij-test-fixtures" }
 name = "graph_eval"
 harness = false
 
+[[bench]]
+name = "control_eval"
+harness = false
+
 [features]
 default = ["urdf_ik"]
 urdf_ik = ["k", "urdf-rs"]

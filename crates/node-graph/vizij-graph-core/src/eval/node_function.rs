@@ -61,6 +61,14 @@ pub trait NodeFunctions {
     ) -> Result<(Value, Vec<(Uuid, Value)>), String> {
         Ok((self.call_module(module, function, args)?, Vec::new()))
     }
+
+    /// Cancel the call of `function` an [`Action`](crate::types::NodeType::Action)
+    /// node left running when it was halted: the next call it makes starts a
+    /// new one. The default does nothing, for functions that finish within
+    /// one call.
+    fn halt(&mut self, module: Option<Uuid>, function: Uuid) {
+        let _ = (module, function);
+    }
 }
 
 /// A registry of [`NodeFunction`]s keyed by their stable id.

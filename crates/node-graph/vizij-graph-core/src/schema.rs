@@ -16,6 +16,8 @@ pub enum PortType {
     Transform,
     Vector,
     Any,
+    /// A behavior `Status`: what a control node ticks a child for.
+    Status,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -174,6 +176,26 @@ pub fn required_inputs(kind: &NodeType) -> &'static [&'static str] {
         _ => &[],
     }
 }
+
+/// The variadic input group whose ports a node of `kind` ticks as its
+/// children (`child_0`, `child_1`, …, in suffix order), when it is a control
+/// node. An edge into one of these ports is a **child edge**: the node it
+/// comes from runs when the control node ticks it, not by itself (see
+/// [`crate::control`]).
+pub fn child_group(kind: &NodeType) -> Option<&'static str> {
+    match kind {
+        NodeType::Sequence
+        | NodeType::SequenceWithMemory
+        | NodeType::Fallback
+        | NodeType::Parallel
+        | NodeType::Inverter
+        | NodeType::Control => Some(CHILD_GROUP),
+        _ => None,
+    }
+}
+
+/// The name of a control node's child port group.
+pub const CHILD_GROUP: &str = "child";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Registry {
@@ -2899,6 +2921,130 @@ pub fn registry() -> Registry {
             doc: "Whether this evaluation requested a run.",
             optional: false,
         }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // Behavior control: nodes that tick their children (see crate::control)
+    let children = |doc: &'static str, min: usize, max: Option<usize>| VariadicSpec {
+        id: CHILD_GROUP,
+        ty: PortType::Status,
+        label: "Child",
+        doc,
+        min,
+        max,
+        keyed: false,
+    };
+    let status_out = |doc: &'static str| PortSpec {
+        id: "out",
+        ty: PortType::Status,
+        label: "Status",
+        doc,
+        optional: false,
+    };
+    for (type_id, name, doc, child_doc, max) in [
+        (
+            Sequence,
+            "Sequence",
+            "Ticks its children in order, from the first at every tick: fails at the first \
+             child that fails, is running at the first that runs, and succeeds when all \
+             succeed. A child after the one it stopped at is not ticked; one that was running \
+             is halted.",
+            "A child, ticked in suffix order. A child whose value is not a Status succeeds.",
+            None,
+        ),
+        (
+            SequenceWithMemory,
+            "Sequence with Memory",
+            "Ticks its children in order, resuming at the child that was running: the \
+             children before it are not ticked again until the sequence ends.",
+            "A child, ticked in suffix order. A child whose value is not a Status succeeds.",
+            None,
+        ),
+        (
+            Fallback,
+            "Fallback",
+            "Ticks its children in order, from the first at every tick: succeeds at the first \
+             child that succeeds, is running at the first that runs, and fails when all fail.",
+            "A child, ticked in suffix order. A child whose value is not a Status succeeds.",
+            None,
+        ),
+        (
+            Parallel,
+            "Parallel",
+            "Ticks every child at every tick. Succeeds once params.success_threshold children \
+             succeed (all, by default), fails once too many failed to reach it, and then \
+             halts the children still running.",
+            "A child, ticked at every tick.",
+            None,
+        ),
+        (
+            Inverter,
+            "Inverter",
+            "Ticks its child and swaps Success and Failure; Running stays Running.",
+            "The child.",
+            Some(1),
+        ),
+        (
+            Control,
+            "Control",
+            "A control node the host registered under params.control: it ticks its children \
+             as its implementation decides.",
+            "A child, as the implementation reads it.",
+            None,
+        ),
+    ] {
+        nodes.push(NodeSignature {
+            type_id,
+            name,
+            category: "Behavior",
+            doc,
+            inputs: vec![],
+            variadic_inputs: Some(children(child_doc, 1, max)),
+            outputs: vec![status_out("This tick's status.")],
+            variadic_outputs: None,
+            params: vec![],
+        });
+    }
+    nodes.push(NodeSignature {
+        type_id: Condition,
+        name: "Condition",
+        category: "Behavior",
+        doc: "Succeeds when its input is true (a nonzero number), fails otherwise: how a \
+              computed value becomes a child's status.",
+        inputs: vec![PortSpec {
+            id: "in",
+            ty: PortType::Any,
+            label: "In",
+            doc: "The condition: a boolean, or a number that is true when nonzero.",
+            optional: false,
+        }],
+        variadic_inputs: None,
+        outputs: vec![status_out(
+            "Success when the input is true, Failure otherwise.",
+        )],
+        variadic_outputs: None,
+        params: vec![],
+    });
+    nodes.push(NodeSignature {
+        type_id: Action,
+        name: "Action",
+        category: "Behavior",
+        doc: "Calls a host function (params.function, under params.module) each time it is \
+              ticked, with its `args` inputs paired with params.param_ids. Emits the call's \
+              Status; any other return is Success. A call left running when the action is \
+              halted is cancelled.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "args",
+            ty: PortType::Any,
+            label: "Arg",
+            doc: "A call argument, paired with params.param_ids in slot order.",
+            min: 0,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![status_out("The call's Status.")],
         variadic_outputs: None,
         params: vec![],
     });

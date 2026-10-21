@@ -105,6 +105,17 @@ pub enum NodeRuntimeState {
     UrdfKinematics(UrdfKinematicsState),
     TaskRun(TaskRunState),
     Spawn(SpawnState),
+    /// A control node's instance, kept between ticks until it is halted.
+    Control(Box<dyn crate::control::Control>),
+    /// An action whose call is running: what a halt cancels.
+    Action(ActionState),
+}
+
+/// The call an [`Action`](crate::types::NodeType::Action) node left running.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActionState {
+    pub module: Option<Uuid>,
+    pub function: Uuid,
 }
 
 /// State of a [`TaskRun`](crate::types::NodeType::TaskRun) node's hosted run.
@@ -174,6 +185,9 @@ pub struct GraphRuntime {
     pub input_epoch: u64,
     /// Cached execution plan and node-index lookup derived from the current spec.
     pub plan: PlanCache,
+    /// What a graph with control nodes keeps between ticks: which nodes are
+    /// lazy, each child's branch, and when each node last ran.
+    pub control: super::tree::ControlState,
 }
 
 impl GraphRuntime {
@@ -181,6 +195,13 @@ impl GraphRuntime {
     ///
     /// Call this when a structural graph change invalidates cached layouts, bindings, or node
     /// state. Ordinary param updates can continue reusing the existing runtime.
+    /// Whether node `index` (its position in the spec) is lazy: it runs only
+    /// when a control node ticks the child it serves (see [`crate::control`]).
+    /// `false` before the first evaluation.
+    pub fn is_lazy(&self, index: usize) -> bool {
+        self.control.is_lazy(index)
+    }
+
     pub fn reset_for_spec(&mut self) {
         self.plan = PlanCache::default();
         self.outputs.clear();
@@ -190,6 +211,7 @@ impl GraphRuntime {
         self.node_states.clear();
         self.staged_inputs.clear();
         self.input_epoch = 0;
+        self.control = Default::default();
     }
 
     /// Advance the staging epoch. Values staged for `epoch + 1` become visible for the

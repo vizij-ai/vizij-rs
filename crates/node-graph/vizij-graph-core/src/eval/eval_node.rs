@@ -390,7 +390,83 @@ fn evaluate_kind_inner(
         NodeType::ExternalFunction => eval_external_function(params, inputs, outputs, functions),
         NodeType::TaskRun => eval_task_run(rt, spec, inputs, outputs, functions),
         NodeType::Spawn => eval_spawn(rt, spec, inputs, outputs),
+        NodeType::Condition => eval_condition(inputs, outputs),
+        NodeType::Action => eval_action(rt, spec, inputs, outputs, functions),
+        NodeType::Sequence
+        | NodeType::SequenceWithMemory
+        | NodeType::Fallback
+        | NodeType::Parallel
+        | NodeType::Inverter
+        | NodeType::Control => Err(format!(
+            "control node '{}' ticks its children within its graph's evaluation; it is not \
+             evaluated on its own",
+            spec.id
+        )),
     }
+}
+
+/// `Success` when `in` is true, or a nonzero number; `Failure` otherwise.
+fn eval_condition(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+    let holds = inputs.get("in").is_some_and(|port| {
+        vocab::as_bool(&port.value)
+            .or_else(|| vocab::as_float(&port.value).map(|number| number != 0.0))
+            .unwrap_or(false)
+    });
+    let status = if holds {
+        crate::task::Status::Success
+    } else {
+        crate::task::Status::Failure
+    };
+    single_output(outputs, status.value())
+}
+
+/// Call the action's function with its `args`, paired with `param_ids`, and
+/// emit its status. A running call is remembered, for a halt to cancel.
+fn eval_action(
+    rt: &mut GraphRuntime,
+    spec: &NodeSpec,
+    inputs: &InputSlots,
+    outputs: &mut OutputSlots,
+    functions: Option<&mut dyn NodeFunctions>,
+) -> Result<(), String> {
+    use super::graph_runtime::{ActionState, NodeRuntimeState};
+    use crate::task::Status;
+
+    let function = spec
+        .params
+        .function
+        .ok_or_else(|| format!("action '{}' names no function", spec.id))?;
+    let functions = functions.ok_or_else(|| {
+        format!(
+            "action '{}' evaluated without a function host (graph run outside a host)",
+            spec.id
+        )
+    })?;
+    let param_ids: &[Uuid] = spec.params.param_ids.as_deref().unwrap_or(&[]);
+    let args: Vec<(Uuid, Value)> = param_ids
+        .iter()
+        .copied()
+        .zip(
+            inputs
+                .variadic("args")
+                .iter()
+                .map(|port| port.value.clone()),
+        )
+        .collect();
+    let (ret, _) = functions.call_module_with_outputs(spec.params.module, function, &args)?;
+    let status = Status::of_child(&ret);
+    if status == Status::Running {
+        rt.node_states.insert(
+            spec.id.clone(),
+            NodeRuntimeState::Action(ActionState {
+                module: spec.params.module,
+                function,
+            }),
+        );
+    } else {
+        rt.node_states.remove(&spec.id);
+    }
+    single_output(outputs, status.value())
 }
 
 /// The call args a TaskRun argument bundle carries: the fields of a

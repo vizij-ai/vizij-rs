@@ -109,7 +109,15 @@ export type NodeType =
   | "output"
   | "externalfunction"
   | "taskrun"
-  | "spawn";
+  | "spawn"
+  | "sequence"
+  | "sequence_with_memory"
+  | "fallback"
+  | "parallel"
+  | "inverter"
+  | "control"
+  | "condition"
+  | "action";
 
 export type ShapeJSON =
   | { id: "Scalar"; meta?: Record<string, string> }
@@ -175,6 +183,10 @@ export interface NodeParams {
   case_labels?: string[];
   record_keys?: string[]; // for BuildRecord/ReadRecord
   keys?: string; // for SplitRecord (comma-separated field names)
+  /** How many children of a `parallel` must succeed for it to succeed; all when unset. */
+  success_threshold?: number;
+  /** The host-registered implementation a `control` node runs. */
+  control?: string;
 }
 
 /** One step in a selector path applied to a structured output value. */
@@ -288,7 +300,8 @@ export type PortType =
   | "quat"
   | "transform"
   | "vector"
-  | "any";
+  | "any"
+  | "status";
 export type ParamType = "float" | "bool" | "vec3" | "vector" | "any" | "text";
 
 /** Schema description for one fixed input or output port. */

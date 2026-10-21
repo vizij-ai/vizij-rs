@@ -13,6 +13,7 @@
 //!
 //! Integration code should primarily interact with [`GraphRuntime`] and [`evaluate_all`].
 
+use crate::control::ControlRegistry;
 use crate::types::{GraphSpec, NodeSpec, NodeType};
 use std::mem;
 
@@ -23,19 +24,23 @@ mod noise;
 mod numeric;
 mod plan;
 mod shape_helpers;
+mod tree;
 #[cfg(feature = "urdf_ik")]
 mod urdfik;
 mod value_layout;
 mod variadic;
 
 pub use eval_node::eval_node;
-pub use graph_runtime::{GraphRuntime, SpawnRequest, StagedInput};
+pub use graph_runtime::{ActionState, GraphRuntime, SpawnRequest, StagedInput};
 pub use node_function::{NodeFunction, NodeFunctionRegistry, NodeFunctions};
 pub use plan::{fingerprint_spec, PlanCache};
+pub use tree::ControlState;
 pub use value_layout::PortValue;
 
 #[cfg(test)]
 mod blend_tests;
+#[cfg(test)]
+mod control_tests;
 #[cfg(test)]
 mod external_function_tests;
 #[cfg(test)]
@@ -55,7 +60,7 @@ mod zero_dt_tests;
 /// This path has no [`NodeFunctions`] host, so any `ExternalFunction` node in `spec` errors.
 /// Use [`evaluate_all_with_functions`] to run graphs that invoke node-functions.
 pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
-    evaluate_all_inner(rt, spec, None, ByName::Kept)
+    evaluate_all_inner(rt, spec, None, &ControlRegistry::new(), ByName::Kept)
 }
 
 /// Evaluate every node in `spec`, threading `functions` through to any `ExternalFunction` nodes.
@@ -67,7 +72,25 @@ pub fn evaluate_all_with_functions(
     spec: &GraphSpec,
     functions: &mut dyn NodeFunctions,
 ) -> Result<(), String> {
-    evaluate_all_inner(rt, spec, Some(functions), ByName::Kept)
+    evaluate_all_inner(
+        rt,
+        spec,
+        Some(functions),
+        &ControlRegistry::new(),
+        ByName::Kept,
+    )
+}
+
+/// Evaluate like [`evaluate_all_with_functions`], with the control nodes the
+/// host registered in `controls`: a `control` node ticks its children through
+/// the implementation its `control` param names (see [`crate::control`]).
+pub fn evaluate_all_with_controls(
+    rt: &mut GraphRuntime,
+    spec: &GraphSpec,
+    functions: &mut dyn NodeFunctions,
+    controls: &ControlRegistry,
+) -> Result<(), String> {
+    evaluate_all_inner(rt, spec, Some(functions), controls, ByName::Kept)
 }
 
 /// Evaluate like [`evaluate_all_with_functions`], for a host that takes the
@@ -82,13 +105,19 @@ pub fn evaluate_writes_with_functions(
     spec: &GraphSpec,
     functions: &mut dyn NodeFunctions,
 ) -> Result<(), String> {
-    evaluate_all_inner(rt, spec, Some(functions), ByName::Skipped)
+    evaluate_all_inner(
+        rt,
+        spec,
+        Some(functions),
+        &ControlRegistry::new(),
+        ByName::Skipped,
+    )
 }
 
 /// Whether an evaluation keeps [`GraphRuntime::outputs`], the copy of every
 /// port by node id and port name.
 #[derive(Clone, Copy, PartialEq)]
-enum ByName {
+pub(crate) enum ByName {
     Kept,
     Skipped,
 }
@@ -97,6 +126,7 @@ fn evaluate_all_inner(
     rt: &mut GraphRuntime,
     spec: &GraphSpec,
     mut functions: Option<&mut dyn NodeFunctions>,
+    controls: &ControlRegistry,
     by_name: ByName,
 ) -> Result<(), String> {
     if spec.version > 0 {
@@ -117,55 +147,77 @@ fn evaluate_all_inner(
     let mut plan = mem::take(&mut rt.plan);
     let result = (|| {
         prepare_buckets(rt, spec, &mut plan);
-
+        // A graph with control nodes runs its eager nodes, and the lazy ones
+        // its control nodes tick (see `crate::control`).
+        if rt.control.ensure(spec, &plan)? {
+            return tree::evaluate(rt, spec, &plan, functions, controls, by_name);
+        }
         for &idx in plan.order.iter() {
-            let node = spec
-                .nodes
-                .get(idx)
-                .ok_or_else(|| format!("plan referenced missing node at index {}", idx))?;
-            // A constant every read of which the plan resolved has no
-            // reader here — only the by-name copy shows it.
-            if by_name == ByName::Skipped && plan.unread_constant(idx) {
-                continue;
-            }
-            if holds_its_constant(node, &rt.outputs_vec[idx]) {
-                if by_name == ByName::Kept {
-                    let compat = eval_node::materialize_outputs(
-                        &plan.layouts[idx].outputs,
-                        &rt.outputs_vec[idx],
-                    );
-                    rt.outputs.insert(node.id.clone(), compat);
-                }
-                continue;
-            }
-            let (inputs_vec, present_vec) = eval_node::read_inputs(rt, idx, &plan)?;
-            let inputs =
-                eval_node::InputSlots::new(&inputs_vec, &present_vec, &plan.layouts[idx].inputs);
-            let mut vec_out = mem::take(rt.outputs_vec.get_mut(idx).expect("outputs vec present"));
-            resize_and_clear(&mut vec_out);
-            {
-                let mut outputs =
-                    eval_node::OutputSlots::new(&mut vec_out, &plan.layouts[idx].outputs);
-                outputs.clear();
-                // Reborrow the optional host with a fresh, per-iteration lifetime so the mutable
-                // borrow does not outlive a single node evaluation.
-                let functions_ref: Option<&mut dyn NodeFunctions> = match functions {
-                    Some(ref mut f) => Some(&mut **f),
-                    None => None,
-                };
-                eval_node::eval_node_inner(rt, node, &inputs, &mut outputs, functions_ref)?;
-            }
-
-            if by_name == ByName::Kept {
-                let compat = eval_node::materialize_outputs(&plan.layouts[idx].outputs, &vec_out);
-                rt.outputs.insert(node.id.clone(), compat);
-            }
-            rt.outputs_vec[idx] = vec_out;
+            // Reborrow the optional host with a fresh, per-iteration lifetime so the mutable
+            // borrow does not outlive a single node evaluation.
+            let functions_ref: Option<&mut dyn NodeFunctions> = match functions {
+                Some(ref mut f) => Some(&mut **f),
+                None => None,
+            };
+            evaluate_one(rt, spec, &plan, idx, functions_ref, by_name)?;
         }
         Ok(())
     })();
     rt.plan = plan;
     result
+}
+
+/// Refuse a graph whose control nodes cannot run: see
+/// [`GraphSpec::validate`](crate::types::GraphSpec::validate).
+pub(crate) fn check_controls(spec: &GraphSpec) -> Result<(), String> {
+    let mut plan = PlanCache::default();
+    plan.ensure(spec)?;
+    tree::check(spec, &plan)
+}
+
+/// Evaluate node `idx` of `spec` into its output bucket, from the buckets of
+/// the nodes it reads.
+pub(crate) fn evaluate_one(
+    rt: &mut GraphRuntime,
+    spec: &GraphSpec,
+    plan: &PlanCache,
+    idx: usize,
+    functions: Option<&mut dyn NodeFunctions>,
+    by_name: ByName,
+) -> Result<(), String> {
+    let node = spec
+        .nodes
+        .get(idx)
+        .ok_or_else(|| format!("plan referenced missing node at index {}", idx))?;
+    // A constant every read of which the plan resolved has no
+    // reader here — only the by-name copy shows it.
+    if by_name == ByName::Skipped && plan.unread_constant(idx) {
+        return Ok(());
+    }
+    if holds_its_constant(node, &rt.outputs_vec[idx]) {
+        if by_name == ByName::Kept {
+            let compat =
+                eval_node::materialize_outputs(&plan.layouts[idx].outputs, &rt.outputs_vec[idx]);
+            rt.outputs.insert(node.id.clone(), compat);
+        }
+        return Ok(());
+    }
+    let (inputs_vec, present_vec) = eval_node::read_inputs(rt, idx, plan)?;
+    let inputs = eval_node::InputSlots::new(&inputs_vec, &present_vec, &plan.layouts[idx].inputs);
+    let mut vec_out = mem::take(rt.outputs_vec.get_mut(idx).expect("outputs vec present"));
+    resize_and_clear(&mut vec_out);
+    {
+        let mut outputs = eval_node::OutputSlots::new(&mut vec_out, &plan.layouts[idx].outputs);
+        outputs.clear();
+        eval_node::eval_node_inner(rt, node, &inputs, &mut outputs, functions)?;
+    }
+
+    if by_name == ByName::Kept {
+        let compat = eval_node::materialize_outputs(&plan.layouts[idx].outputs, &vec_out);
+        rt.outputs.insert(node.id.clone(), compat);
+    }
+    rt.outputs_vec[idx] = vec_out;
+    Ok(())
 }
 
 /// Size the output buckets for `spec` and clear them for an evaluation, but
@@ -244,6 +296,9 @@ pub fn evaluate_all_cached(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<()
     let mut plan = mem::take(&mut rt.plan);
     let result = (|| {
         prepare_buckets(rt, spec, &mut plan);
+        if rt.control.ensure(spec, &plan)? {
+            return tree::evaluate(rt, spec, &plan, None, &ControlRegistry::new(), ByName::Kept);
+        }
 
         for &idx in plan.order.iter() {
             let node = spec

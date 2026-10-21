@@ -103,6 +103,11 @@ impl PlanCache {
         self.filled == Some(self.generation)
     }
 
+    /// The plan's generation: it changes whenever the plan does.
+    pub(crate) fn generation(&self) -> u64 {
+        self.generation
+    }
+
     /// Record that the runtime's output buckets now follow this plan.
     pub(crate) fn mark_buckets_filled(&mut self) {
         self.filled = Some(self.generation);

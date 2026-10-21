@@ -3238,6 +3238,207 @@ const registry: Registry = {
         }
       ],
       "params": []
+    },
+    {
+      "type_id": "sequence",
+      "name": "Sequence",
+      "category": "Behavior",
+      "doc": "Ticks its children in order, from the first at every tick: fails at the first child that fails, is running at the first that runs, and succeeds when all succeed. A child after the one it stopped at is not ticked; one that was running is halted.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "child",
+        "ty": "status",
+        "label": "Child",
+        "doc": "A child, ticked in suffix order. A child whose value is not a Status succeeds.",
+        "min": 1,
+        "keyed": false
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "status",
+          "label": "Status",
+          "doc": "This tick's status.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "sequence_with_memory",
+      "name": "Sequence with Memory",
+      "category": "Behavior",
+      "doc": "Ticks its children in order, resuming at the child that was running: the children before it are not ticked again until the sequence ends.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "child",
+        "ty": "status",
+        "label": "Child",
+        "doc": "A child, ticked in suffix order. A child whose value is not a Status succeeds.",
+        "min": 1,
+        "keyed": false
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "status",
+          "label": "Status",
+          "doc": "This tick's status.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "fallback",
+      "name": "Fallback",
+      "category": "Behavior",
+      "doc": "Ticks its children in order, from the first at every tick: succeeds at the first child that succeeds, is running at the first that runs, and fails when all fail.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "child",
+        "ty": "status",
+        "label": "Child",
+        "doc": "A child, ticked in suffix order. A child whose value is not a Status succeeds.",
+        "min": 1,
+        "keyed": false
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "status",
+          "label": "Status",
+          "doc": "This tick's status.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "parallel",
+      "name": "Parallel",
+      "category": "Behavior",
+      "doc": "Ticks every child at every tick. Succeeds once params.success_threshold children succeed (all, by default), fails once too many failed to reach it, and then halts the children still running.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "child",
+        "ty": "status",
+        "label": "Child",
+        "doc": "A child, ticked at every tick.",
+        "min": 1,
+        "keyed": false
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "status",
+          "label": "Status",
+          "doc": "This tick's status.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "inverter",
+      "name": "Inverter",
+      "category": "Behavior",
+      "doc": "Ticks its child and swaps Success and Failure; Running stays Running.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "child",
+        "ty": "status",
+        "label": "Child",
+        "doc": "The child.",
+        "min": 1,
+        "max": 1,
+        "keyed": false
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "status",
+          "label": "Status",
+          "doc": "This tick's status.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "control",
+      "name": "Control",
+      "category": "Behavior",
+      "doc": "A control node the host registered under params.control: it ticks its children as its implementation decides.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "child",
+        "ty": "status",
+        "label": "Child",
+        "doc": "A child, as the implementation reads it.",
+        "min": 1,
+        "keyed": false
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "status",
+          "label": "Status",
+          "doc": "This tick's status.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "condition",
+      "name": "Condition",
+      "category": "Behavior",
+      "doc": "Succeeds when its input is true (a nonzero number), fails otherwise: how a computed value becomes a child's status.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "any",
+          "label": "In",
+          "doc": "The condition: a boolean, or a number that is true when nonzero.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "status",
+          "label": "Status",
+          "doc": "Success when the input is true, Failure otherwise.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "action",
+      "name": "Action",
+      "category": "Behavior",
+      "doc": "Calls a host function (params.function, under params.module) each time it is ticked, with its `args` inputs paired with params.param_ids. Emits the call's Status; any other return is Success. A call left running when the action is halted is cancelled.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "args",
+        "ty": "any",
+        "label": "Arg",
+        "doc": "A call argument, paired with params.param_ids in slot order.",
+        "min": 0,
+        "keyed": false
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "status",
+          "label": "Status",
+          "doc": "The call's Status.",
+          "optional": false
+        }
+      ],
+      "params": []
     }
   ]
 };

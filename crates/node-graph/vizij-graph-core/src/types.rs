@@ -180,6 +180,38 @@ pub enum NodeType {
     /// once the evaluation is done. The graph keeps no handle — a run it
     /// spawns is the host's to end and clean up.
     Spawn,
+
+    // Behavior control (see `crate::control`)
+    /// Ticks its `child_N` inputs in order, every tick from the first: fails
+    /// at the first child that fails, is running at the first that runs, and
+    /// succeeds when all succeed.
+    Sequence,
+    /// Like [`Sequence`](Self::Sequence), but resumes at the child that was
+    /// running, without ticking the children before it again.
+    #[serde(rename = "sequence_with_memory")]
+    SequenceWithMemory,
+    /// Ticks its `child_N` inputs in order, every tick from the first:
+    /// succeeds at the first child that succeeds, is running at the first
+    /// that runs, and fails when all fail.
+    Fallback,
+    /// Ticks every `child_N` input every tick: succeeds once
+    /// `success_threshold` of them succeed (all, by default), fails once too
+    /// many failed for that, and halts the children still running then.
+    Parallel,
+    /// Ticks its one child and swaps its `Success` and `Failure`.
+    Inverter,
+    /// A control node registered by the host under the name in
+    /// [`control`](NodeParams::control): the extension point the other
+    /// control nodes are built on.
+    Control,
+    /// Reads its `in` input as a condition: `Success` when it is true (a
+    /// nonzero number), `Failure` otherwise.
+    Condition,
+    /// Calls a host function like [`ExternalFunction`](Self::ExternalFunction),
+    /// each time it is ticked, and emits its `Status` on `out` (any other
+    /// return is `Success`). A call still running when the action is halted
+    /// is cancelled through [`NodeFunctions::halt`](crate::eval::NodeFunctions::halt).
+    Action,
 }
 
 /// Node-construction parameters consumed selectively by different [`NodeType`] variants.
@@ -329,6 +361,14 @@ pub struct NodeParams {
     /// like an [`NodeType::ExternalFunction`] call.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub module: Option<Uuid>,
+    /// How many children of a [`NodeType::Parallel`] must succeed for it to
+    /// succeed. `None` is all of them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub success_threshold: Option<u32>,
+    /// The name a [`NodeType::Control`] node's implementation is registered
+    /// under (see [`ControlRegistry`](crate::control::ControlRegistry)).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub control: Option<String>,
 }
 
 /// Rounding strategy for [`NodeType::Round`].
@@ -552,7 +592,9 @@ impl GraphSpec {
     /// - an edge names a node the graph lacks, or two edges feed one input;
     /// - two nodes share an id, or the edges form a cycle;
     /// - a node leaves one of its [required inputs](crate::schema::required_inputs)
-    ///   with neither an edge nor an inline default.
+    ///   with neither an edge nor an inline default;
+    /// - a node a control node ticks is read by a node outside any control
+    ///   node, or a child edge has a selector (see [`crate::control`]).
     ///
     /// The error names the node and, for a required input, the port. What a
     /// graph needs only at evaluation time, such as a value staged on an input
@@ -573,6 +615,13 @@ impl GraphSpec {
                     ));
                 }
             }
+        }
+        if self
+            .nodes
+            .iter()
+            .any(|node| crate::schema::child_group(&node.kind).is_some())
+        {
+            crate::eval::check_controls(self)?;
         }
         Ok(())
     }

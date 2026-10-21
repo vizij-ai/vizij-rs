@@ -61,3 +61,49 @@ pub fn coerce(ret: Value) -> Value {
         _ => success(),
     }
 }
+
+/// A behavior node's status, read off a `Status` value: what a control node
+/// ticks its children for (see [`crate::control`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Status {
+    /// Not done: tick it again.
+    Running,
+    /// Done, and it succeeded.
+    Success,
+    /// Done, and it failed.
+    Failure,
+}
+
+impl Status {
+    /// The status `value` is, when it is a `Status` value.
+    pub fn of(value: &Value) -> Option<Self> {
+        match value {
+            Value::Enumeration(e) if e.id == STATUS_ENUMERATION_ID => {
+                Some(if e.variant_id == STATUS_RUNNING_VARIANT_ID {
+                    Status::Running
+                } else if e.variant_id == STATUS_SUCCESS_VARIANT_ID {
+                    Status::Success
+                } else {
+                    Status::Failure
+                })
+            }
+            _ => None,
+        }
+    }
+
+    /// The status a ticked child's value stands for: a `Status` value is
+    /// itself, and any other value is `Success`, the child having computed
+    /// it — so any node can be a child, as in Arora's behavior tree.
+    pub fn of_child(value: &Value) -> Self {
+        Status::of(value).unwrap_or(Status::Success)
+    }
+
+    /// This status as a `Status` value.
+    pub fn value(self) -> Value {
+        match self {
+            Status::Running => running(),
+            Status::Success => success(),
+            Status::Failure => failure(),
+        }
+    }
+}

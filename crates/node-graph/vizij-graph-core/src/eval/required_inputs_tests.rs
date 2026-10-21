@@ -81,6 +81,7 @@ fn sample(port: &PortSpec, rest: &Rest) -> Value {
             scale: [1.0; 3],
         }),
         (_, PortType::Vector) => vocab::vector(vec![0.0, 1.0]),
+        (_, PortType::Status) => crate::task::Status::Success.value(),
     }
 }
 
@@ -94,10 +95,17 @@ fn params(kind: &NodeType) -> NodeParams {
             path: Some(TypedPath::parse("sensor/x").expect("a path")),
             ..Default::default()
         },
-        NodeType::ExternalFunction | NodeType::TaskRun | NodeType::Spawn => NodeParams {
-            function,
+        NodeType::ExternalFunction | NodeType::TaskRun | NodeType::Spawn | NodeType::Action => {
+            NodeParams {
+                function,
+                ..Default::default()
+            }
+        }
+        NodeType::Control => NodeParams {
+            control: Some("registered".to_string()),
             ..Default::default()
         },
+
         #[cfg(feature = "urdf_ik")]
         NodeType::UrdfIkPosition | NodeType::UrdfIkPose | NodeType::UrdfFk => {
             let fixture: serde_json::Value =
@@ -150,6 +158,23 @@ fn graph(signature: &NodeSignature, inputs: &[&PortSpec], rest: &Rest) -> GraphS
                         },
                     )
                 })
+                // A control node's fewest children, each a status.
+                .chain(
+                    signature
+                        .variadic_inputs
+                        .iter()
+                        .filter(|group| group.id == crate::schema::CHILD_GROUP)
+                        .flat_map(|group| 0..group.min)
+                        .map(|child| {
+                            (
+                                format!("{}_{child}", crate::schema::CHILD_GROUP),
+                                InputDefault {
+                                    value: crate::task::Status::Success.value(),
+                                    shape: None,
+                                },
+                            )
+                        }),
+                )
                 .collect(),
         }],
         edges: Vec::new(),
@@ -175,7 +200,12 @@ fn evaluates(spec: &GraphSpec) -> Result<(), String> {
 #[test]
 fn every_node_evaluates_with_all_its_inputs() {
     let rest = rest();
-    for signature in registry().nodes {
+    // A `control` node runs what the host registered: see `control_tests`.
+    for signature in registry()
+        .nodes
+        .into_iter()
+        .filter(|signature| signature.type_id != NodeType::Control)
+    {
         let all: Vec<&PortSpec> = signature.inputs.iter().collect();
         evaluates(&graph(&signature, &all, &rest))
             .unwrap_or_else(|e| panic!("{:?} with every input: {e}", signature.type_id));
