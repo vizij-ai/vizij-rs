@@ -1,5 +1,18 @@
 # Changelog
 
+## 7.2.0
+
+### Minor Changes
+
+- a79956e: The animation source steps the animation module with the device's `arora/time` as well as `arora/dt`, so `play_at(player, time_ns)` starts a player at that device time, where it counted from the module's first step.
+- 6d44aec: A Vizij's device keeps no time until the Vizij is first drawn (`ready`). Until then every `step(dtMs)` is a `step(0)`, whatever `dtMs` says, so it still carries the page's operations and writes through the face's graphs. The first step after advances the time since the frame that drew the Vizij, at most its `dtMs`, and the steps after that advance their `dtMs`. A `run()` called before then starts its loop at that frame; a `stop()` before it gives the run up, and its promise resolves. Before, a page stepping a face from `loadVizij` on — `@vizij/runtime-react`'s provider does — ran the face's springs, programs and animations through the load and the first draw, in steps as long as the frames the load blocked (0.8 s on an M1), and the face first showed mid-motion. A device with no Vizij (`startRuntime`) keeps time from its first step, as before.
+- 54f1590: The `vizij-face` profile declares two more settings of the face, `standard/vizij/gaze/eye_spacing` (metres, resting at 0.06) and `standard/vizij/gaze/range` (radians, resting at 0.78), and has 98 keys. The ROS4HRI mapping aims the eyes with them, read under the face's rig prefix, where it held the incumbent's 6 cm and ±0.78 rad as constants; a face authors its own in its adaptation, as the default of an input node on the setting's path, and a face authoring neither is aimed as before. A face's settings rest at the value the face authors, so `reset` returns them to the face's own.
+
+### Patch Changes
+
+- 077e1a1: The page's first `say` plays on a page that steps its device slowly. The page's player stops a playback that goes unpolled for longer than its halt bound, `IDLE_STOP_MS` (250 ms) or four of the page's poll intervals when the page polls slower than that, and it now measures that interval only between two polls of one playback. Until the page has measured it, no playback stops unpolled. On a page stepping about once a second, as under a software GPU, the first `say` was stopped before its first poll, so its run ended at once and no viseme played; it now plays through, and a later playback whose device stops stepping still stops within four of the page's poll intervals.
+- 32eddfa: A `Spring` node moves by the exact solution of a damped spring over each step, so one long step lands where as many short ones would, whatever its stiffness, damping and mass. A face whose page was hidden — its steps throttled to one a second, then one a minute — shows its springs where that much time leaves them when it shows again. Before, a step longer than a bound its parameters set (0.15 s for the mouth and brow springs of Quori's program, 0.23 s for its eye spring) made a spring diverge: under steps of a second Quori's springs grew to infinity and then NaN, and its mouth froze at its clamps' floors until the face was reloaded. A spring's state also stays finite: at a target that is not a number it holds, and a state seeded from one starts again at rest on the next target.
+
 ## 7.1.0
 
 ### Minor Changes
