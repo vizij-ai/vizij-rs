@@ -20,7 +20,7 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   method; Vizij asks for it on the `standard/ros4hri/expression/*` keys the
   face's graphs read, as before. The preset's `set_facial_action_units`,
   `set_viseme` and `play_visemes` skills name methods the device does not
-  describe, so the bridge refuses them at startup and says so in its log.
+  describe, so Vizij leaves them out of the profile it serves.
 - The browser module's Vizij devices keep no time until their Vizij is
   first drawn (`ready`). Until then every `step` is a step at a zero dt,
   whatever dt the page passes; the first step after advances the time since
