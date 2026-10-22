@@ -2101,9 +2101,10 @@ mod tests {
     }
 
     /// A graph's calls to other modules are placed by the descriptions the
-    /// device's function index gives: a call to a function taking
-    /// parameters runs when they change, one to a function taking none at
-    /// every tick, and one to a function returning nothing not at all.
+    /// device's function index gives: a call to a function returning
+    /// nothing is left out, and any other runs at every tick, its arguments
+    /// changed or not, as a module's function may keep state they do not
+    /// show (the animation module's `step(dt)`).
     #[test]
     fn calls_to_other_modules_follow_their_functions_descriptions() {
         use arora_types::record::module::frozen::{Function, Parameter};
@@ -2185,7 +2186,11 @@ mod tests {
                 .expect("tick");
         }
         let count = |function: Uuid| bridge.calls.iter().filter(|c| c.id == function).count();
-        assert_eq!(count(step), 2, "called when its argument changes");
+        assert_eq!(
+            count(step),
+            4,
+            "called at every tick, its argument repeated"
+        );
         assert_eq!(count(states), 4, "called at every tick");
         assert_eq!(count(notify), 0, "returns nothing, so nothing reads it");
     }

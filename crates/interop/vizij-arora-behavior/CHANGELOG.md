@@ -18,11 +18,11 @@ All notable changes to `vizij-arora-behavior`. The format follows
   tick, and every node it keeps keeps its state.
 - An `ExternalFunction` node is placed by the description the device's
   function index gives of its function, which `tick` reads: a call to a
-  function that returns nothing and writes nothing back is left out, one
-  to a function that takes no parameter is called at every tick, and any
-  other is called when its arguments change. `tick_store_with` takes the
-  index; `tick_store` describes no function, so each such node is called
-  at every tick, as before.
+  function that returns nothing and writes nothing back is left out, and
+  any other is called at every tick, as before: a module's function may
+  keep state its arguments do not show (the animation module's
+  `step(dt)`). `tick_store_with` takes the index; `tick_store` describes
+  no function, so each such node is called at every tick.
 - A tick costs less when few of a graph's inputs change, and more when many
   do on graphs of a few thousand nodes or fewer. Measured against the
   write-only evaluation this replaces, a 950-node graph ticks 2.2 times
