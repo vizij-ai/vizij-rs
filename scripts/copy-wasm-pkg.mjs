@@ -17,7 +17,6 @@ if (packages.length === 0) {
 }
 
 const bootstrapScripts = {
-  animation: "build:wasm:animation",
   "node-graph": "build:wasm:graph",
   runtime: "build:wasm:runtime",
 };

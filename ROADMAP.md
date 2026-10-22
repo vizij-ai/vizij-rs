@@ -7,7 +7,7 @@
 ## Current Focus (Next 1–2 Sprints)
 
 - Harden wasm distribution tooling:
-  - Add wasm-bindgen integration tests for the animation and graph packages.
+  - Add wasm-bindgen integration tests for the graph package.
   - Script ABI/version bump checks so release candidates fail fast when glue and binaries drift.
 - Establish performance baselines:
   - Capture benchmark data for representative node graphs (including robotics workloads).
@@ -17,10 +17,6 @@
 ---
 
 ## Stack Roadmaps
-
-### Animation Stack
-- Add native↔wasm parity tests to catch divergence before publishing.
-- Investigate profiling hooks (feature-flagged metrics) and faster watcher iterations.
 
 ### API Stack
 - Explore generating JSON/TypeScript schemas directly from `arora-shape`.
@@ -52,6 +48,6 @@
 
 ## Backlog & Ideas
 
-- Ship optional Web Worker helpers for heavy wasm workloads (animation baking, graph evaluation).
+- Ship optional Web Worker helpers for heavy wasm workloads (graph evaluation).
 - Offer CLI utilities for schema diffing (`arora-node-graph`) and orchestration smoke tests.
 - Publish fixture metadata (durations, node counts) to help demos surface summary information quickly.

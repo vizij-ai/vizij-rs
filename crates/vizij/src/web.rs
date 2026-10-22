@@ -1004,12 +1004,12 @@ impl VizijRuntime {
         self.inner.drain_changes()
     }
 
-    /// An animation as the animation module's `load_animation` takes it:
+    /// An animation as the animation module's `load_clip` takes it:
     /// `animation_json` is an animation as [`describe`] lists them
     /// (`{ id, name, duration, tracks }`) or a bundle `animations` entry
     /// (`{ id, clip }`). Returns `{ id, name, duration, moduleAnimation }`: the
     /// animation's id, name and duration in seconds, and `moduleAnimation`,
-    /// its `AnimationClip` as an Arora `Value` — each track keyed by the store key
+    /// its `Clip` (format 2.0) as an Arora `Value` — each track keyed by the store key
     /// its channel names through the Vizij's rig, as the Vizij's own
     /// animations are ([`face::load_animations`]), and as [`channel_keys`]
     /// names them from the Vizij's glTF document. On a device with no Vizij

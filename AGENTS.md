@@ -27,16 +27,16 @@ file summarises, it does not replace, those sources.
 ## Workspace Snapshot
 - **API stack**: the value/type/WriteBatch contract is arora-sdk's
   `arora-shape`; `crates/api` holds its wasm adapter, reused across stacks.
-- **Animation stack**: `vizij-animation-core`,
-  `vizij-animation-wasm`, and npm `@vizij/animation`.
 - **Node graph stack**: arora-sdk's `arora-node-graph` (the node functions,
   the importer onto arora-behavior-tree, `TreeRuntime`), `vizij-graph-wasm`,
   and npm `@vizij/node-graph`.
 - **Interop (Arora) stack**: `crates/interop/*` adapts the Vizij stacks onto
   Arora runtime seams — `vizij-arora` (Value interop), `vizij-arora-store`,
-  `vizij-arora-hal`, `vizij-arora-behavior`, and `vizij-animation-module` (npm
-  `@vizij/animation-module`); `crates/vizij` is the view and the device on every
-  target, and its `web` module is npm `@vizij/runtime`.
+  `vizij-arora-hal` and `vizij-arora-behavior`; a device's animations play
+  through Arora's `arora-animation-module`, host-linked, and
+  `vizij-animation-artifact` writes that module's directory, the guest
+  `@vizij/runtime`'s tests load; `crates/vizij` is the view and the device on
+  every target, and its `web` module is npm `@vizij/runtime`.
 - **Test fixtures**: `vizij-test-fixtures` crate that exposes the shared JSON
   manifest, mirrored to npm `@vizij/test-fixtures` for browsers.
 - **Support packages**: npm `@vizij/value-json`, `@vizij/wasm-loader`, and
@@ -61,9 +61,7 @@ file summarises, it does not replace, those sources.
 ### WASM builds and watchers
 | Task | Command |
 |------|---------|
-| Build animation WASM pkg | `pnpm run build:wasm:animation` |
 | Build node-graph WASM pkg | `pnpm run build:wasm:graph` |
-| Watch animation WASM | `pnpm run watch:wasm:animation` *(needs `cargo-watch`)* |
 | Watch node-graph WASM | `pnpm run watch:wasm:graph` *(needs `cargo-watch`)* |
 
 Install the watcher dependency once with `cargo install cargo-watch`.
@@ -93,9 +91,10 @@ Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unkno
 - **API**: `TypedPath`, `ValueJSON` and WriteBatch tooling come from
   arora-sdk's `arora-shape`; read its README before changing serialization or
   shared types, which downstream stacks depend on.
-- **Animation**: `crates/animation/vizij-animation-core/src/lib.rs` exports
-  `Engine`/`StoredAnimation` APIs. WASM (`vizij-animation-wasm`) normalises JSON
-  inputs/outputs and enforces ABI version checks mirrored in the npm wrapper.
+- **Animation**: Arora's animation module (`arora-animation-module`, from
+  crates.io) plays a device's animations, host-linked in `crates/vizij`
+  (`modules::animation`); `module_animation` converts a face's authored
+  animation into its clip format 2.0.
 - **Node graph**: a graph runs on arora-sdk's behavior tree: `arora-node-graph`
   imports it as a tree's detached nodes and runs it (`TreeRuntime`).
   Features like `urdf_ik` are enabled by default and surfaced through the wasm

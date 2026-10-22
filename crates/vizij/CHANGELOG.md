@@ -110,6 +110,41 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   behavior-tree interpreter receives its method index at each tick
   (arora-behavior-tree 9). Nothing a face, a page or a bridge client sees
   changes.
+- **Breaking.** A face's animations play through Arora's animation module,
+  `@arora/animation` 3.0.0 (`arora-animation-module` 1, from crates.io),
+  host-linked in place of Vizij's `@vizij/animation`: same module, function
+  and parameter ids, one state per device.
+  `modules::animation::module_animation` gives the module's format 2.0
+  `Clip`, which `face::load_animations` loads with `load_clip`, as the
+  browser module's `moduleAnimation` gives it for a page's `load_clip`.
+  Each segment plays as its left keyframe's interpolation says, every side
+  of every keypoint stated: `linear` with the linear easing; `step` held to
+  the next keyframe by a keypoint there carrying the held value; `cubic` as
+  glTF's `CUBICSPLINE` Hermite, on the keyframes' authored `inTangent` and
+  `outTangent` and the segment's chord slope where one is absent, so an
+  untangented `cubic` plays the straight line its keys make, as the
+  authoring timeline draws it, where it played the ease (0.42, 0)/(0.58, 1).
+  Keyframes keep their signed nanoseconds and an animation without a
+  duration plays to its last keyframe. What the module changes, as a
+  device's clients see it:
+  - numbers play as `F64`, and an animation writes each key in the type
+    the store declares for it (`KeyMeta::ty`, vizij-arora-behavior 7.3): a
+    face's rig inputs keep holding `F32`; a key with no declared type takes
+    `F32`, Vizij's number type, which keeps pages that read `.f32` working;
+  - a player never moves back to an earlier device time: a client that
+    steps the module directly, ahead of the device's `arora/time`, holds its
+    players until the device's clock passes that time;
+  - a player `play_at` holds before its time reports `waiting` with the
+    state `playing`;
+  - a command takes effect at the device time of the last step, so the
+    player states read right after it show it;
+  - a window no longer moves the playhead: a player outside it plays toward
+    it;
+  - travel past a bound carries on past the wrap or the turn;
+  - `set_loop` takes `bounce`; `PlayerState` (1.3.0) adds `reversed` and
+    `waiting`, `InstanceState` (1.2.0) adds `rate`;
+  - a call the module refuses answers `u32::MAX`, which
+    `face::load_animations` reports as an error.
 - A device stepped with no time in it — the browser module's `step(0)` —
   carries changes through the face's graphs and runs and moves nothing that
   time drives: the springs, dampers and slews of its graphs,

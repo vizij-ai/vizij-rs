@@ -277,8 +277,8 @@ export interface VizijView {
 /**
  * An Arora module as a device loads it: its header as JSON plus its wasm
  * executable — the two arguments of `arora-web`'s `withModule(headerJson,
- * executable)`, carried together. `@vizij/animation-module`'s
- * `loadAnimationModule()` returns one. Loaded as a guest, its functions are
+ * executable)`, carried together: a module directory's `header.json` and
+ * guest. Loaded as a guest, its functions are
  * reachable by id from {@link Runtime.call} and from the graph's
  * `ExternalFunction` nodes, like the host-linked modules'.
  */
@@ -358,6 +358,13 @@ export interface AnimationKeyframe {
   value: number;
   /** Overrides the track's interpolation for the segment from this point. */
   interpolation: string | null;
+  /** The slope a `cubic` segment ending here arrives with, in value units
+   * per second (glTF's `CUBICSPLINE` in-tangent); without one, the
+   * segment's chord slope. */
+  inTangent?: number | null;
+  /** The slope a `cubic` segment starting here leaves with, in value units
+   * per second; without one, the segment's chord slope. */
+  outTangent?: number | null;
 }
 
 /** One animated channel of a {@link Animation}. */
@@ -432,14 +439,14 @@ export interface VizijDescription {
   metadata: Record<string, unknown> | null;
 }
 
-/** An animation as the animation module's `load_animation` takes it, from
+/** An animation as the animation module's `load_clip` takes it, from
  * {@link Runtime.moduleAnimation}. */
 export interface ModuleAnimation {
   id: string;
   name: string | null;
   /** Seconds. */
   duration: number;
-  /** The module's `AnimationClip`, as an Arora `Value`: `load_animation`'s
+  /** The module's `Clip` (format 2.0), as an Arora `Value`: `load_clip`'s
    * `clip` argument. */
   moduleAnimation: object;
 }
@@ -914,13 +921,13 @@ export class Runtime {
 
   /**
    * `animation` — one of {@link describe}'s `animations`, or a page's own in
-   * that shape — as the animation module's `load_animation` takes it: its
+   * that shape — as the animation module's `load_clip` takes it: its
    * id, name and duration (seconds), and `moduleAnimation`, the module's
-   * `AnimationClip` with each track keyed by the store key its channel
+   * `Clip` (format 2.0) with each track keyed by the store key its channel
    * names through this Vizij's rig, as the Vizij's own animations are
    * loaded ({@link channelKeys} names the same keys from the Vizij's glTF
    * document); on a device from {@link startRuntime}, which has no Vizij,
-   * a channel is its own key. Pass it on: `invoke("load_animation", { clip:
+   * a channel is its own key. Pass it on: `invoke("load_clip", { clip:
    * moduleAnimation })`.
    */
   moduleAnimation(animation: Animation): ModuleAnimation {

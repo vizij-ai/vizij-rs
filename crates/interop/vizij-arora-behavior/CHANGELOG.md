@@ -39,6 +39,23 @@ All notable changes to `vizij-arora-behavior`. The format follows
   holds keys through it.
 - Requires arora-node-graph 1 and arora-shape 1.
 
+## [7.3.0] - Unreleased
+
+### Changed
+
+- A path-less `output` writes each record's number in the type the store
+  declares for its key (`KeyMeta::ty`), so a reader of a key its records
+  write reads the key's type: the animation module's `F64` lands on an `F32`
+  rig input as an `F32`. Arora checks a declared type on the writes that
+  come from outside the device only; the interpreter holds these records to
+  it. An integer converts to an integer type exactly, held within the
+  type's range; a float rounds to the nearest integer, held within the range,
+  and a NaN, which names no integer, writes nothing, so the key keeps its
+  value. A key that declares no type takes an `F64` as an `F32`, Vizij's
+  number type, which keeps pages that read `.f32` working. Anything but a
+  number is written as it is, and a path `output`'s value is not converted.
+  The store's meta is read once a tick, for the records alone.
+
 ## [7.2.0] - 2026-10-19
 
 ### Changed

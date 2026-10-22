@@ -1,13 +1,11 @@
 [workspace]
 members = [
-  "crates/animation/vizij-animation-core",
-  "crates/animation/vizij-animation-wasm",
   "crates/node-graph/vizij-graph-wasm",
   "crates/node-graph/vizij-graph-registry-export",
   "crates/api/vizij-api-wasm",
   "crates/test-fixtures/vizij-test-fixtures",
   "crates/interop/vizij-arora",
-  "crates/interop/vizij-animation-module",
+  "crates/interop/vizij-animation-artifact",
   "crates/interop/vizij-arora-store",
   "crates/interop/vizij-arora-hal",
   "crates/interop/vizij-arora-behavior",

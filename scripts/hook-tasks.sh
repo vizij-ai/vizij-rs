@@ -60,18 +60,12 @@ rust_build() {
     cargo build -p vizij --features "$VIZIJ_FEATURES_ZENOH" --bins
 }
 
-# `vizij-animation-module` is tested in the `vizij` pass, not the workspace
-# one. Its library is a cdylib as well as an rlib, and cargo keeps a single
-# build of such a path crate (its artifacts carry no hash): built under both
-# passes' dependency resolutions, it would be rebuilt by each pass, and
-# `vizij`'s library and test binaries with it, on every run, changes or not.
-# The crate has no features, so the `vizij` pass tests the same code.
 rust_test() {
   # Avoid compiling/running benches to keep hook/CI fast
-  run_cmd "cargo test --workspace --all-features --exclude vizij --exclude vizij-animation-module" \
-    cargo test --workspace --all-features --exclude vizij --exclude vizij-animation-module
-  run_cmd "cargo test -p vizij -p vizij-animation-module --features vizij/$VIZIJ_FEATURES_DDS" \
-    cargo test -p vizij -p vizij-animation-module --features "vizij/$VIZIJ_FEATURES_DDS"
+  run_cmd "cargo test --workspace --all-features --exclude vizij" \
+    cargo test --workspace --all-features --exclude vizij
+  run_cmd "cargo test -p vizij --features $VIZIJ_FEATURES_DDS" \
+    cargo test -p vizij --features "$VIZIJ_FEATURES_DDS"
 }
 
 rust_clean() {
@@ -95,15 +89,7 @@ npm_test() {
 }
 
 run_wasm_checks() {
-  run_cmd "node scripts/build-animation-wasm.mjs" node scripts/build-animation-wasm.mjs
   run_cmd "node scripts/build-graph-wasm.mjs" node scripts/build-graph-wasm.mjs
-
-  (
-    cd npm/@vizij/animation
-    run_cmd "npm/@vizij/animation: npm ci" npm ci
-    run_cmd "npm/@vizij/animation: npm run build" npm run build
-    run_cmd "npm/@vizij/animation: npm pack --dry-run" npm pack --dry-run
-  )
 
   (
     cd npm/@vizij/node-graph

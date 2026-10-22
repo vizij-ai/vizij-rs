@@ -27,3 +27,5 @@ vizij-arora-host = { version = "7", path = "../vizij-arora-host" }
 
 [dev-dependencies]
 arora-simple-data-store = "3"
+# A store that keeps key meta, for the declared types a keyed record takes.
+vizij-arora-store = { path = "../vizij-arora-store" }

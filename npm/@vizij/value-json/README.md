@@ -123,7 +123,7 @@ graph.stageInput("demo/input/vector", toValueJSON([1, 2, 3]));
 graph.stageInput("demo/input/mode", toValueJSON({ enum: { tag: "A", value: { float: 1 } } }));
 ```
 
-Reading values emitted by the animation engine:
+Reading the values an engine emits:
 
 ```ts
 import { valueAsNumber, valueAsTransform } from "@vizij/value-json";
@@ -161,6 +161,6 @@ The package uses Node's built-in test runner (`node --test`) to cover coercion e
 ## Related Packages
 
 - [`arora-shape`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-shape/README.md) – Rust source of truth for Value/Shape types.
-- [`@vizij/node-graph`](../node-graph/README.md) • [`@vizij/animation`](../animation/README.md) – wrapper packages that rely on these helpers.
+- [`@vizij/node-graph`](../node-graph/README.md) – the wrapper package that relies on these helpers.
 
 Questions or improvements? Open an issue—aligned value handling keeps Vizij runtimes interoperable. 🔄

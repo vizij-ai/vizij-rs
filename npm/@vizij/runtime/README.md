@@ -236,8 +236,9 @@ works on it.
 
 Arora wasm modules load into a device as guests: `startRuntime(graph, init,
 modules)` and `loadVizij`'s `options.modules` take `AroraModule`s —
-`{ headerJson, wasmBytes }`, what `@vizij/animation-module`'s
-`loadAnimationModule()` returns for its artifact; their functions are
+`{ headerJson, wasmBytes }`, a module directory's `header.json` and guest
+(an Arora module's `module_dir`, such as `arora-animation-module`'s, writes
+one); their functions are
 reachable from `runtime.call` and `runtime.invoke` and
 from the graph's `ExternalFunction` nodes, like the host-linked modules'. A
 guest under a host-linked module's id — the animation module's — is served
@@ -269,16 +270,16 @@ await quori.invoke("play", { player: u32(player) });
 await quori.invoke("set_speed", { player: u32(player), speed: { f32: 2 } }); // kept across pause and play
 await quori.invoke("pause", { player: u32(player) });                         // holds the pose
 await quori.invoke("seek", { player: u32(player), time_ns: { u64: 1.5e9 } });
-await quori.invoke("set_loop", { player: u32(player), mode: "once" });        // "loop", "ping_pong"
+await quori.invoke("set_loop", { player: u32(player), mode: "once" });        // "loop", "bounce", "ping_pong"
 await quori.invoke("stop", { player: u32(player) });                          // back to its first frame
 await quori.invoke("set_weight", { player: u32(player), instance: u32(instances[0].instance), weight: { f32: 0 } }); // silent
 
 // a page's own animation, in describe's shape:
 const { moduleAnimation } = quori.moduleAnimation(animation);
-const anim = await quori.invoke("load_animation", { clip: moduleAnimation });   // { u32 }
+const anim = await quori.invoke("load_clip", { clip: moduleAnimation });        // { u32 }
 const created = await quori.invoke("create_player", { name: animation.id });   // { u32 }
 await quori.invoke("add_instance_with_weight", { player: created, anim, weight: { f32: 0 } });
-await quori.invoke("reload_animation", { anim, clip: edited });               // in place: the playback stays
+await quori.invoke("reload_clip", { anim, clip: edited });                    // in place: the playback stays
 await quori.invoke("remove_player", { player: created });
 await quori.invoke("unload_animation", { anim });                              // its keys keep their last values
 ```
@@ -287,8 +288,16 @@ A stopped player still writes its first frame at its weight: a client that
 wants an animation to let go of its keys gives it weight 0. The calls apply
 in the order they were issued.
 `moduleAnimation(animation)` turns an animation in `describe`'s shape into
-the module's `AnimationClip`, each track keyed by the store key its channel
-names through this Vizij's rig, as the Vizij's own are loaded.
+the module's `Clip` (format 2.0), each track keyed by the store key its
+channel names through this Vizij's rig, as the Vizij's own are loaded. Each
+segment plays as its left keyframe's interpolation says: `linear`, `step`,
+or `cubic` — glTF's `CUBICSPLINE` Hermite on the keyframes' `inTangent` and
+`outTangent` (value units per second), the segment's chord slope where one
+is absent, so an untangented `cubic` plays the straight line its keys
+make. The module plays numbers as `f64`, and the animation writes each key
+in the type the store declares for it (`KeyMeta::ty`): an `f32` on a Vizij's
+rig inputs. A key with no declared type takes `f32`, Vizij's number type,
+which keeps pages that read `.f32` working.
 
 `channelKeys(gltf, channels)` names those keys from a Vizij's glTF JSON
 document, without loading it — its `VIZIJ_bundle` read as `composeVizij`

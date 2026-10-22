@@ -14,7 +14,7 @@
  * each step. */
 export const ANIMATION_PLAYERS_PATH = "vizij/animations/players";
 
-/** `PlayerState`'s field ids (record 1.1.0). */
+/** `PlayerState`'s field ids (record 1.3.0). */
 export const PLAYER_STATE_FIELDS = {
   player: "76697a69-6a00-0000-0111-000000000001",
   state: "76697a69-6a00-0000-0111-000000000002",
@@ -24,13 +24,20 @@ export const PLAYER_STATE_FIELDS = {
   name: "76697a69-6a00-0000-0111-000000000006",
   instances: "76697a69-6a00-0000-0111-000000000007",
   loop_mode: "76697a69-6a00-0000-0111-000000000008",
+  ended: "76697a69-6a00-0000-0111-000000000009",
+  window_start_ns: "76697a69-6a00-0000-0111-00000000000a",
+  window_end_ns: "76697a69-6a00-0000-0111-00000000000b",
+  reversed: "76697a69-6a00-0000-0111-00000000000c",
+  waiting: "76697a69-6a00-0000-0111-00000000000d",
 } as const;
 
-/** `InstanceState`'s field ids. */
+/** `InstanceState`'s field ids (record 1.2.0). */
 export const INSTANCE_STATE_FIELDS = {
   instance: "76697a69-6a00-0000-0112-000000000001",
   anim: "76697a69-6a00-0000-0112-000000000002",
   weight: "76697a69-6a00-0000-0112-000000000003",
+  start_offset_ns: "76697a69-6a00-0000-0112-000000000004",
+  rate: "76697a69-6a00-0000-0112-000000000006",
 } as const;
 
 /** One instance on a player, as the animation module reports it. */
@@ -39,6 +46,12 @@ export interface InstanceState {
   /** The animation it plays: what `unload_animation` takes. */
   anim: number;
   weight: number;
+  /** Seconds: where on the player's timeline the instance's clip starts
+   * (`set_start_offset`). */
+  startOffset: number;
+  /** The speed multiplier the clip plays at on the player's timeline
+   * (`set_rate`): its local time is `(time - startOffset) * rate`. */
+  rate: number;
 }
 
 /** One player's state, as the animation module reports it. */
@@ -56,8 +69,19 @@ export interface PlayerState {
   /** The speed multiplier, as `set_speed` set it: kept while paused or
    * stopped. */
   speed: number;
-  /** `once`, `loop` or `ping_pong`, as `set_loop` takes it. */
+  /** `once`, `loop`, `bounce` or `ping_pong`, as `set_loop` takes it. */
   loopMode: string;
+  /** Whether the loop mode stopped the player at a bound. */
+  ended: boolean;
+  /** Seconds: the window the player plays within (`set_window`); its end
+   * `null` for the player's length. */
+  window: { start: number; end: number | null };
+  /** Whether the player heads against its speed's sign, after a turn at a
+   * bound. */
+  reversed: boolean;
+  /** Whether the player waits for the device time `play_at` gave it; its
+   * `state` says `playing` meanwhile. */
+  waiting: boolean;
   instances: InstanceState[];
 }
 
@@ -77,10 +101,20 @@ function structures(value: unknown): Fields[] {
   );
 }
 
-/** A scalar field's value (`{ u32: 3 }` → 3). */
+/** A scalar field's value (`{ u32: 3 }` → 3); an optional one's
+ * (`{ option: { u64: 3 } }` → 3, `{ option: null }` → `null`). */
 function scalar(fields: Fields, id: string): unknown {
   const value = fields.get(id);
+  if (value && "option" in value) {
+    const inner = value.option as Record<string, unknown> | null;
+    return inner ? Object.values(inner)[0] : null;
+  }
   return value ? Object.values(value)[0] : undefined;
+}
+
+/** Nanoseconds as seconds; `null` for an absent value. */
+function seconds(ns: unknown): number | null {
+  return ns == null ? null : Number(ns) / 1e9;
 }
 
 /** The players of a `[PlayerState]` store value; empty for anything else. */
@@ -93,10 +127,19 @@ export function decodePlayerStates(value: unknown): PlayerState[] {
     duration: Number(scalar(fields, PLAYER_STATE_FIELDS.duration_ns) ?? 0) / 1e9,
     speed: Number(scalar(fields, PLAYER_STATE_FIELDS.speed) ?? 0),
     loopMode: String(scalar(fields, PLAYER_STATE_FIELDS.loop_mode) ?? "loop"),
+    ended: scalar(fields, PLAYER_STATE_FIELDS.ended) === true,
+    window: {
+      start: Number(scalar(fields, PLAYER_STATE_FIELDS.window_start_ns) ?? 0) / 1e9,
+      end: seconds(scalar(fields, PLAYER_STATE_FIELDS.window_end_ns)),
+    },
+    reversed: scalar(fields, PLAYER_STATE_FIELDS.reversed) === true,
+    waiting: scalar(fields, PLAYER_STATE_FIELDS.waiting) === true,
     instances: structures(fields.get(PLAYER_STATE_FIELDS.instances)).map((instance) => ({
       instance: Number(scalar(instance, INSTANCE_STATE_FIELDS.instance)),
       anim: Number(scalar(instance, INSTANCE_STATE_FIELDS.anim)),
       weight: Number(scalar(instance, INSTANCE_STATE_FIELDS.weight) ?? 0),
+      startOffset: Number(scalar(instance, INSTANCE_STATE_FIELDS.start_offset_ns) ?? 0) / 1e9,
+      rate: Number(scalar(instance, INSTANCE_STATE_FIELDS.rate) ?? 1),
     })),
   }));
 }

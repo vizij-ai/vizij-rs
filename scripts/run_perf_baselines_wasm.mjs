@@ -41,7 +41,6 @@ const goldens = JSON.parse(readFileSync(GOLDEN_PATH, "utf8"));
 const SMOKE_IDS = new Set([
   "graph-smoke",
   "graph-defaults-only",
-  "animation-mixed-small",
 ]);
 
 function stableStringify(value) {
@@ -146,18 +145,6 @@ async function loadGraphWasm() {
   }
 }
 
-async function loadAnimWasm() {
-  try {
-    return await import("@vizij/animation");
-  } catch {
-    const local = new URL(
-      "../npm/@vizij/animation/dist/animation/src/index.js",
-      import.meta.url,
-    );
-    return await import(local);
-  }
-}
-
 function applyGraphInputs(graph, entry, dt, stepIdx, hotPaths) {
   if (!hotPaths.length) return;
   if (entry.mode === "defaults-only") return; // keep defaults untouched for this scenario
@@ -234,56 +221,6 @@ async function runGraphScenario(entry, abiInfo) {
   };
 }
 
-async function runAnimationScenario(entry, abiInfo) {
-  const { spec, sha } = resolveSpec(entry);
-  const { init, Engine, abi_version } = await loadAnimWasm();
-  await init();
-  const steps = entry.steps ?? 120;
-  const warmup = entry.warmup ?? 0;
-  const samples = entry.samples ?? 5;
-  const dt = entry.dt ?? DEFAULT_DT;
-
-  const perSample = [];
-  let signature = "";
-
-  for (let s = 0; s < samples; s++) {
-    const engine = new Engine();
-    engine.loadAnimation(spec, { format: "stored" });
-    const player = engine.createPlayer("bench");
-    engine.addInstance(player, spec.id ?? "anim", {
-      time_scale: 1,
-      weight: 1,
-      enabled: true,
-      start_offset: 0,
-    });
-    let outputs = null;
-    for (let w = 0; w < warmup; w++) {
-      outputs = engine.updateValues(dt);
-    }
-    const t0 = now();
-    for (let i = 0; i < steps; i++) {
-      outputs = engine.updateValues(dt);
-    }
-    const usPerStep = ((now() - t0) * 1000) / steps;
-    signature = hashValue({ outputs, steps, dt });
-    perSample.push(usPerStep);
-  }
-
-  abiInfo.animation = abi_version?.() ?? abiInfo.animation ?? null;
-
-  return {
-    id: entry.id,
-    bench: "animation_step",
-    median_us: median(perSample),
-    signature,
-    spec_sha: sha,
-    samples,
-    warmup,
-    steps,
-    dt,
-  };
-}
-
 function loadGraphSpecFromFile(relPath) {
   const full = path.resolve(ROOT, relPath);
   const parsed = JSON.parse(readFileSync(full, "utf8"));
@@ -326,7 +263,7 @@ function appendRows(rows, abiInfo) {
   } catch {
     /* fall back to unknown */
   }
-  const abiString = `g${abiInfo.graph ?? "?"}-a${abiInfo.animation ?? "?"}`;
+  const abiString = `g${abiInfo.graph ?? "?"}`;
   const buildType = process.env.VIZIJ_BUILD_TYPE ?? "release";
 
   const lines = rows
@@ -351,22 +288,17 @@ function selectScenarios() {
   const pick = (arr) => (SMOKE ? arr.filter((e) => SMOKE_IDS.has(e.id)) : arr);
   return {
     graph: pick(meta.graph ?? []),
-    animation: pick(meta.animation ?? []),
   };
 }
 
 async function main() {
-  const abiInfo = { graph: null, animation: null };
+  const abiInfo = { graph: null };
   const scenarios = selectScenarios();
   const results = [];
 
   for (const entry of scenarios.graph) {
     if (VERIFY_ONLY || SMOKE) console.log(`Running graph:${entry.id}`);
     results.push(await runGraphScenario(entry, abiInfo));
-  }
-  for (const entry of scenarios.animation) {
-    if (VERIFY_ONLY || SMOKE) console.log(`Running animation:${entry.id}`);
-    results.push(await runAnimationScenario(entry, abiInfo));
   }
 
   if (UPDATE_GOLDEN) {

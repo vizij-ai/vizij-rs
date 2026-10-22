@@ -65,9 +65,8 @@ jobs:
 
       - name: Install wasm32 targets
         if: steps.check.outputs.pending == 'true'
-        # unknown-unknown for the wasm-bindgen wrappers, wasip1 for the
-        # animation-module artifact (an Arora guest module).
-        run: rustup target add wasm32-unknown-unknown wasm32-wasip1
+        # unknown-unknown for the wasm-bindgen wrappers.
+        run: rustup target add wasm32-unknown-unknown
 
       - uses: taiki-e/install-action@v2
         if: steps.check.outputs.pending == 'true'

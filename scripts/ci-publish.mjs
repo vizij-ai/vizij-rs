@@ -38,7 +38,6 @@ const DRY_RUN = process.argv.includes("--dry-run");
  * The other packages need no wasm build step.
  */
 const WASM_TARGETS = {
-  animation: "animation",
   "node-graph": "graph",
   runtime: "runtime",
 };

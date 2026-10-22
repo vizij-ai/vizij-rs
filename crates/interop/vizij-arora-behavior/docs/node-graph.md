@@ -53,7 +53,7 @@ flowchart LR
 ```
 
 - **Read (store → graph):** each subscribed input path (the graph's `Input` nodes, [`input_paths`, `lib.rs:98-104`](../src/lib.rs#L98-L104)) is read from the store and staged into the runtime ([`tick_store`](../src/lib.rs)); an `Input` node's call reads it.
-- **Write (graph → store):** only sink `Output` nodes emit writes; they are collected after the tick and drained into a **single `StateChange`** written once per tick ([`tick_store`](../src/lib.rs)). A path-less `Output` with `key_field`/`value_field` expands an array-of-records into one write per record, which the runtime applies, as the tree binds an output to one static key.
+- **Write (graph → store):** only sink `Output` nodes emit writes; they are collected after the tick and drained into a **single `StateChange`** written once per tick ([`tick_store`](../src/lib.rs)). A path-less `Output` with `key_field`/`value_field` expands an array-of-records into one write per record, which the runtime applies, as the tree binds an output to one static key. A record's value is a module's, of the module's own type (the animation module plays numbers as `F64`), so the flush writes each record's number in the type the store declares for its key (`KeyMeta::ty`): an `F32` rig input takes an `F32`, and an integer type the integer exactly or a float rounded to the nearest, held within its range, a NaN writing nothing. A key declaring no type takes an `F64` as an `F32`, Vizij's number type, which keeps pages that read `.f32` working ([`store_change`, `conform`](../src/lib.rs)). Arora checks a declared type on the writes from outside the device only; a path `Output` writes what its port computes, unconverted.
 
 This is the same store seam a behavior tree uses (read inputs, write outputs), but staged at the tick boundary rather than per-node — where the tree binds each `{var}` to a store `Slot` and reads/writes it mid-tick, the graph batches a read pass before and a write pass after evaluation. Round-trip test: [`graph_reads_and_writes_the_arora_store`](../src/lib.rs#L269-L293).
 
@@ -70,7 +70,7 @@ flowchart LR
   engine -- "result.ret" --> extnode
 ```
 
-The node-graph module looks up the `function → module` id the interpreter set (`ProcessingGraph::set_function_modules`; the engine routes a `Call` by its `module_id`), builds `Call { module_id, id: function, args }` from the opaque UUIDs, dispatches through the `CallBridge` the interpreter got in its `BehaviorContext`, and returns `result.ret`. **Animation** is one such module: `vizij-animation-core` packaged as a standalone Arora wasm module ([`vizij-animation-module/src/lib.rs:1-31`](../../vizij-animation-module/src/lib.rs#L1-L31)), reached the same way as any other — an `ExternalFunction` node whose function/module UUIDs point at it.
+The node-graph module looks up the `function → module` id the interpreter set (`ProcessingGraph::set_function_modules`; the engine routes a `Call` by its `module_id`), builds `Call { module_id, id: function, args }` from the opaque UUIDs, dispatches through the `CallBridge` the interpreter got in its `BehaviorContext`, and returns `result.ret`. **Animation** is one such module: Arora's [`arora-animation-module`](https://github.com/semio-ai/arora-sdk/tree/main/modules/animation), host-linked into a Vizij device ([`crates/vizij/src/modules/animation.rs`](../../../vizij/src/modules/animation.rs)), reached the same way as any other — an `ExternalFunction` node whose function/module UUIDs point at it.
 
 This is the UUID-keyed analogue of the behavior tree's module dispatch (a non-built-in node id resolved through the engine): both go through `CallBridge::arora_call`; the graph routes by an explicit `function → module` map, the tree by a `function_index`. Dispatch test: [`external_function_dispatches_through_host_and_sets_output`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/tree_tests/external_function_tests.rs).
 
@@ -93,7 +93,7 @@ Both keep the graph runtime **warm**: the tree is loaded again from the changed 
 | The importer onto the tree | [`arora-node-graph/src/import.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/import.rs) |
 | The node functions (`@arora/node-graph`) | [`arora-node-graph/src/functions.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/functions.rs) |
 | The tree runtime | [`arora-node-graph/src/tree_runtime.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/tree_runtime.rs) |
-| Animation packaged as an Arora module | [`crates/interop/vizij-animation-module/src/lib.rs`](../../vizij-animation-module/src/lib.rs) |
+| The animation module, host-linked | [`crates/vizij/src/modules/animation.rs`](../../../vizij/src/modules/animation.rs) |
 | The Arora interpreter contract this satisfies | [arora-behavior interpreter workflow](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-behavior/docs/interpreter-workflow.md) |
 | The other reference interpreter (parallels drawn here) | [arora-behavior-tree nodes](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-behavior-tree/docs/nodes.md) |
 
