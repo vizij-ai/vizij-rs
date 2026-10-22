@@ -277,8 +277,8 @@ export interface VizijView {
 /**
  * An Arora module as a device loads it: its header as JSON plus its wasm
  * executable — the two arguments of `arora-web`'s `withModule(headerJson,
- * executable)`, carried together. `@vizij/animation-module`'s
- * `loadAnimationModule()` returns one. Loaded as a guest, its functions are
+ * executable)`, carried together: a module directory's `header.json` and
+ * guest. Loaded as a guest, its functions are
  * reachable by id from {@link Runtime.call} and from the graph's
  * `ExternalFunction` nodes, like the host-linked modules'.
  */

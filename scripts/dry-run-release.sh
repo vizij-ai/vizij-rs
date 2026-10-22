@@ -11,14 +11,11 @@ cargo test --workspace
 
 # # 2. Build WASM artifacts (assumes wasm-pack or equivalent is installed)
 # echo "Building WASM packages…"
-# node scripts/build-animation-wasm.mjs
 # node scripts/build-graph-wasm.mjs
 
 # # 3. Dry‑run publishing of crates in dependency order
 # CRATES=(
-#   vizij-animation-core
 #   vizij-graph-core
-#   vizij-animation-wasm
 #   vizij-graph-wasm
 # )
 
@@ -35,7 +32,6 @@ pnpm run build:shared
 NPM_PACKAGES=(
   value-json
   wasm-loader
-  animation
   node-graph
 )
 

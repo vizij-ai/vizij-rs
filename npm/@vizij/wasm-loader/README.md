@@ -76,10 +76,10 @@ export async function init(input?: InitInput): Promise<void> {
 Consumers can override the init argument when hosting assets elsewhere:
 
 ```ts
-import { init } from "@vizij/animation";
+import { init } from "@vizij/node-graph";
 import { readFile } from "node:fs/promises";
 
-const bytes = await readFile("dist/animation_wasm_bg.wasm");
+const bytes = await readFile("dist/pkg/vizij_graph_wasm_bg.wasm");
 await init(bytes); // load from a buffer instead of fetch()
 ```
 
@@ -91,7 +91,7 @@ If you expose separate debug/release builds, call `loadBindings` with different 
 
 ### Error translation
 
-Wrap initialisation in `try/catch` to present actionable messages (e.g. `Failed to load animation engine: ABI mismatch`). The loader surfaces meaningful strings—forward them to your UI or logs.
+Wrap initialisation in `try/catch` to present actionable messages (e.g. `Failed to load the node-graph engine: ABI mismatch`). The loader surfaces meaningful strings—forward them to your UI or logs.
 
 ---
 
@@ -115,5 +115,5 @@ pnpm --filter @vizij/wasm-loader run build
 
 ## Related Packages
 
-- [`@vizij/animation`](../animation/README.md), [`@vizij/node-graph`](../node-graph/README.md) – primary consumers of this loader.
-- [`vizij-animation-wasm`](../../../crates/animation/vizij-animation-wasm/README.md) et al. – Rust crates that produce the wasm artefacts loaded through this helper.
+- [`@vizij/node-graph`](../node-graph/README.md) – the primary consumer of this loader.
+- [`vizij-graph-wasm`](../../../crates/node-graph/vizij-graph-wasm/README.md) – the Rust crate that produces the wasm artefact loaded through this helper.

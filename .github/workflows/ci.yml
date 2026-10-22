@@ -94,9 +94,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-          # wasm32-wasip1 builds the Arora guests: the animation-module
-          # artifact, and arora-animation-module's guest @vizij/runtime's
-          # tests load (neither is a wasm-bindgen wrapper).
+          # wasm32-wasip1 builds arora-animation-module's guest, which
+          # @vizij/runtime's tests load (an Arora guest, not a wasm-bindgen
+          # wrapper).
           targets: wasm32-wasip1
       - uses: Swatinem/rust-cache@v2
         with:
@@ -104,8 +104,6 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack
-      - name: Build WASM into npm wrapper pkg/
-        run: node scripts/build-animation-wasm.mjs
       - name: Build Graph WASM into npm wrapper pkg/
         run: node scripts/build-graph-wasm.mjs
       # The browser bundle is the whole vizij crate (Bevy included) for
@@ -126,15 +124,11 @@ jobs:
           pnpm --filter @vizij/wasm-loader run build
       - name: Build wasm wrapper packages
         run: |
-          pnpm --filter @vizij/animation run build
           pnpm --filter @vizij/node-graph run build
-          pnpm --filter @vizij/animation-module run build
           pnpm --filter @vizij/runtime run build
       - name: Run wrapper tests
         run: |
-          pnpm --filter @vizij/animation run test
           pnpm --filter @vizij/node-graph run test
-          pnpm --filter @vizij/animation-module run test
           pnpm --filter @vizij/runtime run test
       # What the browser tests serve: the runtime's dist (the wasm module
       # included) and the two workspace packages its page imports by name.
@@ -223,7 +217,6 @@ jobs:
           pnpm --filter @vizij/wasm-loader run build
       - name: Build wasm wrapper packages
         run: |
-          pnpm --filter @vizij/animation run build
           pnpm --filter @vizij/node-graph run build
       - name: Run perf smoke (signatures + order-of-magnitude)
         run: pnpm run perf:smoke
@@ -243,27 +236,6 @@ jobs:
           package-manager-cache: false
       - name: Verify node registry artifacts are updated
         run: node scripts/verify-node-registry.mjs
-
-  # Proves the animation module's arora_call boundary end-to-end: the typed
-  # AnimationClip (Vec<Struct> -> Value::ArrayStructure) marshals through
-  # `arora_call` into the wasm module and the sampled TrackOutput marshals back.
-  # host_ramp is #[ignore]d because building the wasm artifact from inside the
-  # test deadlocks the cargo build lock, so we pre-build the artifact here and
-  # then run the test with --ignored (the workspace `cargo test` never runs it).
-  animation-module-boundary:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-wasip1
-      - uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Build the animation wasm module artifact
-        run: cargo build -p vizij-animation-module --target wasm32-wasip1
-      - name: Prove the arora_call boundary (host_ramp)
-        run: cargo test -p vizij-animation-module --test host_ramp -- --ignored
 
   # Visual regression: render Quori/Toasty on lavapipe (Mesa's software Vulkan —
   # no GPU on the runner) and compare to committed references, keeping the

@@ -110,7 +110,8 @@ your own AWS-backed deployment, and where text enters — is in
 | Embed a live face in my own web app | [`@vizij/runtime`](npm/@vizij/runtime/README.md) (the browser device) + the React packages in [vizij-web](https://github.com/vizij-ai/vizij-web) |
 | Pilot faces from [Semio Studio](https://studio.semio.ai) | the `--studio` flag ([app README](crates/vizij/README.md)) or the standalone's studio-bridge build |
 | Pack, validate, or embed profiles and mappings into face assets | [`vizij-bundle`](crates/tools/vizij-bundle/README.md) — the model: [profiles and mappings](docs/profiles-and-mappings.md) |
-| Use the animation or node-graph engine on its own | [vizij-animation-core](crates/animation/vizij-animation-core/README.md) / [vizij-graph-core](crates/node-graph/vizij-graph-core/README.md), or their [npm wrappers](#domain-stacks) |
+| Use the node-graph engine on its own | [vizij-graph-core](crates/node-graph/vizij-graph-core/README.md), or its [npm wrapper](#domain-stacks) |
+| Play keyframe animations on their own | Arora's [`arora-animation`](https://crates.io/crates/arora-animation) (the engine) and [`arora-animation-module`](https://crates.io/crates/arora-animation-module) (`@arora/animation`, the module a Vizij device links) |
 
 The rest of this README covers developing in the workspace itself.
 
@@ -182,19 +183,18 @@ This command runs the Rust workspace build, each WASM build, and the shared npm 
 ### Build a specific WASM stack
 
 ```bash
-pnpm run build:wasm:animation
 pnpm run build:wasm:graph
+pnpm run build:wasm:runtime
 ```
 
 Each script invokes the corresponding Node helper in `scripts/`, which runs `wasm-pack build --target web --release` for the matching crate and writes the generated JS + `.wasm` artifacts into the npm package's `pkg/` directory.
 
 ### Continuous rebuilds during development
 
-All WASM stacks expose watch scripts that rely on `cargo-watch`:
+The node graph's WASM build has a watch script that relies on `cargo-watch`:
 
 ```bash
 pnpm run watch:wasm:graph
-pnpm run watch:wasm:animation
 ```
 
 These scripts rebuild the WASM artefacts whenever source files change. For short-lived experiments you can still publish a global link via the `link:wasm:*` scripts, but the recommended flow is:
@@ -259,7 +259,6 @@ Per-crate runs are equally useful:
 
 ```bash
 cargo test -p vizij-graph-core
-cargo test -p vizij-animation-core
 ```
 
 The wrapper packages exercise their generated bindings through package-level test scripts:
@@ -281,7 +280,7 @@ Fixtures live in `fixtures/` for repeatable scenario testing. Use them in integr
 - CI smoke uses: `SMOKE=1 VERIFY_ONLY=1 pnpm run perf:smoke`
 - Update goldens intentionally: `UPDATE_GOLDEN=1 pnpm run perf:wasm`
 
-Scenarios cover: tiny smoke, defaults-only, kitchen mid (25 blocks), kitchen heavy (500 blocks), and mixed animation (small/medium). Each run records samples, warmup, steps, dt, ABI, build type, commit, and signatures.
+Scenarios cover: tiny smoke, defaults-only, kitchen mid (25 blocks), and kitchen heavy (500 blocks). Each run records samples, warmup, steps, dt, ABI, build type, commit, and signatures.
 
 ---
 
@@ -361,9 +360,6 @@ vizij-rs/
 │  ├─ api/
 │  │  ├─ vizij-api-core            # Shared Value/Shape/TypedPath types
 │  │  └─ vizij-api-wasm            # wasm-bindgen helpers for Value/WriteBatch JSON
-│  ├─ animation/
-│  │  ├─ vizij-animation-core      # Deterministic animation engine
-│  │  └─ vizij-animation-wasm      # wasm-bindgen binding
 │  ├─ node-graph/
 │  │  ├─ vizij-graph-core          # Data-flow node graph evaluator
 │  │  ├─ vizij-graph-wasm          # wasm-bindgen binding
@@ -374,7 +370,6 @@ vizij-rs/
 │  │  ├─ vizij-arora-hal           # Vizij rig presented as an Arora HAL
 │  │  ├─ vizij-arora-behavior      # Vizij node graph as an Arora behavior interpreter
 │  │  ├─ vizij-arora-host          # Bundle composition, face standard, profiles & mappings (ROS4HRI), skills
-│  │  ├─ vizij-animation-module    # vizij-animation-core packaged as an Arora wasm module
 │  │  └─ vizij-animation-artifact  # Writes arora-animation-module's module directory: the guest @vizij/runtime's tests load
 │  ├─ tools/
 │  │  └─ vizij-bundle              # Face-GLB bundle tool: inspect/pack/validate, declare profiles, embed mappings
@@ -382,8 +377,6 @@ vizij-rs/
 │  └─ test-fixtures/
 │     └─ vizij-test-fixtures       # Loads JSON fixtures referenced across stacks
 ├─ npm/
-│  ├─ @vizij/animation-module      # vizij-animation-core built as an Arora wasm module (assets)
-│  ├─ @vizij/animation             # Stable ESM wrapper around `vizij-animation-wasm`
 │  ├─ @vizij/node-graph            # Wrapper around `vizij-graph-wasm`
 │  ├─ @vizij/runtime               # Vizij faces in the browser: the view and the device in one wasm module
 │  ├─ @vizij/test-fixtures         # Browser bundle of shared JSON fixtures
@@ -405,7 +398,6 @@ package.
 
 | Stack          | Core Crate               | WASM Binding               | npm wrapper                  |
 | -------------- | ------------------------ | -------------------------- | ---------------------------- |
-| Animation      | `vizij-animation-core`   | `vizij-animation-wasm`     | `@vizij/animation`      |
 | Node graph     | `vizij-graph-core`       | `vizij-graph-wasm`         | `@vizij/node-graph`     |
 | Test fixtures  | `vizij-test-fixtures`    | —                          | `@vizij/test-fixtures`       |
 
@@ -425,7 +417,6 @@ The `crates/interop/*` family adapts the Vizij stacks onto Arora runtime seams s
 | `vizij-arora-hal`        | Vizij rig presented as an Arora HAL.                                   | — |
 | `vizij-arora-behavior`   | Vizij node graph driven as an Arora behavior interpreter.              | — |
 | `vizij-arora-host`       | Composes a face's bundle graphs; hosts the [face standard](docs/face-standard.md) vocabulary, the [profiles and mappings](docs/profiles-and-mappings.md) registries (incl. [ROS4HRI](docs/ros4hri.md)), and the skills registry. | — |
-| `vizij-animation-module` | `vizij-animation-core` packaged as an Arora wasm module.               | `@vizij/animation-module` |
 | `vizij-animation-artifact` | Writes `arora-animation-module`'s module directory (header, records, guest): the guest `@vizij/runtime`'s tests load. | — |
 | `vizij`                  | The Bevy view and the arora device of a face, on every target: the desktop binary, the browser module (its `web` module). | `@vizij/runtime` |
 
@@ -469,12 +460,10 @@ These packages build quickly (`pnpm run build:shared`) and should be rebuilt whe
 - [vizij/README](crates/vizij/README.md) — the native app (the `vizij` binary)
 - [Face standard](docs/face-standard.md) & [ROS4HRI support](docs/ros4hri.md)
 - [vizij-bundle/README](crates/tools/vizij-bundle/README.md) — the face-GLB bundle tool
-- [vizij-animation-core/README](crates/animation/vizij-animation-core/README.md)
 - [vizij-graph-core/README](crates/node-graph/vizij-graph-core/README.md)
 - [vizij-api-core/README](crates/api/vizij-api-core/README.md)
 - [vizij-test-fixtures/README](crates/test-fixtures/vizij-test-fixtures/README.md)
 - [@vizij/node-graph/README](npm/@vizij/node-graph/README.md)
-- [@vizij/animation/README](npm/@vizij/animation/README.md)
 - [@vizij/value-json/README](npm/@vizij/value-json/README.md)
 - [@vizij/test-fixtures/README](npm/@vizij/test-fixtures/README.md)
 - [@vizij/wasm-loader/README](npm/@vizij/wasm-loader/README.md)

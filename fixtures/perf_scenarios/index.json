@@ -43,25 +43,5 @@
       "mode": "kitchen",
       "pathsPerBlock": ["bench/kitchen/{i}/a", "bench/kitchen/{i}/b"]
     }
-  ],
-  "animation": [
-    {
-      "id": "animation-mixed-small",
-      "spec": "fixtures/perf_scenarios/animation-mixed-small.json",
-      "sha256": "e83f47c09727f01b046ee485d20dae35ff6a5921a5af5fca226394dc91060d2e",
-      "dt": 0.0166667,
-      "steps": 120,
-      "warmup": 2,
-      "samples": 12
-    },
-    {
-      "id": "animation-mixed-medium",
-      "spec": "fixtures/perf_scenarios/animation-mixed-medium.json",
-      "sha256": "00564001c8fdc569c9945bbcb9b5b7d909680cb261e857c71aa4b61ad1a991cb",
-      "dt": 0.0166667,
-      "steps": 120,
-      "warmup": 2,
-      "samples": 10
-    }
   ]
 }

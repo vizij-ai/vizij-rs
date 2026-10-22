@@ -162,6 +162,6 @@ Modules include unit tests for the constructor/accessor round-trips, blending, c
 ## Related Packages
 
 - [`vizij-api-wasm`](../vizij-api-wasm/README.md) – wasm helpers that mirror the same normalisation logic for JavaScript.
-- Engine stacks (`vizij-animation-core`, `vizij-graph-core`) all depend on these contracts.
+- The node-graph stack (`vizij-graph-core`) and the interop crates depend on these contracts.
 
 Questions or improvements? Open an issue—shared contracts are the backbone of Vizij interoperability. 🔗
