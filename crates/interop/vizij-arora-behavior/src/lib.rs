@@ -41,7 +41,7 @@ use std::collections::{HashMap, HashSet};
 use arora_behavior::graph::{GraphDiff, LinkSource};
 use arora_behavior::{
     built_in, interpreter_module, BehaviorContext, BehaviorError, BehaviorInterpreter,
-    BehaviorStatus, Graph, RunPolicy, TaskHandle, TaskId,
+    BehaviorStatus, FunctionIndex, Graph, RunPolicy, TaskHandle, TaskId,
 };
 pub use arora_node_graph::task;
 use arora_node_graph::tree_runtime::{Evaluation, TreeRuntime};
@@ -184,8 +184,10 @@ pub struct ProcessingGraph {
     /// graph's outputs read.
     rt: TreeRuntime,
     /// The version of [`spec`](Self::spec) the evaluator was last loaded
-    /// with: a spec of another version is loaded at the next tick.
-    loaded: Option<u64>,
+    /// with, and the size of the function index it placed calls by: a spec
+    /// of another version, or an index of another size, is loaded at the
+    /// next tick.
+    loaded: Option<(u64, usize)>,
     /// Store paths staged into the graph before each evaluation, each with
     /// the store key it is read under: the lowered spec's `input` paths, once
     /// each, derived each time the graph is re-lowered.
@@ -819,11 +821,29 @@ impl ProcessingGraph {
     /// for tests.
     ///
     /// `call_bridge` is the Arora host call interface; `ExternalFunction` nodes dispatch through
-    /// it, resolving each function to its module via the `function id -> module id` map.
+    /// it, resolving each function to its module via the `function id -> module id` map. With no
+    /// function described, each `ExternalFunction` node is called at every tick
+    /// ([`tick_store_with`](Self::tick_store_with)).
     pub fn tick_store(
         &mut self,
         store: &dyn DataStore,
         call_bridge: &mut dyn CallBridge,
+        dt: f32,
+    ) -> Result<(), BehaviorError> {
+        self.tick_store_with(store, call_bridge, &FunctionIndex::new(), dt)
+    }
+
+    /// [`tick_store`](Self::tick_store), placing each `ExternalFunction` node by the
+    /// description `functions` gives of its function, as the device's index does at each
+    /// tick: a call to a function that returns nothing is left out, one to a function that
+    /// takes no parameter is called at every tick, and any other is called when its
+    /// arguments change ([`arora_node_graph::functions::placement`]). The graph is imported
+    /// again when the index changes size, as when a module loads.
+    pub fn tick_store_with(
+        &mut self,
+        store: &dyn DataStore,
+        call_bridge: &mut dyn CallBridge,
+        functions: &FunctionIndex,
         dt: f32,
     ) -> Result<(), BehaviorError> {
         // The holds and releases sent since the last tick hold from this one.
@@ -853,11 +873,12 @@ impl ProcessingGraph {
 
         // The evaluator follows the spec: a spec changed since the last tick
         // is imported again, every node it keeps keeping its state.
-        if self.loaded != Some(self.spec.version) {
+        let loaded = (self.spec.version, functions.len());
+        if self.loaded != Some(loaded) {
             self.rt
-                .load(&self.spec)
+                .load_with_functions(&self.spec, functions)
                 .map_err(|message| BehaviorError { message })?;
-            self.loaded = Some(self.spec.version);
+            self.loaded = Some(loaded);
         }
         self.rt
             .evaluate_with(call_bridge)
@@ -1220,7 +1241,7 @@ impl BehaviorInterpreter for ProcessingGraph {
 
     fn tick(&mut self, ctx: &mut BehaviorContext) -> Result<BehaviorStatus, BehaviorError> {
         let dt = built_in_dt_seconds(ctx.store);
-        self.tick_store(ctx.store, &mut *ctx.call_bridge, dt)?;
+        self.tick_store_with(ctx.store, &mut *ctx.call_bridge, ctx.functions, dt)?;
         // A node graph is continuous: tick it again next step.
         Ok(BehaviorStatus::Running)
     }
@@ -2078,6 +2099,96 @@ mod tests {
         graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
         assert_eq!(vizij_nodes(&graph), nodes_before);
         assert_eq!(bridge.calls.len(), 2, "an ended run is never invoked again");
+    }
+
+    /// A graph's calls to other modules are placed by the descriptions the
+    /// device's function index gives: a call to a function taking
+    /// parameters runs when they change, one to a function taking none at
+    /// every tick, and one to a function returning nothing not at all.
+    #[test]
+    fn calls_to_other_modules_follow_their_functions_descriptions() {
+        use arora_types::record::module::frozen::{Function, Parameter};
+        use arora_types::record::ty::{FrozenTy, PrimitiveKind};
+
+        let module = Uuid::from_u128(0x0a0);
+        let parameter = Uuid::from_u128(0x0a1);
+        let [step, notify, states] = [0x0b1, 0x0b2, 0x0b3].map(Uuid::from_u128);
+        let describe = |id: Uuid, parameters: &[Uuid], returns: PrimitiveKind| {
+            arora_behavior::ModuleFunction {
+                module_id: module,
+                function_id: id,
+                function_name: id.to_string(),
+                function: Function {
+                    parameter_ordering: parameters.to_vec(),
+                    parameters: parameters
+                        .iter()
+                        .map(|id| {
+                            let parameter = Parameter {
+                                name: "x".into(),
+                                ty: FrozenTy::from(PrimitiveKind::F32),
+                                mutable: false,
+                            };
+                            (*id, parameter)
+                        })
+                        .collect(),
+                    return_ty: FrozenTy::from(returns),
+                },
+            }
+        };
+        let functions: FunctionIndex = [
+            (step, describe(step, &[parameter], PrimitiveKind::F32)),
+            (notify, describe(notify, &[parameter], PrimitiveKind::Unit)),
+            (states, describe(states, &[], PrimitiveKind::F32)),
+        ]
+        .into_iter()
+        .collect();
+        let call = |id: &str, function: Uuid, takes: bool| {
+            let param_ids: Vec<String> = if takes {
+                vec![parameter.to_string()]
+            } else {
+                Vec::new()
+            };
+            json!({ "id": id, "type": "externalfunction",
+                    "params": { "function": function.to_string(), "param_ids": param_ids } })
+        };
+        let spec = parse_spec(
+            &json!({
+                "nodes": [
+                    { "id": "x", "type": "input", "params": { "path": "cmd/x", "value": 0.0 } },
+                    call("step", step, true),
+                    call("notify", notify, true),
+                    call("states", states, false),
+                    { "id": "step-out", "type": "output", "params": { "path": "out/step" } },
+                    { "id": "states-out", "type": "output", "params": { "path": "out/states" } },
+                ],
+                "edges": [
+                    { "from": { "node_id": "x" }, "to": { "node_id": "step", "input": "args_0" } },
+                    { "from": { "node_id": "x" }, "to": { "node_id": "notify", "input": "args_0" } },
+                    { "from": { "node_id": "step" }, "to": { "node_id": "step-out", "input": "in" } },
+                    { "from": { "node_id": "states" }, "to": { "node_id": "states-out", "input": "in" } },
+                ],
+            })
+            .to_string(),
+        )
+        .expect("spec");
+        let mut graph = ProcessingGraph::from_spec(spec).expect("graph");
+        graph.set_function_modules(HashMap::from([
+            (step, module),
+            (notify, module),
+            (states, module),
+        ]));
+        let store = SimpleDataStore::new();
+        let mut bridge = RunBridge::new(Vec::new());
+        for x in [0.5, 0.5, 0.5, 0.75] {
+            store.write(StateChange::set("cmd/x", float(x))).unwrap();
+            graph
+                .tick_store_with(&store, &mut bridge, &functions, 0.016)
+                .expect("tick");
+        }
+        let count = |function: Uuid| bridge.calls.iter().filter(|c| c.id == function).count();
+        assert_eq!(count(step), 2, "called when its argument changes");
+        assert_eq!(count(states), 4, "called at every tick");
+        assert_eq!(count(notify), 0, "returns nothing, so nothing reads it");
     }
 
     /// A run of a function no fragment and no module implements is refused

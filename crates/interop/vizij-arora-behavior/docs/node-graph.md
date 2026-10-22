@@ -59,11 +59,11 @@ This is the same store seam a behavior tree uses (read inputs, write outputs), b
 
 ## How nodes call modules (and animation)
 
-A node reaches a module through an `ExternalFunction` node, which carries only a stable **function UUID** plus opaque arg-key handles. On the tree it is a leaf under the root, ticked at every tick, as a module's function may change what it returns with no argument changing (`player_states()`); its call goes through `@arora/node-graph`'s `external` function:
+A node reaches a module through an `ExternalFunction` node, which carries only a stable **function UUID** plus opaque arg-key handles. On the tree its place follows the description the device's function index gives of its function, which `ProcessingGraph::tick` hands the importer: a call to a function that returns nothing and writes nothing back is left out, as nothing could read it; one to a function that takes no parameter (`player_states()`) is a leaf under the root, ticked at every tick, as its result can only come from outside its arguments; any other is a detached node, called when what it returns is read and its arguments changed, as the animation module's `step` with the clock is. A function the index does not describe is ticked at every tick. Its call goes through `@arora/node-graph`'s `external` function:
 
 ```mermaid
 flowchart LR
-  extnode["ExternalFunction leaf<br/>(function UUID + args)"] --> hostcall["@arora/node-graph external(…)"]
+  extnode["ExternalFunction node<br/>(function UUID + args)"] --> hostcall["@arora/node-graph external(…)"]
   hostcall --> adapter["NodeGraphModule<br/>(function → module map)"]
   adapter --> call["CallBridge::arora_call<br/>Call { module_id, id, args }"]
   call --> engine["Arora engine module<br/>(e.g. animation)"]

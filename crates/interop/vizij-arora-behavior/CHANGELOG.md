@@ -16,6 +16,13 @@ All notable changes to `vizij-arora-behavior`. The format follows
   on both evaluators and compares every port. A spec of a new version (a
   LOAD, an EDIT, a grafted or pruned run) is imported again at the next
   tick, and every node it keeps keeps its state.
+- An `ExternalFunction` node is placed by the description the device's
+  function index gives of its function, which `tick` reads: a call to a
+  function that returns nothing and writes nothing back is left out, one
+  to a function that takes no parameter is called at every tick, and any
+  other is called when its arguments change. `tick_store_with` takes the
+  index; `tick_store` describes no function, so each such node is called
+  at every tick, as before.
 - A tick costs less when few of a graph's inputs change, and more when many
   do on graphs of a few thousand nodes or fewer. Measured against the
   write-only evaluation this replaces, a 950-node graph ticks 1.2 times
