@@ -25,10 +25,10 @@ All notable changes to `vizij-arora-behavior`. The format follows
   at every tick, as before.
 - A tick costs less when few of a graph's inputs change, and more when many
   do on graphs of a few thousand nodes or fewer. Measured against the
-  write-only evaluation this replaces, a 950-node graph ticks 1.2 times
-  faster at rest and 2.4 times slower with every input moving; a
-  19,000-node graph ticks 5.6 and 2.8 times faster. Importing a graph costs
-  2 to 6 times what lowering it did.
+  write-only evaluation this replaces, a 950-node graph ticks 2.2 times
+  faster at rest and 1.6 times slower with every input moving; a
+  19,000-node graph ticks 8 and 3.3 times faster. Importing a graph costs
+  2 to 3.5 times what lowering it did.
 - The graph types are arora-node-graph's and the value types arora-shape's,
   where they were vizij-graph-core's and vizij-api-core's: the two crates
   moved to arora-sdk under these names. `task` re-exports
