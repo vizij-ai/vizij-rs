@@ -512,8 +512,8 @@ pub const ANIMATIONS_SOURCE_ID: &str = "animations";
 pub const ANIMATION_PLAYERS_PATH: &str = "vizij/animations/players";
 
 // The animation module's declared ids (its Rust declaration, `animation` in
-// vizij-animation-module, which this published crate cannot depend on; the
-// `vizij` crate tests that they match). The graph carries them as opaque
+// arora-animation-module, which this crate does not depend on; the `vizij`
+// crate tests that they match). The graph carries them as opaque
 // handles: the `ExternalFunction` nodes name the module functions, the
 // `output` node the `TrackOutput` fields it fans out by.
 const FN_STEP: &str = "76697a69-6a00-0000-0f00-000000000004";
@@ -526,11 +526,13 @@ const FIELD_OUTPUT_VALUE: &str = "76697a69-6a00-0000-0110-000000000003";
 /// The graph source that ticks the animation module **inside the device**: an
 /// `ExternalFunction` node calls the module's `step` every tick, fed the
 /// runtime's built-in `arora/dt` and `arora/time` (nanoseconds), so the
-/// module's `play_at` counts on the device's clock, and a path-less `output`
-/// node fans the returned `[TrackOutput]` batch onto the store keys each record names — its
-/// `default_key`, the final rig paths decided when an animation loads. A
-/// second `ExternalFunction` node writes `player_states()` to
-/// [`ANIMATION_PLAYERS_PATH`].
+/// module's players stand where the device's clock puts them — `play_at`
+/// counts on it, and a step at a zero `dt` moves none of them — and a
+/// path-less `output` node fans the returned `[TrackOutput]` batch onto the
+/// store keys each record names, its `default_key`: the final rig paths
+/// decided when an animation loads, each written in the type the store
+/// declares for it. A second `ExternalFunction` node writes `player_states()`
+/// to [`ANIMATION_PLAYERS_PATH`].
 ///
 /// The source is inert until an animation plays: with no instance of weight
 /// the module's `step` returns nothing — an animation loads silent, its

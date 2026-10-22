@@ -4,6 +4,16 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [7.6.0] - Unreleased
+
+### Added
+
+- `contents::Keyframe::in_tangent` and `out_tangent`: the keyframe's
+  `inTangent` and `outTangent` as the bundle carries them, the slopes a
+  `cubic` segment arrives and leaves with, in value units per second (glTF's
+  `CUBICSPLINE` tangents); `None` when absent. They serialize as `inTangent`
+  and `outTangent`.
+
 ## [7.5.0] - 2026-10-19
 
 ### Changed

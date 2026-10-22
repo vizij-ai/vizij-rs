@@ -1,15 +1,16 @@
 // Arora wasm modules load into a device as guests: `startRuntime(graph,
 // init, modules)` and `loadVizij`'s `options.modules` take `{ headerJson,
-// wasmBytes }` pairs, instantiated by the device's engine at build. The only
-// artifact around is the animation module, whose id the host-linked engine
-// serves — a host module registered under an id a guest holds replaces it —
-// so what this proves is the loading: a guest that is not a wasm module
-// fails the build, a well-formed one loads and the device runs.
+// wasmBytes }` pairs, instantiated by the device's engine at build. The guest
+// is Arora's animation module, built from arora-animation-module on
+// crates.io (`animation-guest.mjs`), whose id the host-linked module serves —
+// a host module registered under an id a guest holds replaces it — so what
+// this proves is the loading: a guest that is not a wasm module fails the
+// build, a well-formed one loads and the device runs.
 import assert from "node:assert/strict";
-import { loadAnimationModule } from "@vizij/animation-module";
 import { startRuntime } from "../dist/runtime/src/index.js";
+import { animationModule } from "./animation-guest.mjs";
 
-const module = await loadAnimationModule();
+const module = animationModule();
 assert.ok(module.wasmBytes.length > 0 && module.headerJson.length > 0);
 
 // A guest the engine cannot instantiate fails the build, so a guest is

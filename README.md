@@ -374,7 +374,8 @@ vizij-rs/
 │  │  ├─ vizij-arora-hal           # Vizij rig presented as an Arora HAL
 │  │  ├─ vizij-arora-behavior      # Vizij node graph as an Arora behavior interpreter
 │  │  ├─ vizij-arora-host          # Bundle composition, face standard, profiles & mappings (ROS4HRI), skills
-│  │  └─ vizij-animation-module    # vizij-animation-core packaged as an Arora wasm module
+│  │  ├─ vizij-animation-module    # vizij-animation-core packaged as an Arora wasm module
+│  │  └─ vizij-animation-artifact  # Writes arora-animation-module's module directory: the guest @vizij/runtime's tests load
 │  ├─ tools/
 │  │  └─ vizij-bundle              # Face-GLB bundle tool: inspect/pack/validate, declare profiles, embed mappings
 │  ├─ vizij                        # The view and the device on every target: the desktop app (cargo run), the browser module (@vizij/runtime)
@@ -425,6 +426,7 @@ The `crates/interop/*` family adapts the Vizij stacks onto Arora runtime seams s
 | `vizij-arora-behavior`   | Vizij node graph driven as an Arora behavior interpreter.              | — |
 | `vizij-arora-host`       | Composes a face's bundle graphs; hosts the [face standard](docs/face-standard.md) vocabulary, the [profiles and mappings](docs/profiles-and-mappings.md) registries (incl. [ROS4HRI](docs/ros4hri.md)), and the skills registry. | — |
 | `vizij-animation-module` | `vizij-animation-core` packaged as an Arora wasm module.               | `@vizij/animation-module` |
+| `vizij-animation-artifact` | Writes `arora-animation-module`'s module directory (header, records, guest): the guest `@vizij/runtime`'s tests load. | — |
 | `vizij`                  | The Bevy view and the arora device of a face, on every target: the desktop binary, the browser module (its `web` module). | `@vizij/runtime` |
 
 ### Support Packages

@@ -158,10 +158,10 @@ vizij-arora-store = { path = "../interop/vizij-arora-store" }
 vizij-arora-hal = { path = "../interop/vizij-arora-hal" }
 vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
 
-# The animation module, linked natively: we register its functions as a host
-# module (`with_host_module`) rather than loading its wasm, so no artifact
-# dependency and no nightly. Its generated `Value` conversions marshal the calls.
-vizij-animation-module = { path = "../interop/vizij-animation-module" }
+# Arora's animation module, linked natively: its declared functions register
+# as a host module (`with_host_module`), one state per device, rather than
+# loading its wasm guest, so no artifact dependency and no nightly.
+arora-animation-module = "1"
 
 # The speech provider — the say skill's `say` — over the Vizij TTS cloud
 # function: rodio plays it natively, the page's hook in the browser.

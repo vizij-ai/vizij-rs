@@ -2,18 +2,17 @@
 // one-track ramp through the call surface (load_animation / create_player /
 // add_instance, each call naming the module and the function by id), and a
 // graph ExternalFunction node calls the module's step each tick, landing the
-// sampled outputs in the device's store. Mirrors the Rust boundary proof
-// (crates/interop/vizij-animation-module/tests/host_ramp.rs) through the
-// public JS surface.
+// sampled outputs in the device's store. The clip is a format 1.x
+// `AnimationClip`, whose `f32` numbers the module plays as `f32`.
 import assert from "node:assert/strict";
-import { headerJson } from "@vizij/animation-module";
 import { startRuntime } from "../dist/runtime/src/index.js";
+import { animationModule } from "./animation-guest.mjs";
 
-// --- function and parameter ids, from the module's shipped header ------------
+// --- function and parameter ids, from the module's header --------------------
 // The header is written from the module's Rust declaration, so the ids a call
-// names are the declared ones. The package ships it beside the wasm artifact
-// this device does not need: the module is linked in.
-const header = JSON.parse(headerJson);
+// names are the declared ones. This device needs no guest: the module is
+// linked in.
+const header = JSON.parse(animationModule({ guest: false }).headerJson);
 const fn = (name) => {
   const found = header.exports.find((e) => e.name === name);
   assert.ok(found, `the header exports ${name}`);

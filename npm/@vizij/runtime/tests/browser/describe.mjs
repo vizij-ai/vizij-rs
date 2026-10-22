@@ -94,7 +94,13 @@ try {
   assert.equal(gaze.channel, "gaze/left_right");
   assert.equal(gaze.interpolation, "linear");
   assert.equal(gaze.keyframes.length, 4);
-  assert.deepEqual(gaze.keyframes[0], { time: 0, value: -0.04, interpolation: "linear" });
+  assert.deepEqual(gaze.keyframes[0], {
+    time: 0,
+    value: -0.04,
+    interpolation: "linear",
+    inTangent: null,
+    outTangent: null,
+  });
   for (const animation of quori.animations) {
     for (const track of animation.tracks) {
       const times = track.keyframes.map((k) => k.time);
