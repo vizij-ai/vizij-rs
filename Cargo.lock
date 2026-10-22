@@ -325,7 +325,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
  "wl-clipboard-rs",
  "x11rb",
 ]
@@ -389,7 +389,7 @@ dependencies = [
 [[package]]
 name = "arora-behavior-tree"
 version = "9.4.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=claude%2Fexciting-bell-zuvea5#e3d92732a087cb37e6267c5e8008e950c4ad24a5"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=claude%2Fexciting-bell-zuvea5#6f16d377732040b4c27ee4d824e20f5854ee1078"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
@@ -578,7 +578,7 @@ dependencies = [
 [[package]]
 name = "arora-node-graph"
 version = "1.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=claude%2Fexciting-bell-zuvea5#e3d92732a087cb37e6267c5e8008e950c4ad24a5"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=claude%2Fexciting-bell-zuvea5#6f16d377732040b4c27ee4d824e20f5854ee1078"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -612,7 +612,7 @@ dependencies = [
 [[package]]
 name = "arora-shape"
 version = "1.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=claude%2Fexciting-bell-zuvea5#e3d92732a087cb37e6267c5e8008e950c4ad24a5"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=claude%2Fexciting-bell-zuvea5#6f16d377732040b4c27ee4d824e20f5854ee1078"
 dependencies = [
  "arora-types",
  "hashbrown 0.17.1",
@@ -666,9 +666,8 @@ dependencies = [
 
 [[package]]
 name = "arora-types"
-version = "3.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95b3f779504bdb183114c5f02637f2124fb3854e136e0f83718fbdd55087115d"
+version = "3.9.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=claude%2Fexciting-bell-zuvea5#6f16d377732040b4c27ee4d824e20f5854ee1078"
 dependencies = [
  "arora-types-derive",
  "async-trait",

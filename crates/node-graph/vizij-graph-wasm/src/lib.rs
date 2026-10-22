@@ -416,9 +416,10 @@ impl WasmGraph {
         let normalized = json::normalize_graph_spec_json(json_str)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         // Now deserialize into the typed GraphSpec
+        // The runtime loads the spec whenever the plan is not ready, so the
+        // spec carries no cache key of its own.
         self.spec = serde_json::from_value::<GraphSpec>(normalized)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?
-            .with_cache();
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
         self.runtime = TreeRuntime::new(Evaluation::Every);
         self.epoch = 0;
@@ -503,8 +504,6 @@ impl WasmGraph {
         self.plan_ready = false;
         self.last_outputs.clear();
         self.last_outputs_version = 0;
-        // The edited spec is a new version of the graph.
-        self.spec = std::mem::take(&mut self.spec).with_cache();
     }
 
     fn eval_internal(&mut self) -> Result<(), JsValue> {

@@ -616,10 +616,9 @@ impl ProcessingGraph {
         self.inputs = Inputs::of(&self.spec);
     }
 
-    /// A lowered spec changed in place: a new version, which the evaluator
-    /// imports at the next tick. Its fingerprint is not recomputed — the
-    /// evaluator is keyed by version — and is cleared rather than left
-    /// stale.
+    /// The lowered spec changed: a new version, which the evaluator imports
+    /// at the next tick. Its fingerprint is not computed — the evaluator is
+    /// keyed by version — and is cleared rather than left stale.
     fn relowered(&mut self) {
         self.spec.version += 1;
         self.spec.fingerprint = 0;
@@ -774,13 +773,13 @@ impl ProcessingGraph {
         spec.validate()
             .map_err(|message| BehaviorError { message })?;
         self.inputs = Inputs::of(&spec);
-        // Carry the version forward before re-caching. A freshly decoded spec
-        // restarts at version 0 (→ 1 after `with_cache`); bumping from the
-        // current version keeps it strictly increasing, so the evaluator,
-        // keyed by version, imports the new graph rather than keep running
-        // the previous one.
+        // Carry the version forward. A freshly decoded spec restarts at
+        // version 0; bumping from the current version keeps it strictly
+        // increasing, so the evaluator, keyed by version, imports the new
+        // graph rather than keep running the previous one.
         spec.version = self.spec.version;
-        self.spec = spec.with_cache();
+        self.spec = spec;
+        self.relowered();
         self.dirty = false;
         Ok(())
     }
