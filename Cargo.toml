@@ -49,15 +49,15 @@ debug = "line-tables-only"
 
 # The node graph runs on arora-sdk's behavior tree (arora-node-graph,
 # arora-shape, arora-behavior-tree 9.5 and arora-types 3.9), which crates.io
-# does not have yet: those four come from the arora-sdk branch. The arora
+# does not have yet: those four come from arora-sdk's main. The arora
 # crates they depend on by path within arora-sdk resolve to their crates.io
 # releases, which are the same versions, so the workspace builds one copy of
 # each. Remove both tables once the four are published.
 [patch.crates-io]
-arora-behavior-tree = { git = "https://github.com/semio-ai/arora-sdk", branch = "claude/exciting-bell-zuvea5" }
-arora-node-graph = { git = "https://github.com/semio-ai/arora-sdk", branch = "claude/exciting-bell-zuvea5" }
-arora-shape = { git = "https://github.com/semio-ai/arora-sdk", branch = "claude/exciting-bell-zuvea5" }
-arora-types = { git = "https://github.com/semio-ai/arora-sdk", branch = "claude/exciting-bell-zuvea5" }
+arora-behavior-tree = { git = "https://github.com/semio-ai/arora-sdk", branch = "main" }
+arora-node-graph = { git = "https://github.com/semio-ai/arora-sdk", branch = "main" }
+arora-shape = { git = "https://github.com/semio-ai/arora-sdk", branch = "main" }
+arora-types = { git = "https://github.com/semio-ai/arora-sdk", branch = "main" }
 
 [patch."https://github.com/semio-ai/arora-sdk"]
 arora-behavior = "9.6"
