@@ -659,7 +659,7 @@ mod tests {
         );
     }
 
-    use vizij_api_core::value::{as_float, float};
+    use arora_shape::value::{as_float, float};
     use vizij_arora_store::BlackboardStore;
 
     /// A Studio-exported face's store, keeping its targets' forms in

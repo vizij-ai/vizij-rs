@@ -16,7 +16,7 @@ arora-module = "2.2"
 arora-types = "3.8"
 vizij-animation-core = { path = "../../animation/vizij-animation-core" }
 vizij-arora = { path = "../vizij-arora" }
-vizij-api-core = { path = "../../api/vizij-api-core" }
+arora-shape = "1"
 
 [dev-dependencies]
 arora-engine = "5"

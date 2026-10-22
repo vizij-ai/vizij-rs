@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ids::PlayerId;
-use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
+use arora_shape::{TypedPath, Value, WriteBatch, WriteOp};
 
 /// One changed target value for a given player this tick.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -172,7 +172,7 @@ impl OutputsWithDerivatives {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vizij_api_core::value::{as_bool, bool_, float};
+    use arora_shape::value::{as_bool, bool_, float};
 
     #[test]
     fn to_writebatch_skips_invalid_paths() {

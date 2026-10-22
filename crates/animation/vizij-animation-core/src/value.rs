@@ -1,4 +1,4 @@
-//! Animation-specific value types layered on top of `vizij-api-core`.
+//! Animation-specific value types layered on top of `arora-shape`.
 //!
 //! Tracks store keyframe values as [`TrackValue`]: the plain-Rust (POD) form
 //! of the vizij vocabulary, decoded once when an animation is parsed or
@@ -7,10 +7,10 @@
 //! changes, write batches, baked artifacts), encoded through the vocabulary
 //! constructors.
 
+use arora_shape::value as vocab;
 use serde::{Deserialize, Serialize};
-use vizij_api_core::value as vocab;
 
-pub use vizij_api_core::{Transform, Value};
+pub use arora_shape::{Transform, Value};
 
 /// Keyframe value in plain-Rust form.
 ///
@@ -147,7 +147,7 @@ impl From<TrackValue> for Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vizij_api_core::value::{
+    use arora_shape::value::{
         array, bool_, color_rgba, enumeration, float, quat, record, text, transform, vec2, vec3,
         vec4, vector,
     };

@@ -4,10 +4,11 @@ All notable changes to `vizij-arora-tts`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [7.0.2] - 2026-10-22
 
 ### Changed
 
+- Requires vizij-arora-behavior 8, whose graphs run on arora-behavior-tree.
 - Licensed under Apache-2.0, where it was MIT OR Apache-2.0. Releases up
   to 7.0.1 keep the licence they were published under.
 

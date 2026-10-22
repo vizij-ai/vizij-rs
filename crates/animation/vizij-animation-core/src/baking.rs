@@ -10,7 +10,7 @@ use crate::ids::AnimId;
 use crate::sampling::{
     sample_track, sample_track_with_derivative_epsilon, DEFAULT_DERIVATIVE_EPSILON,
 };
-use vizij_api_core::Value;
+use arora_shape::Value;
 
 /// The most samples one bake takes, over all its tracks; a bake with
 /// derivatives counts each derivative sample as well.

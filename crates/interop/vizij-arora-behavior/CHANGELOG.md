@@ -4,6 +4,34 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [8.0.0] - 2026-10-22
+
+### Changed
+
+- `ProcessingGraph` evaluates its graph on arora-behavior-tree.
+  arora-node-graph imports the lowered spec as a behavior tree whose
+  detached nodes call the node functions, and each tick runs the nodes the
+  graph's outputs read whose arguments changed. A graph computes what it
+  computed on vizij-graph-core: arora-node-graph runs every shared fixture
+  on both evaluators and compares every port. A spec of a new version (a
+  LOAD, an EDIT, a grafted or pruned run) is imported again at the next
+  tick, and every node it keeps keeps its state.
+- A tick costs less when few of a graph's inputs change, and more when many
+  do on graphs of a few thousand nodes or fewer. Measured against the
+  write-only evaluation this replaces, a 950-node graph ticks 1.2 times
+  faster at rest and 2.4 times slower with every input moving; a
+  19,000-node graph ticks 5.6 and 2.8 times faster. Importing a graph costs
+  2 to 6 times what lowering it did.
+- The graph types are arora-node-graph's and the value types arora-shape's,
+  where they were vizij-graph-core's and vizij-api-core's: the two crates
+  moved to arora-sdk under these names. `task` re-exports
+  `arora_node_graph::task`.
+- `ProcessingGraph` is neither `Send` nor `Sync`, because a behavior tree
+  holds its nodes in `Rc`s. A device builds and ticks it on one thread.
+  `KeyHolds` stays `Send` and `Sync`, so a client on another thread still
+  holds keys through it.
+- Requires arora-node-graph 1 and arora-shape 1.
+
 ## [7.2.0] - 2026-10-19
 
 ### Changed

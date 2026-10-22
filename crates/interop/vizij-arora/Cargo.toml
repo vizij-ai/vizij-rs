@@ -9,5 +9,5 @@ description = "Vizij/Arora interop: the vizij record scope, identity passthrough
 [dependencies]
 # 3.8 is the first with `record::scope::Scope`.
 arora-types = "3.8"
-vizij-api-core = { path = "../../api/vizij-api-core" }
+arora-shape = "1"
 serde_json = { workspace = true }

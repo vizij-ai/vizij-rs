@@ -140,15 +140,15 @@ winit = { version = "0.30", default-features = false, optional = true }
 tracing = { version = "0.1", default-features = false, features = ["std", "log"] }
 # For staging neutral inputs into the store (`StateChange`/`Key`) and saying
 # what the face's keys are (`KeyMeta`); the value type is shared with
-# vizij-api-core.
+# arora-shape.
 arora-types = "3.1"
 # The `reset` contract the rest module implements.
 arora-module = "2.1"
 # The target-key grammar (`set_targets`) the Studio-key profile reads targets
 # by; the HAL seam a headless test writes a face's pose through.
 arora-hal = "4.2"
-vizij-api-core = { path = "../api/vizij-api-core" }
-vizij-graph-core = { path = "../node-graph/vizij-graph-core" }
+arora-shape = "1"
+arora-node-graph = "1"
 vizij-arora = { path = "../interop/vizij-arora" }
 # `frames`: the rendered face as its `sensor_msgs` image value, the shape the
 # browser runtime would build too if it published frames; `diagnostics`: the

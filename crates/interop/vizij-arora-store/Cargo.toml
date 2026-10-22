@@ -7,5 +7,5 @@ license = "Apache-2.0"
 description = "Vizij's Blackboard exposed as an Arora DataStore (arora-types)."
 
 [dependencies]
-vizij-api-core = { path = "../../api/vizij-api-core" }
+arora-shape = "1"
 arora-types = "3.1"

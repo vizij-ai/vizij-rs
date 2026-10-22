@@ -32,9 +32,9 @@ use arora_behavior::{
     Status, STATUS_ENUMERATION_ID, STATUS_FAILURE_VARIANT_ID, STATUS_RUNNING_VARIANT_ID,
     STATUS_SUCCESS_VARIANT_ID,
 };
+use arora_shape::value::{Enumeration, Structure, StructureField, Value};
 use serde_json::{json, Value as Json};
 use uuid::Uuid;
-use vizij_api_core::value::{Enumeration, Structure, StructureField, Value};
 
 use crate::graph_builder::GraphBuilder;
 use crate::ros4hri::{GAZE_FRAME_KEY, GAZE_TARGET_KEY};

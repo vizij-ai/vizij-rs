@@ -3,7 +3,7 @@
 //!
 //! Each tick it reads its subscribed input paths from the shared store,
 //! evaluates the graph for `dt`, and writes the graph's outputs back. Vizij
-//! and Arora share one runtime value type ([`vizij_api_core::Value`] is
+//! and Arora share one runtime value type ([`arora_shape::Value`] is
 //! `arora_types::value::Value`), so values cross the store boundary directly.
 //! The tick always reports [`BehaviorStatus::Running`] — a node graph runs
 //! every frame, unlike a tree that runs to a terminal status. `dt` comes from
@@ -43,113 +43,17 @@ use arora_behavior::{
     built_in, interpreter_module, BehaviorContext, BehaviorError, BehaviorInterpreter,
     BehaviorStatus, Graph, RunPolicy, TaskHandle, TaskId,
 };
-use arora_types::call::{Call, CallBridge, CallResult};
+pub use arora_node_graph::task;
+use arora_node_graph::tree_runtime::{Evaluation, TreeRuntime};
+use arora_node_graph::types::{
+    EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
+};
+use arora_shape::TypedPath;
+use arora_types::call::{Call, CallBridge};
 use arora_types::data::{DataStore, Key, StateChange};
 use arora_types::record::module::frozen;
 use arora_types::value::{Structure, StructureField, Value};
 use uuid::Uuid;
-use vizij_api_core::TypedPath;
-use vizij_graph_core::eval::{evaluate_writes_with_functions, GraphRuntime, NodeFunctions};
-pub use vizij_graph_core::task;
-use vizij_graph_core::types::{
-    EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
-};
-
-/// Adapts an Arora [`CallBridge`] to graph-core's [`NodeFunctions`] host interface.
-///
-/// A graph `ExternalFunction` node carries an opaque function [`Uuid`] for the function it invokes.
-/// The engine routes a [`Call`] by its `module_id` and refuses one naming no module, so this
-/// adapter must know which module each function lives in; it holds a `function -> module` map
-/// supplied at construction. The map is built from module-load summaries (arora-engine's
-/// `LoadedModule { id, function_ids }`); this crate does not own that plumbing.
-struct CallBridgeFunctions<'a> {
-    bridge: &'a mut dyn CallBridge,
-    /// function id -> module id, so a bare function handle can be dispatched to `arora_call`.
-    function_modules: &'a HashMap<Uuid, Uuid>,
-}
-
-impl CallBridgeFunctions<'_> {
-    fn dispatch(
-        &mut self,
-        module_id: Uuid,
-        function: Uuid,
-        args: &[(Uuid, Value)],
-    ) -> Result<Value, String> {
-        Ok(self.dispatch_full(module_id, function, args)?.ret)
-    }
-
-    /// The call's whole result: its return value and its mutable parameters.
-    fn dispatch_full(
-        &mut self,
-        module_id: Uuid,
-        function: Uuid,
-        args: &[(Uuid, Value)],
-    ) -> Result<CallResult, String> {
-        let args: Vec<StructureField> = args
-            .iter()
-            .map(|(id, value)| StructureField {
-                id: *id,
-                value: Box::new(value.clone()),
-            })
-            .collect();
-        self.bridge
-            .arora_call(Call {
-                module_id: Some(module_id),
-                id: function,
-                args,
-            })
-            .map_err(|e| format!("module call failed: {e}"))
-    }
-}
-
-impl NodeFunctions for CallBridgeFunctions<'_> {
-    fn call(&mut self, function: Uuid, args: &[(Uuid, Value)]) -> Result<Value, String> {
-        let module_id = *self
-            .function_modules
-            .get(&function)
-            .ok_or_else(|| format!("no module registered for external function {function}"))?;
-        self.dispatch(module_id, function, args)
-    }
-
-    /// The call's return value with its mutable parameters after the call —
-    /// what a `say` run's fragment reads the streamed viseme from.
-    fn call_module_with_outputs(
-        &mut self,
-        module: Option<Uuid>,
-        function: Uuid,
-        args: &[(Uuid, Value)],
-    ) -> Result<(Value, Vec<(Uuid, Value)>), String> {
-        let module_id = match module {
-            Some(module_id) => module_id,
-            None => *self
-                .function_modules
-                .get(&function)
-                .ok_or_else(|| format!("no module registered for external function {function}"))?,
-        };
-        let result = self.dispatch_full(module_id, function, args)?;
-        let mutated = result
-            .mutated
-            .into_iter()
-            .map(|field| (field.id, *field.value))
-            .collect();
-        Ok((result.ret, mutated))
-    }
-
-    /// A task-run call names its module itself, so it dispatches without a
-    /// `function -> module` entry; one falls back to the map like any other
-    /// external function.
-    fn call_module(
-        &mut self,
-        module: Option<Uuid>,
-        function: Uuid,
-        args: &[(Uuid, Value)],
-    ) -> Result<Value, String> {
-        match module {
-            Some(module_id) => self.dispatch(module_id, function, args),
-            None => self.call(function, args),
-        }
-    }
-}
 
 /// The handle-side index of one live run: the function it implements and
 /// the status key it reports on. The run itself is graph structure — its
@@ -275,14 +179,21 @@ pub struct ProcessingGraph {
     /// Whether [`graph`](Self::graph) changed since [`spec`](Self::spec) was
     /// last lowered.
     dirty: bool,
-    rt: GraphRuntime,
+    /// The evaluator: [`spec`](Self::spec) imported into a behavior tree,
+    /// its nodes detached calls of the node functions, run for what the
+    /// graph's outputs read.
+    rt: TreeRuntime,
+    /// The version of [`spec`](Self::spec) the evaluator was last loaded
+    /// with: a spec of another version is loaded at the next tick.
+    loaded: Option<u64>,
     /// Store paths staged into the graph before each evaluation, each with
     /// the store key it is read under: the lowered spec's `input` paths, once
     /// each, derived each time the graph is re-lowered.
     inputs: Inputs,
-    /// function id -> module id, so `ExternalFunction` nodes can be dispatched through the
-    /// [`CallBridge`]. See [`CallBridgeFunctions`] for why this map is needed and where it
-    /// should come from.
+    /// function id -> module id, so `ExternalFunction` nodes, which name a
+    /// function alone, can be dispatched through the [`CallBridge`], which
+    /// routes a call by its module. The map is built from the device's
+    /// module-load summaries.
     function_modules: HashMap<Uuid, Uuid>,
     /// Live task runs by the identity their [`TaskHandle`] carries. Each run is
     /// a grafted fragment in [`graph`](Self::graph); this index holds its
@@ -358,7 +269,7 @@ impl KeyHolds {
 pub fn parse_spec(json: &str) -> Result<GraphSpec, String> {
     let mut spec: serde_json::Value =
         serde_json::from_str(json).map_err(|e| format!("graph spec is not JSON: {e}"))?;
-    vizij_api_core::json::normalize_graph_spec_value(&mut spec)
+    arora_shape::json::normalize_graph_spec_value(&mut spec)
         .map_err(|e| format!("normalize graph spec failed: {e}"))?;
     serde_json::from_value(spec).map_err(|e| format!("invalid graph spec: {e}"))
 }
@@ -375,7 +286,7 @@ pub fn parse_spec_diff(json: &str) -> Result<graph_codec::GraphSpecDiff, String>
             "nodes": object.get("upsert_nodes").cloned().unwrap_or_else(empty),
             "edges": object.get("upsert_edges").cloned().unwrap_or_else(empty),
         });
-        vizij_api_core::json::normalize_graph_spec_value(&mut spec)
+        arora_shape::json::normalize_graph_spec_value(&mut spec)
             .map_err(|e| format!("normalize graph edit failed: {e}"))?;
         object.insert("upsert_nodes".to_string(), spec["nodes"].take());
         object.insert("upsert_edges".to_string(), spec["edges"].take());
@@ -434,6 +345,14 @@ pub fn input_paths(spec: &GraphSpec) -> Vec<TypedPath> {
         .collect()
 }
 
+/// The evaluator of a [`ProcessingGraph`]: a behavior tree evaluating what
+/// the graph's outputs read, its writes applied by the graph.
+fn evaluator() -> TreeRuntime {
+    let mut rt = TreeRuntime::new(Evaluation::Demanded);
+    rt.set_collect_outputs(false);
+    rt
+}
+
 impl ProcessingGraph {
     /// Build from a Vizij graph spec: encode it to the shared model's
     /// [`graph_codec`] form (the retained, editable source of truth). Errors only
@@ -447,7 +366,8 @@ impl ProcessingGraph {
             graph,
             spec: GraphSpec::default(),
             dirty: true,
-            rt: GraphRuntime::default(),
+            rt: evaluator(),
+            loaded: None,
             inputs: Inputs::default(),
             function_modules: HashMap::new(),
             runs: HashMap::new(),
@@ -645,31 +565,28 @@ impl ProcessingGraph {
         Ok(())
     }
 
-    /// Lower a grafted run in place rather than the whole graph again. The
-    /// run is a component of its own — its edges join its nodes only, and it
-    /// meets the rest of the graph through store paths — so its nodes go
-    /// after everything lowered so far and its plan after theirs, which is
+    /// Add a grafted run's nodes to the lowered spec rather than lowering
+    /// the whole graph again. The run is a component of its own — its edges
+    /// join its nodes only, and it meets the rest of the graph through store
+    /// paths — so its nodes go after everything lowered so far, which is
     /// where a full lowering puts them too: the run's `flow` is the runner's
     /// last child. Whatever is not a separate component is left to a full
-    /// lowering.
+    /// lowering. The evaluator imports the spec of the new version at the
+    /// next tick.
     fn lower_grafted_run(&mut self, diff: graph_codec::GraphSpecDiff) {
         if !diff.remove_nodes.is_empty() || !diff.remove_edges.is_empty() {
             self.dirty = true;
             return;
         }
-        let first = self.spec.nodes.len();
         self.spec.nodes.extend(diff.upsert_nodes);
         self.spec.edges.extend(diff.upsert_edges);
         self.relowered();
-        match self.rt.plan.append_component(&self.spec, first) {
-            Ok(()) => self.inputs = Inputs::of(&self.spec),
-            Err(_) => self.dirty = true,
-        }
+        self.inputs = Inputs::of(&self.spec);
     }
 
-    /// Take a pruned run's nodes out of the lowered graph and its plan in
-    /// place — nothing else read them, being a component of its own. Left to
-    /// a full lowering when they were not.
+    /// Take a pruned run's nodes out of the lowered spec in place: nothing
+    /// else read them, being a component of its own. The evaluator imports
+    /// the spec of the new version at the next tick.
     fn lower_pruned_run(&mut self, task: TaskId) {
         let prefix = run_node_prefix(task);
         let removed: Vec<usize> = self
@@ -694,15 +611,13 @@ impl ProcessingGraph {
             !removed_ids.contains(&edge.from.node_id) && !removed_ids.contains(&edge.to.node_id)
         });
         self.relowered();
-        match self.rt.plan.remove_nodes(&self.spec, &removed) {
-            Ok(()) => self.inputs = Inputs::of(&self.spec),
-            Err(_) => self.dirty = true,
-        }
+        self.inputs = Inputs::of(&self.spec);
     }
 
-    /// A lowered spec changed in place: a new version for the plan to serve.
-    /// Its fingerprint is not recomputed — the plan is keyed by version —
-    /// and is cleared rather than left stale.
+    /// A lowered spec changed in place: a new version, which the evaluator
+    /// imports at the next tick. Its fingerprint is not recomputed — the
+    /// evaluator is keyed by version — and is cleared rather than left
+    /// stale.
     fn relowered(&mut self) {
         self.spec.version += 1;
         self.spec.fingerprint = 0;
@@ -848,7 +763,7 @@ impl ProcessingGraph {
     }
 
     /// Re-lower the evaluator's spec from the retained graph and refresh the
-    /// input paths, keeping the runtime warm and the plan-cache version
+    /// input paths, keeping the runtime warm and the spec's version
     /// monotonic. A spec that fails [`GraphSpec::validate`] is refused, and
     /// the evaluator keeps the spec it has.
     fn lower(&mut self) -> Result<(), BehaviorError> {
@@ -859,9 +774,9 @@ impl ProcessingGraph {
         self.inputs = Inputs::of(&spec);
         // Carry the version forward before re-caching. A freshly decoded spec
         // restarts at version 0 (→ 1 after `with_cache`); bumping from the
-        // current version keeps it strictly increasing, so the version-keyed
-        // `PlanCache` always rebuilds the plan for the new topology rather than
-        // serving the previous graph's plan.
+        // current version keeps it strictly increasing, so the evaluator,
+        // keyed by version, imports the new graph rather than keep running
+        // the previous one.
         spec.version = self.spec.version;
         self.spec = spec.with_cache();
         self.dirty = false;
@@ -894,6 +809,7 @@ impl ProcessingGraph {
     ///
     /// Until this is populated, an `ExternalFunction` node errors with "no module registered".
     pub fn set_function_modules(&mut self, function_modules: HashMap<Uuid, Uuid>) {
+        self.rt.set_function_modules(function_modules.clone());
         self.function_modules = function_modules;
     }
 
@@ -935,11 +851,16 @@ impl ProcessingGraph {
             }
         }
 
-        let mut functions = CallBridgeFunctions {
-            bridge: call_bridge,
-            function_modules: &self.function_modules,
-        };
-        evaluate_writes_with_functions(&mut self.rt, &self.spec, &mut functions)
+        // The evaluator follows the spec: a spec changed since the last tick
+        // is imported again, every node it keeps keeping its state.
+        if self.loaded != Some(self.spec.version) {
+            self.rt
+                .load(&self.spec)
+                .map_err(|message| BehaviorError { message })?;
+            self.loaded = Some(self.spec.version);
+        }
+        self.rt
+            .evaluate_with(call_bridge)
             .map_err(|message| BehaviorError { message })?;
 
         // Write the graph's outputs back to the store, but for the keys it
@@ -1476,11 +1397,11 @@ pub(crate) fn built_in_dt_seconds(store: &dyn DataStore) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arora_shape::value::{float, vec3};
     use arora_simple_data_store::SimpleDataStore;
     use arora_types::call::{Call, CallError, CallResult, Callable, CallableId};
     use serde_json::json;
     use std::rc::Rc;
-    use vizij_api_core::value::{float, vec3};
 
     /// A bridge the passthrough graphs never invoke (they contain no ExternalFunction nodes).
     #[derive(Default)]
@@ -1511,7 +1432,7 @@ mod tests {
                 { "from": { "node_id": "in" }, "to": { "node_id": "out", "input": "in" } }
             ]
         });
-        vizij_api_core::json::normalize_graph_spec_value(&mut spec).expect("normalize");
+        arora_shape::json::normalize_graph_spec_value(&mut spec).expect("normalize");
         serde_json::from_value(spec).expect("graph spec")
     }
 
@@ -1662,7 +1583,7 @@ mod tests {
                   "selector": [{ "field": "values" }, { "field": "x" }] }
             ]
         });
-        vizij_api_core::json::normalize_graph_spec_value(&mut spec).expect("normalize");
+        arora_shape::json::normalize_graph_spec_value(&mut spec).expect("normalize");
         let mut graph =
             ProcessingGraph::from_spec(serde_json::from_value(spec).expect("spec")).expect("graph");
         let mut bridge = NoopBridge;
@@ -1693,8 +1614,8 @@ mod tests {
     /// A load keeps the graph runtime warm: the graph clock (surfaced by a
     /// `Time` node, which reads `rt.t`) stays continuous across a recompose
     /// instead of restarting at zero. Guards the runtime-continuity behavior
-    /// and, with `load_swaps_the_graph_in_place`, the version-carry that keeps
-    /// the plan cache from serving the old plan for the new graph.
+    /// and, with `load_swaps_the_graph_in_place`, the version-carry that has
+    /// the evaluator import the new graph rather than keep the old one.
     fn clock_graph_json(output: &str) -> serde_json::Value {
         json!({
             "nodes": [
@@ -1710,7 +1631,7 @@ mod tests {
     #[test]
     fn load_keeps_the_graph_runtime_warm() {
         let mut initial = clock_graph_json("clock/a");
-        vizij_api_core::json::normalize_graph_spec_value(&mut initial).expect("normalize");
+        arora_shape::json::normalize_graph_spec_value(&mut initial).expect("normalize");
         let initial: GraphSpec = serde_json::from_value(initial).expect("graph spec");
 
         let store = SimpleDataStore::new();
@@ -1790,7 +1711,7 @@ mod tests {
                 { "from": { "node_id": "src" }, "to": { "node_id": "sink", "input": "in" } }
             ]
         });
-        vizij_api_core::json::normalize_graph_spec_value(&mut spec).expect("normalize");
+        arora_shape::json::normalize_graph_spec_value(&mut spec).expect("normalize");
         let spec: GraphSpec = serde_json::from_value(spec).expect("graph spec");
 
         let store = SimpleDataStore::new();
@@ -1935,7 +1856,8 @@ mod tests {
         assert_eq!(tick(&mut graph, &mut bridge), Some(float(3.0)));
     }
 
-    /// The order a plan follows and what it binds, in comparable form.
+    /// The order the lowered spec evaluates in and what it binds, in
+    /// comparable form.
     fn lowered(graph: &ProcessingGraph) -> Vec<String> {
         let mut out: Vec<String> = graph
             .spec
@@ -1943,13 +1865,8 @@ mod tests {
             .iter()
             .map(|n| format!("node {}", n.id))
             .collect();
-        let order: Vec<&str> = graph
-            .rt
-            .plan
-            .order
-            .iter()
-            .map(|&idx| graph.spec.nodes[idx].id.as_str())
-            .collect();
+        let order = arora_node_graph::topo_order(&graph.spec.nodes, &graph.spec.edges)
+            .expect("the lowered spec orders");
         out.push(format!("order {order:?}"));
         let mut edges: Vec<String> = graph
             .spec
@@ -1998,7 +1915,6 @@ mod tests {
 
         graph.dirty = true;
         graph.lower().unwrap();
-        graph.rt.plan.ensure_versioned(&graph.spec).unwrap();
         assert_eq!(lowered(&graph), in_place);
     }
 
@@ -3255,12 +3171,12 @@ mod tests {
         assert_eq!(read(&store, "actuator/y"), Some(float(0.75)));
     }
 
-    /// The interpreter is `Send` and `Sync` whether or not anything holds
-    /// through it, and so is a hold handle.
+    /// A hold handle is `Send` and `Sync`, so a client on another thread
+    /// holds keys through it. The interpreter runs a behavior tree, which is
+    /// single-threaded: a device builds it on the thread that ticks it.
     #[test]
-    fn the_interpreter_and_its_key_holds_are_send_and_sync() {
+    fn the_key_holds_are_send_and_sync() {
         fn send_and_sync<T: Send + Sync>() {}
-        send_and_sync::<ProcessingGraph>();
         send_and_sync::<KeyHolds>();
     }
 

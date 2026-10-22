@@ -10,6 +10,11 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- A face's graphs run on arora-behavior-tree (vizij-arora-behavior 8): each
+  frame evaluates the nodes the graphs' outputs read whose inputs changed,
+  so a face at rest costs less per frame. The graphs compute what they did
+  before. The device is built and ticked on the app's worker thread, as
+  before.
 - `--ros2` requires `arora-bridge-ros2` 11.1, which speaks ros2-client 0.14
   (RustDDS 0.14): a reliable writer's send window is
   `ResourceLimits::max_samples` (8192) rather than its history depth, so a

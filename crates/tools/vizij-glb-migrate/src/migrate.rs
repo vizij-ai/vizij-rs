@@ -6,7 +6,7 @@
 //! - `scenes[*].extensions.VIZIJ_bundle` and `nodes[*].extensions.
 //!   VIZIJ_bundle`: each `graphs[*].spec` / `graphs[*].ir` entry (an inline
 //!   object or an embedded JSON string) is a node-graph document, normalized
-//!   with [`vizij_api_core::json::normalize_graph_spec_value`]; inline edge
+//!   with [`arora_shape::json::normalize_graph_spec_value`]; inline edge
 //!   `default` / `default_value` payloads (which that normalizer does not
 //!   cover) are normalized value-by-value. The bundle's `poses.config` and
 //!   animation keyframe values are plain scalars and are not visited.
@@ -18,9 +18,9 @@
 //!
 //! Unrecognized payloads are left unchanged and reported as warnings.
 
+use arora_shape::json::{normalize_graph_spec_value, parse_value, JsonError};
 use serde_json::Value as Json;
 use thiserror::Error;
-use vizij_api_core::json::{normalize_graph_spec_value, parse_value, JsonError};
 
 #[derive(Debug, Error)]
 pub enum MigrateError {
@@ -228,9 +228,9 @@ fn normalize_value_payload(payload: &mut Json, context: &str, report: &mut Repor
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arora_shape::value::{as_color_rgba, as_vec3, VEC3_TYPE};
+    use arora_shape::Value;
     use serde_json::json;
-    use vizij_api_core::value::{as_color_rgba, as_vec3, VEC3_TYPE};
-    use vizij_api_core::Value;
 
     fn sample_gltf() -> Json {
         json!({

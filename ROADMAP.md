@@ -23,7 +23,7 @@
 - Investigate profiling hooks (feature-flagged metrics) and faster watcher iterations.
 
 ### API Stack
-- Explore generating JSON/TypeScript schemas directly from `vizij-api-core`.
+- Explore generating JSON/TypeScript schemas directly from `arora-shape`.
 - Provide derive macros or builders to reduce setter boilerplate.
 - Investigate `no_std` support for constrained targets.
 
@@ -53,5 +53,5 @@
 ## Backlog & Ideas
 
 - Ship optional Web Worker helpers for heavy wasm workloads (animation baking, graph evaluation).
-- Offer CLI utilities for schema diffing (`vizij-graph-core`) and orchestration smoke tests.
+- Offer CLI utilities for schema diffing (`arora-node-graph`) and orchestration smoke tests.
 - Publish fixture metadata (durations, node counts) to help demos surface summary information quickly.

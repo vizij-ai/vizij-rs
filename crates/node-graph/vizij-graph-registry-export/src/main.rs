@@ -5,7 +5,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-use vizij_graph_core::schema;
+use arora_node_graph::schema;
 
 fn print_usage() {
     eprintln!("Usage: vizij-graph-registry-export [--output <path>] [--pretty]");

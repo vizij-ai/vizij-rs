@@ -7,7 +7,7 @@ license = "Apache-2.0"
 description = "Rewrites the Value-bearing JSON embedded in Vizij face-bundle .glb files to canonical arora Value serde"
 
 [dependencies]
-vizij-api-core = { path = "../../api/vizij-api-core" }
+arora-shape = "1"
 # preserve_order keeps glTF JSON member order stable across the rewrite so
 # migrated files diff cleanly against their sources.
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }

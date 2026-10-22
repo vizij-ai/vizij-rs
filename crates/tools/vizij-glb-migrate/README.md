@@ -25,7 +25,7 @@ All rewrites happen inside the glTF JSON chunk:
 - `scenes[*].extensions.VIZIJ_bundle` and `nodes[*].extensions.VIZIJ_bundle`:
   each `graphs[*].spec` / `graphs[*].ir` entry — an inline object or an
   embedded JSON string — is a node-graph document, normalized with
-  `vizij_api_core::json::normalize_graph_spec_value`: node `params.value` and
+  `arora_shape::json::normalize_graph_spec_value`: node `params.value` and
   `input_defaults.<port>.value` payloads become canonical Values, legacy
   `inputs` wiring becomes `edges`, and shape shorthand expands. Inline edge
   `default` / `default_value` payloads are normalized value-by-value.

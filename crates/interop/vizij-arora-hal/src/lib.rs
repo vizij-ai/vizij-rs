@@ -7,7 +7,7 @@
 //! Rust side — it holds the GLB, accumulates the latest actuation `State`,
 //! and feeds [`pose_updates`](RigHal::pose_updates) so a renderer knows what
 //! changed. Vizij and Arora share one runtime value type
-//! ([`vizij_api_core::Value`] is `arora_types::value::Value`), so
+//! ([`arora_shape::Value`] is `arora_types::value::Value`), so
 //! [`RigHal::pose`] exposes that state to a Vizij renderer directly — the
 //! only translation is string [`Key`]s to [`TypedPath`]s; the actual
 //! bone/morph application stays in the renderer.
@@ -31,10 +31,10 @@ use std::sync::{Arc, Mutex};
 use arora_hal::{
     content_hash, ComponentModel, Hal, HalAssets, HalDescription, HalResult, UpdatesStream, DEVICE,
 };
+use arora_shape::{TypedPath, Value};
 use arora_types::data::{Key, State, StateChange};
 use async_trait::async_trait;
 use futures_channel::mpsc::UnboundedSender;
-use vizij_api_core::{TypedPath, Value};
 
 #[derive(Default)]
 struct Inner {
@@ -243,8 +243,8 @@ impl HalAssets for RigHal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arora_shape::value::{as_float, as_vec3, bool_, float, vec3};
     use futures::{FutureExt, StreamExt};
-    use vizij_api_core::value::{as_float, as_vec3, bool_, float, vec3};
 
     /// Drain everything the feed has already buffered, without blocking.
     fn drain(feed: &mut UpdatesStream) -> Vec<StateChange> {

@@ -18,9 +18,9 @@ use crate::interp::InterpRegistry;
 use crate::outputs::{Change, ChangeWithDerivative, Outputs, OutputsWithDerivatives};
 use crate::sampling::{sample_track, sample_track_with_derivative};
 use crate::scratch::Scratch;
+use arora_shape::{Value, WriteBatch};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use vizij_api_core::{Value, WriteBatch};
 
 #[derive(Clone, Debug, Default)]
 pub struct PrebindReport {
@@ -1121,7 +1121,7 @@ mod tests {
     use crate::data::{Keypoint, Track};
     use crate::inputs::PlayerCommand;
     use crate::value::TrackValue;
-    use vizij_api_core::Value;
+    use arora_shape::Value;
 
     /// A track holding `value` at every time.
     fn constant_track(key: &str, value: f32) -> Track {

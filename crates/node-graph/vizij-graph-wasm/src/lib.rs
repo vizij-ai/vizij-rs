@@ -3,19 +3,18 @@
 //! This module exposes graph normalization, evaluation, staged-input handling, registry
 //! metadata, and delta-friendly output snapshots to JavaScript consumers.
 
+use arora_node_graph::tree_runtime::{Evaluation, TreeRuntime};
+use arora_node_graph::types::RoundMode;
+use arora_node_graph::{GraphSpec, PortValue};
+use arora_shape::shape::ShapeId;
+use arora_shape::value::{
+    as_array, as_bool, as_float, as_quat, as_text, as_transform, as_vec2, as_vec3, as_vec4,
+    as_vector, float, kind, vector, ShapeKind,
+};
+use arora_shape::{coercion, json, Shape, TypedPath, Value};
 use hashbrown::HashMap;
 use js_sys::{Float32Array, Uint32Array, JSON};
 use serde_wasm_bindgen as swb;
-use vizij_api_core::shape::ShapeId;
-use vizij_api_core::value::{
-    as_array, as_bool, as_float, as_quat, as_text, as_transform, as_vec2, as_vec3, as_vec4,
-    as_vector, float, kind, vector, VizijKind,
-};
-use vizij_api_core::{coercion, json, Shape, TypedPath, Value};
-use vizij_graph_core::types::RoundMode;
-use vizij_graph_core::{
-    evaluate_all, evaluate_all_cached, GraphRuntime, GraphSpec, NodeType, PortValue,
-};
 use wasm_bindgen::prelude::*;
 
 /// Normalize a graph-spec JSON string into the canonical serde shape expected by the runtime.
@@ -33,8 +32,8 @@ pub fn abi_version() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arora_shape::json;
     use std::collections::HashSet;
-    use vizij_api_core::json;
 
     #[test]
     fn it_should_normalize_value_and_path_shorthand() {
@@ -115,8 +114,10 @@ mod tests {
         assert_eq!(super::abi_version(), 2);
     }
 
+    /// A changed split arity reaches the graph at the next eval: the spec is
+    /// loaded again, and the split has the ports its new sizes give it.
     #[test]
-    fn set_param_invalidates_plan_cache_for_structural_changes() {
+    fn a_changed_split_arity_reloads_with_its_new_ports() {
         let mut graph = WasmGraph::new();
         let spec = r#"{
             "nodes": [
@@ -132,13 +133,7 @@ mod tests {
         graph.eval_all().expect("initial eval");
 
         assert!(graph.plan_ready);
-        let split_idx = *graph
-            .runtime
-            .plan
-            .node_index
-            .get("split")
-            .expect("split present");
-        let initial_slots = graph.runtime.plan.layouts[split_idx].outputs.slots.len();
+        let initial_ports = graph.runtime.outputs["split"].len();
 
         graph
             .set_param("split", "sizes", "[1, 1, 1, 1]")
@@ -146,32 +141,25 @@ mod tests {
 
         assert!(
             !graph.plan_ready,
-            "plan cache should be invalidated after structural param change"
-        );
-        assert!(
-            graph.runtime.plan.layouts.is_empty(),
-            "plan cache should be cleared"
+            "the next eval loads the spec again after a param change"
         );
 
-        graph.eval_all().expect("re-eval rebuilds plan");
+        graph.eval_all().expect("re-eval loads the spec");
         assert!(graph.plan_ready);
+        assert_eq!(graph.runtime.loads(), 2);
 
-        let rebuilt_idx = *graph
-            .runtime
-            .plan
-            .node_index
-            .get("split")
-            .expect("split present");
-        let rebuilt_slots = graph.runtime.plan.layouts[rebuilt_idx].outputs.slots.len();
-
+        let rebuilt_ports = graph.runtime.outputs["split"].len();
         assert!(
-            rebuilt_slots > initial_slots,
-            "plan rebuild should reflect new Split arity"
+            rebuilt_ports > initial_ports,
+            "the reload reflects the new Split arity"
         );
     }
 
+    /// A changed value reaches the graph at the next eval with the tree
+    /// kept: on the tree, a parameter is a literal argument of its node's
+    /// call, set in place.
     #[test]
-    fn set_param_does_not_invalidate_plan_cache_for_non_structural_changes() {
+    fn a_changed_value_reaches_the_output_at_the_next_eval() {
         let mut graph = WasmGraph::new();
         let spec = r#"{
             "nodes": [
@@ -185,37 +173,20 @@ mod tests {
 
         graph.load_graph(spec).expect("graph loads");
         graph.eval_all().expect("initial eval");
-        assert!(graph.plan_ready, "plan should be ready after first eval");
+        assert!(graph.plan_ready, "the spec is loaded after the first eval");
 
-        // We can't directly read `PlanCache.fingerprint` from this crate (private field), so we
-        // use the public shape of the plan as our proxy for "cache remained intact".
-        let initial_slots = graph.runtime.plan.layouts.len();
-        assert!(initial_slots > 0, "plan layouts should be populated");
-
-        // Change a non-structural param. Constant.value affects runtime outputs but not port layout.
         graph
             .set_param("c", "value", "2.0")
             .expect("set_param succeeds");
+        assert!(graph.plan_ready, "the value is set in place");
 
-        assert!(
-            graph.plan_ready,
-            "non-structural param change should not invalidate plan cache"
-        );
-        assert!(
-            !graph.runtime.plan.layouts.is_empty(),
-            "plan cache should remain populated"
-        );
+        graph.eval_all().expect("eval succeeds after a value edit");
+        assert_eq!(graph.runtime.loads(), 1, "the tree is kept");
         assert_eq!(
-            graph.runtime.plan.layouts.len(),
-            initial_slots,
-            "plan layouts should remain the same for non-structural edits"
+            graph.runtime.outputs["out"]["out"].value,
+            Value::F32(2.0),
+            "the new value reaches the output"
         );
-
-        // A follow-up eval should succeed and keep the plan ready.
-        graph
-            .eval_all()
-            .expect("eval succeeds after non-structural edit");
-        assert!(graph.plan_ready);
     }
 
     #[test]
@@ -239,8 +210,8 @@ mod tests {
             .set_param("rec", "value", r#"{ "record": { "x": { "f32": 2.0 } } }"#)
             .expect("set_param succeeds");
         assert!(
-            !graph.plan_ready,
-            "the plan holds what the selector reads, so the value is structural"
+            graph.plan_ready,
+            "the selection reads the constant's value as it changes"
         );
         graph.eval_all().expect("re-eval");
         assert_eq!(out(&graph), Value::F32(2.0));
@@ -269,9 +240,7 @@ mod tests {
 
         graph.load_graph(spec).expect("graph loads");
         graph.eval_all().expect("initial eval");
-        assert!(graph.plan_ready, "plan should be ready after first eval");
-        let initial_layouts = graph.runtime.plan.layouts.len();
-        assert!(initial_layouts > 0, "plan layouts should be populated");
+        assert!(graph.plan_ready, "the spec is loaded after the first eval");
 
         graph
             .set_param("noise", "noise_seed", "42.0")
@@ -286,15 +255,8 @@ mod tests {
             .set_param("noise", "persistence", "0.4")
             .expect("persistence set_param succeeds");
 
-        assert!(
-            graph.plan_ready,
-            "noise params are non-structural and should not invalidate plan cache"
-        );
-        assert_eq!(
-            graph.runtime.plan.layouts.len(),
-            initial_layouts,
-            "plan layouts should remain unchanged for noise param edits"
-        );
+        assert!(graph.plan_ready, "the noise parameters are set in place");
+        graph.eval_all().expect("eval after the noise edits");
 
         let noise = graph
             .spec
@@ -347,17 +309,23 @@ mod tests {
 
 /// WASM-facing graph runtime with staging and output delta caches.
 ///
-/// Node-local runtime state lives inside `GraphRuntime` (including per-node state),
-/// while this wrapper tracks input staging and output snapshots to avoid crossing
+/// The graph runs on the behavior tree ([`TreeRuntime`]), every node at
+/// every evaluation so each port can be shown; node state lives in the tree.
+/// This wrapper tracks input staging and output snapshots to avoid crossing
 /// the wasm boundary when values are unchanged.
 #[wasm_bindgen]
 pub struct WasmGraph {
     spec: GraphSpec,
     t: f64,
-    runtime: GraphRuntime,
+    runtime: TreeRuntime,
     input_paths: Vec<TypedPath>,
     input_slots: Vec<Option<SlotStaging>>,
+    /// Whether the runtime holds the current spec: false after a load, or
+    /// after an edit the tree cannot take in place, until the next eval loads
+    /// it, every node keeping its state.
     plan_ready: bool,
+    /// The evaluations so far: the epoch the next one stages for.
+    epoch: u64,
     output_version: u64,
     last_outputs: HashMap<String, HashMap<String, PortValue>>,
     last_outputs_version: u64,
@@ -428,10 +396,11 @@ impl WasmGraph {
                 ..Default::default()
             },
             t: 0.0,
-            runtime: GraphRuntime::default(),
+            runtime: TreeRuntime::new(Evaluation::Every),
             input_paths: Vec::new(),
             input_slots: Vec::new(),
             plan_ready: false,
+            epoch: 0,
             output_version: 0,
             last_outputs: HashMap::new(),
             last_outputs_version: 0,
@@ -451,7 +420,8 @@ impl WasmGraph {
             .map_err(|e| JsValue::from_str(&e.to_string()))?
             .with_cache();
 
-        self.runtime = GraphRuntime::default();
+        self.runtime = TreeRuntime::new(Evaluation::Every);
+        self.epoch = 0;
         self.runtime.t = self.t as f32;
         self.runtime.dt = 0.0;
         self.input_paths.clear();
@@ -513,7 +483,7 @@ impl WasmGraph {
     pub fn clear_input_path(&mut self, path: &str) -> Result<(), JsValue> {
         let typed_path = TypedPath::parse(path)
             .map_err(|e| JsValue::from_str(&format!("invalid path: {}", e)))?;
-        self.runtime.staged_inputs.remove(&typed_path);
+        self.runtime.clear_input(&typed_path);
         // Drop slot caches if this path was registered.
         if let Some((slot_idx, _)) = self
             .input_paths
@@ -528,24 +498,23 @@ impl WasmGraph {
         Ok(())
     }
 
-    /// Drop the cached execution plan and delta snapshot so the next eval rebuilds layouts.
+    /// Have the next eval load the spec again, and drop the delta snapshot.
     fn invalidate_plan_cache(&mut self) {
         self.plan_ready = false;
-        self.runtime.plan = Default::default();
         self.last_outputs.clear();
         self.last_outputs_version = 0;
-        // Bump the plan-validity key (structural generation) and refresh the fingerprint.
-        // This ensures `PlanCache::ensure_versioned` will rebuild when needed without doing
-        // per-frame hashing in the steady state.
+        // The edited spec is a new version of the graph.
         self.spec = std::mem::take(&mut self.spec).with_cache();
     }
 
     fn eval_internal(&mut self) -> Result<(), JsValue> {
         let res = if self.plan_ready {
-            evaluate_all_cached(&mut self.runtime, &self.spec)
+            Ok(())
         } else {
-            evaluate_all(&mut self.runtime, &self.spec)
-        };
+            self.runtime.load(&self.spec)
+        }
+        .and_then(|()| self.runtime.evaluate());
+        self.epoch = self.epoch.saturating_add(1);
         match res {
             Ok(_) => {
                 self.plan_ready = true;
@@ -561,7 +530,7 @@ impl WasmGraph {
 
     /// Restage cached slots so the core sees fresh inputs each frame while JS can skip resending.
     fn restage_cached_inputs(&mut self) -> Result<(), JsValue> {
-        let next_epoch = self.runtime.input_epoch.saturating_add(1);
+        let next_epoch = self.epoch.saturating_add(1);
         for (slot_idx, value) in self.input_last_values.iter() {
             let tp = self
                 .input_paths
@@ -588,7 +557,7 @@ impl WasmGraph {
         value: Value,
         declared: Option<Shape>,
     ) -> Result<(), JsValue> {
-        let next_epoch = self.runtime.input_epoch.saturating_add(1);
+        let next_epoch = self.epoch.saturating_add(1);
         if let Some(prev) = self.input_last_values.get(&slot_idx) {
             let same_value = *prev == value;
             let same_shape = self
@@ -976,7 +945,7 @@ impl WasmGraph {
             .get(idx)
             .ok_or_else(|| JsValue::from_str("clear_input_slot: slot index out of bounds"))?
             .clone();
-        self.runtime.staged_inputs.remove(&tp);
+        self.runtime.clear_input(&tp);
         self.input_last_values.remove(&idx);
         self.input_last_shapes.remove(&idx);
         self.input_touched.remove(&idx);
@@ -989,13 +958,13 @@ impl WasmGraph {
         let port = self.runtime.outputs.get(node_id)?.get(output_key)?;
         let value = &port.value;
         match kind(value) {
-            VizijKind::Float => as_float(value).map(|f| Float32Array::from(&[f][..])),
-            VizijKind::Vector => as_vector(value).map(Float32Array::from),
-            VizijKind::Vec2 => as_vec2(value).map(|a| Float32Array::from(&a[..])),
-            VizijKind::Vec3 => as_vec3(value).map(|a| Float32Array::from(&a[..])),
-            VizijKind::Vec4 => as_vec4(value).map(|a| Float32Array::from(&a[..])),
-            VizijKind::Quat => as_quat(value).map(|a| Float32Array::from(&a[..])),
-            VizijKind::Transform => as_transform(value).map(|t| {
+            ShapeKind::Float => as_float(value).map(|f| Float32Array::from(&[f][..])),
+            ShapeKind::Vector => as_vector(value).map(Float32Array::from),
+            ShapeKind::Vec2 => as_vec2(value).map(|a| Float32Array::from(&a[..])),
+            ShapeKind::Vec3 => as_vec3(value).map(|a| Float32Array::from(&a[..])),
+            ShapeKind::Vec4 => as_vec4(value).map(|a| Float32Array::from(&a[..])),
+            ShapeKind::Quat => as_quat(value).map(|a| Float32Array::from(&a[..])),
+            ShapeKind::Transform => as_transform(value).map(|t| {
                 let mut tmp = Vec::with_capacity(10);
                 tmp.extend_from_slice(&t.translation);
                 tmp.extend_from_slice(&t.rotation);
@@ -1021,13 +990,13 @@ impl WasmGraph {
                 .and_then(|port| {
                     let value = &port.value;
                     match kind(value) {
-                        VizijKind::Float => as_float(value),
-                        VizijKind::Vector => as_vector(value).and_then(|v| v.first().copied()),
-                        VizijKind::Vec2 => as_vec2(value).map(|a| a[0]),
-                        VizijKind::Vec3 => as_vec3(value).map(|a| a[0]),
-                        VizijKind::Vec4 => as_vec4(value).map(|a| a[0]),
-                        VizijKind::Quat => as_quat(value).map(|a| a[0]),
-                        VizijKind::Transform => as_transform(value).map(|t| t.translation[0]),
+                        ShapeKind::Float => as_float(value),
+                        ShapeKind::Vector => as_vector(value).and_then(|v| v.first().copied()),
+                        ShapeKind::Vec2 => as_vec2(value).map(|a| a[0]),
+                        ShapeKind::Vec3 => as_vec3(value).map(|a| a[0]),
+                        ShapeKind::Vec4 => as_vec4(value).map(|a| a[0]),
+                        ShapeKind::Quat => as_quat(value).map(|a| a[0]),
+                        ShapeKind::Transform => as_transform(value).map(|t| t.translation[0]),
                         _ => None,
                     }
                 });
@@ -1156,11 +1125,14 @@ impl WasmGraph {
     }
 
     /// Set a param on a node (e.g., key="value" with a JSON payload in Arora
-    /// `Value` serde form or any legacy form the api-core normalizer accepts).
+    /// `Value` serde form or any legacy form the arora-shape normalizer accepts).
     ///
-    /// Structural parameter edits invalidate the cached execution plan so the next evaluation
-    /// rebuilds layouts safely. The current bridge treats `Split.sizes` as the main structural
-    /// case.
+    /// A parameter is a literal argument of the node's call on the behavior
+    /// tree. A value is set in place: the tree is kept, and the node runs
+    /// with it at the next evaluation. An edit that changes the tree (a
+    /// split's sizes, a record's keys, an input's or output's path, a
+    /// parameter the node did not set) has the next evaluation load the
+    /// edited spec, every node keeping its state.
     #[wasm_bindgen]
     pub fn set_param(&mut self, node_id: &str, key: &str, json_value: &str) -> Result<(), JsValue> {
         let raw: serde_json::Value =
@@ -1288,26 +1260,7 @@ impl WasmGraph {
             }
         }
 
-        // The plan resolves what a selector reads from a constant, so the value of a constant
-        // read through a selector is plan structure.
-        let picked = self
-            .spec
-            .edges
-            .iter()
-            .any(|edge| edge.from.node_id == node_id && edge.selector.is_some());
         if let Some(node) = self.spec.nodes.iter_mut().find(|n| n.id == node_id) {
-            // Structural params are those that can change the cached plan's port layouts or
-            // bindings. Known structural mutations via `set_param`:
-            // - `Split.sizes`: changes the number of variadic outputs and slot indices.
-            // - `ReadRecord.record_keys`: changes the number of variadic outputs and slot indices.
-            // - `Constant.value`, for a constant read through a selector: the plan holds what
-            //   the selector reads.
-            let structural_change = matches!(
-                (&node.kind, key),
-                (NodeType::Split, "sizes") | (NodeType::ReadRecord, "record_keys")
-            ) || (picked
-                && matches!((&node.kind, key), (NodeType::Constant, "value")));
-
             match key {
                 "value" => {
                     node.params.value = Some(val);
@@ -1414,18 +1367,13 @@ impl WasmGraph {
                     )))
                 }
             }
-            if structural_change {
-                // Structural edits can change port layouts and bindings (e.g. Split.sizes affects
-                // how many variadic outputs exist), so we must drop the cached plan.
+            // An edit the tree refuses, or fails to make, is left to the
+            // next eval's load of the edited spec, which reports any error.
+            let params = node.params.clone();
+            let in_place =
+                self.plan_ready && matches!(self.runtime.set_params(node_id, &params), Ok(true));
+            if !in_place {
                 self.invalidate_plan_cache();
-            } else {
-                // Non-structural params only affect runtime evaluation, not the cached layouts or
-                // input bindings. Keep the plan cache valid so we can continue using
-                // `evaluate_all_cached` for the steady-state fast path.
-                //
-                // NOTE: We intentionally do *not* bump `GraphSpec.version` here, because in this
-                // stack `version` acts as a plan-validity key. Bumping it on non-structural edits
-                // would force unnecessary plan rebuilds.
             }
             Ok(())
         } else {
@@ -1437,6 +1385,6 @@ impl WasmGraph {
 /// Expose the node schema registry as JSON for tooling/UI.
 #[wasm_bindgen]
 pub fn get_node_schemas_json() -> String {
-    let reg = vizij_graph_core::registry();
+    let reg = arora_node_graph::registry();
     serde_json::to_string(&reg).unwrap()
 }

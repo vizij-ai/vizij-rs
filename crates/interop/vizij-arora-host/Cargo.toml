@@ -1,13 +1,13 @@
 [package]
 name = "vizij-arora-host"
-version = "7.5.0"
+version = "7.5.1"
 edition.workspace = true
 license = "Apache-2.0"
 description = "Portable Vizij host glue: compose the device behavior from graph sources, read the face bundle, pick the program to autoplay, and stage the neutral pose. Shared by the native app and the browser module (both in the vizij crate)."
 repository = "https://github.com/vizij-ai/vizij-rs"
 
 [dependencies]
-vizij-api-core = { version = "2", path = "../../api/vizij-api-core" }
+arora-shape = "1"
 # The key descriptor types (`Type`, `Value`) a profile shares with the WS
 # bridge's `KeyInfo`, so the two serialize identically.
 arora-types = "3"

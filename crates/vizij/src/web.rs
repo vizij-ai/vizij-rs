@@ -1242,7 +1242,7 @@ fn parse_face_config(json: Option<&str>) -> Result<(FaceConfig, bool), JsValue> 
 fn normalize_value_str(value_json: &str) -> Result<String, JsValue> {
     let value: serde_json::Value = serde_json::from_str(value_json)
         .map_err(|e| JsValue::from_str(&format!("value is not JSON: {e}")))?;
-    let normalized = vizij_api_core::json::normalize_value_json(value);
+    let normalized = arora_shape::json::normalize_value_json(value);
     serde_json::to_string(&normalized)
         .map_err(|e| JsValue::from_str(&format!("serialize value: {e}")))
 }
@@ -1254,7 +1254,7 @@ fn normalize_values_map_str(values_json: &str) -> Result<String, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("values are not a JSON object: {e}")))?;
     let normalized: serde_json::Map<String, serde_json::Value> = map
         .into_iter()
-        .map(|(path, value)| (path, vizij_api_core::json::normalize_value_json(value)))
+        .map(|(path, value)| (path, arora_shape::json::normalize_value_json(value)))
         .collect();
     serde_json::to_string(&normalized)
         .map_err(|e| JsValue::from_str(&format!("serialize values: {e}")))

@@ -35,8 +35,8 @@ pub mod standard;
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
+use arora_shape::json::normalize_graph_spec_value;
 use serde_json::{json, Value as Json};
-use vizij_api_core::json::normalize_graph_spec_value;
 
 /// Which of a bundle's motiongraph programs the face boots playing.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -381,7 +381,7 @@ impl Bundle {
                     .and_then(|node| node.pointer("/params/value"))
                     .filter(|value| !value.is_null())
                     .filter(|value| {
-                        vizij_api_core::json::parse_value((*value).clone())
+                        arora_shape::json::parse_value((*value).clone())
                             .is_ok_and(|value| value.conforms_to(ty))
                     })
                     .cloned();
@@ -1288,7 +1288,7 @@ mod tests {
                 })
                 .unwrap_or_else(|| panic!("{source} reads {path}"))["params"]["value"]
                 .clone();
-            vizij_api_core::json::parse_value(value).expect("a rest value")
+            arora_shape::json::parse_value(value).expect("a rest value")
         };
 
         for face in [

@@ -31,10 +31,12 @@ pub mod sampling;
 pub mod scratch;
 /// Parser for the stored-animation JSON format used by fixtures and wrappers.
 pub mod stored_animation;
-/// Animation-specific value helpers layered on top of `vizij-api-core`.
+/// Animation-specific value helpers layered on top of `arora-shape`.
 pub mod value;
 
 // Re-exports for consumers (adapters)
+/// The shared runtime value used at the output boundary.
+pub use arora_shape::Value;
 /// Baking helpers and exported baked-data contracts.
 pub use baking::{
     bake_animation_data, bake_animation_data_with_derivatives, export_baked_json,
@@ -65,5 +67,3 @@ pub use scratch::Scratch;
 pub use stored_animation::parse_stored_animation_json;
 /// POD keyframe values held by tracks.
 pub use value::TrackValue;
-/// The shared runtime value used at the output boundary.
-pub use vizij_api_core::Value;

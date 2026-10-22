@@ -79,8 +79,8 @@ impl Rest for AtRest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arora_shape::value::float;
     use arora_types::data::KeyMeta;
-    use vizij_api_core::value::float;
     use vizij_arora_store::BlackboardStore;
 
     fn read(store: &BlackboardStore, key: &str) -> Option<arora_types::value::Value> {

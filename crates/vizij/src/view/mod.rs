@@ -48,6 +48,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 
+use arora_shape::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
+use arora_shape::Value;
 use bevy::asset::io::memory::{Dir, MemoryAssetReader};
 use bevy::asset::io::AssetSourceBuilder;
 use bevy::asset::AssetApp;
@@ -62,8 +64,6 @@ use bevy::math::Vec3A;
 use bevy::mesh::morph::MorphWeights;
 use bevy::prelude::*;
 use bevy::render::render_resource::BlendState;
-use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
-use vizij_api_core::Value;
 
 use hold::{HoldTarget, Holds};
 use meta::{Binding, FaceMeta, FeatureKind, PrimitiveShape};
@@ -2102,8 +2102,8 @@ mod tests {
     /// A feature takes the value shapes it can show, and nothing else.
     #[test]
     fn a_value_decodes_to_what_its_feature_takes() {
-        let vec3 = vizij_api_core::value::vec3([1.0, 2.0, 3.0]);
-        let float = vizij_api_core::value::float(0.5);
+        let vec3 = arora_shape::value::vec3([1.0, 2.0, 3.0]);
+        let float = arora_shape::value::float(0.5);
         assert_eq!(
             decode(&FeatureKind::Translation, None, &vec3),
             Some(Decoded::Triple([1.0, 2.0, 3.0]))
@@ -2172,8 +2172,8 @@ mod tests {
     /// so does the whole pose on the frame after a static feature landed.
     #[test]
     fn an_unchanged_pose_value_leaves_its_target_alone() {
+        use arora_shape::value::vec3;
         use bevy::ecs::system::RunSystemOnce;
-        use vizij_api_core::value::vec3;
 
         let mut world = World::new();
         world.init_resource::<Assets<StandardMaterial>>();
@@ -2243,8 +2243,8 @@ mod tests {
     /// share its colour — lands its value on every one of them.
     #[test]
     fn an_animatable_lands_on_every_element_it_binds() {
+        use arora_shape::value::vec3;
         use bevy::ecs::system::RunSystemOnce;
-        use vizij_api_core::value::vec3;
 
         let mut world = World::new();
         world.init_resource::<Assets<StandardMaterial>>();

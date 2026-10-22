@@ -1,6 +1,6 @@
 [package]
 name = "vizij-arora-behavior"
-version = "7.2.0"
+version = "8.0.0"
 edition.workspace = true
 license = "Apache-2.0"
 description = "A Vizij node graph driven as an Arora behavior interpreter (ProcessingGraph)."
@@ -13,15 +13,15 @@ arora-behavior-tree-types = "2"
 arora-types = "3"
 # Declares the run_behavior contract the interpreter describes.
 arora-module = "2.1"
-# The channel key holds travel on: its receiver is `Sync`, so the interpreter
-# holding it stays `Sync`.
+# The channel key holds travel on: a hold handle is `Send` and `Sync`, so a
+# client on another thread holds keys through it.
 crossbeam-channel = "0.5"
 log = "0.4"
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = "1"
-vizij-api-core = { version = "2", path = "../../api/vizij-api-core" }
-vizij-graph-core = { version = "3.1", path = "../../node-graph/vizij-graph-core" }
+arora-shape = "1"
+arora-node-graph = "1"
 # The skill fragments (the gaze contract grafts the shipped look_at asset).
 vizij-arora-host = { version = "7", path = "../vizij-arora-host" }
 

@@ -1,3 +1,4 @@
+use arora_shape::value::{as_float, as_quat, as_transform, as_vec3};
 use vizij_animation_core::{
     config::Config,
     data::{AnimationData, Keypoint, Track},
@@ -6,7 +7,6 @@ use vizij_animation_core::{
     parse_stored_animation_json,
     value::TrackValue,
 };
-use vizij_api_core::value::{as_float, as_quat, as_transform, as_vec3};
 
 fn approx(a: f32, b: f32, eps: f32) {
     assert!(

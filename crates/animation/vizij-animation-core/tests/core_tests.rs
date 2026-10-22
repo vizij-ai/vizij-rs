@@ -1,4 +1,5 @@
 #![allow(clippy::approx_constant)]
+use arora_shape::value::{as_quat, Value};
 use vizij_animation_core::{
     accumulate::AccumulatorWithDerivatives,
     baking::{export_baked_json, BakingConfig},
@@ -12,7 +13,6 @@ use vizij_animation_core::{
     sampling::{sample_track, sample_track_with_derivative},
     value::TrackValue,
 };
-use vizij_api_core::value::{as_quat, Value};
 
 fn approx(a: f32, b: f32, eps: f32) {
     assert!((a - b).abs() <= eps, "left={a} right={b} eps={eps}");
@@ -572,7 +572,7 @@ fn outputs_api_basics() {
     out.push_change(vizij_animation_core::outputs::Change {
         player: PlayerId(0),
         key: "a".into(),
-        value: vizij_api_core::value::float(1.0),
+        value: arora_shape::value::float(1.0),
     });
     assert!(!out.is_empty());
     out.clear();
@@ -1284,12 +1284,12 @@ fn config_and_value_serde_roundtrip() {
     assert!(cfg2.scratch_samples > 0);
 
     // Value roundtrips through the vocabulary encodings
-    let vq = vizij_api_core::value::quat([0.0, 0.0, 0.0, 1.0]);
+    let vq = arora_shape::value::quat([0.0, 0.0, 0.0, 1.0]);
     let svq = serde_json::to_string(&vq).unwrap();
     let vq2: Value = serde_json::from_str(&svq).unwrap();
     assert_eq!(vq, vq2);
 
-    let vt = vizij_api_core::value::transform(vizij_api_core::Transform {
+    let vt = arora_shape::value::transform(arora_shape::Transform {
         translation: [1.0, 2.0, 3.0],
         rotation: [0.0, 0.0, 0.0, 1.0],
         scale: [1.0, 1.0, 1.0],
@@ -1299,13 +1299,13 @@ fn config_and_value_serde_roundtrip() {
     assert_eq!(vt, vt2);
 
     // Bool roundtrip
-    let vb = vizij_api_core::value::bool_(true);
+    let vb = arora_shape::value::bool_(true);
     let svb = serde_json::to_string(&vb).unwrap();
     let vb2: Value = serde_json::from_str(&svb).unwrap();
     assert_eq!(vb, vb2);
 
     // Text roundtrip
-    let vtxt = vizij_api_core::value::text("hello");
+    let vtxt = arora_shape::value::text("hello");
     let svtxt = serde_json::to_string(&vtxt).unwrap();
     let vtxt2: Value = serde_json::from_str(&svtxt).unwrap();
     assert_eq!(vtxt, vtxt2);

@@ -277,7 +277,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -288,7 +288,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -376,9 +376,9 @@ dependencies = [
 
 [[package]]
 name = "arora-behavior"
-version = "9.5.0"
+version = "9.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9c8cde7d2164906bd6bfa5d95bc114546070afe6f57de327946fe6c700c4a18"
+checksum = "ee756f977b7655a4decf3ecc320039a79d929b2f4ea5de8c3a582f66cb03856c"
 dependencies = [
  "arora-types",
  "semver",
@@ -388,9 +388,8 @@ dependencies = [
 
 [[package]]
 name = "arora-behavior-tree"
-version = "9.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b377e5f28ef2e6d3e72bf232f59667dab24c7aecbb14a79d79c7fab2fa8ec9af"
+version = "9.4.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=claude%2Fexciting-bell-zuvea5#9a04c5856cb34f84ccc91be28c8df3f48a4304f3"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
@@ -577,6 +576,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "arora-node-graph"
+version = "1.0.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=claude%2Fexciting-bell-zuvea5#9a04c5856cb34f84ccc91be28c8df3f48a4304f3"
+dependencies = [
+ "anyhow",
+ "arora-behavior",
+ "arora-behavior-tree",
+ "arora-shape",
+ "arora-simple-data-store",
+ "arora-types",
+ "hashbrown 0.17.1",
+ "k",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "urdf-rs",
+ "uuid",
+]
+
+[[package]]
 name = "arora-registry"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -591,10 +610,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "arora-shape"
+version = "1.0.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=claude%2Fexciting-bell-zuvea5#9a04c5856cb34f84ccc91be28c8df3f48a4304f3"
+dependencies = [
+ "arora-types",
+ "hashbrown 0.17.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
 name = "arora-simple-data-store"
-version = "3.0.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91c5fa013c082c02a554579db5c51a0382fba6b874d1cb6875c631842b8d24ab"
+checksum = "e9d8f70e341106e5f869ab1ce87f8b3a13f6c2013d7131495bb0b65a772c0424"
 dependencies = [
  "arora-types",
 ]
@@ -1903,7 +1935,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-time",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3925,7 +3957,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.2",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4181,7 +4213,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6410,7 +6442,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7034,7 +7066,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -7742,7 +7774,7 @@ dependencies = [
  "once_cell",
  "socket2 0.6.5",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -8399,7 +8431,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -8477,7 +8509,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -8866,6 +8898,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1_smol"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9111,7 +9149,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -9486,10 +9524,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -10042,7 +10080,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.4",
+ "cfg-if 0.1.10",
  "static_assertions",
 ]
 
@@ -10078,7 +10116,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -10236,6 +10274,7 @@ dependencies = [
  "js-sys",
  "rand 0.10.2",
  "serde_core",
+ "sha1_smol",
  "wasm-bindgen",
 ]
 
@@ -10305,6 +10344,8 @@ dependencies = [
  "arora-hal",
  "arora-module",
  "arora-msgs-ros2",
+ "arora-node-graph",
+ "arora-shape",
  "arora-types",
  "arora-web",
  "async-trait",
@@ -10332,7 +10373,6 @@ dependencies = [
  "tracing",
  "uuid",
  "vizij-animation-module",
- "vizij-api-core",
  "vizij-arora",
  "vizij-arora-behavior",
  "vizij-arora-hal",
@@ -10340,7 +10380,6 @@ dependencies = [
  "vizij-arora-store",
  "vizij-arora-tts",
  "vizij-bundle",
- "vizij-graph-core",
  "vizij-piper",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -10351,10 +10390,10 @@ dependencies = [
 name = "vizij-animation-core"
 version = "5.0.0"
 dependencies = [
+ "arora-shape",
  "criterion",
  "serde",
  "serde_json",
- "vizij-api-core",
  "vizij-test-fixtures",
 ]
 
@@ -10365,11 +10404,11 @@ dependencies = [
  "arora-engine",
  "arora-module",
  "arora-registry",
+ "arora-shape",
  "arora-types",
  "futures",
  "serde_json",
  "vizij-animation-core",
- "vizij-api-core",
  "vizij-arora",
 ]
 
@@ -10377,38 +10416,26 @@ dependencies = [
 name = "vizij-animation-wasm"
 version = "3.0.0"
 dependencies = [
+ "arora-shape",
  "console_error_panic_hook",
  "js-sys",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
  "vizij-animation-core",
- "vizij-api-core",
  "vizij-api-wasm",
  "wasm-bindgen",
  "wasm-bindgen-test",
 ]
 
 [[package]]
-name = "vizij-api-core"
-version = "2.1.0"
-dependencies = [
- "arora-types",
- "hashbrown 0.17.1",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "uuid",
-]
-
-[[package]]
 name = "vizij-api-wasm"
 version = "1.0.0"
 dependencies = [
+ "arora-shape",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "vizij-api-core",
  "wasm-bindgen",
 ]
 
@@ -10416,18 +10443,20 @@ dependencies = [
 name = "vizij-arora"
 version = "0.0.0"
 dependencies = [
+ "arora-shape",
  "arora-types",
  "serde_json",
- "vizij-api-core",
 ]
 
 [[package]]
 name = "vizij-arora-behavior"
-version = "7.2.0"
+version = "8.0.0"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
  "arora-module",
+ "arora-node-graph",
+ "arora-shape",
  "arora-simple-data-store",
  "arora-types",
  "crossbeam-channel",
@@ -10435,9 +10464,7 @@ dependencies = [
  "serde",
  "serde_json",
  "uuid",
- "vizij-api-core",
  "vizij-arora-host",
- "vizij-graph-core",
 ]
 
 [[package]]
@@ -10445,42 +10472,42 @@ name = "vizij-arora-hal"
 version = "0.0.0"
 dependencies = [
  "arora-hal",
+ "arora-shape",
  "arora-types",
  "async-trait",
  "futures",
  "futures-channel",
  "futures-core",
  "tokio",
- "vizij-api-core",
 ]
 
 [[package]]
 name = "vizij-arora-host"
-version = "7.5.0"
+version = "7.5.1"
 dependencies = [
  "anyhow",
  "arora-behavior",
  "arora-module",
  "arora-msgs-ros2",
+ "arora-shape",
  "arora-types",
  "log",
  "serde",
  "serde_json",
  "uuid",
- "vizij-api-core",
 ]
 
 [[package]]
 name = "vizij-arora-store"
 version = "0.0.0"
 dependencies = [
+ "arora-shape",
  "arora-types",
- "vizij-api-core",
 ]
 
 [[package]]
 name = "vizij-arora-tts"
-version = "7.0.1"
+version = "7.0.2"
 dependencies = [
  "arora",
  "arora-behavior",
@@ -10517,49 +10544,31 @@ dependencies = [
 name = "vizij-glb-migrate"
 version = "0.1.1"
 dependencies = [
+ "arora-shape",
  "serde_json",
  "thiserror 2.0.20",
- "vizij-api-core",
-]
-
-[[package]]
-name = "vizij-graph-core"
-version = "3.1.1"
-dependencies = [
- "anyhow",
- "arora-behavior",
- "criterion",
- "hashbrown 0.17.1",
- "k",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "urdf-rs",
- "uuid",
- "vizij-api-core",
- "vizij-test-fixtures",
 ]
 
 [[package]]
 name = "vizij-graph-registry-export"
 version = "1.0.0"
 dependencies = [
+ "arora-node-graph",
  "serde_json",
- "vizij-graph-core",
 ]
 
 [[package]]
 name = "vizij-graph-wasm"
 version = "1.0.0"
 dependencies = [
+ "arora-node-graph",
+ "arora-shape",
  "console_error_panic_hook",
  "hashbrown 0.17.1",
  "js-sys",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "vizij-api-core",
- "vizij-graph-core",
  "wasm-bindgen",
 ]
 
@@ -11565,7 +11574,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

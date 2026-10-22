@@ -8,7 +8,7 @@
 
 use crate::interp::functions::nlerp_quat;
 use crate::value::{TrackValue, Transform, Value};
-use vizij_api_core::value as vocab;
+use arora_shape::value as vocab;
 
 /// Numeric collection flavor: a `Vector` re-encodes as `ArrayF32`, an
 /// `Array` as an all-scalar `ArrayValue`.

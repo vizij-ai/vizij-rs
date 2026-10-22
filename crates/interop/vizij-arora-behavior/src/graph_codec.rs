@@ -41,7 +41,7 @@
 //! # Declared-shape metadata
 //!
 //! [`output_shapes`](NodeSpec::output_shapes) and an input default's
-//! [`shape`](vizij_graph_core::types::InputDefault::shape) are declared *type*
+//! [`shape`](arora_node_graph::types::InputDefault::shape) are declared *type*
 //! metadata, not values, so they have no per-value slot. They ride one reserved
 //! `Literal(JSON)` slot per node (`meta_slot`), present only when a node
 //! actually declares a shape (no real authored graph does — the runtime derives
@@ -73,15 +73,15 @@ use std::collections::{HashMap, HashSet};
 
 use arora_behavior::graph::{GraphDiff, Io, Link, LinkSource, Node, Port};
 use arora_behavior::Graph;
+use arora_node_graph::types::{
+    EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, InputDefault, NodeParams, NodeSpec,
+    NodeType, Selector, SelectorSegment,
+};
+use arora_shape::Shape;
 use arora_types::data::Key;
 use arora_types::value::Value;
 use arora_types::{gen_uuid_from_str, value_serde};
 use uuid::Uuid;
-use vizij_api_core::Shape;
-use vizij_graph_core::types::{
-    EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, InputDefault, NodeParams, NodeSpec,
-    NodeType, Selector, SelectorSegment,
-};
 
 fn kind_function(kind: &NodeType) -> Result<(Uuid, String), String> {
     let name = kind_name(kind)?;
@@ -427,9 +427,9 @@ fn structural_order(graph: &Graph) -> Vec<&Node> {
 
 /// Decode an Arora shared [`Graph`] produced by [`encode`] back into a
 /// [`GraphSpec`], its nodes in the order the graph's structure gives
-/// ([`structural_order`]). That order is the evaluation's: the plan runs a
-/// node after every node it reads from, and otherwise in listed order, so of
-/// two writers of one path the later-listed wins.
+/// ([`structural_order`]). That order is the evaluation's: a node runs
+/// after every node it reads from, and of two writers of one path the
+/// later-listed wins.
 pub fn decode(graph: &Graph) -> Result<GraphSpec, String> {
     let name = |id: &Uuid| -> Result<String, String> {
         graph

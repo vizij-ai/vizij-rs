@@ -106,21 +106,21 @@ fn assert_migrated(bytes: &[u8]) {
         Some(&json!({ "f32": 1.0 }))
     );
     let features = "/nodes/0/extensions/RobotData/features";
-    let gaze: vizij_api_core::Value = serde_json::from_value(
+    let gaze: arora_shape::Value = serde_json::from_value(
         root.pointer(&format!("{features}/gaze/value/default"))
             .expect("gaze default")
             .clone(),
     )
     .expect("gaze default is a canonical Value");
-    assert_eq!(vizij_api_core::value::as_vec3(&gaze), Some([1.0, 2.0, 3.0]));
-    let tint: vizij_api_core::Value = serde_json::from_value(
+    assert_eq!(arora_shape::value::as_vec3(&gaze), Some([1.0, 2.0, 3.0]));
+    let tint: arora_shape::Value = serde_json::from_value(
         root.pointer(&format!("{features}/tint/value/default"))
             .expect("tint default")
             .clone(),
     )
     .expect("tint default is a canonical Value");
     assert_eq!(
-        vizij_api_core::value::as_color_rgba(&tint),
+        arora_shape::value::as_color_rgba(&tint),
         Some([0.25, 0.5, 0.75, 1.0])
     );
     assert_eq!(

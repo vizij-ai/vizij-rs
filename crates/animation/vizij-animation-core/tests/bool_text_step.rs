@@ -1,3 +1,4 @@
+use arora_shape::value::{as_bool, as_text};
 use serde_json::json;
 use vizij_animation_core::{
     config::Config,
@@ -7,7 +8,6 @@ use vizij_animation_core::{
     sampling::sample_track,
     value::TrackValue,
 };
-use vizij_api_core::value::{as_bool, as_text};
 
 fn mk_bool_track(path: &str, keys: &[(f32, bool)]) -> Track {
     let mut points = Vec::with_capacity(keys.len());

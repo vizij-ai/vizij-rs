@@ -19,13 +19,13 @@ mod common;
 use std::collections::HashMap;
 use std::time::Duration;
 
+use arora_shape::value::{as_float, as_vector, Value};
 use futures::{SinkExt, StreamExt};
 use serde_json::{json, Value as Json};
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 use vizij::face::{FaceConfig, ProgramSelect};
 use vizij::native::{start, BridgeConfig, Mode, Runtime};
-use vizij_api_core::value::{as_float, as_vector, Value};
 
 use common::studio_face_glb;
 

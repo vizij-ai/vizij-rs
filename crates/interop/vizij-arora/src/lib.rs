@@ -5,7 +5,7 @@
 //!
 //! Vizij and Arora share one runtime value type: `arora_types::value::Value`,
 //! re-exported (with its vizij vocabulary of type ids, constructors, and
-//! accessors) by [`vizij_api_core::value`]. There is nothing to convert
+//! accessors) by [`arora_shape::value`]. There is nothing to convert
 //! between the two sides, so this crate holds only:
 //!
 //! - [`to_arora`] / [`from_arora`]: identity passthroughs kept so existing
@@ -17,8 +17,8 @@
 
 use std::collections::HashMap;
 
+use arora_shape::{Shape, Value};
 use arora_types::record::scope::Scope;
-use vizij_api_core::{Shape, Value};
 
 // ---- record scope -------------------------------------------------------------
 
@@ -76,11 +76,11 @@ pub fn decode_shape_meta(value: &Value) -> Option<HashMap<String, String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vizij_api_core::value::{
+    use arora_shape::value::{
         array, bool_, color_rgba, enumeration, float, quat, record, text, transform, vec2, vec3,
         vec4, vector,
     };
-    use vizij_api_core::{ShapeId, Transform};
+    use arora_shape::{ShapeId, Transform};
 
     #[test]
     fn passthroughs_are_identity_across_the_vocabulary() {

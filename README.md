@@ -110,7 +110,7 @@ your own AWS-backed deployment, and where text enters — is in
 | Embed a live face in my own web app | [`@vizij/runtime`](npm/@vizij/runtime/README.md) (the browser device) + the React packages in [vizij-web](https://github.com/vizij-ai/vizij-web) |
 | Pilot faces from [Semio Studio](https://studio.semio.ai) | the `--studio` flag ([app README](crates/vizij/README.md)) or the standalone's studio-bridge build |
 | Pack, validate, or embed profiles and mappings into face assets | [`vizij-bundle`](crates/tools/vizij-bundle/README.md) — the model: [profiles and mappings](docs/profiles-and-mappings.md) |
-| Use the animation or node-graph engine on its own | [vizij-animation-core](crates/animation/vizij-animation-core/README.md) / [vizij-graph-core](crates/node-graph/vizij-graph-core/README.md), or their [npm wrappers](#domain-stacks) |
+| Use the animation or node-graph engine on its own | [vizij-animation-core](crates/animation/vizij-animation-core/README.md) / [arora-node-graph](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/README.md) (in arora-sdk), or their [npm wrappers](#domain-stacks) |
 
 The rest of this README covers developing in the workspace itself.
 
@@ -258,7 +258,7 @@ pnpm run test:wasm        # wrapper package test suites
 Per-crate runs are equally useful:
 
 ```bash
-cargo test -p vizij-graph-core
+cargo test -p vizij-arora-behavior
 cargo test -p vizij-animation-core
 ```
 
@@ -359,13 +359,11 @@ one. Each publishable npm package has `"private": false` and a
 vizij-rs/
 ├─ crates/
 │  ├─ api/
-│  │  ├─ vizij-api-core            # Shared Value/Shape/TypedPath types
 │  │  └─ vizij-api-wasm            # wasm-bindgen helpers for Value/WriteBatch JSON
 │  ├─ animation/
 │  │  ├─ vizij-animation-core      # Deterministic animation engine
 │  │  └─ vizij-animation-wasm      # wasm-bindgen binding
 │  ├─ node-graph/
-│  │  ├─ vizij-graph-core          # Data-flow node graph evaluator
 │  │  ├─ vizij-graph-wasm          # wasm-bindgen binding
 │  │  └─ vizij-graph-registry-export # Registry export utility used by npm tooling
 │  ├─ interop/                     # Adapters that run the Vizij stacks on Arora seams
@@ -405,10 +403,10 @@ package.
 | Stack          | Core Crate               | WASM Binding               | npm wrapper                  |
 | -------------- | ------------------------ | -------------------------- | ---------------------------- |
 | Animation      | `vizij-animation-core`   | `vizij-animation-wasm`     | `@vizij/animation`      |
-| Node graph     | `vizij-graph-core`       | `vizij-graph-wasm`         | `@vizij/node-graph`     |
+| Node graph     | `arora-node-graph` (arora-sdk) | `vizij-graph-wasm`   | `@vizij/node-graph`     |
 | Test fixtures  | `vizij-test-fixtures`    | —                          | `@vizij/test-fixtures`       |
 
-Shared API crates (`vizij-api-core`, `vizij-api-wasm`) provide the Value/Shape/TypedPath contract that keeps the stacks interoperable.
+The Value/Shape/TypedPath contract that keeps the stacks interoperable is arora-sdk's `arora-shape`; `vizij-api-wasm` binds it for JavaScript. A node graph runs on arora-sdk's behavior tree: `arora-node-graph` translates it into a tree's detached nodes.
 `vizij-test-fixtures` exposes the JSON assets defined under `fixtures/`, while `vizij-graph-registry-export` supports registry generation for the node-graph npm tooling.
 
 Each WASM crate exposes a stable `abi_version()` (currently `2`); the npm wrappers verify this at runtime and instruct you to rebuild if versions drift.
@@ -431,7 +429,7 @@ The `crates/interop/*` family adapts the Vizij stacks onto Arora runtime seams s
 
 | Package | Purpose |
 |---------|---------|
-| `@vizij/value-json` | TypeScript helpers that normalise Value/Shape payloads to match `vizij-api-core`. |
+| `@vizij/value-json` | TypeScript helpers that normalise Value/Shape payloads to match `arora-shape`. |
 | `@vizij/test-fixtures` | Workspace package that bundles the shared fixture manifest + JSON for browsers and Node tooling. |
 | `@vizij/wasm-loader` | Shared loader that caches wasm-bindgen modules, resolves `file://` URLs, and enforces ABI checks. |
 
@@ -442,8 +440,8 @@ These packages build quickly (`pnpm run build:shared`) and should be rebuilt whe
 ## Development Tips
 
 - **ABI mismatches**: If you see `ABI mismatch: expected 2` from a wasm wrapper, rebuild the Rust crate and rerun `pnpm run build:wasm:<stack>` to regenerate JS glue.
-- **Time-dependent nodes**: the Vizij graph runtime advances `GraphRuntime.t`/`dt` on each evaluation. Ensure any custom integrations do the same when you drive a `GraphRuntime` elsewhere.
-- **URDF features**: Enable the `urdf_ik` feature on `vizij-graph-core` if you need robotics nodes in native builds (`cargo build -p vizij-graph-core --features urdf_ik`). The WASM package ships with the feature enabled by default.
+- **Time-dependent nodes**: a graph host sets `t`/`dt` on its `TreeRuntime` before each evaluation, as `ProcessingGraph` and `vizij-graph-wasm` do.
+- **URDF features**: The `urdf_ik` feature of `arora-node-graph` (on by default) compiles the robotics nodes. The WASM package ships with the feature enabled by default.
 - **Fixtures**: The `fixtures/` directory includes ready-to-use JSON files for graphs and animations. They are mirrored into `npm/@vizij/test-fixtures` for web consumers.
 
 ---
@@ -468,8 +466,8 @@ These packages build quickly (`pnpm run build:shared`) and should be rebuilt whe
 - [Face standard](docs/face-standard.md) & [ROS4HRI support](docs/ros4hri.md)
 - [vizij-bundle/README](crates/tools/vizij-bundle/README.md) — the face-GLB bundle tool
 - [vizij-animation-core/README](crates/animation/vizij-animation-core/README.md)
-- [vizij-graph-core/README](crates/node-graph/vizij-graph-core/README.md)
-- [vizij-api-core/README](crates/api/vizij-api-core/README.md)
+- [arora-node-graph/README](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/README.md) (arora-sdk)
+- [arora-shape/README](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-shape/README.md) (arora-sdk)
 - [vizij-test-fixtures/README](crates/test-fixtures/vizij-test-fixtures/README.md)
 - [@vizij/node-graph/README](npm/@vizij/node-graph/README.md)
 - [@vizij/animation/README](npm/@vizij/animation/README.md)

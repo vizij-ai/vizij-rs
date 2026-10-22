@@ -146,7 +146,7 @@ Instances are blended in insertion order. Adjust `weight`, `time_scale`, and `st
 - **AnimationData** – Internal representation with duration (seconds), track list, and optional metadata.
 - **StoredAnimation** – Distribution format expressed in milliseconds with normalised `stamp` keypoints (0..1). Each point contains optional `transitions.in/out` cubic-bezier control points.
 - **Track** – Couples a canonical target with keyframes and a value kind. Supports per-key interpolation overrides.
-- **Value Types** – Scalars, Vec2/Vec3/Vec4, Quaternion, Colour RGBA, Transform (TRS), Boolean, Text. Keypoints hold these as POD `TrackValue`s, decoded once at load; `Outputs.changes` carry them as `vizij-api-core` `Value`s encoded at the output boundary. Transform interpolation decomposes into TRS components.
+- **Value Types** – Scalars, Vec2/Vec3/Vec4, Quaternion, Colour RGBA, Transform (TRS), Boolean, Text. Keypoints hold these as POD `TrackValue`s, decoded once at load; `Outputs.changes` carry them as `arora-shape` `Value`s encoded at the output boundary. Transform interpolation decomposes into TRS components.
 
 ### Engine Components
 

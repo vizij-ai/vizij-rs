@@ -3,7 +3,7 @@
 //!
 //! Arora's runtime can be spawned with a custom memory (`Arc<dyn DataStore>`),
 //! so this lets a Vizij `Blackboard` *be* that memory. Vizij and Arora share
-//! one runtime value type ([`vizij_api_core::Value`] is
+//! one runtime value type ([`arora_shape::Value`] is
 //! `arora_types::value::Value`), so the `DataStore` view reads and writes the
 //! Blackboard's entries directly — the only translation is between string
 //! [`Key`]s and [`TypedPath`]s. The Blackboard's richer provenance
@@ -22,11 +22,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 
+use arora_shape::blackboard::{Blackboard, BlackboardEntry};
+use arora_shape::{TypedPath, Value};
 use arora_types::data::{
     prefix_covers, DataError, DataStore, Key, KeyMeta, Slot, State, StateChange, Subscription,
 };
-use vizij_api_core::blackboard::{Blackboard, BlackboardEntry};
-use vizij_api_core::{TypedPath, Value};
 
 /// Source label recorded on entries written through the Arora `DataStore` view.
 const SOURCE: &str = "arora";
@@ -242,7 +242,7 @@ impl Slot for BlackboardSlot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vizij_api_core::value::{as_vec3, bool_, float, vec3};
+    use arora_shape::value::{as_vec3, bool_, float, vec3};
 
     #[test]
     fn write_then_read_primitive_and_composite() {
