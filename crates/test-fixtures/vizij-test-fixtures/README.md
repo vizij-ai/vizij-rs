@@ -47,5 +47,4 @@ When adding fixtures:
 ## Related Packages
 
 - [`@vizij/test-fixtures`](../../../npm/@vizij/test-fixtures/README.md)
-- [`vizij-animation-core`](../../animation/vizij-animation-core/README.md)
 - [`vizij-graph-core`](../../node-graph/vizij-graph-core/README.md)

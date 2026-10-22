@@ -99,6 +99,5 @@ run_bench() {
 ensure_table
 
 run_bench vizij-graph-core graph_eval
-run_bench vizij-animation-core animation_step
 
 echo "Done. Results appended to $OUT"

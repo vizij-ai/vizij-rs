@@ -236,8 +236,9 @@ works on it.
 
 Arora wasm modules load into a device as guests: `startRuntime(graph, init,
 modules)` and `loadVizij`'s `options.modules` take `AroraModule`s —
-`{ headerJson, wasmBytes }`, what `@vizij/animation-module`'s
-`loadAnimationModule()` returns for its artifact; their functions are
+`{ headerJson, wasmBytes }`, a module directory's `header.json` and guest
+(an Arora module's `module_dir`, such as `arora-animation-module`'s, writes
+one); their functions are
 reachable from `runtime.call` and `runtime.invoke` and
 from the graph's `ExternalFunction` nodes, like the host-linked modules'. A
 guest under a host-linked module's id — the animation module's — is served

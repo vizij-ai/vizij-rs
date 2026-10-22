@@ -8,7 +8,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const TARGETS = new Map([
-  ["animation", "build-animation-wasm.mjs"],
   ["graph", "build-graph-wasm.mjs"],
   ["runtime", "build-runtime-wasm.mjs"],
 ]);

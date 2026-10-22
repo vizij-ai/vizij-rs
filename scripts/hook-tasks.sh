@@ -89,15 +89,7 @@ npm_test() {
 }
 
 run_wasm_checks() {
-  run_cmd "node scripts/build-animation-wasm.mjs" node scripts/build-animation-wasm.mjs
   run_cmd "node scripts/build-graph-wasm.mjs" node scripts/build-graph-wasm.mjs
-
-  (
-    cd npm/@vizij/animation
-    run_cmd "npm/@vizij/animation: npm ci" npm ci
-    run_cmd "npm/@vizij/animation: npm run build" npm run build
-    run_cmd "npm/@vizij/animation: npm pack --dry-run" npm pack --dry-run
-  )
 
   (
     cd npm/@vizij/node-graph

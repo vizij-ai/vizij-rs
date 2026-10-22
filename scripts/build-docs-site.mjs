@@ -35,13 +35,6 @@ const rustSections = [
     ]
   },
   {
-    title: "Animation Stack",
-    items: [
-      ["vizij-animation-core", "rust/vizij_animation_core/"],
-      ["vizij-animation-wasm", "rust/vizij_animation_wasm/"],
-    ]
-  },
-  {
     title: "Node Graph Stack",
     items: [
       ["vizij-graph-core", "rust/vizij_graph_core/"],
@@ -60,7 +53,6 @@ const npmSections = [
   {
     title: "WASM Wrappers",
     items: [
-      ["@vizij/animation", "npm/modules/animation_src.html"],
       ["@vizij/node-graph", "npm/modules/node-graph_src.html"]
     ]
   },
