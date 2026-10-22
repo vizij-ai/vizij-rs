@@ -294,8 +294,9 @@ or `cubic` — glTF's `CUBICSPLINE` Hermite on the keyframes' `inTangent` and
 `outTangent` (value units per second), the segment's chord slope where one
 is absent, so an untangented `cubic` plays the straight line its keys
 make. The module plays numbers as `f64`, and the animation writes each key
-in the type the device declares for it: an `f32` on a Vizij's rig inputs,
-an `f32` too on a key that declares no type.
+in the type the store declares for it (`KeyMeta::ty`): an `f32` on a Vizij's
+rig inputs. A key with no declared type takes `f32`, Vizij's number type,
+which keeps pages that read `.f32` working.
 
 `channelKeys(gltf, channels)` names those keys from a Vizij's glTF JSON
 document, without loading it — its `VIZIJ_bundle` read as `composeVizij`

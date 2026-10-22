@@ -9,6 +9,7 @@ members = [
   "crates/api/vizij-api-wasm",
   "crates/test-fixtures/vizij-test-fixtures",
   "crates/interop/vizij-arora",
+  "crates/interop/vizij-animation-module",
   "crates/interop/vizij-animation-artifact",
   "crates/interop/vizij-arora-store",
   "crates/interop/vizij-arora-hal",

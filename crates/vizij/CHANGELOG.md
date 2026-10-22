@@ -123,9 +123,9 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   duration plays to its last keyframe. What the module changes, as a
   device's clients see it:
   - numbers play as `F64`, and an animation writes each key in the type
-    the store declares for it (vizij-arora-behavior 7.3): a face's rig
-    inputs keep holding `F32`, and a key that declares no type holds an
-    `F32` too;
+    the store declares for it (`KeyMeta::ty`, vizij-arora-behavior 7.3): a
+    face's rig inputs keep holding `F32`; a key with no declared type takes
+    `F32`, Vizij's number type, which keeps pages that read `.f32` working;
   - a player never moves back to an earlier device time: a client that
     steps the module directly, ahead of the device's `arora/time`, holds its
     players until the device's clock passes that time;

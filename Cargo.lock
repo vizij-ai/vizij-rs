@@ -10390,6 +10390,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "vizij-animation-module"
+version = "0.0.0"
+dependencies = [
+ "arora-engine",
+ "arora-module",
+ "arora-registry",
+ "arora-types",
+ "futures",
+ "serde_json",
+ "vizij-animation-core",
+ "vizij-api-core",
+ "vizij-arora",
+]
+
+[[package]]
 name = "vizij-animation-wasm"
 version = "3.0.0"
 dependencies = [

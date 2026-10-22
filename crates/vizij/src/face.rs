@@ -2863,6 +2863,35 @@ mod animation_tests {
         assert_eq!(state.time_ns, 150_000_000, "150 ms after the anchor");
     }
 
+    /// The module's players never move back to an earlier device time: a
+    /// client that steps the module directly, a second ahead of the device,
+    /// holds them until the device's clock passes that second. A player
+    /// anchored at 300 ms, behind the module's count, waits until then, and
+    /// stands where it would had it started at 300 ms.
+    #[test]
+    fn a_player_anchored_behind_a_client_s_step_waits_for_the_device_to_pass_it() {
+        let mut arora = ramp_face();
+        step_for(&mut arora, 0.1);
+        call(
+            &mut arora,
+            ids::step::FUNCTION,
+            vec![(ids::step::DT_NS, AValue::U64(1_000_000_000))],
+        );
+        play_at(&mut arora, "ramp", 300_000_000);
+
+        // Device time 1 s: past the anchor, but behind the module's 1.1 s.
+        step_for(&mut arora, 0.9);
+        let state = player(&mut arora, "ramp");
+        assert_eq!((state.state.as_str(), state.waiting), ("playing", true));
+        assert_eq!(state.time_ns, 0);
+
+        // Device time 1.2 s: 900 ms after the anchor.
+        step_for(&mut arora, 0.2);
+        let state = player(&mut arora, "ramp");
+        assert_eq!((state.state.as_str(), state.waiting), ("playing", false));
+        assert_eq!(state.time_ns, 900_000_000, "900 ms after the anchor");
+    }
+
     /// On a device whose clock starts far from zero — at a Unix time, as
     /// devices sharing a wall clock's reference start — a `play_at` start
     /// lands at the device time it names, and a step at a zero dt moves no
@@ -2876,7 +2905,7 @@ mod animation_tests {
         step_for(&mut arora, 0.1);
         play_at(&mut arora, "ramp", start_ns + 300_000_000);
 
-        // A zero-dt step applies the anchor and brings it no closer.
+        // A zero-dt step brings the anchor no closer.
         arora.step(Duration::ZERO).expect("a step at a zero dt");
         // Device time start + 200 ms: before the anchor, the player waits at
         // its start, playing.
@@ -2901,20 +2930,40 @@ mod animation_tests {
     }
 
     /// The module plays a number as an `F64`; the animation writes it in the
-    /// type the face declares for its key, the rig input's `F32`.
+    /// type the store declares for its key: the rig input's `F32` as the face
+    /// declares it, and an `F64` once the key is declared one.
     #[test]
     fn a_face_animation_writes_its_key_in_the_key_s_declared_type() {
+        use arora_types::data::KeyMeta;
+        use arora_types::value::Type;
+
         let mut arora = ramp_face();
         step_for(&mut arora, 0.1);
         play(&mut arora, "ramp");
         step_for(&mut arora, 0.5);
-        let written = arora
+        let written = |arora: &arora::Arora| {
+            arora
+                .store()
+                .read(&[Key::from("rig/f/x")])
+                .into_iter()
+                .next()
+                .flatten()
+        };
+        let x = match written(&arora) {
+            Some(AValue::F32(x)) => x,
+            other => panic!("an F32 for the face's F32 input, got {other:?}"),
+        };
+        assert!((x - 0.5).abs() < 0.02, "the ramp half-way, got {x}");
+
+        arora
             .store()
-            .read(&[Key::from("rig/f/x")])
-            .into_iter()
-            .next()
-            .flatten();
-        assert!(matches!(written, Some(AValue::F32(_))), "{written:?}");
+            .set_meta([(Key::from("rig/f/x"), KeyMeta::new().of_type(Type::F64))].into())
+            .expect("the store keeps key meta");
+        step_for(&mut arora, 0.1);
+        match written(&arora) {
+            Some(AValue::F64(x)) => assert!((x - 0.6).abs() < 0.02, "the ramp at 0.6, got {x}"),
+            other => panic!("an F64 once the key is declared one, got {other:?}"),
+        }
     }
 
     /// The native device plays the animations the bundle of the demo face

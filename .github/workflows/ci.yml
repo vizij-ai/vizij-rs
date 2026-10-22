@@ -94,8 +94,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-          # wasm32-wasip1 builds the animation-module artifact (arora's
-          # animation module as an Arora guest, not a wasm-bindgen wrapper).
+          # wasm32-wasip1 builds the Arora guests: the animation-module
+          # artifact, and arora-animation-module's guest @vizij/runtime's
+          # tests load (neither is a wasm-bindgen wrapper).
           targets: wasm32-wasip1
       - uses: Swatinem/rust-cache@v2
         with:
@@ -242,6 +243,27 @@ jobs:
           package-manager-cache: false
       - name: Verify node registry artifacts are updated
         run: node scripts/verify-node-registry.mjs
+
+  # Proves the animation module's arora_call boundary end-to-end: the typed
+  # AnimationClip (Vec<Struct> -> Value::ArrayStructure) marshals through
+  # `arora_call` into the wasm module and the sampled TrackOutput marshals back.
+  # host_ramp is #[ignore]d because building the wasm artifact from inside the
+  # test deadlocks the cargo build lock, so we pre-build the artifact here and
+  # then run the test with --ignored (the workspace `cargo test` never runs it).
+  animation-module-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Build the animation wasm module artifact
+        run: cargo build -p vizij-animation-module --target wasm32-wasip1
+      - name: Prove the arora_call boundary (host_ramp)
+        run: cargo test -p vizij-animation-module --test host_ramp -- --ignored
 
   # Visual regression: render Quori/Toasty on lavapipe (Mesa's software Vulkan —
   # no GPU on the runner) and compare to committed references, keeping the

@@ -983,12 +983,13 @@ impl ProcessingGraph {
 /// write gives it.
 ///
 /// A path `output` writes what its port computes, of the type the graph
-/// gives it. The records a path-less `output` applies are a module's
-/// values, such as the animation module's `step`, of the module's own
-/// types, so the graph declares no shape for them: each is written in the
-/// type the store declares for its key ([`conform`]), read once for every
-/// such record in the tick. A key whose type a profile or the face fixes,
-/// an `F32` rig input for one, so holds that type whoever writes it.
+/// gives it, as it is. The records a path-less `output` applies are a
+/// module's values, such as the animation module's `step`, of the module's
+/// own types, so the graph declares no shape for them: each is written in the
+/// type the store declares for its key (`KeyMeta::ty`, [`conform`]), the meta
+/// read once for every such record in the tick. Arora checks a declared type
+/// on the writes that come from outside the device only; this holds the
+/// records to it too, so a reader of a key they write reads the key's type.
 fn store_change(store: &dyn DataStore, writes: Vec<WriteOp>) -> StateChange {
     let keys: Vec<Key> = writes
         .iter()
@@ -1012,57 +1013,91 @@ fn store_change(store: &dyn DataStore, writes: Vec<WriteOp>) -> StateChange {
             let meta = declared.next().flatten();
             conform(op.value, meta.as_ref().and_then(|meta| meta.ty.as_ref()))
         } else {
-            op.value
+            Some(op.value)
         };
-        change.set.insert(key, Some(value));
+        if let Some(value) = value {
+            change.set.insert(key, Some(value));
+        }
     }
     change
 }
 
-/// A number in the type `declared` states for its key.
+/// A number, as an integer or a float.
+#[derive(Clone, Copy)]
+enum Number {
+    Integer(i128),
+    Float(f64),
+}
+
+impl Number {
+    /// The number as an integer: itself, or a float rounded to the nearest;
+    /// `None` for a NaN, which names no integer.
+    fn integer(self) -> Option<i128> {
+        match self {
+            Number::Integer(i) => Some(i),
+            Number::Float(f) if f.is_nan() => None,
+            // `as` holds a float beyond `i128` at its bounds.
+            Number::Float(f) => Some(f.round() as i128),
+        }
+    }
+
+    fn float(self) -> f64 {
+        match self {
+            Number::Integer(i) => i as f64,
+            Number::Float(f) => f,
+        }
+    }
+}
+
+/// `value` in the type `declared` states for its key; `None` to write
+/// nothing, leaving the key its current value.
 ///
-/// - A key declaring a numeric type takes the number in that type: a
-///   fraction for an integer type rounds to the nearest integer, held within
-///   the type's range.
-/// - A key declaring no type takes an `F64` as Vizij's number, an `F32`.
+/// - A key declaring a numeric type takes the number in that type. An
+///   integer converts to an integer type exactly, held within the type's
+///   range; a float rounds to the nearest integer, held within the range,
+///   and a NaN, which names no integer, writes nothing.
+/// - A key declaring no type takes an `F64` as an `F32`, Vizij's number
+///   type, which keeps pages that read `.f32` working.
 ///
 /// A value already of the declared type, and anything but a number, is
 /// written as it is.
-fn conform(value: Value, declared: Option<&Type>) -> Value {
-    if declared.is_some_and(|ty| value.conforms_to(ty)) {
-        return value;
-    }
-    let number = match value {
-        Value::F32(v) => f64::from(v),
-        Value::F64(v) => v,
-        Value::I8(v) => f64::from(v),
-        Value::I16(v) => f64::from(v),
-        Value::I32(v) => f64::from(v),
-        Value::I64(v) => v as f64,
-        Value::U8(v) => f64::from(v),
-        Value::U16(v) => f64::from(v),
-        Value::U32(v) => f64::from(v),
-        Value::U64(v) => v as f64,
-        _ => return value,
-    };
-    // `as` from a float saturates at the integer type's bounds, NaN to 0.
-    match declared {
-        Some(Type::F32) => Value::F32(number as f32),
-        Some(Type::F64) => Value::F64(number),
-        Some(Type::I8) => Value::I8(number.round() as i8),
-        Some(Type::I16) => Value::I16(number.round() as i16),
-        Some(Type::I32) => Value::I32(number.round() as i32),
-        Some(Type::I64) => Value::I64(number.round() as i64),
-        Some(Type::U8) => Value::U8(number.round() as u8),
-        Some(Type::U16) => Value::U16(number.round() as u16),
-        Some(Type::U32) => Value::U32(number.round() as u32),
-        Some(Type::U64) => Value::U64(number.round() as u64),
-        Some(_) => value,
-        None => match value {
+fn conform(value: Value, declared: Option<&Type>) -> Option<Value> {
+    let Some(ty) = declared else {
+        return Some(match value {
             Value::F64(v) => Value::F32(v as f32),
             other => other,
-        },
+        });
+    };
+    if value.conforms_to(ty) {
+        return Some(value);
     }
+    let number = match value {
+        Value::F32(v) => Number::Float(f64::from(v)),
+        Value::F64(v) => Number::Float(v),
+        Value::I8(v) => Number::Integer(v.into()),
+        Value::I16(v) => Number::Integer(v.into()),
+        Value::I32(v) => Number::Integer(v.into()),
+        Value::I64(v) => Number::Integer(v.into()),
+        Value::U8(v) => Number::Integer(v.into()),
+        Value::U16(v) => Number::Integer(v.into()),
+        Value::U32(v) => Number::Integer(v.into()),
+        Value::U64(v) => Number::Integer(v.into()),
+        _ => return Some(value),
+    };
+    let held = |min: i128, max: i128| number.integer().map(|i| i.clamp(min, max));
+    Some(match ty {
+        Type::F32 => Value::F32(number.float() as f32),
+        Type::F64 => Value::F64(number.float()),
+        Type::I8 => Value::I8(held(i8::MIN.into(), i8::MAX.into())? as i8),
+        Type::I16 => Value::I16(held(i16::MIN.into(), i16::MAX.into())? as i16),
+        Type::I32 => Value::I32(held(i32::MIN.into(), i32::MAX.into())? as i32),
+        Type::I64 => Value::I64(held(i64::MIN.into(), i64::MAX.into())? as i64),
+        Type::U8 => Value::U8(held(0, u8::MAX.into())? as u8),
+        Type::U16 => Value::U16(held(0, u16::MAX.into())? as u16),
+        Type::U32 => Value::U32(held(0, u32::MAX.into())? as u32),
+        Type::U64 => Value::U64(held(0, u64::MAX.into())? as u64),
+        _ => value,
+    })
 }
 
 /// The store keys a grafted run reads or writes under its key `prefix` — the
@@ -1909,6 +1944,9 @@ mod tests {
                         record("anim/f64", json!({ "f64": 0.1 })),
                         record("anim/u8", json!({ "f64": 2.6 })),
                         record("anim/i16", json!({ "f64": -1e9 })),
+                        // 2^53 + 1, which no f64 holds.
+                        record("anim/i64", json!({ "u64": 9_007_199_254_740_993_u64 })),
+                        record("anim/i8", json!({ "u32": 300 })),
                         record("anim/undeclared", json!({ "f64": 0.75 })),
                         record("anim/text", json!({ "str": "open" })),
                     ]}
@@ -1935,6 +1973,8 @@ mod tests {
                     ("anim/f64", Type::F64),
                     ("anim/u8", Type::U8),
                     ("anim/i16", Type::I16),
+                    ("anim/i64", Type::I64),
+                    ("anim/i8", Type::I8),
                     ("anim/text", Type::F32),
                     ("graph/f64", Type::F64),
                 ]
@@ -1957,6 +1997,12 @@ mod tests {
             Some(Value::I16(i16::MIN)),
             "held in range"
         );
+        assert_eq!(
+            read("anim/i64"),
+            Some(Value::I64(9_007_199_254_740_993)),
+            "an integer converts exactly"
+        );
+        assert_eq!(read("anim/i8"), Some(Value::I8(i8::MAX)), "held in range");
         assert_eq!(read("anim/undeclared"), Some(Value::F32(0.75)));
         assert_eq!(
             read("anim/text"),
@@ -1968,6 +2014,35 @@ mod tests {
             Some(float(1.0)),
             "a path output writes its port's value"
         );
+    }
+
+    /// A NaN names no integer: a record carrying one to a key that declares
+    /// an integer type writes nothing, and the key keeps its value. On a
+    /// float key it is written as it is.
+    #[test]
+    fn a_nan_record_leaves_an_integer_key_its_value() {
+        use arora_types::data::KeyMeta;
+        use vizij_arora_store::BlackboardStore;
+
+        let store = BlackboardStore::new();
+        store
+            .set_meta(
+                [("anim/u8", Type::U8), ("anim/f32", Type::F32)]
+                    .into_iter()
+                    .map(|(key, ty)| (Key::from(key), KeyMeta::new().of_type(ty)))
+                    .collect(),
+            )
+            .unwrap();
+        store
+            .write(StateChange::set("anim/u8", Value::U8(7)))
+            .unwrap();
+        let record = |key: &str| WriteOp::new(TypedPath::parse(key).unwrap(), Value::F64(f64::NAN));
+        let change = store_change(&store, vec![record("anim/u8"), record("anim/f32")]);
+        assert!(!change.set.contains_key(&Key::from("anim/u8")));
+        store.write(change).unwrap();
+        let read = |key: &str| store.read(&[Key::from(key)]).into_iter().next().flatten();
+        assert_eq!(read("anim/u8"), Some(Value::U8(7)), "keeps its value");
+        assert!(matches!(read("anim/f32"), Some(Value::F32(v)) if v.is_nan()));
     }
 
     /// A bridge scripting the spawned function: serves each call from a queue

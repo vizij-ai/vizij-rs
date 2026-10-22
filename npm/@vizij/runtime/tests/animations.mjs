@@ -6,13 +6,13 @@
 // unloaded. Keys are read back from the store, states from the player states
 // the animation source writes.
 import assert from "node:assert/strict";
-import { headerJson } from "@vizij/animation-module";
 import {
   composeVizij,
   startRuntime,
   ANIMATION_PLAYERS_PATH,
   decodePlayerStates,
 } from "../dist/runtime/src/index.js";
+import { animationModule } from "./animation-guest.mjs";
 
 // --- a device stepping the animation source ----------------------------------
 // A bundle with no graph composes to the animation source alone.
@@ -52,7 +52,7 @@ const x = () => read("face/x");
 const animated = () => runtime.readValues(["face/x"])["face/x"];
 
 // --- the module's declared functions are the device's described methods ------
-const header = JSON.parse(headerJson);
+const header = JSON.parse(animationModule({ guest: false }).headerJson);
 const described = await settle(runtime.describeMethods());
 for (const { name } of header.exports) {
   assert.ok(
@@ -101,8 +101,8 @@ state = playerNamed("ramp");
 assert.equal(state.state, "playing");
 assert.ok(state.time > 0.2 && state.time < 0.45, `playhead at ${state.time}`);
 assert.ok(Math.abs(x() - state.time) < 0.05, `linear ramp: ${x()} at ${state.time}`);
-// The module plays numbers as f64; a key that declares no type takes Vizij's
-// number, an f32.
+// The module plays numbers as f64; a key with no declared type takes f32,
+// Vizij's number type.
 assert.ok("f32" in animated(), `the key holds an f32: ${JSON.stringify(animated())}`);
 
 // --- paused: the playhead holds, the speed is kept, a seek moves the pose ----
