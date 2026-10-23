@@ -287,6 +287,12 @@ jobs:
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
           WGPU_BACKEND: vulkan
+          # No VK_EXT_debug_utils, so wgpu names no Vulkan object: with the
+          # tests' render apps on threads of their own, each on its own
+          # instance, the runner's Vulkan loader faults inside
+          # vkSetDebugUtilsObjectNameEXT as wgpu names a new buffer. The
+          # tests check what is drawn, not the objects' names.
+          WGPU_DEBUG: "0"
         run: |
           runner() {
             lscpu | grep -E 'Model name|^CPU\(s\)'
