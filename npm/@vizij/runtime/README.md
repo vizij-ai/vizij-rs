@@ -243,8 +243,8 @@ reachable from `runtime.call` and `runtime.invoke` and
 from the graph's `ExternalFunction` nodes, like the host-linked modules'. A
 guest is a component of Arora's `arora:module` world built for
 `wasm32-wasip2`, its header naming the `wasm-component` executor, as Arora's
-guests are, or a `wasm32-wasip1` core module, its header naming `wasm`. A
-device loads one module per id: a guest under a host-linked module's id —
+guests are; a `wasm32-wasip1` core module does not load. A device loads one
+module per id: a guest under a host-linked module's id —
 the animation module's — fails the build, naming both modules.
 
 ### Animations

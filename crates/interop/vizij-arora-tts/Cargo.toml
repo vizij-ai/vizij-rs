@@ -9,7 +9,7 @@ repository = "https://github.com/vizij-ai/vizij-rs"
 [dependencies]
 # The host-module seam only — no engine features, so the crate rides the
 # executor-free arora slice on every target.
-arora-engine = { version = "5.1", default-features = false }
+arora-engine = { version = "7", default-features = false }
 arora-types = "3"
 log = "0.4"
 # Synthesis, the same on every target: `json` on, reqwest picks `fetch` on
@@ -38,7 +38,7 @@ serde-wasm-bindgen = { workspace = true }
 [dev-dependencies]
 # The browser tests spawn runs the way a bridge does: through the
 # interpreter module, on a device composed like vizij's.
-arora = { version = "13", default-features = false }
+arora = { version = "15", default-features = false }
 serde_json = { workspace = true }
 vizij-arora-host = { path = "../vizij-arora-host" }
 vizij-arora-store = { path = "../vizij-arora-store" }

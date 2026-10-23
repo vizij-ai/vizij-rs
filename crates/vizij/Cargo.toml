@@ -100,7 +100,7 @@ bevy = { version = "0.19", default-features = false, features = [
 # slice builds on every target; the native target table below adds `native`
 # (wasmtime, the local WS bridge, the operator flow) and the desktop feature
 # adds `tui`.
-arora = { version = "13.7", default-features = false }
+arora = { version = "15", default-features = false }
 # The ROS 2 bridge, attached under `--ros2` (feature `ros2`). Heavy (ros2-client
 # + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
 # `studio-bridge` feature instead (`--studio`). It carries the skill plane the
@@ -175,7 +175,7 @@ bevy = { version = "0.19", default-features = false, features = ["bevy_log", "mu
 # arora's operator flow — `native` is the run loop, the local WS bridge and
 # the module executors — with the bridges the build adds. 11.0.1 is where its
 # `studio-bridge` feature builds.
-arora = { version = "13.7", default-features = false, features = ["native"] }
+arora = { version = "15", default-features = false, features = ["native"] }
 # The bridge seam the Studio identity is read and registered through; the major
 # this arora's bridges implement.
 arora-bridge = "6"
@@ -202,7 +202,7 @@ bevy = { version = "0.19", default-features = false, features = ["android-native
 # device; wasm-bindgen carries the module's own surface. 10.3: `complete`,
 # through which `loadGraph` and `applyGraphEdits` settle as `call` does, and
 # `request_step`, through which `releaseKeys` does.
-arora-web = "10.3"
+arora-web = "12"
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4"
 # A `run` called before its Vizij is drawn waits for the App's report of
