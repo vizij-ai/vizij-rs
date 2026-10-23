@@ -2,7 +2,7 @@
 
 Vizij's node graph is a **behavior interpreter** in the Arora sense. Read Arora's **[how a behavior interpreter works](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-behavior/docs/interpreter-workflow.md)** first — it defines the `BehaviorInterpreter` contract (the `tick` / `apply` / `load` lifecycle, the `BehaviorContext` store, timing as built-in store keys) that this page assumes. Here we cover what is *specific* to the node graph, and draw the parallel with the other reference interpreter, [`arora-behavior-tree`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-behavior-tree/docs/nodes.md).
 
-The interpreter type is [`ProcessingGraph`](../src/lib.rs#L75), which implements `arora_behavior::BehaviorInterpreter` ([`lib.rs:176`](../src/lib.rs#L176)). The evaluator underneath it is arora-sdk's behavior tree: [`arora-node-graph`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/README.md) imports the graph as a tree's detached nodes and runs it (`TreeRuntime`). Vizij and Arora share **one runtime value type** (`arora_shape::Value` *is* `arora_types::value::Value`), so values cross the store and call boundaries with no conversion ([`vizij-arora/src/lib.rs:1-13`](../../vizij-arora/src/lib.rs#L1-L13)).
+The interpreter type is [`ProcessingGraph`](../src/lib.rs#L75), which implements `arora_behavior::BehaviorInterpreter` ([`lib.rs:176`](../src/lib.rs#L176)). The evaluator underneath it is arora-sdk's behavior tree: [`arora-dataflow-nodes`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/README.md) imports the graph as a tree's detached nodes and runs it (`TreeRuntime`). Vizij and Arora share **one runtime value type** (`arora_shape::Value` *is* `arora_types::value::Value`), so values cross the store and call boundaries with no conversion ([`vizij-arora/src/lib.rs:1-13`](../../vizij-arora/src/lib.rs#L1-L13)).
 
 ## Lifecycle mapping
 
@@ -19,9 +19,9 @@ The single most important contrast with a behavior tree: **a node graph is conti
 
 ## What a node is in Vizij
 
-A node graph is **dataflow**, not control flow. A node is one [`NodeSpec { id, kind, params, output_shapes, input_defaults }`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/types.rs); edges ([`EdgeSpec`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/types.rs)) wire a named **output port** of one node to a named **input port** of another, with an optional field/index selector. `NodeType` is a large value-producing vocabulary — arithmetic, trig, time/oscillators, springs/damping, logic, vectors, IK/FK, records — plus the three that form the Arora seam ([`types.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/types.rs)): `Input` (reads a staged host value by path), `Output` (writes a value to a host path sink), and `ExternalFunction` (invokes a module by opaque id).
+A node graph is **dataflow**, not control flow. A node is one [`NodeSpec { id, kind, params, output_shapes, input_defaults }`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/src/types.rs); edges ([`EdgeSpec`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/src/types.rs)) wire a named **output port** of one node to a named **input port** of another, with an optional field/index selector. `NodeType` is a large value-producing vocabulary — arithmetic, trig, time/oscillators, springs/damping, logic, vectors, IK/FK, records — plus the three that form the Arora seam ([`types.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/src/types.rs)): `Input` (reads a staged host value by path), `Output` (writes a value to a host path sink), and `ExternalFunction` (invokes a module by opaque id).
 
-On the tree each node is a detached call of its kind's function ([`functions.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/functions.rs)): it runs when what it outputs is read, once per tick, and only when its arguments changed. The graph's `output` nodes are the tree's sinks, brought up to date at every tick, so a tick runs what the outputs read and changed since the last; a node nothing reads does not run. A node reads named input ports and writes named output ports, and its function runs the node's evaluation as the reference evaluator defines it.
+On the tree each node is a detached call of its kind's function ([`functions.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/src/functions.rs)): it runs when what it outputs is read, once per tick, and only when its arguments changed. The graph's `output` nodes are the tree's sinks, brought up to date at every tick, so a tick runs what the outputs read and changed since the last; a node nothing reads does not run. A node reads named input ports and writes named output ports, and its function runs its kind's per-node code.
 
 ### Vizij node vs. behavior-tree node
 
@@ -59,12 +59,12 @@ This is the same store seam a behavior tree uses (read inputs, write outputs), b
 
 ## How nodes call modules (and animation)
 
-A node reaches a module through an `ExternalFunction` node, which carries only a stable **function UUID** plus opaque arg-key handles. On the tree its place follows the description the device's function index gives of its function, which `ProcessingGraph::tick` hands the importer: a call to a function that returns nothing and writes nothing back is left out, as nothing could read it; any other is a leaf under the root, ticked at every tick. It is not a detached node, which calls again only for arguments it has not seen: a module's function may keep state its arguments do not show, as the animation module's `step(dt)` does, called with the same `dt` every frame. A function the index does not describe is ticked at every tick. Its call goes through `@arora/node-graph`'s `external` function:
+A node reaches a module through an `ExternalFunction` node, which carries only a stable **function UUID** plus opaque arg-key handles. On the tree its place follows the description the device's function index gives of its function, which `ProcessingGraph::tick` hands the importer: a call to a function that returns nothing and writes nothing back is left out, as nothing could read it; any other is a leaf under the root, ticked at every tick. It is not a detached node, which calls again only for arguments it has not seen: a module's function may keep state its arguments do not show, as the animation module's `step(dt)` does, called with the same `dt` every frame. A function the index does not describe is ticked at every tick. Its call goes through `@arora/dataflow`'s `external` function:
 
 ```mermaid
 flowchart LR
-  extnode["ExternalFunction node<br/>(function UUID + args)"] --> hostcall["@arora/node-graph external(…)"]
-  hostcall --> adapter["NodeGraphModule<br/>(function → module map)"]
+  extnode["ExternalFunction node<br/>(function UUID + args)"] --> hostcall["@arora/dataflow external(…)"]
+  hostcall --> adapter["DataflowNodes<br/>(function → module map)"]
   adapter --> call["CallBridge::arora_call<br/>Call { module_id, id, args }"]
   call --> engine["Arora engine module<br/>(e.g. animation)"]
   engine -- "result.ret" --> extnode
@@ -72,7 +72,7 @@ flowchart LR
 
 The node-graph module looks up the `function → module` id the interpreter set (`ProcessingGraph::set_function_modules`; the engine routes a `Call` by its `module_id`), builds `Call { module_id, id: function, args }` from the opaque UUIDs, dispatches through the `CallBridge` the interpreter got in its `BehaviorContext`, and returns `result.ret`. **Animation** is one such module: Arora's [`arora-animation-module`](https://github.com/semio-ai/arora-sdk/tree/main/modules/animation), host-linked into a Vizij device ([`crates/vizij/src/modules/animation.rs`](../../../vizij/src/modules/animation.rs)), reached the same way as any other — an `ExternalFunction` node whose function/module UUIDs point at it.
 
-This is the UUID-keyed analogue of the behavior tree's module dispatch (a non-built-in node id resolved through the engine): both go through `CallBridge::arora_call`; the graph routes by an explicit `function → module` map, the tree by a `function_index`. Dispatch test: [`external_function_dispatches_through_host_and_sets_output`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/tree_tests/external_function_tests.rs).
+This is the UUID-keyed analogue of the behavior tree's module dispatch (a non-built-in node id resolved through the engine): both go through `CallBridge::arora_call`; the graph routes by an explicit `function → module` map, the tree by a `function_index`. Dispatch test: [`external_function_dispatches_through_host_and_sets_output`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/src/tree_tests/external_function_tests.rs).
 
 ## Editing: structural load or GraphDiff
 
@@ -89,12 +89,12 @@ Both keep the graph runtime **warm**: the tree is loaded again from the changed 
 |---|---|
 | `ProcessingGraph` (the interpreter), `tick_store` | [`crates/interop/vizij-arora-behavior/src/lib.rs`](../src/lib.rs) |
 | Structural encoding (load/edit), `GraphSpecDiff` → `GraphDiff` | [`crates/interop/vizij-arora-behavior/src/graph_codec.rs`](../src/graph_codec.rs) |
-| Graph spec / node / edge types | [`arora-node-graph/src/types.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/types.rs) |
-| The importer onto the tree | [`arora-node-graph/src/import.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/import.rs) |
-| The node functions (`@arora/node-graph`) | [`arora-node-graph/src/functions.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/functions.rs) |
-| The tree runtime | [`arora-node-graph/src/tree_runtime.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/tree_runtime.rs) |
+| Graph spec / node / edge types | [`arora-dataflow-nodes/src/types.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/src/types.rs) |
+| The importer onto the tree | [`arora-dataflow-nodes/src/import.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/src/import.rs) |
+| The node functions (`@arora/dataflow`, `@arora/geometry`, `@arora/kinematics`) | [`arora-dataflow-nodes/src/functions.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/src/functions.rs) |
+| The tree runtime | [`arora-dataflow-nodes/src/tree_runtime.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/src/tree_runtime.rs) |
 | The animation module, host-linked | [`crates/vizij/src/modules/animation.rs`](../../../vizij/src/modules/animation.rs) |
 | The Arora interpreter contract this satisfies | [arora-behavior interpreter workflow](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-behavior/docs/interpreter-workflow.md) |
 | The other reference interpreter (parallels drawn here) | [arora-behavior-tree nodes](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-behavior-tree/docs/nodes.md) |
 
-Tests worth reading: store round-trip ([`graph_reads_and_writes_the_arora_store`](../src/lib.rs)), in-place graph swap ([`load_swaps_the_graph_in_place`](../src/lib.rs)), external-function dispatch ([`external_function_tests.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/tree_tests/external_function_tests.rs)), and the equivalence of the tree and the reference evaluator on every fixture ([`equivalence.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/src/tree_tests/equivalence.rs)).
+Tests worth reading: store round-trip ([`graph_reads_and_writes_the_arora_store`](../src/lib.rs)), in-place graph swap ([`load_swaps_the_graph_in_place`](../src/lib.rs)), external-function dispatch ([`external_function_tests.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/src/tree_tests/external_function_tests.rs)), and every fixture evaluated two ways on the tree ([`fixture_tests.rs`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/src/tree_tests/fixture_tests.rs)).

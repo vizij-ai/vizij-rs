@@ -49,5 +49,5 @@
 ## Backlog & Ideas
 
 - Ship optional Web Worker helpers for heavy wasm workloads (graph evaluation).
-- Offer CLI utilities for schema diffing (`arora-node-graph`) and orchestration smoke tests.
+- Offer CLI utilities for schema diffing (`arora-dataflow-nodes`) and orchestration smoke tests.
 - Publish fixture metadata (durations, node counts) to help demos surface summary information quickly.

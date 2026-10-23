@@ -27,7 +27,7 @@ file summarises, it does not replace, those sources.
 ## Workspace Snapshot
 - **API stack**: the value/type/WriteBatch contract is arora-sdk's
   `arora-shape`; `crates/api` holds its wasm adapter, reused across stacks.
-- **Node graph stack**: arora-sdk's `arora-node-graph` (the node functions,
+- **Node graph stack**: arora-sdk's `arora-dataflow-nodes` (the node functions,
   the importer onto arora-behavior-tree, `TreeRuntime`), `vizij-graph-wasm`,
   and npm `@vizij/node-graph`.
 - **Interop (Arora) stack**: `crates/interop/*` adapts the Vizij stacks onto
@@ -95,7 +95,7 @@ Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unkno
   crates.io) plays a device's animations, host-linked in `crates/vizij`
   (`modules::animation`); `module_animation` converts a face's authored
   animation into its clip format 2.0.
-- **Node graph**: a graph runs on arora-sdk's behavior tree: `arora-node-graph`
+- **Node graph**: a graph runs on arora-sdk's behavior tree: `arora-dataflow-nodes`
   imports it as a tree's detached nodes and runs it (`TreeRuntime`).
   Features like `urdf_ik` are enabled by default and surfaced through the wasm
   build scripts. The wasm crate handles JSON normalisation for JS consumers.

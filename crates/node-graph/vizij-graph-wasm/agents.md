@@ -1,6 +1,6 @@
 # vizij-graph-wasm — Agent Notes
 
-- **Purpose**: wasm-bindgen bridge for `arora-node-graph`'s tree runtime, consumed by `@vizij/node-graph`.
+- **Purpose**: wasm-bindgen bridge for `arora-dataflow-nodes`'s tree runtime, consumed by `@vizij/node-graph`.
 - **Key files**: `src/lib.rs`, feature flags in `Cargo.toml`, generated `pkg/`.
 - **Commands**: `pnpm run build:wasm:graph`, `cargo test -p vizij-graph-wasm`, `pnpm --filter @vizij/node-graph test`.
 - **Doc reminders**: Keep the README current on bundler targets, output payload examples, and troubleshooting guidance.

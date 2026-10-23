@@ -37,7 +37,7 @@
 use std::collections::{HashMap, HashSet};
 
 use arora_behavior::{interpreter_module, Graph, Status, TaskHandle, TaskId};
-use arora_node_graph::types::{GraphSpec, NodeType};
+use arora_dataflow_nodes::types::{GraphSpec, NodeType};
 use arora_types::call::Call;
 use arora_types::data::{DataStore, Key};
 use arora_types::value::{StructureField, Value};

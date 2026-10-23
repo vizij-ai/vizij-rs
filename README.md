@@ -110,7 +110,7 @@ your own AWS-backed deployment, and where text enters — is in
 | Embed a live face in my own web app | [`@vizij/runtime`](npm/@vizij/runtime/README.md) (the browser device) + the React packages in [vizij-web](https://github.com/vizij-ai/vizij-web) |
 | Pilot faces from [Semio Studio](https://studio.semio.ai) | the `--studio` flag ([app README](crates/vizij/README.md)) or the standalone's studio-bridge build |
 | Pack, validate, or embed profiles and mappings into face assets | [`vizij-bundle`](crates/tools/vizij-bundle/README.md) — the model: [profiles and mappings](docs/profiles-and-mappings.md) |
-| Use the node-graph engine on its own | [arora-node-graph](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/README.md) (in arora-sdk), or its [npm wrapper](#domain-stacks) |
+| Use the node-graph engine on its own | [arora-dataflow-nodes](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/README.md) (in arora-sdk), or its [npm wrapper](#domain-stacks) |
 | Play keyframe animations on their own | Arora's [`arora-animation`](https://crates.io/crates/arora-animation) (the engine) and [`arora-animation-module`](https://crates.io/crates/arora-animation-module) (`@arora/animation`, the module a Vizij device links) |
 
 The rest of this README covers developing in the workspace itself.
@@ -396,10 +396,10 @@ package.
 
 | Stack          | Core Crate               | WASM Binding               | npm wrapper                  |
 | -------------- | ------------------------ | -------------------------- | ---------------------------- |
-| Node graph     | `arora-node-graph` (arora-sdk) | `vizij-graph-wasm`   | `@vizij/node-graph`     |
+| Node graph     | `arora-dataflow-nodes` (arora-sdk) | `vizij-graph-wasm`   | `@vizij/node-graph`     |
 | Test fixtures  | `vizij-test-fixtures`    | —                          | `@vizij/test-fixtures`       |
 
-The Value/Shape/TypedPath contract that keeps the stacks interoperable is arora-sdk's `arora-shape`; `vizij-api-wasm` binds it for JavaScript. A node graph runs on arora-sdk's behavior tree: `arora-node-graph` translates it into a tree's detached nodes.
+The Value/Shape/TypedPath contract that keeps the stacks interoperable is arora-sdk's `arora-shape`; `vizij-api-wasm` binds it for JavaScript. A node graph runs on arora-sdk's behavior tree: `arora-dataflow-nodes` translates it into a tree's detached nodes.
 `vizij-test-fixtures` exposes the JSON assets defined under `fixtures/`, while `vizij-graph-registry-export` supports registry generation for the node-graph npm tooling.
 
 Each WASM crate exposes a stable `abi_version()` (currently `2`); the npm wrappers verify this at runtime and instruct you to rebuild if versions drift.
@@ -434,7 +434,7 @@ These packages build quickly (`pnpm run build:shared`) and should be rebuilt whe
 
 - **ABI mismatches**: If you see `ABI mismatch: expected 2` from a wasm wrapper, rebuild the Rust crate and rerun `pnpm run build:wasm:<stack>` to regenerate JS glue.
 - **Time-dependent nodes**: a graph host sets `t`/`dt` on its `TreeRuntime` before each evaluation, as `ProcessingGraph` and `vizij-graph-wasm` do.
-- **URDF features**: The `urdf_ik` feature of `arora-node-graph` (on by default) compiles the robotics nodes. The WASM package ships with the feature enabled by default.
+- **URDF features**: The `urdf_ik` feature of `arora-dataflow-nodes` (on by default) compiles the robotics nodes. The WASM package ships with the feature enabled by default.
 - **Fixtures**: The `fixtures/` directory includes ready-to-use JSON files for graphs and animations. They are mirrored into `npm/@vizij/test-fixtures` for web consumers.
 
 ---
@@ -458,7 +458,7 @@ These packages build quickly (`pnpm run build:shared`) and should be rebuilt whe
 - [vizij/README](crates/vizij/README.md) — the native app (the `vizij` binary)
 - [Face standard](docs/face-standard.md) & [ROS4HRI support](docs/ros4hri.md)
 - [vizij-bundle/README](crates/tools/vizij-bundle/README.md) — the face-GLB bundle tool
-- [arora-node-graph/README](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/README.md) (arora-sdk)
+- [arora-dataflow-nodes/README](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/README.md) (arora-sdk)
 - [arora-shape/README](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-shape/README.md) (arora-sdk)
 - [vizij-test-fixtures/README](crates/test-fixtures/vizij-test-fixtures/README.md)
 - [@vizij/node-graph/README](npm/@vizij/node-graph/README.md)

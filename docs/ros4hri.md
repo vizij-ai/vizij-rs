@@ -139,7 +139,7 @@ while the eyes it aims are each face's own.
 ### The viseme channel is a spawn
 
 The mapping never writes a lip key. Its viseme channel is one `spawn` node
-(a node kind of `arora-node-graph`). A streamed `hri_msgs/Viseme` lands as
+(a node kind of `arora-dataflow-nodes`). A streamed `hri_msgs/Viseme` lands as
 three keys in one change: its code on `standard/ros4hri/viseme`, its `time`
 (seconds into the utterance) on `standard/ros4hri/viseme/time`, and its
 `duration` (seconds the shape is held) on `standard/ros4hri/viseme/duration`.

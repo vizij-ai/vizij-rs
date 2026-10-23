@@ -43,9 +43,9 @@ use arora_behavior::{
     built_in, interpreter_module, BehaviorContext, BehaviorError, BehaviorInterpreter,
     BehaviorStatus, FunctionIndex, Graph, RunPolicy, TaskHandle, TaskId,
 };
-pub use arora_node_graph::task;
-use arora_node_graph::tree_runtime::{Evaluation, TreeRuntime};
-use arora_node_graph::types::{
+pub use arora_dataflow_nodes::task;
+use arora_dataflow_nodes::tree_runtime::{Evaluation, TreeRuntime};
+use arora_dataflow_nodes::types::{
     EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
 };
 use arora_shape::{TypedPath, WriteOp};
@@ -836,7 +836,7 @@ impl ProcessingGraph {
     /// description `functions` gives of its function, as the device's index does at each
     /// tick: a call to a function that returns nothing is left out, one to a function that
     /// takes no parameter is called at every tick, and any other is called when its
-    /// arguments change ([`arora_node_graph::functions::placement`]). The graph is imported
+    /// arguments change ([`arora_dataflow_nodes::functions::placement`]). The graph is imported
     /// again when the index changes size, as when a module loads.
     pub fn tick_store_with(
         &mut self,
@@ -2128,7 +2128,7 @@ mod tests {
             .iter()
             .map(|n| format!("node {}", n.id))
             .collect();
-        let order = arora_node_graph::topo_order(&graph.spec.nodes, &graph.spec.edges)
+        let order = arora_dataflow_nodes::topo_order(&graph.spec.nodes, &graph.spec.edges)
             .expect("the lowered spec orders");
         out.push(format!("order {order:?}"));
         let mut edges: Vec<String> = graph

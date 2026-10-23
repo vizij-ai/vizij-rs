@@ -392,7 +392,7 @@ dependencies = [
 [[package]]
 name = "arora-behavior-tree"
 version = "9.5.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=main#f0312222b297aba8e5dfe635edd73e574151ad4b"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#a26f50bf7838994b8e4a43d2db1789be4cdbfb38"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
@@ -492,6 +492,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "arora-dataflow-nodes"
+version = "1.0.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#a26f50bf7838994b8e4a43d2db1789be4cdbfb38"
+dependencies = [
+ "anyhow",
+ "arora-behavior",
+ "arora-behavior-tree",
+ "arora-geometry",
+ "arora-shape",
+ "arora-simple-data-store",
+ "arora-types",
+ "hashbrown 0.17.1",
+ "k",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "urdf-rs",
+ "uuid",
+]
+
+[[package]]
 name = "arora-engine"
 version = "5.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -521,6 +542,15 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "web-sys",
+]
+
+[[package]]
+name = "arora-geometry"
+version = "1.0.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#a26f50bf7838994b8e4a43d2db1789be4cdbfb38"
+dependencies = [
+ "arora-types",
+ "uuid",
 ]
 
 [[package]]
@@ -581,26 +611,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arora-node-graph"
-version = "1.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=main#f0312222b297aba8e5dfe635edd73e574151ad4b"
-dependencies = [
- "anyhow",
- "arora-behavior",
- "arora-behavior-tree",
- "arora-shape",
- "arora-simple-data-store",
- "arora-types",
- "hashbrown 0.17.1",
- "k",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "urdf-rs",
- "uuid",
-]
-
-[[package]]
 name = "arora-registry"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -617,8 +627,9 @@ dependencies = [
 [[package]]
 name = "arora-shape"
 version = "1.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=main#f0312222b297aba8e5dfe635edd73e574151ad4b"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#a26f50bf7838994b8e4a43d2db1789be4cdbfb38"
 dependencies = [
+ "arora-geometry",
  "arora-types",
  "hashbrown 0.17.1",
  "serde",
@@ -672,7 +683,7 @@ dependencies = [
 [[package]]
 name = "arora-types"
 version = "3.9.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=main#f0312222b297aba8e5dfe635edd73e574151ad4b"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#a26f50bf7838994b8e4a43d2db1789be4cdbfb38"
 dependencies = [
  "arora-types-derive",
  "async-trait",
@@ -10173,10 +10184,10 @@ dependencies = [
  "arora-behavior-tree-types",
  "arora-bridge",
  "arora-bridge-ros2",
+ "arora-dataflow-nodes",
  "arora-hal",
  "arora-module",
  "arora-msgs-ros2",
- "arora-node-graph",
  "arora-shape",
  "arora-types",
  "arora-web",
@@ -10250,8 +10261,8 @@ version = "8.0.0"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
+ "arora-dataflow-nodes",
  "arora-module",
- "arora-node-graph",
  "arora-shape",
  "arora-simple-data-store",
  "arora-types",
@@ -10350,7 +10361,7 @@ dependencies = [
 name = "vizij-graph-registry-export"
 version = "1.0.0"
 dependencies = [
- "arora-node-graph",
+ "arora-dataflow-nodes",
  "serde_json",
 ]
 
@@ -10358,7 +10369,7 @@ dependencies = [
 name = "vizij-graph-wasm"
 version = "1.0.0"
 dependencies = [
- "arora-node-graph",
+ "arora-dataflow-nodes",
  "arora-shape",
  "console_error_panic_hook",
  "hashbrown 0.17.1",

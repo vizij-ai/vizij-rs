@@ -3,9 +3,9 @@
 //! This module exposes graph normalization, evaluation, staged-input handling, registry
 //! metadata, and delta-friendly output snapshots to JavaScript consumers.
 
-use arora_node_graph::tree_runtime::{Evaluation, TreeRuntime};
-use arora_node_graph::types::RoundMode;
-use arora_node_graph::{GraphSpec, PortValue};
+use arora_dataflow_nodes::tree_runtime::{Evaluation, TreeRuntime};
+use arora_dataflow_nodes::types::RoundMode;
+use arora_dataflow_nodes::{GraphSpec, PortValue};
 use arora_shape::shape::ShapeId;
 use arora_shape::value::{
     as_array, as_bool, as_float, as_quat, as_text, as_transform, as_vec2, as_vec3, as_vec4,
@@ -1384,6 +1384,6 @@ impl WasmGraph {
 /// Expose the node schema registry as JSON for tooling/UI.
 #[wasm_bindgen]
 pub fn get_node_schemas_json() -> String {
-    let reg = arora_node_graph::registry();
+    let reg = arora_dataflow_nodes::registry();
     serde_json::to_string(&reg).unwrap()
 }

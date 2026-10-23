@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use arora_node_graph::task;
+use arora_dataflow_nodes::task;
 use arora_types::call::Call;
 use arora_types::value::{StructureField, Value};
 use vizij_arora_store::BlackboardStore;

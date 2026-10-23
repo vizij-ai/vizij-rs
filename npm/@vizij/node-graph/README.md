@@ -2,7 +2,7 @@
 
 > Vizij's node graph engine for JavaScript.
 
-This package ships the WebAssembly build of `arora-node-graph` (a node graph run on the behavior tree) together with a TypeScript wrapper, schema helpers, node registry metadata, and fixture bundles.
+This package ships the WebAssembly build of `arora-dataflow-nodes` (a node graph run on the behavior tree) together with a TypeScript wrapper, schema helpers, node registry metadata, and fixture bundles.
 
 ## Overview
 

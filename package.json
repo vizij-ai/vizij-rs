@@ -45,7 +45,7 @@
     "perf:wasm:verify": "VERIFY_ONLY=1 node scripts/run_perf_baselines_wasm.mjs",
     "perf:smoke": "SMOKE=1 VERIFY_ONLY=1 node scripts/run_perf_baselines_wasm.mjs",
     "docs:typedoc": "node scripts/embed-fixtures.mjs node-graph && node npm/@vizij/test-fixtures/scripts/generate-browser-fixtures.mjs && typedoc --options typedoc.json",
-    "docs:rust": "cargo doc --no-deps --all-features --target-dir target/docs-rust -p arora-shape -p vizij-api-wasm -p arora-node-graph -p vizij-graph-wasm -p vizij-test-fixtures",
+    "docs:rust": "cargo doc --no-deps --all-features --target-dir target/docs-rust -p arora-shape -p vizij-api-wasm -p arora-dataflow-nodes -p vizij-graph-wasm -p vizij-test-fixtures",
     "docs:site": "pnpm run docs:typedoc && pnpm run docs:rust && node scripts/build-docs-site.mjs"
   },
   "workspaces": [

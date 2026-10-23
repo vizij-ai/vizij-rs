@@ -2,7 +2,7 @@
 
 > **wasm-bindgen bridge for Vizij node graphs – load specs, stage inputs, and evaluate graphs from JavaScript.**
 
-`vizij-graph-wasm` compiles `arora-node-graph` — a node graph run on the behavior tree — to WebAssembly and exposes a friendly API for TypeScript tooling. The npm wrapper `@vizij/node-graph` builds on this crate.
+`vizij-graph-wasm` compiles `arora-dataflow-nodes` — a node graph run on the behavior tree — to WebAssembly and exposes a friendly API for TypeScript tooling. The npm wrapper `@vizij/node-graph` builds on this crate.
 
 ---
 
@@ -21,7 +21,7 @@
 ## Overview
 
 - Compiles to a `cdylib` via `wasm-bindgen` with ABI guard `abi_version() == 2`.
-- Wraps a `GraphRuntime` inside the `WasmGraph` class (load, stage, step, evaluate, set params).
+- Wraps a `TreeRuntime` inside the `WasmGraph` class (load, stage, step, evaluate, set params).
 - Provides JSON normalisation helpers so authored specs can use ergonomic shorthands.
 - Emits evaluation results with explicit value/shape metadata to keep consumers schema-aware.
 - Optional features:
@@ -113,7 +113,7 @@ console.log(graph.evalAll());
 ## Key Details
 
 - **Normalisation** – Accepts legacy shorthands like `{ vec3: [...] }` and `{ type: "float", data: 1 }`, auto-lowers node type names, rewrites `kind` → `type`, and normalizes value payloads into Arora `Value` serde form (`{"f32": 1.0}`, `{"bool": true}`, `{"str": "hi"}`, `{"f32s": [...]}`, `{"struct": {...}}`, ...).
-- **Staging** – `stage_input` mirrors `GraphRuntime::set_input`; value payloads normalize through the same rules. Passing `undefined` (via the npm wrapper) removes staged entries safely.
+- **Staging** – `stage_input` mirrors `TreeRuntime::set_input`; value payloads normalize through the same rules. Passing `undefined` (via the npm wrapper) removes staged entries safely.
 - **Evaluation Result** – `eval_all` returns `{ nodes: { [id]: { port: { value, shape } } }, writes: WriteOpJSON[] }`. Values are in Arora `Value` serde form; shapes mirror `arora_shape::Shape`.
   ```jsonc
   {
@@ -134,7 +134,7 @@ console.log(graph.evalAll());
     ]
   }
   ```
-- **The behavior tree** – The first `eval_all`/`eval_all_slots` after `load_graph` imports the graph into a behavior tree (arora-node-graph's `TreeRuntime`), and later evaluations reuse it. Every evaluation brings every node up to date, and a node calls its function again only when its inputs, its parameters or the clock it reads changed.
+- **The behavior tree** – The first `eval_all`/`eval_all_slots` after `load_graph` imports the graph into a behavior tree (arora-dataflow-nodes's `TreeRuntime`), and later evaluations reuse it. Every evaluation brings every node up to date, and a node calls its function again only when its inputs, its parameters or the clock it reads changed.
   - `set_param` sets a parameter's value in place on the tree (e.g., `Constant.value`, a spring's `stiffness`).
   - An edit that changes the tree has the next `eval_*` call load the edited graph, every node keeping its state: `Split.sizes`, `ReadRecord.record_keys`, an input's or output's `path`, or a parameter the node did not set before.
 - **Parameter updates** – `set_param` validates types strictly (no silent coercion). All core node parameters plus robotics settings are supported.
@@ -169,7 +169,7 @@ cargo test -p vizij-graph-wasm
 
 ## Related Packages
 
-- [`arora-node-graph`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-node-graph/README.md) – the importer and tree runtime this crate runs graphs on.
+- [`arora-dataflow-nodes`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/README.md) – the importer and tree runtime this crate runs graphs on.
 - [`npm/@vizij/node-graph`](../../../npm/@vizij/node-graph/README.md) – npm package built from this binding.
 
 Need assistance? Open an issue—predictable WASM bindings keep Vizij graphs portable. 🕸️
