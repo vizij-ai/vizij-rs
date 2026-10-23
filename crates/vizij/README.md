@@ -104,7 +104,7 @@ device its bytes (`RuntimeHandle::reload`).
   `RigHal` + `BlackboardStore` + `ProcessingGraph` as an arora; on desktop
   `native` steps it at ~100 Hz on a worker thread. The `Arora` is
   built inside that thread — it is single-owner by design and not `Send`.
-- **`view`** renders the web renderer's scene model: Z-up, faces in the XY
+- **`view`** renders Vizij's scene model: Z-up, faces in the XY
   plane layered along Z, orthographic camera fit to the authored `rootBounds`
   (`--fit` picks how, `--zoom` magnifies on top), sRGB output, no tonemapping,
   double-sided materials, opacity-driven alpha,
@@ -148,7 +148,7 @@ device its bytes (`RuntimeHandle::reload`).
 | `--frame-format <fmt>` | `png` | encoding of published frames: `png` writes `display/face/compressed`, a `sensor_msgs/CompressedImage`; `raw` writes `display/face`, a `sensor_msgs/Image` |
 | `--frame-id <name>` | the face's id from its GLB | the TF frame published frames are stamped with (`header.frame_id`) |
 | `--background <rrggbb>` | `000000` | clear color |
-| `--ambient <f>` | `π/2` | three.js-style ambient intensity |
+| `--ambient <f>` | `π/2` | ambient intensity of the [lighting model](#lighting-model) |
 | `--unlit` | off | render materials unlit (albedo passthrough) |
 | `--fit <contain\|cover\|stretch>` | `contain` | how the face fits the window: letterbox, crop the excess axis, or distort to the window's aspect |
 | `--zoom <f>` / `<fx>x<fy>` | `1` | magnify the fitted face — one factor for both axes, or width x height; below 1 shrinks it |
@@ -243,8 +243,12 @@ drives nothing, kept until Studio no longer sends it. Velocities, in both
 forms, are accepted, rest at 0 and move nothing. Every animatable the face
 draws is numeric, so the device takes no `<id>/target.value`.
 
-The device does not serve its face's GLB to Studio: nothing on the device
-answers the Studio client's `retrieveGlb` (`GET_MODEL_GLB`).
+The device serves its face's GLB to Studio as its HAL model: `RigHal` holds
+the GLB it shows and states it as the `device` component's model, servable,
+with its content hash, through Arora's HAL module. Studio's client lists it
+with `retrieveModels` and fetches it with `retrieveModelGlb`
+([studio-bridge#104](https://github.com/semio-ai/studio-bridge/pull/104)).
+The older `retrieveGlb` (`GET_MODEL_GLB`) has no answer on the device.
 
 `--ros2` attaches [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2)
 with its ROS4HRI exposure preset:
@@ -304,7 +308,7 @@ one of the [face standard](../../docs/face-standard.md#visemes)'s shapes. The
 **say skill** ([skills](../../docs/skills.md)) hosts that call in a run and
 drives the face's lips from the stream. The contract and the cloud provider
 ship as the [`vizij-arora-tts`](https://crates.io/crates/vizij-arora-tts)
-crate — the same module the vizij-web standalone registers; the Piper provider
+crate — the same module the browser build (`@vizij/runtime`) registers; the Piper provider
 implements the contract here, behind its feature. A build carries exactly one
 provider. Try either from the command line:
 
@@ -382,8 +386,8 @@ follows the lips.
 
 ## Lighting model
 
-The web renders its materials under a single `ambientLight(π/2)` and no
-environment map. A `MeshStandardMaterial` (`material: "standard"`) resolves
+Faces are lit by a single ambient light of intensity π/2 — three.js's
+`ambientLight(π/2)` — and no environment map. A `MeshStandardMaterial` (`material: "standard"`) resolves
 to **base × (1 − metalness) × 0.5 + emissive × emissiveIntensity in linear
 space** (ambient intensity × the Lambert 1/π on the diffuse term; a metal
 has no diffuse and nothing to reflect, so a metallic plate is black;
@@ -394,7 +398,7 @@ carries is ignored, and phong's `specular` and `shininess` need a direct
 light, so they shape nothing either. A `MeshBasicMaterial` (`"basic"`)
 ignores lights: its base color, with no metalness or emissive term.
 
-The native view reproduces this deterministically: every material renders
+The view computes it deterministically: every material renders
 unlit with that composition baked into its albedo (`--ambient`, default
 π/2), from the GLB material at load and from the `color`, `opacity`,
 `metalness`, `roughness`, `emissive`, `emissiveIntensity`, `shininess` and
@@ -404,12 +408,11 @@ three's glTF loader makes its material: basic for `KHR_materials_unlit`,
 standard otherwise. Graph-driven `color` and `emissive` writes are linear
 working-space floats (three `Color.setRGB` semantics), not sRGB.
 
-Verified pixel-exact against the web renderer on flat regions of the
-reference faces: Quori and Toasty, whose look is in `color`, and Emy, whose
-look is a black metallic plate with emissive features. Quori's Blender export
-carries its colors in `emissiveFactor` over a black metallic base and
-renders them exactly (its flat face color is the sRGB encoding of its
-emissive factor).
+On flat regions of the reference faces this matches three.js pixel for pixel:
+Quori and Toasty, whose look is in `color`, and Emy, whose look is a black
+metallic plate with emissive features. Quori's Blender export carries its
+colors in `emissiveFactor` over a black metallic base and renders them
+exactly (its flat face color is the sRGB encoding of its emissive factor).
 
 
 ## Look-at policies
@@ -535,9 +538,6 @@ Zenoh backend does not. Run it with `--ignored` to re-measure.
 
 ## Not yet here
 
-The native app is otherwise complete (VIZ-47): the animation module + animation
-transport, the bridges, and `--headless` frames-to-store all landed. The
-operator surface is the arora TUI + the store: an in-window operator panel
-(egui) — the Studio registration prompt where there is no terminal, as on
-Android — is not built, and packaging (a distributable bundle) is still open.
-See `docs/proposal-vizij-native-app.md`.
+The operator surface is the arora TUI and the store: an in-window operator
+panel (egui) — the Studio registration prompt where there is no terminal, as
+on Android — is not built. See `docs/proposal-vizij-native-app.md`.
