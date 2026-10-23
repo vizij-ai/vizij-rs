@@ -300,24 +300,16 @@ jobs:
             dpkg-query -W mesa-vulkan-drivers
             vulkaninfo --summary 2>/dev/null | grep -E 'deviceName|driverInfo' || true
           }
-          runner
           bin=$(cargo test -p vizij --test headless_face --no-run --message-format=json \
             | jq -r 'select(.profile.test == true and .target.name == "headless_face") | .executable')
-          # Up to six runs, stopping at the first that does not pass: the
-          # crash comes on some runs only.
-          for run in 1 2 3 4 5 6; do
-            echo "::group::headless_face run $run"
-            gdb -q -batch -ex 'set pagination off' -ex 'set print thread-events off' \
-              -ex 'handle SIGPIPE nostop noprint' -ex run -ex 'thread apply all bt 40' \
-              --args "$bin" --ignored --nocapture > headless_face.log 2>&1 || true
-            echo "::endgroup::"
-            if ! grep -q '^test result: ok' headless_face.log; then
-              cat headless_face.log
-              runner
-              exit 1
-            fi
-            grep '^test result' headless_face.log
-          done
+          gdb -q -batch -ex 'set pagination off' -ex 'set print thread-events off' \
+            -ex 'handle SIGPIPE nostop noprint' -ex run -ex 'thread apply all bt 40' \
+            --args "$bin" --ignored --nocapture > headless_face.log 2>&1 || true
+          cat headless_face.log
+          if ! grep -q '^test result: ok' headless_face.log; then
+            runner
+            exit 1
+          fi
       - name: Drive the adapted Quori over the ROS4HRI mapping
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
