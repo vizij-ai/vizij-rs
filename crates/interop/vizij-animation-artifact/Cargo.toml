@@ -8,4 +8,4 @@ description = "Writes arora-animation-module's module directory (header, records
 
 [dependencies]
 # `module-dir`: the module directory's header, records and guest file.
-arora-animation-module = { version = "1", features = ["module-dir"] }
+arora-animation-module = { version = "2", features = ["module-dir"] }
