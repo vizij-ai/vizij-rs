@@ -247,7 +247,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Install Bevy deps + lavapipe (software Vulkan)
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config mesa-vulkan-drivers vulkan-tools
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config mesa-vulkan-drivers vulkan-tools gdb
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -280,11 +280,23 @@ jobs:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
           WGPU_BACKEND: vulkan
         run: cargo test -p vizij --test snapshot_regression -- --ignored --nocapture
+      # Under gdb, so a crash in the binary (lavapipe, wgpu, Bevy or ours)
+      # leaves every thread's backtrace in the log. The step passes only on
+      # the test harness's own "test result: ok".
       - name: Compose faces from bytes headless through the library (one, two, 25 cycles)
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
           WGPU_BACKEND: vulkan
-        run: cargo test -p vizij --test headless_face -- --ignored --nocapture
+        run: |
+          lscpu | grep -E 'Model name|^CPU\(s\)'
+          echo "AVX: $(grep -o -w 'avx[0-9a-z_]*' /proc/cpuinfo | sort -u | tr '\n' ' ')"
+          dpkg-query -W mesa-vulkan-drivers
+          vulkaninfo --summary 2>/dev/null | grep -E 'deviceName|driverInfo' || true
+          bin=$(cargo test -p vizij --test headless_face --no-run --message-format=json \
+            | jq -r 'select(.profile.test == true and .target.name == "headless_face") | .executable')
+          gdb -q -batch -ex 'set pagination off' -ex 'handle SIGPIPE nostop noprint' \
+            -ex run -ex 'thread apply all bt 40' --args "$bin" --ignored --nocapture 2>&1 | tee headless_face.log
+          grep -q '^test result: ok' headless_face.log
       - name: Drive the adapted Quori over the ROS4HRI mapping
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
