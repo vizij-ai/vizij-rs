@@ -3,18 +3,18 @@
 //! This module exposes graph normalization, evaluation, staged-input handling, registry
 //! metadata, and delta-friendly output snapshots to JavaScript consumers.
 
-use arora_dataflow_nodes::tree_runtime::{Evaluation, TreeRuntime};
-use arora_dataflow_nodes::types::RoundMode;
-use arora_dataflow_nodes::{GraphSpec, PortValue};
-use arora_shape::shape::ShapeId;
-use arora_shape::value::{
-    as_array, as_bool, as_float, as_quat, as_text, as_transform, as_vec2, as_vec3, as_vec4,
-    as_vector, float, kind, vector, ShapeKind,
-};
-use arora_shape::{coercion, json, Shape, TypedPath, Value};
 use hashbrown::HashMap;
 use js_sys::{Float32Array, Uint32Array, JSON};
 use serde_wasm_bindgen as swb;
+use vizij_api_core::shape::ShapeId;
+use vizij_api_core::value::{
+    as_array, as_bool, as_float, as_quat, as_text, as_transform, as_vec2, as_vec3, as_vec4,
+    as_vector, float, kind, vector, ShapeKind,
+};
+use vizij_api_core::{coercion, json, Shape, TypedPath, Value};
+use vizij_graph_core::tree_runtime::{Evaluation, TreeRuntime};
+use vizij_graph_core::types::RoundMode;
+use vizij_graph_core::{GraphSpec, PortValue};
 use wasm_bindgen::prelude::*;
 
 /// Normalize a graph-spec JSON string into the canonical serde shape expected by the runtime.
@@ -32,8 +32,8 @@ pub fn abi_version() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arora_shape::json;
     use std::collections::HashSet;
+    use vizij_api_core::json;
 
     #[test]
     fn it_should_normalize_value_and_path_shorthand() {
@@ -1124,7 +1124,7 @@ impl WasmGraph {
     }
 
     /// Set a param on a node (e.g., key="value" with a JSON payload in Arora
-    /// `Value` serde form or any legacy form the arora-shape normalizer accepts).
+    /// `Value` serde form or any legacy form the vizij-api-core normalizer accepts).
     ///
     /// A parameter is a literal argument of the node's call on the behavior
     /// tree. A value is set in place: the tree is kept, and the node runs
@@ -1384,6 +1384,6 @@ impl WasmGraph {
 /// Expose the node schema registry as JSON for tooling/UI.
 #[wasm_bindgen]
 pub fn get_node_schemas_json() -> String {
-    let reg = arora_dataflow_nodes::registry();
+    let reg = vizij_graph_core::registry();
     serde_json::to_string(&reg).unwrap()
 }

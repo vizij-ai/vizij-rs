@@ -14,12 +14,12 @@
 
 use std::time::Duration;
 
-use arora_dataflow_nodes::task;
 use arora_types::call::Call;
 use arora_types::value::{StructureField, Value};
 use vizij_arora_store::BlackboardStore;
 use vizij_arora_tts as tts_api;
 use vizij_arora_tts::say::ids::say;
+use vizij_graph_core::task;
 
 /// This build's provider: the cloud one at `API_URL` (or its default), the
 /// local Piper one under `tts-piper`.

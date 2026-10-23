@@ -18,10 +18,10 @@
 
 use std::collections::HashMap;
 
-use arora_shape::Value;
 use bevy::picking::Pickable;
 use bevy::prelude::*;
 use bevy::text::{FontSize, FontSource};
+use vizij_api_core::Value;
 use vizij_arora_host::captions::{CaptionQueue, Chunk};
 use vizij_arora_host::standard;
 

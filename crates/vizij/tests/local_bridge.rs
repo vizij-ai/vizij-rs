@@ -179,7 +179,7 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
         .next()
         .flatten();
     assert_eq!(
-        held.as_ref().and_then(arora_shape::value::as_float),
+        held.as_ref().and_then(vizij_api_core::value::as_float),
         Some(-0.5),
         "the store holds the written value: {held:?}"
     );

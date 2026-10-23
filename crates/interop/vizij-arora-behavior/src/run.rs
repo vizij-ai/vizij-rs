@@ -37,12 +37,12 @@
 use std::collections::{HashMap, HashSet};
 
 use arora_behavior::{interpreter_module, Graph, Status, TaskHandle, TaskId};
-use arora_dataflow_nodes::types::{GraphSpec, NodeType};
 use arora_types::call::Call;
 use arora_types::data::{DataStore, Key};
 use arora_types::value::{StructureField, Value};
 use arora_types::value_serde;
 use uuid::Uuid;
+use vizij_graph_core::types::{GraphSpec, NodeType};
 
 use crate::graph_codec::{self, GraphSpecDiff};
 

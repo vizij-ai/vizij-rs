@@ -30,14 +30,14 @@ const rustSections = [
   {
     title: "API Stack",
     items: [
-      ["arora-shape", "rust/arora_shape/"],
+      ["vizij-api-core", "rust/vizij_api_core/"],
       ["vizij-api-wasm", "rust/vizij_api_wasm/"],
     ]
   },
   {
     title: "Node Graph Stack",
     items: [
-      ["arora-node-graph", "rust/arora_node_graph/"],
+      ["vizij-graph-core", "rust/vizij_graph_core/"],
       ["vizij-graph-wasm", "rust/vizij_graph_wasm/"],
     ]
   },

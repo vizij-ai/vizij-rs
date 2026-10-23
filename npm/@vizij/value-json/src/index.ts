@@ -72,7 +72,7 @@ export type ValueJSON =
 export type ValueInput = ValueJSON | number[];
 
 /**
- * Arora serde forms — the JSON the Rust side (arora-shape over arora-types)
+ * Arora serde forms — the JSON the Rust side (vizij-api-core over arora-types)
  * emits. Values coming OUT of the wasm engines (frame changes, baked tracks,
  * registry defaults) are in this form; every `valueAs*` accessor decodes it.
  * Values going INTO the engines may stay in the legacy/normalized forms above —
@@ -118,7 +118,7 @@ export type AroraValueJSON =
   | { uuid: string };
 
 /**
- * The vizij declared-type ids (arora-shape's `VEC2_TYPE` … `RECORD_TYPE`):
+ * The vizij declared-type ids (vizij-api-core's `VEC2_TYPE` … `RECORD_TYPE`):
  * the ASCII bytes of "vizij" in the leading bytes, a small offset in the tail.
  * A structure whose `id` matches one of these decodes as the corresponding
  * vizij kind; field ids follow the same scheme.

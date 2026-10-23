@@ -1,14 +1,14 @@
-//! vizij-api-wasm: WASM JSON helpers and TS-friendly serialization for arora-shape.
+//! vizij-api-wasm: WASM JSON helpers and TS-friendly serialization for vizij-api-core.
 //!
 //! Values cross the JS boundary in Arora `Value` serde form (externally
 //! tagged: `{"f32": 1.0}`, `{"bool": true}`, `{"str": "hi"}`,
 //! `{"f32s": [...]}`, `{"struct": {...}}`, ...). Ingress goes through the
-//! arora-shape normalizer ([`arora_shape::json`]), so legacy payload forms
+//! api-core normalizer ([`vizij_api_core::json`]), so legacy payload forms
 //! (`{"vec3": [1, 2, 3]}`, `{"type": "float", "data": 1}`, bare primitives,
 //! ...) are still accepted; outputs are always the canonical Arora form.
 
-use arora_shape::{json, Value, WriteBatch};
 use serde_wasm_bindgen::to_value;
+use vizij_api_core::{json, Value, WriteBatch};
 use wasm_bindgen::prelude::*;
 
 fn parse_value_json(value_json: &str) -> Result<Value, JsValue> {
@@ -24,7 +24,7 @@ fn parse_writebatch_json(batch_json: &str) -> Result<WriteBatch, JsValue> {
 }
 
 /// Validate a `WriteBatch` JSON string (an array of `{ path, value, shape? }`
-/// objects; values in any form the arora-shape normalizer accepts).
+/// objects; values in any form the api-core normalizer accepts).
 #[wasm_bindgen]
 pub fn validate_writebatch_json(batch_json: &str) -> Result<(), JsValue> {
     parse_writebatch_json(batch_json).map(|_| ())
@@ -39,7 +39,7 @@ pub fn writebatch_to_js(batch_json: &str) -> Result<JsValue, JsValue> {
 }
 
 /// Validate a `Value` JSON string (canonical Arora serde or any legacy form
-/// the arora-shape normalizer accepts).
+/// the api-core normalizer accepts).
 #[wasm_bindgen]
 pub fn validate_value_json(value_json: &str) -> Result<(), JsValue> {
     parse_value_json(value_json).map(|_| ())

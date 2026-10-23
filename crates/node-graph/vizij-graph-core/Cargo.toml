@@ -1,0 +1,36 @@
+[package]
+name        = "vizij-graph-core"
+version     = "4.0.0"
+edition     = "2021"
+license     = "Apache-2.0"
+description = "Vizij's node graph: its format, its editor registry, and its evaluation on Arora's behavior tree as calls of arora-dataflow-nodes' functions."
+repository  = "https://github.com/vizij-ai/vizij-rs"
+homepage    = "https://github.com/vizij-ai/vizij-rs"
+documentation = "https://docs.rs/vizij-graph-core"
+readme      = "README.md"
+keywords    = ["vizij", "node", "graph", "behavior-tree"]
+categories  = ["science::robotics", "game-engines"]
+
+[dependencies]
+arora-behavior = "9.6"
+arora-behavior-tree = "9.5"
+arora-dataflow-nodes = { version = "1", default-features = false }
+arora-geometry = "1"
+arora-simple-data-store = "3.2"
+arora-types = "3.9"
+hashbrown = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { version = "1", features = ["serde", "v5"] }
+vizij-api-core = { version = "3", path = "../../api/vizij-api-core" }
+
+[dev-dependencies]
+criterion = "0.8"
+
+[[bench]]
+name = "graph_eval"
+harness = false
+
+[features]
+default = ["urdf_ik"]
+urdf_ik = ["arora-dataflow-nodes/urdf_ik"]

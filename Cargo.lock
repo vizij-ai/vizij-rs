@@ -153,6 +153,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloca"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5a7d05ea6aea7e9e64d25b9156ba2fee3fdd659e34e41063cd2fc7cd020d7f4"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -219,6 +228,12 @@ checksum = "ae221649c9976a6f6c56ae1facf410f3ddb33cc661c4b7b61020a912d4237fbc"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "anes"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
 
 [[package]]
 name = "anstream"
@@ -392,7 +407,7 @@ dependencies = [
 [[package]]
 name = "arora-behavior-tree"
 version = "9.5.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=main#a26f50bf7838994b8e4a43d2db1789be4cdbfb38"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#682ca795454945397ba9aa7a9515ff9573206f27"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
@@ -494,20 +509,15 @@ dependencies = [
 [[package]]
 name = "arora-dataflow-nodes"
 version = "1.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=main#a26f50bf7838994b8e4a43d2db1789be4cdbfb38"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#682ca795454945397ba9aa7a9515ff9573206f27"
 dependencies = [
- "anyhow",
  "arora-behavior",
- "arora-behavior-tree",
  "arora-geometry",
- "arora-shape",
- "arora-simple-data-store",
  "arora-types",
  "hashbrown 0.17.1",
  "k",
  "serde",
  "serde_json",
- "thiserror 2.0.20",
  "urdf-rs",
  "uuid",
 ]
@@ -547,7 +557,7 @@ dependencies = [
 [[package]]
 name = "arora-geometry"
 version = "1.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=main#a26f50bf7838994b8e4a43d2db1789be4cdbfb38"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#682ca795454945397ba9aa7a9515ff9573206f27"
 dependencies = [
  "arora-types",
  "uuid",
@@ -625,20 +635,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arora-shape"
-version = "1.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=main#a26f50bf7838994b8e4a43d2db1789be4cdbfb38"
-dependencies = [
- "arora-geometry",
- "arora-types",
- "hashbrown 0.17.1",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "uuid",
-]
-
-[[package]]
 name = "arora-simple-data-store"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -683,7 +679,7 @@ dependencies = [
 [[package]]
 name = "arora-types"
 version = "3.9.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=main#a26f50bf7838994b8e4a43d2db1789be4cdbfb38"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#682ca795454945397ba9aa7a9515ff9573206f27"
 dependencies = [
  "arora-types-derive",
  "async-trait",
@@ -2914,6 +2910,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "ciborium"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e"
+dependencies = [
+ "ciborium-io",
+ "ciborium-ll",
+ "serde",
+]
+
+[[package]]
+name = "ciborium-io"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757"
+
+[[package]]
+name = "ciborium-ll"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
+dependencies = [
+ "ciborium-io",
+ "half",
+]
+
+[[package]]
 name = "cipher"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3477,6 +3500,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8498c871161e1742aaa9d52551b2d6ebdd4c3d45a3be423e3728f33b955be550"
 dependencies = [
  "cfg-if 1.0.4",
+]
+
+[[package]]
+name = "criterion"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "950046b2aa2492f9a536f5f4f9a3de7b9e2476e575e05bd6c333371add4d98f3"
+dependencies = [
+ "alloca",
+ "anes",
+ "cast",
+ "ciborium",
+ "clap",
+ "criterion-plot",
+ "itertools 0.13.0",
+ "num-traits",
+ "oorandom",
+ "page_size",
+ "plotters",
+ "rayon",
+ "regex",
+ "serde",
+ "serde_json",
+ "tinytemplate",
+ "walkdir",
+]
+
+[[package]]
+name = "criterion-plot"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8d80a2f4f5b554395e47b5d8305bc3d27813bacb73493eb1001e8f76dae29ea"
+dependencies = [
+ "cast",
+ "itertools 0.13.0",
 ]
 
 [[package]]
@@ -6940,7 +6998,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -6950,6 +7008,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36820e9051aca1014ddc75770aab4d68bc1e9e632f0f5627c4086bc216fb583b"
 dependencies = [
  "ttf-parser",
+]
+
+[[package]]
+name = "page_size"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30d5b2194ed13191c1999ae0704b7839fb18384fa22e49b57eeaa97d79ce40da"
+dependencies = [
+ "libc",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -7276,6 +7344,34 @@ dependencies = [
  "quick-xml 0.42.0",
  "serde",
  "time",
+]
+
+[[package]]
+name = "plotters"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5aeb6f403d7a4911efb1e33402027fc44f29b5bf6def3effcc22d7bb75f2b747"
+dependencies = [
+ "num-traits",
+ "plotters-backend",
+ "plotters-svg",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "plotters-backend"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df42e13c12958a16b3f7f4386b9ab1f3e7933914ecea48da7139435263a4172a"
+
+[[package]]
+name = "plotters-svg"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51bae2ac328883f7acdfea3d66a7c35751187f870bc81f94563733a154d7a670"
+dependencies = [
+ "plotters-backend",
 ]
 
 [[package]]
@@ -9492,6 +9588,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinytemplate"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be4d6b5f19ff7664e8c98d03e2139cb510db9b0a60b55f8e8709b689d939b6bc"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "tinyvec"
 version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9922,7 +10028,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.4",
+ "cfg-if 0.1.10",
  "static_assertions",
 ]
 
@@ -10184,11 +10290,9 @@ dependencies = [
  "arora-behavior-tree-types",
  "arora-bridge",
  "arora-bridge-ros2",
- "arora-dataflow-nodes",
  "arora-hal",
  "arora-module",
  "arora-msgs-ros2",
- "arora-shape",
  "arora-types",
  "arora-web",
  "async-trait",
@@ -10215,6 +10319,7 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "uuid",
+ "vizij-api-core",
  "vizij-arora",
  "vizij-arora-behavior",
  "vizij-arora-hal",
@@ -10222,6 +10327,7 @@ dependencies = [
  "vizij-arora-store",
  "vizij-arora-tts",
  "vizij-bundle",
+ "vizij-graph-core",
  "vizij-piper",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -10236,13 +10342,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "vizij-api-core"
+version = "3.0.0"
+dependencies = [
+ "arora-geometry",
+ "arora-types",
+ "hashbrown 0.17.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
 name = "vizij-api-wasm"
 version = "1.0.0"
 dependencies = [
- "arora-shape",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "vizij-api-core",
  "wasm-bindgen",
 ]
 
@@ -10250,9 +10369,9 @@ dependencies = [
 name = "vizij-arora"
 version = "0.0.0"
 dependencies = [
- "arora-shape",
  "arora-types",
  "serde_json",
+ "vizij-api-core",
 ]
 
 [[package]]
@@ -10261,9 +10380,7 @@ version = "8.0.0"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
- "arora-dataflow-nodes",
  "arora-module",
- "arora-shape",
  "arora-simple-data-store",
  "arora-types",
  "crossbeam-channel",
@@ -10271,8 +10388,10 @@ dependencies = [
  "serde",
  "serde_json",
  "uuid",
+ "vizij-api-core",
  "vizij-arora-host",
  "vizij-arora-store",
+ "vizij-graph-core",
 ]
 
 [[package]]
@@ -10280,13 +10399,13 @@ name = "vizij-arora-hal"
 version = "0.0.0"
 dependencies = [
  "arora-hal",
- "arora-shape",
  "arora-types",
  "async-trait",
  "futures",
  "futures-channel",
  "futures-core",
  "tokio",
+ "vizij-api-core",
 ]
 
 [[package]]
@@ -10297,20 +10416,20 @@ dependencies = [
  "arora-behavior",
  "arora-module",
  "arora-msgs-ros2",
- "arora-shape",
  "arora-types",
  "log",
  "serde",
  "serde_json",
  "uuid",
+ "vizij-api-core",
 ]
 
 [[package]]
 name = "vizij-arora-store"
 version = "0.0.0"
 dependencies = [
- "arora-shape",
  "arora-types",
+ "vizij-api-core",
 ]
 
 [[package]]
@@ -10352,31 +10471,49 @@ dependencies = [
 name = "vizij-glb-migrate"
 version = "0.1.1"
 dependencies = [
- "arora-shape",
  "serde_json",
  "thiserror 2.0.20",
+ "vizij-api-core",
+]
+
+[[package]]
+name = "vizij-graph-core"
+version = "4.0.0"
+dependencies = [
+ "arora-behavior",
+ "arora-behavior-tree",
+ "arora-dataflow-nodes",
+ "arora-geometry",
+ "arora-simple-data-store",
+ "arora-types",
+ "criterion",
+ "hashbrown 0.17.1",
+ "serde",
+ "serde_json",
+ "uuid",
+ "vizij-api-core",
 ]
 
 [[package]]
 name = "vizij-graph-registry-export"
 version = "1.0.0"
 dependencies = [
- "arora-dataflow-nodes",
  "serde_json",
+ "vizij-graph-core",
 ]
 
 [[package]]
 name = "vizij-graph-wasm"
 version = "1.0.0"
 dependencies = [
- "arora-dataflow-nodes",
- "arora-shape",
  "console_error_panic_hook",
  "hashbrown 0.17.1",
  "js-sys",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "vizij-api-core",
+ "vizij-graph-core",
  "wasm-bindgen",
 ]
 

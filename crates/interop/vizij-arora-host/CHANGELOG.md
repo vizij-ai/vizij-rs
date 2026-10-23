@@ -16,9 +16,8 @@ All notable changes to `vizij-arora-host`. The format follows
 
 ### Changed
 
-- Reads graph specs and values with arora-shape 1, where it used
-  vizij-api-core 2: the crate moved to arora-sdk under that name. No public
-  item changes.
+- Reads graph specs and values with vizij-api-core 3, where it used
+  vizij-api-core 2. No public item changes.
 
 ## [7.5.0] - 2026-10-19
 

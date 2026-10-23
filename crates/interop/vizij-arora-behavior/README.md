@@ -4,8 +4,10 @@ Drives a Vizij node graph as an Arora **behavior interpreter**. The interpreter
 type is `ProcessingGraph`, which implements
 [`arora_behavior::BehaviorInterpreter`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-behavior/src/lib.rs):
 each tick it reads its subscribed input paths from the shared data store,
-evaluates the graph — imported into a behavior tree by
-[`arora-dataflow-nodes`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/README.md), its nodes detached calls — for
+evaluates the [`vizij-graph-core`](../../node-graph/vizij-graph-core/) graph —
+imported into a behavior tree, its nodes detached calls of
+[`arora-dataflow-nodes`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/README.md)'
+functions — for
 `dt`, and writes the graph's outputs back. Vizij and Arora share one runtime
 value type, so values cross the store and call boundaries with no conversion.
 A tick with a zero `dt` advances no time: it carries the store's changes

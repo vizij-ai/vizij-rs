@@ -9,10 +9,11 @@ All notable changes to `vizij-arora-behavior`. The format follows
 ### Changed
 
 - `ProcessingGraph` evaluates its graph on arora-behavior-tree.
-  arora-dataflow-nodes imports the lowered spec as a behavior tree whose
-  detached nodes call the node functions, and each tick runs the nodes the
-  graph's outputs read whose arguments changed. A graph computes what it
-  computed on vizij-graph-core: the face fixtures' tests pass unchanged. A
+  vizij-graph-core imports the lowered spec as a behavior tree whose
+  detached nodes call arora-dataflow-nodes' node functions, and each tick
+  runs the nodes the graph's outputs read whose arguments changed. A graph
+  computes what it computed before: the face fixtures' tests pass
+  unchanged. A
   spec of a new version (a LOAD, an EDIT, a grafted or pruned run) is
   imported again at the next tick, and every node it keeps keeps its state.
 - An `ExternalFunction` node is placed by the description the device's
@@ -28,15 +29,14 @@ All notable changes to `vizij-arora-behavior`. The format follows
   faster at rest and 1.6 times slower with every input moving; a
   19,000-node graph ticks 8 and 3.3 times faster. Importing a graph costs
   2 to 3.5 times what lowering it did.
-- The graph types are arora-dataflow-nodes' and the value types
-  arora-shape's, where they were vizij-graph-core's and vizij-api-core's:
-  the two crates moved to arora-sdk under these names. `task` re-exports
-  `arora_dataflow_nodes::task`.
+- The graph types are vizij-graph-core 4's, whose node vocabulary is
+  arora-dataflow-nodes', and the value types vizij-api-core 3's. `task`
+  re-exports `vizij_graph_core::task`, which is arora-dataflow-nodes'.
 - `ProcessingGraph` is neither `Send` nor `Sync`, because a behavior tree
   holds its nodes in `Rc`s. A device builds and ticks it on one thread.
   `KeyHolds` stays `Send` and `Sync`, so a client on another thread still
   holds keys through it.
-- Requires arora-dataflow-nodes 1 and arora-shape 1.
+- Requires vizij-graph-core 4 and vizij-api-core 3.
 
 ## [7.3.0] - Unreleased
 

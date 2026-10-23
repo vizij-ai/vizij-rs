@@ -1,0 +1,2974 @@
+//! Static node schema metadata exposed to tooling and wasm wrappers.
+//!
+//! The registry in this module describes the runtime-supported node types, their ports, and
+//! their parameter surfaces so editors and host integrations can stay aligned with the core.
+
+use crate::types::NodeType;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PortType {
+    Float,
+    Bool,
+    Vec3,
+    Quat,
+    Transform,
+    Vector,
+    Any,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ParamType {
+    Float,
+    Bool,
+    Vec3,
+    Vector,
+    Any,  // union (Value)
+    Text, // free-form string
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortSpec {
+    pub id: &'static str,
+    pub ty: PortType,
+    pub label: &'static str,
+    #[serde(default)]
+    pub doc: &'static str,
+    #[serde(default)]
+    pub optional: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VariadicSpec {
+    pub id: &'static str,
+    pub ty: PortType,
+    pub label: &'static str,
+    #[serde(default)]
+    pub doc: &'static str,
+    pub min: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<usize>,
+    #[serde(default)]
+    pub keyed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParamSpec {
+    pub id: &'static str,
+    pub ty: ParamType,
+    pub label: &'static str,
+    #[serde(default)]
+    pub doc: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_json: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+}
+
+/// A node type's ports, parameters and documentation.
+///
+/// Serialized, each input port a node of this type cannot evaluate without
+/// ([`required_inputs`]) carries `"required": true`. `optional: false` alone
+/// does not make a port required: most nodes read an unwired input as zero.
+#[derive(Debug, Clone, Deserialize)]
+pub struct NodeSignature {
+    pub type_id: NodeType,
+    pub name: &'static str,
+    pub category: &'static str,
+    #[serde(default)]
+    pub doc: &'static str,
+    pub inputs: Vec<PortSpec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variadic_inputs: Option<VariadicSpec>,
+    pub outputs: Vec<PortSpec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variadic_outputs: Option<VariadicSpec>,
+    pub params: Vec<ParamSpec>,
+}
+
+impl NodeSignature {
+    /// The input ports a node of this type cannot evaluate without
+    /// ([`required_inputs`]).
+    pub fn required_inputs(&self) -> &'static [&'static str] {
+        required_inputs(&self.type_id)
+    }
+}
+
+impl Serialize for NodeSignature {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        /// An input port, marked when the node cannot evaluate without it.
+        #[derive(Serialize)]
+        struct Input<'a> {
+            #[serde(flatten)]
+            port: &'a PortSpec,
+            #[serde(skip_serializing_if = "std::ops::Not::not")]
+            required: bool,
+        }
+
+        #[derive(Serialize)]
+        struct Signature<'a> {
+            type_id: &'a NodeType,
+            name: &'a str,
+            category: &'a str,
+            doc: &'a str,
+            inputs: Vec<Input<'a>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            variadic_inputs: &'a Option<VariadicSpec>,
+            outputs: &'a [PortSpec],
+            #[serde(skip_serializing_if = "Option::is_none")]
+            variadic_outputs: &'a Option<VariadicSpec>,
+            params: &'a [ParamSpec],
+        }
+
+        let required = self.required_inputs();
+        Signature {
+            type_id: &self.type_id,
+            name: self.name,
+            category: self.category,
+            doc: self.doc,
+            inputs: self
+                .inputs
+                .iter()
+                .map(|port| Input {
+                    port,
+                    required: required.contains(&port.id),
+                })
+                .collect(),
+            variadic_inputs: &self.variadic_inputs,
+            outputs: &self.outputs,
+            variadic_outputs: &self.variadic_outputs,
+            params: &self.params,
+        }
+        .serialize(serializer)
+    }
+}
+
+/// The input ports a node of `kind` cannot evaluate without: with neither an
+/// edge nor an inline default on one of them, its evaluation fails, and the
+/// whole graph's with it. Every other input reads as a default when unwired
+/// (most as zero), or changes what the node does without failing it.
+///
+/// [`GraphSpec::validate`](crate::types::GraphSpec::validate) refuses a graph
+/// that leaves one of them unwired.
+pub fn required_inputs(kind: &NodeType) -> &'static [&'static str] {
+    match kind {
+        NodeType::Clamp => &["in", "min", "max"],
+        NodeType::Remap => &["in", "in_min", "in_max", "out_min", "out_max"],
+        NodeType::CenteredRemap => &[
+            "in",
+            "in_low",
+            "in_anchor",
+            "in_high",
+            "out_low",
+            "out_anchor",
+            "out_high",
+        ],
+        NodeType::PiecewiseRemap => &["in", "input_breakpoints", "output_breakpoints"],
+        NodeType::UrdfIkPosition => &["target_pos"],
+        NodeType::UrdfIkPose => &["target_pos", "target_rot"],
+        NodeType::UrdfFk => &["joints"],
+        _ => &[],
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Registry {
+    pub version: &'static str,
+    pub nodes: Vec<NodeSignature>,
+}
+
+// Helpers
+fn p_in() -> PortSpec {
+    PortSpec {
+        id: "in",
+        ty: PortType::Float,
+        label: "In",
+        doc: "Input scalar value.",
+        optional: false,
+    }
+}
+fn p_bool_in() -> PortSpec {
+    PortSpec {
+        id: "in",
+        ty: PortType::Bool,
+        label: "In",
+        doc: "Input boolean value.",
+        optional: false,
+    }
+}
+fn p_vector_in() -> PortSpec {
+    PortSpec {
+        id: "in",
+        ty: PortType::Vector,
+        label: "In",
+        doc: "Input numeric vector; accepts scalars and arrays.",
+        optional: false,
+    }
+}
+fn p_out_float() -> PortSpec {
+    PortSpec {
+        id: "out",
+        ty: PortType::Float,
+        label: "Out",
+        doc: "Computed scalar result.",
+        optional: false,
+    }
+}
+fn p_out_bool() -> PortSpec {
+    PortSpec {
+        id: "out",
+        ty: PortType::Bool,
+        label: "Out",
+        doc: "Computed boolean result.",
+        optional: false,
+    }
+}
+fn p_out_vec3() -> PortSpec {
+    PortSpec {
+        id: "out",
+        ty: PortType::Vec3,
+        label: "Out",
+        doc: "Computed 3D vector.",
+        optional: false,
+    }
+}
+fn p_out_vector() -> PortSpec {
+    PortSpec {
+        id: "out",
+        ty: PortType::Vector,
+        label: "Out",
+        doc: "Computed numeric vector result.",
+        optional: false,
+    }
+}
+
+pub fn registry() -> Registry {
+    use NodeType::*;
+    let mut nodes: Vec<NodeSignature> = Vec::new();
+
+    // Scalars / arithmetic (float-based legacy kept for convenience)
+    nodes.push(NodeSignature {
+        type_id: Constant,
+        name: "Constant",
+        category: "Math",
+        doc: "Outputs the configured value every frame; defaults to 0.0 when unspecified.",
+        inputs: vec![],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![ParamSpec {
+            id: "value",
+            ty: ParamType::Any,
+            label: "Value",
+            doc: "Value to emit on the output port each tick.",
+            default_json: Some(serde_json::json!({ "f32": 0.0 })),
+            min: None,
+            max: None,
+        }],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Slider,
+        name: "Slider",
+        category: "Math",
+        doc: "Provides a tunable scalar value constrained to the configured min/max range.",
+        inputs: vec![],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![
+            ParamSpec {
+                id: "value",
+                ty: ParamType::Float,
+                label: "Value",
+                doc: "Initial slider position.",
+                default_json: Some(serde_json::json!({ "f32": 0.0 })),
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "min",
+                ty: ParamType::Float,
+                label: "Min",
+                doc: "Lower bound for the slider value.",
+                default_json: Some(serde_json::json!({ "f32": 0.0 })),
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "max",
+                ty: ParamType::Float,
+                label: "Max",
+                doc: "Upper bound for the slider value.",
+                default_json: Some(serde_json::json!({ "f32": 1.0 })),
+                min: None,
+                max: None,
+            },
+        ],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: MultiSlider,
+        name: "Multi Slider",
+        category: "Math",
+        doc: "Provides three independent slider-controlled scalar outputs for X, Y, and Z.",
+        inputs: vec![],
+        variadic_inputs: None,
+        outputs: vec![
+            PortSpec {
+                id: "x",
+                ty: PortType::Float,
+                label: "X",
+                doc: "Current X slider value.",
+                optional: false,
+            },
+            PortSpec {
+                id: "y",
+                ty: PortType::Float,
+                label: "Y",
+                doc: "Current Y slider value.",
+                optional: false,
+            },
+            PortSpec {
+                id: "z",
+                ty: PortType::Float,
+                label: "Z",
+                doc: "Current Z slider value.",
+                optional: false,
+            },
+        ],
+        variadic_outputs: None,
+        params: vec![
+            ParamSpec {
+                id: "x",
+                ty: ParamType::Float,
+                label: "X",
+                doc: "Initial X slider value.",
+                default_json: Some(serde_json::json!({ "f32": 0.0 })),
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "y",
+                ty: ParamType::Float,
+                label: "Y",
+                doc: "Initial Y slider value.",
+                default_json: Some(serde_json::json!({ "f32": 0.0 })),
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "z",
+                ty: ParamType::Float,
+                label: "Z",
+                doc: "Initial Z slider value.",
+                default_json: Some(serde_json::json!({ "f32": 0.0 })),
+                min: None,
+                max: None,
+            },
+        ],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Add,
+        name: "Add",
+        category: "Math",
+        doc: "Sums all incoming operands, treating missing inputs as 0.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "operand",
+            ty: PortType::Float,
+            label: "Operand",
+            doc: "Each scalar to include in the sum.",
+            min: 2,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Subtract,
+        name: "Subtract",
+        category: "Math",
+        doc: "Subtracts RHS from LHS; missing inputs default to 0.",
+        inputs: vec![
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Float,
+                label: "LHS",
+                doc: "Minuend value.",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Float,
+                label: "RHS",
+                doc: "Subtrahend value.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Multiply,
+        name: "Multiply",
+        category: "Math",
+        doc: "Multiplies all incoming operands; missing inputs act as 1.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "operand",
+            ty: PortType::Float,
+            label: "Operand",
+            doc: "Each scalar to include in the product.",
+            min: 2,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Divide,
+        name: "Divide",
+        category: "Math",
+        doc: "Divides LHS by RHS; division by zero yields NaN.",
+        inputs: vec![
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Float,
+                label: "LHS",
+                doc: "Dividend value.",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Float,
+                label: "RHS",
+                doc: "Divisor value; zero produces NaN.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Modulo,
+        name: "Modulo",
+        category: "Math",
+        doc: "Computes the remainder of LHS ÷ RHS; divisor 0 yields NaN.",
+        inputs: vec![
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Float,
+                label: "LHS",
+                doc: "Dividend value.",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Float,
+                label: "RHS",
+                doc: "Divisor value; zero produces NaN.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Power,
+        name: "Power",
+        category: "Math",
+        doc: "Raises Base to the given Exponent using f32 powf semantics.",
+        inputs: vec![
+            PortSpec {
+                id: "base",
+                ty: PortType::Float,
+                label: "Base",
+                doc: "Base value.",
+                optional: false,
+            },
+            PortSpec {
+                id: "exp",
+                ty: PortType::Float,
+                label: "Exponent",
+                doc: "Exponent value.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Log,
+        name: "Log",
+        category: "Math",
+        doc: "Computes logarithm of Value in the provided Base; invalid bases yield NaN.",
+        inputs: vec![
+            PortSpec {
+                id: "value",
+                ty: PortType::Float,
+                label: "Value",
+                doc: "Argument whose logarithm is evaluated.",
+                optional: false,
+            },
+            PortSpec {
+                id: "base",
+                ty: PortType::Float,
+                label: "Base",
+                doc: "Logarithm base; non-positive or 1.0 results produce NaN.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Abs,
+        name: "Abs",
+        category: "Math",
+        doc: "Outputs the absolute value of In component-wise.",
+        inputs: vec![p_in()],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Sqrt,
+        name: "Sqrt",
+        category: "Math",
+        doc: "Outputs the square root of In; negative inputs yield NaN components.",
+        inputs: vec![p_in()],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Sign,
+        name: "Sign",
+        category: "Math",
+        doc: "Outputs -1 for negative inputs, 0 for zero, and +1 for positive values.",
+        inputs: vec![p_in()],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Min,
+        name: "Min",
+        category: "Math",
+        doc: "Returns the smallest scalar among all operands; missing inputs yield NaN.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "operand",
+            ty: PortType::Float,
+            label: "Operand",
+            doc: "Scalar operand to consider.",
+            min: 2,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Max,
+        name: "Max",
+        category: "Math",
+        doc: "Returns the largest scalar among all operands; missing inputs yield NaN.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "operand",
+            ty: PortType::Float,
+            label: "Operand",
+            doc: "Scalar operand to consider.",
+            min: 2,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Round,
+        name: "Round",
+        category: "Math",
+        doc: "Rounds In according to the selected Mode (floor, ceil, or trunc).",
+        inputs: vec![p_in()],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![ParamSpec {
+            id: "round_mode",
+            ty: ParamType::Any,
+            label: "Mode",
+            doc: "Rounding mode: \"floor\", \"ceil\", or \"trunc\".",
+            default_json: Some(serde_json::json!({ "str": "floor" })),
+            min: None,
+            max: None,
+        }],
+    });
+
+    for (nt, name, doc) in [
+        (
+            Sin,
+            "Sin",
+            "Computes the sine of the input angle (radians).",
+        ),
+        (
+            Cos,
+            "Cos",
+            "Computes the cosine of the input angle (radians).",
+        ),
+        (
+            Tan,
+            "Tan",
+            "Computes the tangent of the input angle (radians); results blow up near π/2 + kπ.",
+        ),
+    ] {
+        nodes.push(NodeSignature {
+            type_id: nt,
+            name,
+            category: "Math",
+            doc,
+            inputs: vec![p_in()],
+            variadic_inputs: None,
+            outputs: vec![p_out_float()],
+            variadic_outputs: None,
+            params: vec![],
+        });
+    }
+
+    // Time & generators
+    nodes.push(NodeSignature {
+        type_id: Time,
+        name: "Time",
+        category: "Time",
+        doc: "Outputs the graph runtime's elapsed seconds.",
+        inputs: vec![],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Oscillator,
+        name: "Oscillator",
+        category: "Time",
+        doc: "Generates a sine wave using the provided frequency and phase inputs.",
+        inputs: vec![
+            PortSpec {
+                id: "frequency",
+                ty: PortType::Float,
+                label: "Frequency",
+                doc: "Oscillation rate in Hz; accepts scalars or vectors.",
+                optional: false,
+            },
+            PortSpec {
+                id: "phase",
+                ty: PortType::Float,
+                label: "Phase",
+                doc: "Phase offset in radians; broadcast across vector frequency inputs.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // Transitions & smoothing
+    nodes.push(NodeSignature {
+        type_id: Spring,
+        name: "Spring",
+        category: "Transitions",
+        doc: "Moves toward the Target as a damped spring of the given stiffness, damping and mass, solved exactly for any dt; a zero or non-finite dt holds its value and velocity, and so does a non-finite Target.",
+        inputs: vec![PortSpec {
+            id: "in",
+            ty: PortType::Vector,
+            label: "Target",
+            doc: "Target value to spring toward (scalar or vector).",
+            optional: false,
+        }],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Vector,
+            label: "Value",
+            doc: "Spring-integrated value.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![
+            ParamSpec {
+                id: "stiffness",
+                ty: ParamType::Float,
+                label: "Stiffness",
+                doc: "Hooke's spring constant controlling acceleration toward the target.",
+                default_json: Some(serde_json::json!({ "f32": 120.0 })),
+                min: Some(0.0),
+                max: None,
+            },
+            ParamSpec {
+                id: "damping",
+                ty: ParamType::Float,
+                label: "Damping",
+                doc: "Velocity damping applied each step.",
+                default_json: Some(serde_json::json!({ "f32": 20.0 })),
+                min: Some(0.0),
+                max: None,
+            },
+            ParamSpec {
+                id: "mass",
+                ty: ParamType::Float,
+                label: "Mass",
+                doc: "Effective mass of the spring system.",
+                default_json: Some(serde_json::json!({ "f32": 1.0 })),
+                min: Some(0.0),
+                max: None,
+            },
+        ],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Damp,
+        name: "Damp",
+        category: "Transitions",
+        doc: "Exponentially decays toward the Target using a configurable half-life; a zero half-life passes the Target through, and a zero or non-finite dt holds the value.",
+        inputs: vec![PortSpec {
+            id: "in",
+            ty: PortType::Vector,
+            label: "Target",
+            doc: "Target value to smooth toward.",
+            optional: false,
+        }],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Vector,
+            label: "Value",
+            doc: "Exponentially smoothed output.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![ParamSpec {
+            id: "half_life",
+            ty: ParamType::Float,
+            label: "Half-Life",
+            doc: "Seconds for the remaining error to halve.",
+            default_json: Some(serde_json::json!({ "f32": 0.2 })),
+            min: Some(0.0),
+            max: None,
+        }],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Slew,
+        name: "Slew",
+        category: "Transitions",
+        doc: "Limits the rate of change toward Target using max_rate units per second; a zero max_rate passes the Target through, and a zero or non-finite dt holds the value.",
+        inputs: vec![PortSpec {
+            id: "in",
+            ty: PortType::Vector,
+            label: "Target",
+            doc: "Target value to chase.",
+            optional: false,
+        }],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Vector,
+            label: "Value",
+            doc: "Rate-limited output value.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![ParamSpec {
+            id: "max_rate",
+            ty: ParamType::Float,
+            label: "Max Rate",
+            doc: "Maximum units per second the value may change.",
+            default_json: Some(serde_json::json!({ "f32": 1.0 })),
+            min: Some(0.0),
+            max: None,
+        }],
+    });
+
+    // Logic (Bool semantics)
+    nodes.push(NodeSignature {
+        type_id: And,
+        name: "And",
+        category: "Logic",
+        doc: "Outputs true when both inputs are true; missing inputs default to false.",
+        inputs: vec![
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Bool,
+                label: "LHS",
+                doc: "Left-hand boolean operand.",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Bool,
+                label: "RHS",
+                doc: "Right-hand boolean operand.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_bool()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+    nodes.push(NodeSignature {
+        type_id: Or,
+        name: "Or",
+        category: "Logic",
+        doc: "Outputs true when either input is true; missing inputs default to false.",
+        inputs: vec![
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Bool,
+                label: "LHS",
+                doc: "Left-hand boolean operand.",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Bool,
+                label: "RHS",
+                doc: "Right-hand boolean operand.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_bool()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+    nodes.push(NodeSignature {
+        type_id: Xor,
+        name: "Xor",
+        category: "Logic",
+        doc: "Outputs true when exactly one input is true; missing inputs default to false.",
+        inputs: vec![
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Bool,
+                label: "LHS",
+                doc: "Left-hand boolean operand.",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Bool,
+                label: "RHS",
+                doc: "Right-hand boolean operand.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_bool()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+    nodes.push(NodeSignature {
+        type_id: Not,
+        name: "Not",
+        category: "Logic",
+        doc: "Outputs the logical negation of the input; missing input defaults to false.",
+        inputs: vec![p_bool_in()],
+        variadic_inputs: None,
+        outputs: vec![p_out_bool()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // Conditional (float comparisons)
+    nodes.push(NodeSignature {
+        type_id: GreaterThan,
+        name: "Greater Than",
+        category: "Logic",
+        doc: "Outputs true when LHS is strictly greater than RHS.",
+        inputs: vec![
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Float,
+                label: "LHS",
+                doc: "Left-hand scalar operand.",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Float,
+                label: "RHS",
+                doc: "Right-hand scalar operand.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_bool()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+    nodes.push(NodeSignature {
+        type_id: LessThan,
+        name: "Less Than",
+        category: "Logic",
+        doc: "Outputs true when LHS is strictly less than RHS.",
+        inputs: vec![
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Float,
+                label: "LHS",
+                doc: "Left-hand scalar operand.",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Float,
+                label: "RHS",
+                doc: "Right-hand scalar operand.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_bool()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+    nodes.push(NodeSignature {
+        type_id: Equal,
+        name: "Equal",
+        category: "Logic",
+        doc: "Outputs true when LHS and RHS differ by less than 1e-6.",
+        inputs: vec![
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Float,
+                label: "LHS",
+                doc: "Left-hand scalar operand.",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Float,
+                label: "RHS",
+                doc: "Right-hand scalar operand.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_bool()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+    nodes.push(NodeSignature {
+        type_id: NotEqual,
+        name: "Not Equal",
+        category: "Logic",
+        doc: "Outputs true when LHS and RHS differ by more than 1e-6.",
+        inputs: vec![
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Float,
+                label: "LHS",
+                doc: "Left-hand scalar operand.",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Float,
+                label: "RHS",
+                doc: "Right-hand scalar operand.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_bool()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // If (union in core; schema uses Vector as generic placeholder)
+    nodes.push(NodeSignature {
+        type_id: If,
+        name: "If",
+        category: "Logic",
+        doc: "Routes Then when Condition is true, otherwise Else; missing branches default to 0.",
+        inputs: vec![
+            PortSpec {
+                id: "cond",
+                ty: PortType::Bool,
+                label: "Condition",
+                doc: "Boolean condition to evaluate.",
+                optional: false,
+            },
+            PortSpec {
+                id: "then",
+                ty: PortType::Vector,
+                label: "Then",
+                doc: "Value emitted when Condition is true.",
+                optional: true,
+            },
+            PortSpec {
+                id: "else",
+                ty: PortType::Vector,
+                label: "Else",
+                doc: "Value emitted when Condition is false.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_vector()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // Ranges
+    nodes.push(NodeSignature {
+        type_id: Clamp,
+        name: "Clamp",
+        category: "Math",
+        doc: "Constrains In between Min and Max; expects Min ≤ Max.",
+        inputs: vec![
+            PortSpec {
+                id: "in",
+                ty: PortType::Float,
+                label: "In",
+                doc: "Value to clamp.",
+                optional: false,
+            },
+            PortSpec {
+                id: "min",
+                ty: PortType::Float,
+                label: "Min",
+                doc: "Lower bound.",
+                optional: false,
+            },
+            PortSpec {
+                id: "max",
+                ty: PortType::Float,
+                label: "Max",
+                doc: "Upper bound.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Remap,
+        name: "Remap",
+        category: "Math",
+        doc: "Normalizes In from the [In Min, In Max] range into [Out Min, Out Max]; input is clamped to the source range and divide-by-zero yields NaN.",
+        inputs: vec![
+            PortSpec {
+                id: "in",
+                ty: PortType::Float,
+                label: "In",
+                doc: "Value to remap.",
+                optional: false,
+            },
+            PortSpec {
+                id: "in_min",
+                ty: PortType::Float,
+                label: "In Min",
+                doc: "Lower bound of the input range.",
+                optional: false,
+            },
+            PortSpec {
+                id: "in_max",
+                ty: PortType::Float,
+                label: "In Max",
+                doc: "Upper bound of the input range.",
+                optional: false,
+            },
+            PortSpec {
+                id: "out_min",
+                ty: PortType::Float,
+                label: "Out Min",
+                doc: "Lower bound of the output range.",
+                optional: false,
+            },
+            PortSpec {
+                id: "out_max",
+                ty: PortType::Float,
+                label: "Out Max",
+                doc: "Upper bound of the output range.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: CenteredRemap,
+        name: "Centered Remap",
+        category: "Math",
+        doc: "Linearly remaps In around an anchor without clamping: values ≤ Anchor use the [In Low, Anchor] span while values ≥ Anchor use [Anchor, In High]; spans may collapse to anchor to pin one side.",
+        inputs: vec![
+            PortSpec {
+                id: "in",
+                ty: PortType::Float,
+                label: "In",
+                doc: "Value to remap.",
+                optional: false,
+            },
+            PortSpec {
+                id: "in_low",
+                ty: PortType::Float,
+                label: "In Low",
+                doc: "Reference point for values below the anchor.",
+                optional: false,
+            },
+            PortSpec {
+                id: "in_anchor",
+                ty: PortType::Float,
+                label: "In Anchor",
+                doc: "Anchor point separating the low/high spans.",
+                optional: false,
+            },
+            PortSpec {
+                id: "in_high",
+                ty: PortType::Float,
+                label: "In High",
+                doc: "Reference point for values above the anchor.",
+                optional: false,
+            },
+            PortSpec {
+                id: "out_low",
+                ty: PortType::Float,
+                label: "Out Low",
+                doc: "Output mapped to In Low.",
+                optional: false,
+            },
+            PortSpec {
+                id: "out_anchor",
+                ty: PortType::Float,
+                label: "Out Anchor",
+                doc: "Output corresponding to the anchor.",
+                optional: false,
+            },
+            PortSpec {
+                id: "out_high",
+                ty: PortType::Float,
+                label: "Out High",
+                doc: "Output mapped to In High.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: PiecewiseRemap,
+        name: "Piecewise Remap",
+        category: "Math",
+        doc: "Remaps In across ordered breakpoint pairs; supports n segments, optional clamping, and extrapolation when Clamp is disabled.",
+        inputs: vec![
+            PortSpec {
+                id: "in",
+                ty: PortType::Float,
+                label: "In",
+                doc: "Value to remap.",
+                optional: false,
+            },
+            PortSpec {
+                id: "input_breakpoints",
+                ty: PortType::Vector,
+                label: "Input Breakpoints",
+                doc: "Ordered numeric domain breakpoints (length ≥ 2).",
+                optional: false,
+            },
+            PortSpec {
+                id: "output_breakpoints",
+                ty: PortType::Vector,
+                label: "Output Breakpoints",
+                doc: "Output values paired element-wise with Input Breakpoints.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![ParamSpec {
+            id: "clamp",
+            ty: ParamType::Bool,
+            label: "Clamp",
+            doc: "Clamp to the first/last segment when enabled; otherwise extrapolate beyond the breakpoint range.",
+            default_json: Some(serde_json::json!({ "bool": false })),
+            min: None,
+            max: None,
+        }],
+    });
+
+    // 3D-specific utility kept
+    nodes.push(NodeSignature {
+        type_id: Vec3Cross,
+        name: "Vec3 Cross",
+        category: "Vectors",
+        doc: "Computes the cross product A × B; mismatched shapes yield NaN components.",
+        inputs: vec![
+            PortSpec {
+                id: "a",
+                ty: PortType::Vec3,
+                label: "A",
+                doc: "First 3D vector operand.",
+                optional: false,
+            },
+            PortSpec {
+                id: "b",
+                ty: PortType::Vec3,
+                label: "B",
+                doc: "Second 3D vector operand.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_vec3()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // Generic vector utilities
+    nodes.push(NodeSignature {
+        type_id: VectorConstant,
+        name: "Vector Constant",
+        category: "Vectors",
+        doc: "Outputs the configured vector value each frame.",
+        inputs: vec![],
+        variadic_inputs: None,
+        outputs: vec![p_out_vector()],
+        variadic_outputs: None,
+        params: vec![ParamSpec {
+            id: "value",
+            ty: ParamType::Any,
+            label: "Value",
+            doc: "Vector or numeric value to emit.",
+            default_json: Some(serde_json::json!({ "f32s": [] })),
+            min: None,
+            max: None,
+        }],
+    });
+
+    for (nt, name, doc) in [
+        (
+            VectorAdd,
+            "Vector Add",
+            "Element-wise sum of A and B; mismatched shapes produce NaN.",
+        ),
+        (
+            VectorSubtract,
+            "Vector Subtract",
+            "Element-wise subtraction A - B; mismatched shapes produce NaN.",
+        ),
+        (
+            VectorMultiply,
+            "Vector Multiply",
+            "Element-wise product of A and B; mismatched shapes produce NaN.",
+        ),
+    ] {
+        nodes.push(NodeSignature {
+            type_id: nt,
+            name,
+            category: "Vectors",
+            doc,
+            inputs: vec![
+                PortSpec {
+                    id: "a",
+                    ty: PortType::Vector,
+                    label: "A",
+                    doc: "First vector operand.",
+                    optional: false,
+                },
+                PortSpec {
+                    id: "b",
+                    ty: PortType::Vector,
+                    label: "B",
+                    doc: "Second vector operand.",
+                    optional: false,
+                },
+            ],
+            variadic_inputs: None,
+            outputs: vec![p_out_vector()],
+            variadic_outputs: None,
+            params: vec![],
+        });
+    }
+
+    nodes.push(NodeSignature {
+        type_id: VectorScale,
+        name: "Vector Scale",
+        category: "Vectors",
+        doc: "Multiplies Vector by Scalar; scalar broadcasts across components.",
+        inputs: vec![
+            PortSpec {
+                id: "scalar",
+                ty: PortType::Float,
+                label: "Scalar",
+                doc: "Scalar multiplier.",
+                optional: false,
+            },
+            PortSpec {
+                id: "v",
+                ty: PortType::Vector,
+                label: "Vector",
+                doc: "Vector to scale.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_vector()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: VectorNormalize,
+        name: "Vector Normalize",
+        category: "Vectors",
+        doc: "Normalizes the input vector to unit length; zero-length inputs yield NaN components.",
+        inputs: vec![p_vector_in()],
+        variadic_inputs: None,
+        outputs: vec![p_out_vector()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: VectorDot,
+        name: "Vector Dot",
+        category: "Vectors",
+        doc: "Computes the dot product of A and B; mismatched shapes yield NaN.",
+        inputs: vec![
+            PortSpec {
+                id: "a",
+                ty: PortType::Vector,
+                label: "A",
+                doc: "First vector operand.",
+                optional: false,
+            },
+            PortSpec {
+                id: "b",
+                ty: PortType::Vector,
+                label: "B",
+                doc: "Second vector operand.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: VectorLength,
+        name: "Vector Length",
+        category: "Vectors",
+        doc: "Computes the Euclidean length of the input vector; non-numeric inputs yield NaN.",
+        inputs: vec![p_vector_in()],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: VectorIndex,
+        name: "Vector Index",
+        category: "Vectors",
+        doc: "Extracts the element at floor(Index); out-of-range indices yield NaN.",
+        inputs: vec![
+            PortSpec {
+                id: "v",
+                ty: PortType::Vector,
+                label: "Vector",
+                doc: "Vector to sample from.",
+                optional: false,
+            },
+            PortSpec {
+                id: "index",
+                ty: PortType::Float,
+                label: "Index",
+                doc: "0-based index; non-integer values are floored; out-of-range produces NaN.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // Join (variadic inputs -> single vector)
+    nodes.push(NodeSignature {
+        type_id: Join,
+        name: "Join",
+        category: "Vectors",
+        doc: "Concatenates all Operand inputs into a single numeric vector, skipping non-numeric entries.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "operand",
+            ty: PortType::Vector,
+            label: "Operand",
+            doc: "Each vector or scalar slice to append in order.",
+            min: 1,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![p_out_vector()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // Split (vector in, sizes param, variadic vector outputs)
+    nodes.push(NodeSignature {
+        type_id: Split,
+        name: "Split",
+        category: "Vectors",
+        doc: "Splits In into Parts sized by the Sizes param; mismatched totals return NaN-filled segments.",
+        inputs: vec![p_vector_in()],
+        variadic_inputs: None,
+        outputs: vec![],
+        variadic_outputs: Some(VariadicSpec {
+            id: "parts",
+            ty: PortType::Vector,
+            label: "Part",
+            doc: "Returned segment corresponding to each requested size.",
+            min: 1,
+            max: None,
+            keyed: false,
+        }),
+        params: vec![
+            ParamSpec {
+                id: "sizes",
+                ty: ParamType::Vector,
+                label: "Sizes",
+                doc: "Vector of sizes (floored to integers). Sum must equal input length; otherwise each part is NaNs of requested size.",
+                default_json: Some(serde_json::json!({ "f32s": [] })),
+                min: None,
+                max: None,
+            }
+        ],
+    });
+
+    // ToVector (variadic Float inputs -> single Vector output)
+    nodes.push(NodeSignature {
+        type_id: ToVector,
+        name: "To Vector",
+        category: "Vectors",
+        doc: "Assembles variadic Float inputs into a single Vector output in port order.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "operand",
+            ty: PortType::Float,
+            label: "Element",
+            doc: "Each scalar element to pack into the vector.",
+            min: 1,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![p_out_vector()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // FromVector (single Vector input -> variadic Float outputs)
+    nodes.push(NodeSignature {
+        type_id: FromVector,
+        name: "From Vector",
+        category: "Vectors",
+        doc: "Unpacks a Vector into variadic Float outputs; excess ports beyond vector length emit NaN.",
+        inputs: vec![p_vector_in()],
+        variadic_inputs: None,
+        outputs: vec![],
+        variadic_outputs: Some(VariadicSpec {
+            id: "elements",
+            ty: PortType::Float,
+            label: "Element",
+            doc: "Individual scalar element extracted from the input vector.",
+            min: 1,
+            max: None,
+            keyed: false,
+        }),
+        params: vec![],
+    });
+
+    // Reducers: vector -> float
+    for (nt, name, doc) in [
+        (
+            VectorMin,
+            "Vector Min",
+            "Returns the minimum element of In; empty vectors yield NaN.",
+        ),
+        (
+            VectorMax,
+            "Vector Max",
+            "Returns the maximum element of In; empty vectors yield NaN.",
+        ),
+        (
+            VectorMean,
+            "Vector Mean",
+            "Returns the arithmetic mean of In; empty vectors yield NaN.",
+        ),
+        (
+            VectorMedian,
+            "Vector Median",
+            "Returns the median of In (average of middle pair for even counts); empty vectors yield NaN.",
+        ),
+        (
+            VectorMode,
+            "Vector Mode",
+            "Returns the most frequent non-NaN value in In; ties choose the smallest value; empty vectors yield NaN.",
+        ),
+    ] {
+        nodes.push(NodeSignature {
+            type_id: nt,
+            name,
+            category: "Vectors",
+            doc,
+            inputs: vec![p_vector_in()],
+            variadic_inputs: None,
+            outputs: vec![p_out_float()],
+            variadic_outputs: None,
+            params: vec![],
+        });
+    }
+
+    // Noise generators
+    for (nt, name, doc) in [
+        (
+            SimpleNoise,
+            "Simple Noise",
+            "Hash-based 2D value noise returning [-1, 1]; deterministic for identical inputs and seed.",
+        ),
+        (
+            PerlinNoise,
+            "Perlin Noise",
+            "Classic 2D Perlin gradient noise returning [-1, 1]; deterministic for identical inputs and seed.",
+        ),
+        (
+            SimplexNoise,
+            "Simplex Noise",
+            "2D simplex noise returning [-1, 1]; deterministic for identical inputs and seed.",
+        ),
+    ] {
+        nodes.push(NodeSignature {
+            type_id: nt,
+            name,
+            category: "Noise",
+            doc,
+            inputs: vec![
+                PortSpec {
+                    id: "x",
+                    ty: PortType::Float,
+                    label: "X",
+                    doc: "X coordinate for noise sampling.",
+                    optional: false,
+                },
+                PortSpec {
+                    id: "y",
+                    ty: PortType::Float,
+                    label: "Y",
+                    doc: "Y coordinate for noise sampling.",
+                    optional: false,
+                },
+            ],
+            variadic_inputs: None,
+            outputs: vec![p_out_float()],
+            variadic_outputs: None,
+            params: vec![
+                ParamSpec {
+                    id: "noise_seed",
+                    ty: ParamType::Float,
+                    label: "Seed",
+                    doc: "Integer seed for deterministic noise generation.",
+                    default_json: Some(serde_json::json!({ "f32": 0.0 })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "frequency",
+                    ty: ParamType::Float,
+                    label: "Frequency",
+                    doc: "Spatial frequency multiplier applied to coordinates.",
+                    default_json: Some(serde_json::json!({ "f32": 1.0 })),
+                    min: Some(0.0),
+                    max: None,
+                },
+                ParamSpec {
+                    id: "octaves",
+                    ty: ParamType::Float,
+                    label: "Octaves",
+                    doc: "Number of noise layers to sum for fBm (fractal Brownian motion).",
+                    default_json: Some(serde_json::json!({ "f32": 1.0 })),
+                    min: Some(1.0),
+                    max: Some(16.0),
+                },
+                ParamSpec {
+                    id: "lacunarity",
+                    ty: ParamType::Float,
+                    label: "Lacunarity",
+                    doc: "Frequency multiplier between successive octaves.",
+                    default_json: Some(serde_json::json!({ "f32": 2.0 })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "persistence",
+                    ty: ParamType::Float,
+                    label: "Persistence",
+                    doc: "Amplitude multiplier between successive octaves.",
+                    default_json: Some(serde_json::json!({ "f32": 0.5 })),
+                    min: None,
+                    max: None,
+                },
+            ],
+        });
+    }
+
+    // Blend helpers
+    nodes.push(NodeSignature {
+        type_id: WeightedSumVector,
+        name: "Weighted Sum Vector",
+        category: "Blend",
+        doc: "Pre-computes aggregate blend statistics from Values, optionally applying Weights and Masks; mismatched lengths return NaNs.",
+        inputs: vec![
+            PortSpec {
+                id: "values",
+                ty: PortType::Vector,
+                label: "Values",
+                doc: "Per-input channel values used when computing blend sums.",
+                optional: false,
+            },
+            PortSpec {
+                id: "weights",
+                ty: PortType::Vector,
+                label: "Weights",
+                doc: "Per-input weights (single scalar broadcasts to all values).",
+                optional: true,
+            },
+            PortSpec {
+                id: "masks",
+                ty: PortType::Vector,
+                label: "Masks",
+                doc: "Optional 0/1 mask enabling contributions; single scalar broadcasts to all values.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![
+            PortSpec {
+                id: "total_weighted_sum",
+                ty: PortType::Float,
+                label: "Total Weighted Sum",
+                doc: "Σ(value_i × weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "total_weight",
+                ty: PortType::Float,
+                label: "Total Weight",
+                doc: "Σ(weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "max_effective_weight",
+                ty: PortType::Float,
+                label: "Max Effective Weight",
+                doc: "max(weight_i × mask_i); 0.0 when no inputs provided.",
+                optional: false,
+            },
+            PortSpec {
+                id: "input_count",
+                ty: PortType::Float,
+                label: "Input Count",
+                doc: "Number of values considered (as Float).",
+                optional: false,
+            },
+        ],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: DefaultBlend,
+        name: "Default Blend",
+        category: "Blend",
+        doc: "Produces a weighted sum of operand inputs plus Baseline and Offset; handles weight broadcasting and falls back to neutral/null when counts mismatch.",
+        inputs: vec![
+            PortSpec {
+                id: "baseline",
+                ty: PortType::Any,
+                label: "Baseline",
+                doc: "Base value scaled by the remaining weight (clamped at zero).",
+                optional: true,
+            },
+            PortSpec {
+                id: "offset",
+                ty: PortType::Any,
+                label: "Offset",
+                doc: "Optional offset added after blending.",
+                optional: true,
+            },
+            PortSpec {
+                id: "weights",
+                ty: PortType::Vector,
+                label: "Weights",
+                doc: "Optional per-target weights; single value broadcasts to all targets.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: Some(VariadicSpec {
+            id: "operand",
+            ty: PortType::Any,
+            label: "Operand",
+            doc: "Operand values to blend before adding baseline and offset.",
+            min: 0,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Blended value.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: BlendWeightedAverage,
+        name: "Blend - Weighted Average",
+        category: "Blend",
+        doc: "Normalises Total Weighted Sum by Total Weight / Max Effective Weight; falls back when the divisor is invalid.",
+        inputs: vec![
+            PortSpec {
+                id: "total_weighted_sum",
+                ty: PortType::Float,
+                label: "Total Weighted Sum",
+                doc: "Σ(value_i × weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "total_weight",
+                ty: PortType::Float,
+                label: "Total Weight",
+                doc: "Σ(weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "max_effective_weight",
+                ty: PortType::Float,
+                label: "Max Effective Weight",
+                doc: "max(weight_i × mask_i); used to normalise the divisor.",
+                optional: false,
+            },
+            PortSpec {
+                id: "fallback",
+                ty: PortType::Float,
+                label: "Fallback",
+                doc: "Used when total_weight is zero or the average cannot be computed.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: BlendAdditive,
+        name: "Blend - Additive",
+        category: "Blend",
+        doc: "Outputs Total Weighted Sum when any inputs contribute; otherwise emits Fallback or NaN.",
+        inputs: vec![
+            PortSpec {
+                id: "total_weighted_sum",
+                ty: PortType::Float,
+                label: "Total Weighted Sum",
+                doc: "Σ(value_i × weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "total_weight",
+                ty: PortType::Float,
+                label: "Total Weight",
+                doc: "Σ(weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "fallback",
+                ty: PortType::Float,
+                label: "Fallback",
+                doc: "Fallback value when no inputs contribute.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: BlendMultiply,
+        name: "Blend - Multiply",
+        category: "Blend",
+        doc: "Multiplies contributions using (1 - weight) + value × weight × mask for each entry; mismatched lengths yield NaN, empty input returns 1.",
+        inputs: vec![
+            PortSpec {
+                id: "values",
+                ty: PortType::Vector,
+                label: "Values",
+                doc: "Per-input channel values.",
+                optional: false,
+            },
+            PortSpec {
+                id: "weights",
+                ty: PortType::Vector,
+                label: "Weights",
+                doc: "Per-input weights (single scalar broadcasts to all values).",
+                optional: true,
+            },
+            PortSpec {
+                id: "masks",
+                ty: PortType::Vector,
+                label: "Masks",
+                doc: "Optional 0/1 mask enabling contributions; single scalar broadcasts to all values.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Float,
+            label: "Out",
+            doc: "Product over inputs of (1 - weight_i) + value_i × weight_i × mask_i.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: BlendWeightedOverlay,
+        name: "Blend - Weighted Overlay",
+        category: "Blend",
+        doc: "Interpolates between Base and Total Weighted Sum using Max Effective Weight as the blend factor; invalid weights yield NaN.",
+        inputs: vec![
+            PortSpec {
+                id: "total_weighted_sum",
+                ty: PortType::Float,
+                label: "Total Weighted Sum",
+                doc: "Σ(value_i × weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "max_effective_weight",
+                ty: PortType::Float,
+                label: "Max Effective Weight",
+                doc: "max(weight_i × mask_i) used as interpolation factor.",
+                optional: false,
+            },
+            PortSpec {
+                id: "base",
+                ty: PortType::Float,
+                label: "Base",
+                doc: "Optional base value to blend from.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: BlendWeightedAverageOverlay,
+        name: "Blend - Weighted Average Overlay",
+        category: "Blend",
+        doc: "Computes an averaged offset and adds it to Base; falls back to Base when averaging fails.",
+        inputs: vec![
+            PortSpec {
+                id: "total_weighted_sum",
+                ty: PortType::Float,
+                label: "Total Weighted Sum",
+                doc: "Σ(delta_i × weight_i × mask_i) where delta is (value - base).",
+                optional: false,
+            },
+            PortSpec {
+                id: "total_weight",
+                ty: PortType::Float,
+                label: "Total Weight",
+                doc: "Σ(weight_i × mask_i) for the deltas.",
+                optional: false,
+            },
+            PortSpec {
+                id: "max_effective_weight",
+                ty: PortType::Float,
+                label: "Max Effective Weight",
+                doc: "max(weight_i × mask_i) used to normalise the divisor.",
+                optional: false,
+            },
+            PortSpec {
+                id: "base",
+                ty: PortType::Float,
+                label: "Base",
+                doc: "Optional base value the averaged delta is applied to.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: BlendMax,
+        name: "Blend - Max",
+        category: "Blend",
+        doc: "Selects the value whose weight × mask is largest; scales it by that effective weight or falls back to Base when none contribute.",
+        inputs: vec![
+            PortSpec {
+                id: "values",
+                ty: PortType::Vector,
+                label: "Values",
+                doc: "Per-input channel values.",
+                optional: false,
+            },
+            PortSpec {
+                id: "weights",
+                ty: PortType::Vector,
+                label: "Weights",
+                doc: "Per-input weights (single scalar broadcasts to all values).",
+                optional: true,
+            },
+            PortSpec {
+                id: "masks",
+                ty: PortType::Vector,
+                label: "Masks",
+                doc: "Optional 0/1 mask enabling contributions; single scalar broadcasts to all values.",
+                optional: true,
+            },
+            PortSpec {
+                id: "base",
+                ty: PortType::Float,
+                label: "Base",
+                doc: "Fallback value returned when no effective weight is positive.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // Case routing (select by string labels)
+    nodes.push(NodeSignature {
+        type_id: Case, // reuse If's union output typing; runtime uses NodeType::If/Case mapping. Keep name as 'Case' in types.
+        name: "Case",
+        category: "Logic",
+        doc: "Selects the case value whose label matches Selector; returns Default or NaN when no match is found.",
+        inputs: vec![
+            PortSpec {
+                id: "selector",
+                ty: PortType::Any,
+                label: "Selector",
+                doc: "Value compared against the configured case_labels (exact match).",
+                optional: false,
+            },
+            PortSpec {
+                id: "default",
+                ty: PortType::Any,
+                label: "Default",
+                doc: "Value returned when no case label matches the selector.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: Some(VariadicSpec {
+            id: "operand",
+            ty: PortType::Any,
+            label: "Case Value",
+            doc: "Values routed when their corresponding case_labels entry equals the selector.",
+            min: 0,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Clone of the matched case value or the default when no match is found.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![ParamSpec {
+            id: "case_labels",
+            ty: ParamType::Any,
+            label: "Case Labels",
+            doc: "Array of string labels; entry i maps to variadic input operand_i.",
+            default_json: Some(serde_json::json!({ "strs": [] })),
+            min: None,
+            max: None,
+        }],
+    });
+
+    // Robotics
+    nodes.push(NodeSignature {
+        type_id: InverseKinematics,
+        name: "Inverse Kinematics",
+        category: "Robotics",
+        doc: "Analytic planar 3-bone IK solver; returns joint angles or NaNs when the target is unreachable.",
+        inputs: vec![
+            PortSpec {
+                id: "bone1",
+                ty: PortType::Float,
+                label: "Bone1",
+                doc: "Length of the first bone segment.",
+                optional: false,
+            },
+            PortSpec {
+                id: "bone2",
+                ty: PortType::Float,
+                label: "Bone2",
+                doc: "Length of the second bone segment.",
+                optional: false,
+            },
+            PortSpec {
+                id: "bone3",
+                ty: PortType::Float,
+                label: "Bone3",
+                doc: "Length of the end-effector segment.",
+                optional: false,
+            },
+            PortSpec {
+                id: "theta",
+                ty: PortType::Float,
+                label: "Theta",
+                doc: "Desired end-effector orientation in radians.",
+                optional: false,
+            },
+            PortSpec {
+                id: "x",
+                ty: PortType::Float,
+                label: "Target X",
+                doc: "Target X coordinate.",
+                optional: false,
+            },
+            PortSpec {
+                id: "y",
+                ty: PortType::Float,
+                label: "Target Y",
+                doc: "Target Y coordinate.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_vec3()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    #[cfg(feature = "urdf_ik")]
+    {
+        nodes.push(NodeSignature {
+            type_id: UrdfIkPosition,
+            name: "URDF IK (Position)",
+            category: "Robotics",
+            doc: "Solves for joint angles that reach Target Position using the configured URDF chain; errors when URDF data is missing or the target is unreachable.",
+            inputs: vec![
+                PortSpec {
+                    id: "target_pos",
+                    ty: PortType::Vec3,
+                    label: "Target Position",
+                    doc: "World-space XYZ target (meters).",
+                    optional: false,
+                },
+                PortSpec {
+                    id: "seed",
+                    ty: PortType::Vector,
+                    label: "Seed",
+                    doc: "Optional joint seed vector.",
+                    optional: true,
+                },
+            ],
+            variadic_inputs: None,
+            outputs: vec![PortSpec {
+                id: "out",
+                ty: PortType::Any,
+                label: "Joint Angles",
+                doc: "Record mapping joint_name → angle radians.",
+                optional: false,
+            }],
+            variadic_outputs: None,
+            params: vec![
+                ParamSpec {
+                    id: "urdf_xml",
+                    ty: ParamType::Any,
+                    label: "URDF XML",
+                    doc: "Robot URDF definition (string).",
+                    default_json: Some(serde_json::json!({ "str": "" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "root_link",
+                    ty: ParamType::Any,
+                    label: "Root Link",
+                    doc: "Chain root link name.",
+                    default_json: Some(serde_json::json!({ "str": "base_link" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "tip_link",
+                    ty: ParamType::Any,
+                    label: "Tip Link",
+                    doc: "Chain tip link name.",
+                    default_json: Some(serde_json::json!({ "str": "tool0" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "weights",
+                    ty: ParamType::Vector,
+                    label: "Joint Weights",
+                    doc: "Optional per-joint weights.",
+                    default_json: Some(serde_json::json!({ "f32s": [] })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "max_iters",
+                    ty: ParamType::Float,
+                    label: "Max Iterations",
+                    doc: "Solver iteration cap.",
+                    default_json: Some(serde_json::json!({ "f32": 100.0 })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "tol_pos",
+                    ty: ParamType::Float,
+                    label: "Position Tolerance",
+                    doc: "Solver position tolerance (m).",
+                    default_json: Some(serde_json::json!({ "f32": 0.001 })),
+                    min: None,
+                    max: None,
+                },
+            ],
+        });
+
+        nodes.push(NodeSignature {
+            type_id: UrdfIkPose,
+            name: "URDF IK (Pose)",
+            category: "Robotics",
+            doc: "Solves for joint angles matching both Target Position and Target Rotation; errors when the pose is unreachable or input shapes are invalid.",
+            inputs: vec![
+                PortSpec {
+                    id: "target_pos",
+                    ty: PortType::Vec3,
+                    label: "Target Position",
+                    doc: "World-space XYZ target (meters).",
+                    optional: false,
+                },
+                PortSpec {
+                    id: "target_rot",
+                    ty: PortType::Vector,
+                    label: "Target Rotation",
+                    doc: "Target quaternion (x, y, z, w).",
+                    optional: false,
+                },
+                PortSpec {
+                    id: "seed",
+                    ty: PortType::Vector,
+                    label: "Seed",
+                    doc: "Optional joint seed vector.",
+                    optional: true,
+                },
+            ],
+            variadic_inputs: None,
+            outputs: vec![PortSpec {
+                id: "out",
+                ty: PortType::Any,
+                label: "Joint Angles",
+                doc: "Record mapping joint_name → angle radians.",
+                optional: false,
+            }],
+            variadic_outputs: None,
+            params: vec![
+                ParamSpec {
+                    id: "urdf_xml",
+                    ty: ParamType::Any,
+                    label: "URDF XML",
+                    doc: "Robot URDF definition (string).",
+                    default_json: Some(serde_json::json!({ "str": "" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "root_link",
+                    ty: ParamType::Any,
+                    label: "Root Link",
+                    doc: "Chain root link name.",
+                    default_json: Some(serde_json::json!({ "str": "base_link" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "tip_link",
+                    ty: ParamType::Any,
+                    label: "Tip Link",
+                    doc: "Chain tip link name.",
+                    default_json: Some(serde_json::json!({ "str": "tool0" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "weights",
+                    ty: ParamType::Vector,
+                    label: "Joint Weights",
+                    doc: "Optional per-joint weights.",
+                    default_json: Some(serde_json::json!({ "f32s": [] })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "max_iters",
+                    ty: ParamType::Float,
+                    label: "Max Iterations",
+                    doc: "Solver iteration cap.",
+                    default_json: Some(serde_json::json!({ "f32": 100.0 })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "tol_pos",
+                    ty: ParamType::Float,
+                    label: "Position Tolerance",
+                    doc: "Solver position tolerance (m).",
+                    default_json: Some(serde_json::json!({ "f32": 0.001 })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "tol_rot",
+                    ty: ParamType::Float,
+                    label: "Rotation Tolerance",
+                    doc: "Solver rotation tolerance (rad).",
+                    default_json: Some(serde_json::json!({ "f32": 0.001 })),
+                    min: None,
+                    max: None,
+                },
+            ],
+        });
+
+        nodes.push(NodeSignature {
+            type_id: UrdfFk,
+            name: "URDF FK",
+            category: "Robotics",
+            doc: "Applies forward kinematics for the configured URDF chain using provided joint values or defaults.",
+            inputs: vec![PortSpec {
+                id: "joints",
+                ty: PortType::Any,
+                label: "Joint Values",
+                doc: "Record or array of joint angles (radians).",
+                optional: false,
+            }],
+            variadic_inputs: None,
+            outputs: vec![
+                PortSpec {
+                    id: "position",
+                    ty: PortType::Vec3,
+                    label: "Position",
+                    doc: "Tip position in root frame (meters).",
+                    optional: false,
+                },
+                PortSpec {
+                    id: "rotation",
+                    ty: PortType::Quat,
+                    label: "Rotation",
+                    doc: "Tip orientation as quaternion (x, y, z, w).",
+                    optional: false,
+                },
+                PortSpec {
+                    id: "transform",
+                    ty: PortType::Transform,
+                    label: "Transform",
+                    doc: "Full pose convenience output (pos + rot + unit scale).",
+                    optional: true,
+                },
+            ],
+            variadic_outputs: None,
+            params: vec![
+                ParamSpec {
+                    id: "urdf_xml",
+                    ty: ParamType::Any,
+                    label: "URDF XML",
+                    doc: "Robot URDF definition (string).",
+                    default_json: Some(serde_json::json!({ "str": "" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "root_link",
+                    ty: ParamType::Any,
+                    label: "Root Link",
+                    doc: "Chain root link name.",
+                    default_json: Some(serde_json::json!({ "str": "base_link" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "tip_link",
+                    ty: ParamType::Any,
+                    label: "Tip Link",
+                    doc: "Chain tip link name.",
+                    default_json: Some(serde_json::json!({ "str": "tool0" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "joint_defaults",
+                    ty: ParamType::Any,
+                    label: "Joint Defaults",
+                    doc: "Fallback joint list [[name, angle], ...] when input misses entries.",
+                    default_json: Some(serde_json::json!({ "values": [] })),
+                    min: None,
+                    max: None,
+                },
+            ],
+        });
+    }
+
+    // IO nodes
+    nodes.push(NodeSignature {
+        type_id: Input,
+        name: "Input",
+        category: "IO",
+        doc: "Reads a staged value from the host path or emits the configured Default; enforces declared output shape when provided.",
+        inputs: vec![],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Staged input value forwarded into the graph.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![
+            ParamSpec {
+                id: "path",
+                ty: ParamType::Any,
+                label: "Path",
+                doc: "TypedPath string used to stage host inputs (e.g. robot1/Joint.angle).",
+                default_json: None,
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "value",
+                ty: ParamType::Any,
+                label: "Default",
+                doc: "Optional fallback emitted when no staged input is present.",
+                default_json: None,
+                min: None,
+                max: None,
+            },
+        ],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Output,
+        name: "Output",
+        category: "IO",
+        doc: "Publishes In to the host path while passing the value through for downstream nodes. \
+              Without a path, In is a keyed record batch and each record writes to the path its \
+              key_field names (value from value_field) — records that name their own keys apply \
+              to them by default.",
+        inputs: vec![PortSpec {
+            id: "in",
+            ty: PortType::Any,
+            label: "In",
+            doc: "Value to publish via TypedPath write.",
+            optional: false,
+        }],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Passthrough copy of the input value for chaining.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![
+            ParamSpec {
+                id: "path",
+                ty: ParamType::Any,
+                label: "Path",
+                doc: "TypedPath string used when queuing external writes.",
+                default_json: None,
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "key_field",
+                ty: ParamType::Any,
+                label: "Key Field",
+                doc: "Path-less mode: record field id (UUID) holding each entry's target path.",
+                default_json: None,
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "value_field",
+                ty: ParamType::Any,
+                label: "Value Field",
+                doc: "Path-less mode: record field id (UUID) holding each entry's value.",
+                default_json: None,
+                min: None,
+                max: None,
+            },
+        ],
+    });
+
+    // Records
+    nodes.push(NodeSignature {
+        type_id: BuildRecord,
+        name: "Build Record",
+        category: "Records",
+        doc: "Assembles a Record from variadic Any-typed inputs. \
+              Each slot has a user-defined string key stored in params.record_keys.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "field",
+            ty: PortType::Any,
+            label: "Field",
+            doc: "A value to insert into the record under its corresponding key.",
+            min: 1,
+            max: None,
+            keyed: true,
+        }),
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Record",
+            doc: "The assembled Record value.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: ReadRecord,
+        name: "Read Record",
+        category: "Records",
+        doc: "Extracts individual fields from a Record by key. \
+              Each output slot corresponds to one key stored in params.record_keys.",
+        inputs: vec![PortSpec {
+            id: "in",
+            ty: PortType::Any,
+            label: "Record",
+            doc: "The Record to read from.",
+            optional: false,
+        }],
+        variadic_inputs: None,
+        outputs: vec![],
+        variadic_outputs: Some(VariadicSpec {
+            id: "field",
+            ty: PortType::Any,
+            label: "Field",
+            doc: "The value extracted from the record under its corresponding key.",
+            min: 1,
+            max: None,
+            keyed: true,
+        }),
+        params: vec![],
+    });
+
+    // SwitchRecord
+    nodes.push(NodeSignature {
+        type_id: SwitchRecord,
+        name: "Switch Record",
+        category: "Records",
+        doc: "Selects one of the variadic Record inputs by index (floored from the Switch scalar).",
+        inputs: vec![PortSpec {
+            id: "switch",
+            ty: PortType::Float,
+            label: "Switch",
+            doc: "Index of the record to pass through (floored to integer, clamped to range).",
+            optional: false,
+        }],
+        variadic_inputs: Some(VariadicSpec {
+            id: "record",
+            ty: PortType::Any,
+            label: "Record",
+            doc: "A Record input to select from.",
+            min: 2,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "The selected Record value.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // MergeRecord
+    nodes.push(NodeSignature {
+        type_id: MergeRecord,
+        name: "Merge Record",
+        category: "Records",
+        doc: "Merges variadic Record inputs into one; later inputs overwrite earlier fields.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "record",
+            ty: PortType::Any,
+            label: "Record",
+            doc: "A Record to merge into the output.",
+            min: 2,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "The merged Record value.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // SplitRecord
+    nodes.push(NodeSignature {
+        type_id: SplitRecord,
+        name: "Split Record",
+        category: "Records",
+        doc: "Splits a Record into two: fields whose keys are listed in the Keys param, and the rest.",
+        inputs: vec![PortSpec {
+            id: "in",
+            ty: PortType::Any,
+            label: "Record",
+            doc: "The Record to split.",
+            optional: false,
+        }],
+        variadic_inputs: None,
+        outputs: vec![
+            PortSpec {
+                id: "included",
+                ty: PortType::Any,
+                label: "Included",
+                doc: "Record containing only the keys listed in the Keys param.",
+                optional: false,
+            },
+            PortSpec {
+                id: "excluded",
+                ty: PortType::Any,
+                label: "Excluded",
+                doc: "Record containing the remaining keys not listed in the Keys param.",
+                optional: false,
+            },
+        ],
+        variadic_outputs: None,
+        params: vec![ParamSpec {
+            id: "keys",
+            ty: ParamType::Text,
+            label: "Keys",
+            doc: "Comma-separated list of field keys to route to the Included output.",
+            default_json: None,
+            min: None,
+            max: None,
+        }],
+    });
+
+    // MathMultRecord
+    nodes.push(NodeSignature {
+        type_id: MathMultRecord,
+        name: "Math Mult Record",
+        category: "Records",
+        doc: "Multiplies each numeric field in the Record by a scalar value.",
+        inputs: vec![
+            PortSpec {
+                id: "in",
+                ty: PortType::Any,
+                label: "Record",
+                doc: "The Record whose numeric fields to scale.",
+                optional: false,
+            },
+            PortSpec {
+                id: "value",
+                ty: PortType::Float,
+                label: "Value",
+                doc: "Scalar multiplier applied to each numeric field.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Record with scaled numeric fields.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // MathAddRecord
+    nodes.push(NodeSignature {
+        type_id: MathAddRecord,
+        name: "Math Add Record",
+        category: "Records",
+        doc: "Adds a scalar value to each numeric field in the Record.",
+        inputs: vec![
+            PortSpec {
+                id: "in",
+                ty: PortType::Any,
+                label: "Record",
+                doc: "The Record whose numeric fields to offset.",
+                optional: false,
+            },
+            PortSpec {
+                id: "value",
+                ty: PortType::Float,
+                label: "Value",
+                doc: "Scalar addend applied to each numeric field.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Record with offset numeric fields.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // MathDivRecord
+    nodes.push(NodeSignature {
+        type_id: MathDivRecord,
+        name: "Math Div Record",
+        category: "Records",
+        doc: "Divides each numeric field in the Record by a scalar value; division by zero yields NaN.",
+        inputs: vec![
+            PortSpec {
+                id: "in",
+                ty: PortType::Any,
+                label: "Record",
+                doc: "The Record whose numeric fields to divide.",
+                optional: false,
+            },
+            PortSpec {
+                id: "value",
+                ty: PortType::Float,
+                label: "Value",
+                doc: "Scalar divisor applied to each numeric field.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Record with divided numeric fields.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // MathSubRecord
+    nodes.push(NodeSignature {
+        type_id: MathSubRecord,
+        name: "Math Sub Record",
+        category: "Records",
+        doc: "Subtracts a scalar value from each numeric field in the Record.",
+        inputs: vec![
+            PortSpec {
+                id: "in",
+                ty: PortType::Any,
+                label: "Record",
+                doc: "The Record whose numeric fields to subtract from.",
+                optional: false,
+            },
+            PortSpec {
+                id: "value",
+                ty: PortType::Float,
+                label: "Value",
+                doc: "Scalar subtrahend applied to each numeric field.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Record with subtracted numeric fields.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // External function invocation (variadic args -> single result via host function interface)
+    nodes.push(NodeSignature {
+        type_id: ExternalFunction,
+        name: "External Function",
+        category: "Functions",
+        doc: "Invokes an external function (by opaque id) through the host-provided function \
+              interface, passing the variadic Args inputs zipped with the configured param_ids.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "args",
+            ty: PortType::Any,
+            label: "Arg",
+            doc: "Positional argument value bound to the matching entry in param_ids.",
+            min: 0,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Value returned by the invoked external function.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // Task-run hosting (self-contained module call emitting a latched Status)
+    nodes.push(NodeSignature {
+        type_id: TaskRun,
+        name: "Task Run",
+        category: "Functions",
+        doc: "Hosts one task run: invokes its module function (module and function are params) \
+              each evaluation and emits the run's behavior Status, latched once terminal. The \
+              call's args are the `value` param's fields, then those of the `args` input (so a \
+              live goal update on the run's update key flows in each tick), which win for a \
+              parameter both name. The call's \
+              mutable (out) parameters are the keyed `mutated` outputs, one per key in \
+              params.record_keys (a parameter id). Grafted per spawned run by the interpreter.",
+        inputs: vec![PortSpec {
+            id: "args",
+            ty: PortType::Any,
+            label: "Args",
+            doc: "The call's argument bundle (a structure of the call args). Its fields win \
+                  over the `value` param's — how a live goal update reaches a running task.",
+            optional: true,
+        }],
+        variadic_inputs: None,
+        outputs: vec![
+            PortSpec {
+                id: "out",
+                ty: PortType::Any,
+                label: "Out",
+                doc: "The run's behavior Status value; a terminal status is latched.",
+                optional: false,
+            },
+            PortSpec {
+                id: "done",
+                ty: PortType::Bool,
+                label: "Done",
+                doc: "Whether the run has ended (its status is terminal, and latched) — the \
+                      graph-side handle on terminality, without comparing Status values.",
+                optional: true,
+            },
+        ],
+        variadic_outputs: Some(VariadicSpec {
+            id: "mutated",
+            ty: PortType::Any,
+            label: "Mutated",
+            doc: "One of the call's mutable (out) parameters after the invocation: the one whose \
+                  id is the slot's key in params.record_keys. Latched with the status.",
+            min: 0,
+            max: None,
+            keyed: true,
+        }),
+        params: vec![],
+    });
+
+    // Run spawning (starts a task run when its arguments change)
+    nodes.push(NodeSignature {
+        type_id: Spawn,
+        name: "Spawn",
+        category: "Functions",
+        doc: "Spawns a task run of its function (module and function are params) each time its \
+              arguments or its `when` input change; the first evaluation only records them. \
+              The call's args are the `value` param's fields, then the keyed `args` inputs, \
+              one per key in params.record_keys (a parameter id), which win for a parameter \
+              both name. The host starts the run after the evaluation and owns it: the graph \
+              keeps no handle.",
+        inputs: vec![PortSpec {
+            id: "when",
+            ty: PortType::Any,
+            label: "When",
+            doc: "Optional. A new value starts a run even when the arguments are unchanged — \
+                  an event's time, so a repeated command is a new run. It is not passed to \
+                  the call.",
+            optional: true,
+        }],
+        variadic_inputs: Some(VariadicSpec {
+            id: "args",
+            ty: PortType::Any,
+            label: "Arg",
+            doc: "The call arg for the parameter whose id is the slot's key in \
+                  params.record_keys.",
+            min: 0,
+            max: None,
+            keyed: true,
+        }),
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Bool,
+            label: "Spawned",
+            doc: "Whether this evaluation requested a run.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    Registry {
+        version: "1.0.0",
+        nodes,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::kind::Kind;
+    use crate::ports::{ports, Variadic};
+
+    /// The registry describes the ports each node kind's function declares,
+    /// in the same order, and covers every kind it can evaluate.
+    #[test]
+    fn the_registry_describes_the_ports_the_functions_declare() {
+        let ids = |specs: &[PortSpec]| specs.iter().map(|port| port.id).collect::<Vec<_>>();
+        let variadic = |spec: &Option<VariadicSpec>| {
+            spec.as_ref().map(|group| Variadic {
+                id: group.id,
+                keyed: group.keyed,
+            })
+        };
+        let nodes = registry().nodes;
+        for signature in &nodes {
+            let kind = &signature.type_id;
+            let Some(declared) = kind.kind().map(|kind| ports(&kind)) else {
+                // An `input` or `output` node: the importer's ports.
+                let inputs = match kind {
+                    NodeType::Output => vec!["in"],
+                    _ => vec![],
+                };
+                assert_eq!(ids(&signature.inputs), inputs, "{kind:?}'s inputs");
+                assert_eq!(ids(&signature.outputs), ["out"], "{kind:?}'s outputs");
+                continue;
+            };
+            assert_eq!(ids(&signature.inputs), declared.inputs, "{kind:?}'s inputs");
+            assert_eq!(
+                ids(&signature.outputs),
+                declared.outputs,
+                "{kind:?}'s outputs"
+            );
+            assert_eq!(
+                variadic(&signature.variadic_inputs),
+                declared.variadic_inputs,
+                "{kind:?}'s variadic inputs"
+            );
+            assert_eq!(
+                variadic(&signature.variadic_outputs),
+                declared.variadic_outputs,
+                "{kind:?}'s variadic outputs"
+            );
+        }
+        let urdf =
+            |kind: &Kind| matches!(kind, Kind::UrdfIkPosition | Kind::UrdfIkPose | Kind::UrdfFk);
+        for kind in crate::functions::KINDS {
+            if urdf(kind) && !cfg!(feature = "urdf_ik") {
+                // The registry describes them with the feature alone.
+                continue;
+            }
+            assert!(
+                nodes
+                    .iter()
+                    .any(|signature| signature.type_id.kind().as_ref() == Some(kind)),
+                "the registry describes {kind:?}"
+            );
+        }
+    }
+}

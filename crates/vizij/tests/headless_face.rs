@@ -158,9 +158,9 @@ fn a_face_whose_ids_are_plain_strings_renders_its_pose() {
 /// `[x, y, yaw, color]`, its pose driven through them, rendered.
 fn renders_its_per_axis_pose(element: &str, [x, y, yaw, color]: [String; 4]) {
     use arora_hal::Hal;
-    use arora_shape::value::{float, vec3};
     use arora_types::data::{Key, StateChange};
     use vizij::view::{Shading, Surface, ViewEvent};
+    use vizij_api_core::value::{float, vec3};
 
     let glb = plate_face_glb(
         element,
@@ -762,9 +762,9 @@ fn a_face_draws_on_its_target_only_once_ready() {
 #[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job"]
 fn a_caption_shows_over_the_face() {
     use arora_hal::Hal;
-    use arora_shape::Value;
     use arora_types::data::{Key, StateChange};
     use vizij::view::ViewEvent;
+    use vizij_api_core::Value;
     use vizij_arora_host::standard::{CAPTION_SPEAKER, CAPTION_TEXT};
 
     const W: u32 = 640;

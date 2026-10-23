@@ -20,8 +20,8 @@ log = "0.4"
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = "1"
-arora-shape = "1"
-arora-dataflow-nodes = "1"
+vizij-api-core = { version = "3", path = "../../api/vizij-api-core" }
+vizij-graph-core = { version = "4", path = "../../node-graph/vizij-graph-core" }
 # The skill fragments (the gaze contract grafts the shipped look_at asset).
 vizij-arora-host = { version = "7", path = "../vizij-arora-host" }
 

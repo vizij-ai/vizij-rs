@@ -6,8 +6,8 @@
 //! ([`native`]), a JS-paced step in the browser — is each entry point's.
 
 use anyhow::{anyhow, Result};
-use arora_shape::value::{float, Value};
 use arora_types::data::{DataStore, Key, StateChange};
+use vizij_api_core::value::{float, Value};
 use vizij_arora_behavior::{gaze, speech, viseme};
 use vizij_arora_behavior::{parse_spec, KeyHolds, ProcessingGraph};
 use vizij_arora_hal::RigHal;
@@ -330,10 +330,10 @@ fn walk_free_inputs(spec: &str, profiled: &ProfileKeys) -> Vec<FreeInput> {
         }
         let (ty, default) = match node.get("params").and_then(|p| p.get("value")).cloned() {
             None | Some(serde_json::Value::Null) => (Type::F32, None),
-            Some(json) => match arora_shape::json::parse_value(json) {
+            Some(json) => match vizij_api_core::json::parse_value(json) {
                 Ok(value @ Value::String(_)) => (Type::String, Some(value)),
                 Ok(value @ Value::Boolean(_)) => (Type::Boolean, Some(value)),
-                Ok(value) if arora_shape::value::as_float(&value).is_some() => {
+                Ok(value) if vizij_api_core::value::as_float(&value).is_some() => {
                     (value.kind(), Some(value))
                 }
                 _ => continue,
@@ -1430,7 +1430,7 @@ mod tests {
         );
     }
 
-    use arora_shape::value::{as_float, text, vec3, Value};
+    use vizij_api_core::value::{as_float, text, vec3, Value};
     use vizij_arora_host::ros4hri::{self, ros4hri_source};
     use vizij_arora_host::standard;
 
@@ -2625,9 +2625,9 @@ mod animation_tests {
 
     use arora_animation_module::animation::ids;
     use arora_animation_module::PlayerState;
-    use arora_shape::value::as_float;
     use arora_types::call::Call;
     use arora_types::value::{StructureField, Value as AValue};
+    use vizij_api_core::value::as_float;
 
     use super::*;
 

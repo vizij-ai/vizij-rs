@@ -19,7 +19,7 @@
 ## Stack Roadmaps
 
 ### API Stack
-- Explore generating JSON/TypeScript schemas directly from `arora-shape`.
+- Explore generating JSON/TypeScript schemas directly from `vizij-api-core`.
 - Provide derive macros or builders to reduce setter boilerplate.
 - Investigate `no_std` support for constrained targets.
 
@@ -49,5 +49,5 @@
 ## Backlog & Ideas
 
 - Ship optional Web Worker helpers for heavy wasm workloads (graph evaluation).
-- Offer CLI utilities for schema diffing (`arora-dataflow-nodes`) and orchestration smoke tests.
+- Offer CLI utilities for schema diffing (`vizij-graph-core`) and orchestration smoke tests.
 - Publish fixture metadata (durations, node counts) to help demos surface summary information quickly.

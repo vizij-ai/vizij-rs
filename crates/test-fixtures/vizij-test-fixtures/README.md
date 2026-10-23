@@ -47,4 +47,4 @@ When adding fixtures:
 ## Related Packages
 
 - [`@vizij/test-fixtures`](../../../npm/@vizij/test-fixtures/README.md)
-- [`arora-dataflow-nodes`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-dataflow-nodes/README.md)
+- [`vizij-graph-core`](../../node-graph/vizij-graph-core/README.md)

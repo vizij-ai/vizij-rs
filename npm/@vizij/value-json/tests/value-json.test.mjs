@@ -151,7 +151,7 @@ test("isNormalizedValue type guard", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Arora serde forms — the JSON the Rust side emits (pinned by arora-shape's
+// Arora serde forms — the JSON the Rust side emits (pinned by vizij-api-core's
 // `json_wire_form_matches_the_js_decoder` test).
 // ---------------------------------------------------------------------------
 

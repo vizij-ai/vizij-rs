@@ -13,7 +13,7 @@ arora-types = "3"
 async-trait = "0.1"
 futures-channel = "0.3"
 futures-core = "0.3"
-arora-shape = "1"
+vizij-api-core = { version = "3", path = "../../api/vizij-api-core" }
 
 [dev-dependencies]
 futures = "0.3"

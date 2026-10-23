@@ -253,7 +253,7 @@ fn speak(arora: &mut arora::Arora, rig_prefix: &str) {
         .store()
         .write(arora_types::data::StateChange::set(
             format!("{rig_prefix}standard/vizij/conversation/speaking"),
-            arora_shape::value::float(1.0),
+            vizij_api_core::value::float(1.0),
         ))
         .expect("speaking");
 }

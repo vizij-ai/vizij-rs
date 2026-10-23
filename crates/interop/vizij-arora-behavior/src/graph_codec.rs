@@ -41,7 +41,7 @@
 //! # Declared-shape metadata
 //!
 //! [`output_shapes`](NodeSpec::output_shapes) and an input default's
-//! [`shape`](arora_dataflow_nodes::types::InputDefault::shape) are declared *type*
+//! [`shape`](vizij_graph_core::types::InputDefault::shape) are declared *type*
 //! metadata, not values, so they have no per-value slot. They ride one reserved
 //! `Literal(JSON)` slot per node (`meta_slot`), present only when a node
 //! actually declares a shape (no real authored graph does — the runtime derives
@@ -73,15 +73,15 @@ use std::collections::{HashMap, HashSet};
 
 use arora_behavior::graph::{GraphDiff, Io, Link, LinkSource, Node, Port};
 use arora_behavior::Graph;
-use arora_dataflow_nodes::types::{
-    EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, InputDefault, NodeParams, NodeSpec,
-    NodeType, Selector, SelectorSegment,
-};
-use arora_shape::Shape;
 use arora_types::data::Key;
 use arora_types::value::Value;
 use arora_types::{gen_uuid_from_str, value_serde};
 use uuid::Uuid;
+use vizij_api_core::Shape;
+use vizij_graph_core::types::{
+    EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, InputDefault, NodeParams, NodeSpec,
+    NodeType, Selector, SelectorSegment,
+};
 
 fn kind_function(kind: &NodeType) -> Result<(Uuid, String), String> {
     let name = kind_name(kind)?;

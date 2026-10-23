@@ -3,7 +3,7 @@
 //!
 //! Each tick it reads its subscribed input paths from the shared store,
 //! evaluates the graph for `dt`, and writes the graph's outputs back. Vizij
-//! and Arora share one runtime value type ([`arora_shape::Value`] is
+//! and Arora share one runtime value type ([`vizij_api_core::Value`] is
 //! `arora_types::value::Value`), so values cross the store boundary directly.
 //! The tick always reports [`BehaviorStatus::Running`] — a node graph runs
 //! every frame, unlike a tree that runs to a terminal status. `dt` comes from
@@ -43,17 +43,17 @@ use arora_behavior::{
     built_in, interpreter_module, BehaviorContext, BehaviorError, BehaviorInterpreter,
     BehaviorStatus, FunctionIndex, Graph, RunPolicy, TaskHandle, TaskId,
 };
-pub use arora_dataflow_nodes::task;
-use arora_dataflow_nodes::tree_runtime::{Evaluation, TreeRuntime};
-use arora_dataflow_nodes::types::{
-    EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
-};
-use arora_shape::{TypedPath, WriteOp};
 use arora_types::call::{Call, CallBridge};
 use arora_types::data::{DataStore, Key, StateChange};
 use arora_types::record::module::frozen;
 use arora_types::value::{Structure, StructureField, Type, Value};
 use uuid::Uuid;
+use vizij_api_core::{TypedPath, WriteOp};
+pub use vizij_graph_core::task;
+use vizij_graph_core::tree_runtime::{Evaluation, TreeRuntime};
+use vizij_graph_core::types::{
+    EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
+};
 
 /// The handle-side index of one live run: the function it implements and
 /// the status key it reports on. The run itself is graph structure — its
@@ -271,7 +271,7 @@ impl KeyHolds {
 pub fn parse_spec(json: &str) -> Result<GraphSpec, String> {
     let mut spec: serde_json::Value =
         serde_json::from_str(json).map_err(|e| format!("graph spec is not JSON: {e}"))?;
-    arora_shape::json::normalize_graph_spec_value(&mut spec)
+    vizij_api_core::json::normalize_graph_spec_value(&mut spec)
         .map_err(|e| format!("normalize graph spec failed: {e}"))?;
     serde_json::from_value(spec).map_err(|e| format!("invalid graph spec: {e}"))
 }
@@ -288,7 +288,7 @@ pub fn parse_spec_diff(json: &str) -> Result<graph_codec::GraphSpecDiff, String>
             "nodes": object.get("upsert_nodes").cloned().unwrap_or_else(empty),
             "edges": object.get("upsert_edges").cloned().unwrap_or_else(empty),
         });
-        arora_shape::json::normalize_graph_spec_value(&mut spec)
+        vizij_api_core::json::normalize_graph_spec_value(&mut spec)
             .map_err(|e| format!("normalize graph edit failed: {e}"))?;
         object.insert("upsert_nodes".to_string(), spec["nodes"].take());
         object.insert("upsert_edges".to_string(), spec["edges"].take());
@@ -836,7 +836,7 @@ impl ProcessingGraph {
     /// description `functions` gives of its function, as the device's index does at each
     /// tick: a call to a function that returns nothing is left out, one to a function that
     /// takes no parameter is called at every tick, and any other is called when its
-    /// arguments change ([`arora_dataflow_nodes::functions::placement`]). The graph is imported
+    /// arguments change ([`vizij_graph_core::functions::placement`]). The graph is imported
     /// again when the index changes size, as when a module loads.
     pub fn tick_store_with(
         &mut self,
@@ -1532,11 +1532,11 @@ pub(crate) fn built_in_dt_seconds(store: &dyn DataStore) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arora_shape::value::{float, vec3};
     use arora_simple_data_store::SimpleDataStore;
     use arora_types::call::{Call, CallError, CallResult, Callable, CallableId};
     use serde_json::json;
     use std::rc::Rc;
+    use vizij_api_core::value::{float, vec3};
 
     /// A bridge the passthrough graphs never invoke (they contain no ExternalFunction nodes).
     #[derive(Default)]
@@ -1567,7 +1567,7 @@ mod tests {
                 { "from": { "node_id": "in" }, "to": { "node_id": "out", "input": "in" } }
             ]
         });
-        arora_shape::json::normalize_graph_spec_value(&mut spec).expect("normalize");
+        vizij_api_core::json::normalize_graph_spec_value(&mut spec).expect("normalize");
         serde_json::from_value(spec).expect("graph spec")
     }
 
@@ -1718,7 +1718,7 @@ mod tests {
                   "selector": [{ "field": "values" }, { "field": "x" }] }
             ]
         });
-        arora_shape::json::normalize_graph_spec_value(&mut spec).expect("normalize");
+        vizij_api_core::json::normalize_graph_spec_value(&mut spec).expect("normalize");
         let mut graph =
             ProcessingGraph::from_spec(serde_json::from_value(spec).expect("spec")).expect("graph");
         let mut bridge = NoopBridge;
@@ -1766,7 +1766,7 @@ mod tests {
     #[test]
     fn load_keeps_the_graph_runtime_warm() {
         let mut initial = clock_graph_json("clock/a");
-        arora_shape::json::normalize_graph_spec_value(&mut initial).expect("normalize");
+        vizij_api_core::json::normalize_graph_spec_value(&mut initial).expect("normalize");
         let initial: GraphSpec = serde_json::from_value(initial).expect("graph spec");
 
         let store = SimpleDataStore::new();
@@ -1846,7 +1846,7 @@ mod tests {
                 { "from": { "node_id": "src" }, "to": { "node_id": "sink", "input": "in" } }
             ]
         });
-        arora_shape::json::normalize_graph_spec_value(&mut spec).expect("normalize");
+        vizij_api_core::json::normalize_graph_spec_value(&mut spec).expect("normalize");
         let spec: GraphSpec = serde_json::from_value(spec).expect("graph spec");
 
         let store = SimpleDataStore::new();
@@ -1903,7 +1903,7 @@ mod tests {
                 { "from": { "node_id": "one" }, "to": { "node_id": "path", "input": "in" } },
             ]
         });
-        arora_shape::json::normalize_graph_spec_value(&mut spec).expect("normalize");
+        vizij_api_core::json::normalize_graph_spec_value(&mut spec).expect("normalize");
         let spec: GraphSpec = serde_json::from_value(spec).expect("graph spec");
 
         let store = BlackboardStore::new();
@@ -2128,7 +2128,7 @@ mod tests {
             .iter()
             .map(|n| format!("node {}", n.id))
             .collect();
-        let order = arora_dataflow_nodes::topo_order(&graph.spec.nodes, &graph.spec.edges)
+        let order = vizij_graph_core::topo_order(&graph.spec.nodes, &graph.spec.edges)
             .expect("the lowered spec orders");
         out.push(format!("order {order:?}"));
         let mut edges: Vec<String> = graph

@@ -25,11 +25,11 @@ file summarises, it does not replace, those sources.
   could not run.
 
 ## Workspace Snapshot
-- **API stack**: the value/type/WriteBatch contract is arora-sdk's
-  `arora-shape`; `crates/api` holds its wasm adapter, reused across stacks.
-- **Node graph stack**: arora-sdk's `arora-dataflow-nodes` (the node functions,
-  the importer onto arora-behavior-tree, `TreeRuntime`), `vizij-graph-wasm`,
-  and npm `@vizij/node-graph`.
+- **API stack**: Shared value/type/WriteBatch contracts (`crates/api`), plus
+  wasm adapters reused across other stacks.
+- **Node graph stack**: `vizij-graph-core` (the graph format, the importer onto
+  arora-behavior-tree, `TreeRuntime`, over arora-sdk's `arora-dataflow-nodes`,
+  the node functions), `vizij-graph-wasm`, and npm `@vizij/node-graph`.
 - **Interop (Arora) stack**: `crates/interop/*` adapts the Vizij stacks onto
   Arora runtime seams — `vizij-arora` (Value interop), `vizij-arora-store`,
   `vizij-arora-hal` and `vizij-arora-behavior`; a device's animations play
@@ -54,7 +54,7 @@ file summarises, it does not replace, those sources.
 | Format everything | `cargo fmt --all` |
 | Lint with warnings as errors | `cargo clippy --all-targets --all-features -- -D warnings` |
 | Test full workspace | `cargo test --workspace` |
-| Test a single crate | `cargo test -p vizij-arora-behavior` (replace crate name) |
+| Test a single crate | `cargo test -p vizij-graph-core` (replace crate name) |
 | Build support crates | `pnpm run build:shared` |
 | Run wasm/npm tests | `pnpm run test` |
 
@@ -88,15 +88,16 @@ Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unkno
 `ROADMAP.md` aggregates documentation TODOs and engineering follow-ups pulled from crate READMEs—consult it when prioritising work or updating docs.
 
 ## Stack Briefs
-- **API**: `TypedPath`, `ValueJSON` and WriteBatch tooling come from
-  arora-sdk's `arora-shape`; read its README before changing serialization or
-  shared types, which downstream stacks depend on.
+- **API**: Hub for `TypedPath`, `ValueJSON`, and WriteBatch tooling. Read
+  `crates/api/vizij-api-core/README.md` before changing serialization or shared
+  types; downstream stacks depend on version alignment here.
 - **Animation**: Arora's animation module (`arora-animation-module`, from
   crates.io) plays a device's animations, host-linked in `crates/vizij`
   (`modules::animation`); `module_animation` converts a face's authored
   animation into its clip format 2.0.
-- **Node graph**: a graph runs on arora-sdk's behavior tree: `arora-dataflow-nodes`
-  imports it as a tree's detached nodes and runs it (`TreeRuntime`).
+- **Node graph**: a graph runs on arora-sdk's behavior tree: `vizij-graph-core`
+  imports it as a tree's detached nodes, calls of `arora-dataflow-nodes`'
+  functions, and runs it (`TreeRuntime`).
   Features like `urdf_ik` are enabled by default and surfaced through the wasm
   build scripts. The wasm crate handles JSON normalisation for JS consumers.
   Until the arora crates are published, the workspace patches them to an

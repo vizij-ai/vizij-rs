@@ -1,0 +1,483 @@
+// ExternalFunction node unit tests: host dispatch, arg zipping, and the no-host error path.
+
+#[allow(unused_imports)]
+use crate::eval::*;
+#[allow(unused_imports)]
+use crate::tree_runtime::{evaluate_all, evaluate_all_with_functions, TreeRuntime};
+use crate::types::{
+    EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
+};
+use hashbrown::HashMap;
+use uuid::Uuid;
+use vizij_api_core::value as vocab;
+use vizij_api_core::Value;
+
+/// Records each `call` it receives and always returns Float(42.0).
+#[derive(Default)]
+struct RecordingFunctions {
+    calls: Vec<(Uuid, Vec<(Uuid, Value)>)>,
+}
+
+impl NodeFunctions for RecordingFunctions {
+    fn call(&mut self, function: Uuid, args: &[(Uuid, Value)]) -> Result<Value, String> {
+        self.calls.push((function, args.to_vec()));
+        Ok(vocab::float(42.0))
+    }
+}
+
+fn constant_node(id: &str, value: Value) -> NodeSpec {
+    NodeSpec {
+        id: id.to_string(),
+        kind: NodeType::Constant,
+        params: NodeParams {
+            value: Some(value),
+            ..Default::default()
+        },
+        output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
+    }
+}
+
+fn link(from: &str, to: &str, input: &str) -> EdgeSpec {
+    EdgeSpec {
+        from: EdgeOutputEndpoint {
+            node_id: from.to_string(),
+            output: "out".to_string(),
+        },
+        to: EdgeInputEndpoint {
+            node_id: to.to_string(),
+            input: input.to_string(),
+        },
+        selector: None,
+    }
+}
+
+fn external_function_graph(function_id: Uuid, param_id: Uuid) -> GraphSpec {
+    GraphSpec {
+        nodes: vec![
+            constant_node("arg0", Value::F32(7.0)),
+            NodeSpec {
+                id: "call".to_string(),
+                kind: NodeType::ExternalFunction,
+                params: NodeParams {
+                    function: Some(function_id),
+                    param_ids: Some(vec![param_id]),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        // The variadic "args" group is addressed as args_0, args_1, ...
+        edges: vec![link("arg0", "call", "args_0")],
+        ..Default::default()
+    }
+    .with_cache()
+}
+
+#[test]
+fn external_function_dispatches_through_host_and_sets_output() {
+    let function_id = Uuid::from_u128(0x2222);
+    let param_id = Uuid::from_u128(0x3333);
+    let graph = external_function_graph(function_id, param_id);
+
+    let mut rt = TreeRuntime::default();
+    let mut functions = RecordingFunctions::default();
+    evaluate_all_with_functions(&mut rt, &graph, &mut functions)
+        .expect("external function should evaluate");
+
+    // Output "out" carries the host's returned value.
+    let out = rt
+        .outputs
+        .get("call")
+        .and_then(|ports| ports.get("out"))
+        .expect("call out present");
+    match &out.value {
+        Value::F32(f) => assert!((*f - 42.0).abs() < 1e-6, "expected 42.0, got {f}"),
+        other => panic!("expected float out, got {other:?}"),
+    }
+
+    // The host received exactly one call with the configured id and zipped arg.
+    assert_eq!(functions.calls.len(), 1, "expected a single invocation");
+    let (got_function, ref args) = functions.calls[0];
+    assert_eq!(got_function, function_id, "function id");
+    assert_eq!(args.len(), 1, "expected one positional arg");
+    assert_eq!(args[0].0, param_id, "arg key should match param_ids");
+    match &args[0].1 {
+        Value::F32(f) => assert!((*f - 7.0).abs() < 1e-6, "expected arg 7.0, got {f}"),
+        other => panic!("expected float arg, got {other:?}"),
+    }
+}
+
+/// A task-run host whose function reports an out parameter: `Running` with
+/// the out parameter at "speaking" on the first call, `Success` with it at
+/// "rest" on the second.
+#[derive(Default)]
+struct OutParameterFunctions {
+    calls: usize,
+}
+
+impl NodeFunctions for OutParameterFunctions {
+    fn call(&mut self, _function: Uuid, _args: &[(Uuid, Value)]) -> Result<Value, String> {
+        Err("task runs dispatch through call_module_with_outputs".to_string())
+    }
+
+    fn call_module_with_outputs(
+        &mut self,
+        _module: Option<Uuid>,
+        _function: Uuid,
+        _args: &[(Uuid, Value)],
+    ) -> Result<(Value, Vec<(Uuid, Value)>), String> {
+        self.calls += 1;
+        let out = Uuid::from_u128(0x4444);
+        Ok(if self.calls == 1 {
+            (crate::task::running(), vec![(out, vocab::text("speaking"))])
+        } else {
+            (crate::task::success(), vec![(out, vocab::text("rest"))])
+        })
+    }
+}
+
+fn task_run_graph() -> GraphSpec {
+    GraphSpec {
+        nodes: vec![NodeSpec {
+            id: "run".to_string(),
+            kind: NodeType::TaskRun,
+            params: NodeParams {
+                function: Some(Uuid::from_u128(0x2222)),
+                // The out-parameter the graph routes: one keyed `mutated` slot.
+                record_keys: Some(vec![Uuid::from_u128(0x4444).to_string()]),
+                ..Default::default()
+            },
+            output_shapes: HashMap::new(),
+            input_defaults: HashMap::new(),
+        }],
+        edges: vec![],
+        ..Default::default()
+    }
+    .with_cache()
+}
+
+/// The out-parameter on its keyed slot — `mutated_0` is the first key.
+fn mutated_field(rt: &TreeRuntime, _id: Uuid) -> Option<Value> {
+    rt.outputs
+        .get("run")
+        .and_then(|ports| ports.get("mutated_0"))
+        .map(|port| port.value.clone())
+}
+
+#[test]
+fn task_run_emits_the_call_s_out_parameters_and_latches_them() {
+    let graph = task_run_graph();
+    let out = Uuid::from_u128(0x4444);
+    let mut rt = TreeRuntime::default();
+    let mut functions = OutParameterFunctions::default();
+
+    // First evaluation: Running, the out parameter as the function set it.
+    evaluate_all_with_functions(&mut rt, &graph, &mut functions).expect("the run evaluates");
+    assert_eq!(mutated_field(&rt, out), Some(vocab::text("speaking")));
+    let status = rt
+        .outputs
+        .get("run")
+        .and_then(|p| p.get("out"))
+        .expect("status");
+    assert_eq!(status.value, crate::task::running());
+    let done = rt
+        .outputs
+        .get("run")
+        .and_then(|p| p.get("done"))
+        .expect("done");
+    assert_eq!(done.value, vocab::bool_(false));
+
+    // Second: terminal — the status and the final out parameter latch, and
+    // the function is not invoked again.
+    evaluate_all_with_functions(&mut rt, &graph, &mut functions).expect("the run evaluates");
+    evaluate_all_with_functions(&mut rt, &graph, &mut functions).expect("the run evaluates");
+    assert_eq!(functions.calls, 2, "a latched run is not re-invoked");
+    assert_eq!(mutated_field(&rt, out), Some(vocab::text("rest")));
+    let status = rt
+        .outputs
+        .get("run")
+        .and_then(|p| p.get("out"))
+        .expect("status");
+    assert_eq!(status.value, crate::task::success());
+    let done = rt
+        .outputs
+        .get("run")
+        .and_then(|p| p.get("done"))
+        .expect("done");
+    assert_eq!(done.value, vocab::bool_(true));
+}
+
+/// A task-run host that records the args of each call and keeps the run
+/// going.
+#[derive(Default)]
+struct ArgsRecordingFunctions {
+    calls: Vec<Vec<(Uuid, Value)>>,
+}
+
+impl NodeFunctions for ArgsRecordingFunctions {
+    fn call(&mut self, _function: Uuid, _args: &[(Uuid, Value)]) -> Result<Value, String> {
+        Err("task runs dispatch through call_module_with_outputs".to_string())
+    }
+
+    fn call_module_with_outputs(
+        &mut self,
+        _module: Option<Uuid>,
+        _function: Uuid,
+        args: &[(Uuid, Value)],
+    ) -> Result<(Value, Vec<(Uuid, Value)>), String> {
+        self.calls.push(args.to_vec());
+        Ok((crate::task::running(), Vec::new()))
+    }
+}
+
+fn bundle(fields: &[(Uuid, Value)]) -> Value {
+    Value::Structure(vizij_api_core::value::Structure {
+        id: Uuid::from_u128(0x2222),
+        fields: fields
+            .iter()
+            .map(|(id, value)| vizij_api_core::value::StructureField {
+                id: *id,
+                value: Box::new(value.clone()),
+            })
+            .collect(),
+    })
+}
+
+#[test]
+fn task_run_calls_with_the_stated_args_under_the_live_bundle() {
+    let (text, voice, viseme) = (
+        Uuid::from_u128(0x5551),
+        Uuid::from_u128(0x5552),
+        Uuid::from_u128(0x5553),
+    );
+    let mut graph = task_run_graph();
+    // Stated once in the graph: an initial viseme, and a voice the live
+    // bundle replaces.
+    graph.nodes[0].params.value = Some(bundle(&[
+        (viseme, vocab::text("")),
+        (voice, vocab::text("stated")),
+    ]));
+    graph.nodes.push(constant_node(
+        "live",
+        bundle(&[(text, vocab::text("hello")), (voice, vocab::text("live"))]),
+    ));
+    graph.edges.push(link("live", "run", "args"));
+    let graph = graph.with_cache();
+
+    let mut rt = TreeRuntime::default();
+    let mut functions = ArgsRecordingFunctions::default();
+    evaluate_all_with_functions(&mut rt, &graph, &mut functions).expect("the run evaluates");
+
+    let mut args = functions.calls.pop().expect("one call");
+    args.sort_by_key(|(id, _)| *id);
+    assert_eq!(
+        args,
+        vec![
+            (text, vocab::text("hello")),
+            (voice, vocab::text("live")),
+            (viseme, vocab::text("")),
+        ]
+    );
+}
+
+/// A graph on the tree always runs over a bridge: an external function no
+/// module is registered for fails the evaluation, naming the function.
+#[test]
+fn external_function_without_host_errors() {
+    let graph = external_function_graph(Uuid::from_u128(0x2222), Uuid::from_u128(0x3333));
+
+    let mut rt = TreeRuntime::default();
+    let err = evaluate_all(&mut rt, &graph)
+        .expect_err("evaluating an ExternalFunction without a host must error");
+    assert!(
+        err.contains(
+            "no module registered for external function 00000000-0000-0000-0000-000000002222"
+        ),
+        "unexpected error message: {err}"
+    );
+}
+
+#[test]
+fn external_function_missing_id_errors() {
+    let graph = GraphSpec {
+        nodes: vec![NodeSpec {
+            id: "call".to_string(),
+            kind: NodeType::ExternalFunction,
+            params: NodeParams::default(),
+            output_shapes: HashMap::new(),
+            input_defaults: HashMap::new(),
+        }],
+        edges: vec![],
+        ..Default::default()
+    }
+    .with_cache();
+
+    let mut rt = TreeRuntime::default();
+    let mut functions = RecordingFunctions::default();
+    let err = evaluate_all_with_functions(&mut rt, &graph, &mut functions)
+        .expect_err("missing function id must error");
+    assert!(
+        err.contains("requires a function id"),
+        "unexpected error message: {err}"
+    );
+}
+
+/// A spawn node whose `shape` arg follows the input at `test/shape`, over a
+/// stated `weight`.
+fn spawn_graph(function: Uuid, shape: Uuid, weight: Uuid) -> GraphSpec {
+    GraphSpec {
+        nodes: vec![
+            NodeSpec {
+                id: "shape".to_string(),
+                kind: NodeType::Input,
+                params: NodeParams {
+                    path: Some(vizij_api_core::TypedPath::parse("test/shape").expect("path")),
+                    value: Some(vocab::text("sil")),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "spawn".to_string(),
+                kind: NodeType::Spawn,
+                params: NodeParams {
+                    function: Some(function),
+                    record_keys: Some(vec![shape.to_string()]),
+                    value: Some(bundle(&[(weight, Value::F32(1.0))])),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![link("shape", "spawn", "args_0")],
+        ..Default::default()
+    }
+    .with_cache()
+}
+
+/// Stage `shape` and evaluate once, returning the runs that evaluation
+/// requested.
+fn spawn_step(rt: &mut TreeRuntime, graph: &GraphSpec, shape: &str) -> Vec<SpawnRequest> {
+    let path = vizij_api_core::TypedPath::parse("test/shape").expect("path");
+    rt.set_input(path, vocab::text(shape), None);
+    evaluate_all(rt, graph).expect("the graph evaluates without a host");
+    rt.spawns.clone()
+}
+
+#[test]
+fn spawn_requests_a_run_each_time_its_args_change() {
+    let (function, shape, weight) = (
+        Uuid::from_u128(0x7771),
+        Uuid::from_u128(0x7772),
+        Uuid::from_u128(0x7773),
+    );
+    let graph = spawn_graph(function, shape, weight);
+    let mut rt = TreeRuntime::default();
+
+    // The first evaluation is the baseline, whatever it reads.
+    assert!(spawn_step(&mut rt, &graph, "aa").is_empty());
+    // Unchanged args spawn nothing, however many evaluations go by.
+    assert!(spawn_step(&mut rt, &graph, "aa").is_empty());
+
+    let spawned = spawn_step(&mut rt, &graph, "oh");
+    assert_eq!(
+        spawned,
+        vec![SpawnRequest {
+            module: None,
+            function,
+            args: vec![(weight, Value::F32(1.0)), (shape, vocab::text("oh"))],
+        }]
+    );
+    assert_eq!(rt.outputs["spawn"]["out"].value, vocab::bool_(true));
+    // The queue holds one evaluation's requests: served, they are gone.
+    assert!(spawn_step(&mut rt, &graph, "oh").is_empty());
+    assert_eq!(rt.outputs["spawn"]["out"].value, vocab::bool_(false));
+    assert_eq!(spawn_step(&mut rt, &graph, "sil").len(), 1);
+}
+
+/// An evaluation of a tree built once requests its own runs alone: once its
+/// args hold again, the run an earlier evaluation requested is gone.
+#[test]
+fn an_evaluation_of_a_kept_tree_requests_only_its_own_runs() {
+    let (function, shape, weight) = (
+        Uuid::from_u128(0x7771),
+        Uuid::from_u128(0x7772),
+        Uuid::from_u128(0x7773),
+    );
+    let graph = spawn_graph(function, shape, weight);
+    let mut rt = TreeRuntime::default();
+    assert!(spawn_step(&mut rt, &graph, "aa").is_empty());
+    assert_eq!(spawn_step(&mut rt, &graph, "oh").len(), 1);
+    assert!(
+        spawn_step(&mut rt, &graph, "oh").is_empty(),
+        "its args held"
+    );
+    assert_eq!(rt.outputs["spawn"]["out"].value, vocab::bool_(false));
+    assert_eq!(rt.loads(), 1, "the tree is built once");
+}
+
+/// A new `when` makes the same args a new run, and `when` is not an arg.
+#[test]
+fn spawn_requests_a_run_each_time_its_when_changes() {
+    let (function, shape, weight) = (
+        Uuid::from_u128(0x7771),
+        Uuid::from_u128(0x7772),
+        Uuid::from_u128(0x7773),
+    );
+    let mut graph = spawn_graph(function, shape, weight);
+    graph.nodes.push(NodeSpec {
+        id: "when".to_string(),
+        kind: NodeType::Input,
+        params: NodeParams {
+            path: Some(vizij_api_core::TypedPath::parse("test/when").expect("path")),
+            value: Some(Value::F32(0.0)),
+            ..Default::default()
+        },
+        output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
+    });
+    graph.edges.push(link("when", "spawn", "when"));
+    let graph = graph.with_cache();
+    let mut rt = TreeRuntime::default();
+    let when = vizij_api_core::TypedPath::parse("test/when").expect("path");
+    let step = |rt: &mut TreeRuntime, at: f32| {
+        rt.set_input(when.clone(), Value::F32(at), None);
+        spawn_step(rt, &graph, "pp")
+    };
+
+    assert!(step(&mut rt, 0.1).is_empty(), "the baseline");
+    assert!(step(&mut rt, 0.1).is_empty(), "nothing changed");
+    assert_eq!(
+        step(&mut rt, 0.2),
+        vec![SpawnRequest {
+            module: None,
+            function,
+            args: vec![(weight, Value::F32(1.0)), (shape, vocab::text("pp"))],
+        }],
+        "the same shape at a new time is a new run"
+    );
+    assert!(step(&mut rt, 0.2).is_empty());
+}
+
+#[test]
+fn spawn_refuses_an_arg_slot_without_a_parameter_id() {
+    let mut graph = spawn_graph(
+        Uuid::from_u128(0x7771),
+        Uuid::from_u128(0x7772),
+        Uuid::from_u128(0x7773),
+    );
+    graph.nodes[1].params.record_keys = Some(vec!["shape".to_string()]);
+    let graph = graph.with_cache();
+    let mut rt = TreeRuntime::default();
+    let path = vizij_api_core::TypedPath::parse("test/shape").expect("path");
+    rt.set_input(path, vocab::text("aa"), None);
+    let err = evaluate_all(&mut rt, &graph).expect_err("a slot keyed by a name is refused");
+    assert!(
+        err.contains("not a parameter id"),
+        "unexpected error: {err}"
+    );
+}

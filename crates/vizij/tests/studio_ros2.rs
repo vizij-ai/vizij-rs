@@ -243,12 +243,12 @@ async fn a_feedback_holds_its_target_s_type_from_the_rest_on() {
 )]
 async fn a_float_published_on_each_form_s_topic_moves_the_face_and_its_feedback() {
     use arora_bridge_ros2::msg_types::{Float64, MessageType};
-    use arora_shape::value::{as_float, as_vector};
     use rand::Rng;
     use ros2_client::{
         Context, ContextOptions, Name, NodeName, NodeOptions, DEFAULT_PUBLISHER_QOS,
         DEFAULT_SUBSCRIPTION_QOS,
     };
+    use vizij_api_core::value::{as_float, as_vector};
 
     let domain: u16 = rand::rng().random_range(1..=200);
     let namespace = format!("studio_ros2_{}", rand::rng().random_range(0..1_000_000u32));

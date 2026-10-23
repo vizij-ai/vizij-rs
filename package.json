@@ -18,7 +18,7 @@
     "hook:pre-commit": "bash scripts/hook-tasks.sh pre-commit",
     "hook:pre-push": "bash scripts/hook-tasks.sh pre-push",
     "build:wasm:graph": "node scripts/build-graph-wasm.mjs",
-    "watch:wasm:graph": "cargo watch -w crates/node-graph/vizij-graph-wasm -s \"node scripts/build-graph-wasm.mjs\"",
+    "watch:wasm:graph": "cargo watch -w crates/node-graph/vizij-graph-core -w crates/node-graph/vizij-graph-wasm -s \"node scripts/build-graph-wasm.mjs\"",
     "link:wasm:graph": "pnpm --filter @vizij/node-graph run build && (cd npm/@vizij/node-graph && pnpm link --global)",
     "clean:wasm:graph": "rm -rf npm/@vizij/node-graph/pkg npm/@vizij/node-graph/dist",
     "build:wasm:runtime": "node scripts/build-runtime-wasm.mjs",
@@ -45,7 +45,7 @@
     "perf:wasm:verify": "VERIFY_ONLY=1 node scripts/run_perf_baselines_wasm.mjs",
     "perf:smoke": "SMOKE=1 VERIFY_ONLY=1 node scripts/run_perf_baselines_wasm.mjs",
     "docs:typedoc": "node scripts/embed-fixtures.mjs node-graph && node npm/@vizij/test-fixtures/scripts/generate-browser-fixtures.mjs && typedoc --options typedoc.json",
-    "docs:rust": "cargo doc --no-deps --all-features --target-dir target/docs-rust -p arora-shape -p vizij-api-wasm -p arora-dataflow-nodes -p vizij-graph-wasm -p vizij-test-fixtures",
+    "docs:rust": "cargo doc --no-deps --all-features --target-dir target/docs-rust -p vizij-api-core -p vizij-api-wasm -p vizij-graph-core -p vizij-graph-wasm -p vizij-test-fixtures",
     "docs:site": "pnpm run docs:typedoc && pnpm run docs:rust && node scripts/build-docs-site.mjs"
   },
   "workspaces": [
