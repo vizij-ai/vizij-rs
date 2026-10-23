@@ -100,7 +100,7 @@ bevy = { version = "0.19", default-features = false, features = [
 # slice builds on every target; the native target table below adds `native`
 # (wasmtime, the local WS bridge, the operator flow) and the desktop feature
 # adds `tui`.
-arora = { version = "13", default-features = false }
+arora = { version = "13.7", default-features = false }
 # The ROS 2 bridge, attached under `--ros2` (feature `ros2`). Heavy (ros2-client
 # + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
 # `studio-bridge` feature instead (`--studio`). It carries the skill plane the
@@ -161,7 +161,7 @@ vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
 # Arora's animation module, linked natively: its declared functions register
 # as a host module (`with_host_module`), one state per device, rather than
 # loading its wasm guest, so no artifact dependency and no nightly.
-arora-animation-module = "1"
+arora-animation-module = "2"
 
 # The speech provider — the say skill's `say` — over the Vizij TTS cloud
 # function: rodio plays it natively, the page's hook in the browser.
@@ -175,7 +175,7 @@ bevy = { version = "0.19", default-features = false, features = ["bevy_log", "mu
 # arora's operator flow — `native` is the run loop, the local WS bridge and
 # the module executors — with the bridges the build adds. 11.0.1 is where its
 # `studio-bridge` feature builds.
-arora = { version = "13", default-features = false, features = ["native"] }
+arora = { version = "13.7", default-features = false, features = ["native"] }
 # The bridge seam the Studio identity is read and registered through; the major
 # this arora's bridges implement.
 arora-bridge = "6"

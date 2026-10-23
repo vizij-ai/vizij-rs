@@ -94,10 +94,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-          # wasm32-wasip1 builds arora-animation-module's guest, which
+          # wasm32-wasip2 builds arora-animation-module's guest, which
           # @vizij/runtime's tests load (an Arora guest, not a wasm-bindgen
           # wrapper).
-          targets: wasm32-wasip1
+          targets: wasm32-wasip2
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}

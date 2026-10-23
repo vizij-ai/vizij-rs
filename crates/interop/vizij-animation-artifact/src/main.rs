@@ -1,13 +1,14 @@
 //! Write arora-animation-module's module directory, as a device loads the
 //! guest from it: `header.json`, `records/` (the module's record and the
 //! records of the types its functions name, in the `arora` scope) and, when
-//! its path is given, the guest built for `wasm32-wasip1`. `@vizij/runtime`'s
-//! tests load it (`tests/animation-guest.mjs`): a Vizij device host-links the
-//! same module, so it is the guest at hand for proving the `modules` route.
+//! its path is given, the guest: a component of the `arora:module` world,
+//! built for `wasm32-wasip2`. `@vizij/runtime`'s tests load it
+//! (`tests/animation-guest.mjs`): a Vizij device host-links the same module,
+//! so it is the guest at hand for proving the `modules` route.
 //!
 //! ```text
-//! cargo build -p arora-animation-module --target wasm32-wasip1
-//! cargo run -q -p vizij-animation-artifact -- <dir> target/wasm32-wasip1/debug/arora_animation_module.wasm
+//! cargo build -p arora-animation-module --target wasm32-wasip2
+//! cargo run -q -p vizij-animation-artifact -- <dir> target/wasm32-wasip2/debug/arora_animation_module.wasm
 //! ```
 
 use std::path::PathBuf;

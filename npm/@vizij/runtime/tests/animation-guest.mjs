@@ -26,8 +26,8 @@ export function animationModule({ guest = true } = {}) {
   rmSync(moduleDir, { recursive: true, force: true });
   const write = ["run", "-q", "-p", "vizij-animation-artifact", "--", moduleDir];
   if (guest) {
-    cargo(["build", "-q", "-p", "arora-animation-module", "--target", "wasm32-wasip1"]);
-    write.push(resolve(targetDir, "wasm32-wasip1/debug/arora_animation_module.wasm"));
+    cargo(["build", "-q", "-p", "arora-animation-module", "--target", "wasm32-wasip2"]);
+    write.push(resolve(targetDir, "wasm32-wasip2/debug/arora_animation_module.wasm"));
   }
   cargo(write);
   const headerJson = readFileSync(resolve(moduleDir, "header.json"), "utf8");

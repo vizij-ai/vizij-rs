@@ -320,9 +320,9 @@ dependencies = [
 
 [[package]]
 name = "arora"
-version = "13.2.0"
+version = "13.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0fb0256f497f8e26e37559602f796a1417d98e22b55fa44182b2403ed49c253"
+checksum = "2d071bbf97302351c53b19e376a256bb839466886106c6723a5d3bd7d793347e"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -365,9 +365,9 @@ dependencies = [
 
 [[package]]
 name = "arora-animation-module"
-version = "1.0.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3dd254406d9fe9f0518af51a5a1072b2df44ac22f5be1e0de943451920b86b87"
+checksum = "95aada235599a81422dd0abfda04e7d0db9d8e6ab11fa98ec489aa01b502b072"
 dependencies = [
  "arora-animation",
  "arora-module",
@@ -392,7 +392,7 @@ dependencies = [
 [[package]]
 name = "arora-behavior-tree"
 version = "9.5.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=main#32fdebb3086df28b7d755cce2edba3875e2d810d"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#f0312222b297aba8e5dfe635edd73e574151ad4b"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
@@ -479,9 +479,9 @@ dependencies = [
 
 [[package]]
 name = "arora-buffers"
-version = "3.0.0"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2408b7ade82babe656cd849db33d33e8329365a52358232f75a77b947c54f1d2"
+checksum = "1764ca6a6c12af1381dbee59cf88f323207afe55d60fbac2a005f4096bd56656"
 dependencies = [
  "arora-types",
  "bytes",
@@ -493,9 +493,9 @@ dependencies = [
 
 [[package]]
 name = "arora-engine"
-version = "5.4.0"
+version = "5.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b8d4a7069ee6692f8ff1a4aa55690be32e2f23f22465e9df0d02120282f36e0"
+checksum = "f41f2da712573aff5f3947d1cbd0b89af1b055b0568bff38e416a7e8b4080a47"
 dependencies = [
  "anyhow",
  "arora-buffers",
@@ -517,6 +517,7 @@ dependencies = [
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasmparser 0.261.0",
  "wasmtime",
  "wasmtime-wasi",
  "web-sys",
@@ -539,20 +540,21 @@ dependencies = [
 
 [[package]]
 name = "arora-module"
-version = "2.2.0"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36fc9f71bb6bc55fde9661c5ae5a8613d137f7cd9196c7de2687f9da13a7e5da"
+checksum = "d58b21837b70b3bf6e1194a24b6b32617791a072f4bd17a2e3025e77a68cf9f8"
 dependencies = [
  "arora-buffers",
  "arora-module-macros",
  "arora-types",
+ "wit-bindgen 0.58.0",
 ]
 
 [[package]]
 name = "arora-module-macros"
-version = "3.0.0"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4df8aec9dbaac1f2a3df867311c95ceed763724d93bc80a54d2d4324993c810"
+checksum = "b8ed11d92ea9c67a4919fed633431cd000bdf7862bbef4e944499fda641a26a5"
 dependencies = [
  "arora-types",
  "proc-macro2",
@@ -581,7 +583,7 @@ dependencies = [
 [[package]]
 name = "arora-node-graph"
 version = "1.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=main#32fdebb3086df28b7d755cce2edba3875e2d810d"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#f0312222b297aba8e5dfe635edd73e574151ad4b"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -615,7 +617,7 @@ dependencies = [
 [[package]]
 name = "arora-shape"
 version = "1.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=main#32fdebb3086df28b7d755cce2edba3875e2d810d"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#f0312222b297aba8e5dfe635edd73e574151ad4b"
 dependencies = [
  "arora-types",
  "hashbrown 0.17.1",
@@ -670,7 +672,7 @@ dependencies = [
 [[package]]
 name = "arora-types"
 version = "3.9.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=main#32fdebb3086df28b7d755cce2edba3875e2d810d"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#f0312222b297aba8e5dfe635edd73e574151ad4b"
 dependencies = [
  "arora-types-derive",
  "async-trait",
@@ -698,9 +700,9 @@ dependencies = [
 
 [[package]]
 name = "arora-web"
-version = "10.3.0"
+version = "10.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e28bd46cf4de2dd8d392f7c8aa028691bffb0e8f5938a40e5a8491d18ed36a8"
+checksum = "dd6a719920fa9cbbcba29c63d2a19192dcc049538f9d766f41c3199b45a1a16f"
 dependencies = [
  "arora",
  "arora-behavior",
@@ -5804,6 +5806,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dae608c151f68243f2b000364e1f7b186d9c29845f7d2d85bd31b9ad77ad552b"
 
 [[package]]
+name = "macro-string"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59a9dbbfc75d2688ed057456ce8a3ee3f48d12eec09229f560f3643b9f275653"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10411,7 +10424,7 @@ version = "1.0.4+wasi-0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b67efb37e106e55ce722a510d6b5f9c17f083e5fc79afc2badeb12cc313d9487"
 dependencies = [
- "wit-bindgen",
+ "wit-bindgen 0.57.1",
 ]
 
 [[package]]
@@ -10526,6 +10539,16 @@ dependencies = [
 
 [[package]]
 name = "wasm-encoder"
+version = "0.251.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a879a421bd17c528b74721b2abf4c62e8f1d1889c2ba8c3c50d02deaf2ce395"
+dependencies = [
+ "leb128fmt",
+ "wasmparser 0.251.0",
+]
+
+[[package]]
+name = "wasm-encoder"
 version = "0.261.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2608e8bb6d67fd68f5a8d0eb1363d6e7bcbc1f8ded5a0bd3a1e382462b876b22"
@@ -10542,6 +10565,18 @@ checksum = "4495a6f85dd94c411c749303efcbc5defade0b0cbdbc0541495241ab917a9b5a"
 dependencies = [
  "leb128fmt",
  "wasmparser 0.262.0",
+]
+
+[[package]]
+name = "wasm-metadata"
+version = "0.251.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f998ccc6e012f7b86865eb2a106c8a0422017a1a88977ce01a69f2244be2e57"
+dependencies = [
+ "anyhow",
+ "indexmap 2.14.2",
+ "wasm-encoder 0.251.0",
+ "wasmparser 0.251.0",
 ]
 
 [[package]]
@@ -10567,6 +10602,18 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.251.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "437970b35b1a85cfde9c74b2398352d8d653f3bd8e3a3db0c063ea8f5b4b36ff"
+dependencies = [
+ "bitflags 2.13.2",
+ "hashbrown 0.17.1",
+ "indexmap 2.14.2",
+ "semver",
 ]
 
 [[package]]
@@ -10654,7 +10701,7 @@ dependencies = [
  "wasmtime-internal-versioned-export-macros",
  "wat",
  "windows-sys 0.61.2",
- "wit-parser",
+ "wit-parser 0.261.0",
 ]
 
 [[package]]
@@ -10719,7 +10766,7 @@ dependencies = [
  "syn 3.0.5",
  "wasmtime-internal-component-util",
  "wasmtime-internal-wit-bindgen",
- "wit-parser",
+ "wit-parser 0.261.0",
 ]
 
 [[package]]
@@ -10836,8 +10883,8 @@ dependencies = [
  "bitflags 2.13.2",
  "heck",
  "indexmap 2.14.2",
- "wit-component",
- "wit-parser",
+ "wit-component 0.261.0",
+ "wit-parser 0.261.0",
 ]
 
 [[package]]
@@ -11796,6 +11843,78 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
+name = "wit-bindgen"
+version = "0.58.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a43552cfa071f246cfd99e5dbb23710dfe7336b3259e09339818483359470749"
+dependencies = [
+ "bitflags 2.13.2",
+ "wit-bindgen-rust-macro",
+]
+
+[[package]]
+name = "wit-bindgen-core"
+version = "0.58.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4738d1c9a78e97bc7f664bfafd5d8e67d7bb26faa5c41e6d628e8bbdad3ec351"
+dependencies = [
+ "anyhow",
+ "heck",
+ "wit-parser 0.251.0",
+]
+
+[[package]]
+name = "wit-bindgen-rust"
+version = "0.58.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1130ce1f531bc9f9a75922244aa773bf5e2117fda1ef4a86b9f98d6b8135eb46"
+dependencies = [
+ "anyhow",
+ "heck",
+ "indexmap 2.14.2",
+ "prettyplease",
+ "syn 2.0.119",
+ "wasm-metadata 0.251.0",
+ "wit-bindgen-core",
+ "wit-component 0.251.0",
+]
+
+[[package]]
+name = "wit-bindgen-rust-macro"
+version = "0.58.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07296369e4d598e7e79b64eef66f724d83324ea671bcf677d78fc5cf92604ae5"
+dependencies = [
+ "anyhow",
+ "macro-string",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+ "wit-bindgen-core",
+ "wit-bindgen-rust",
+]
+
+[[package]]
+name = "wit-component"
+version = "0.251.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83a5e60173c413659c689f0581b0cf5d1a2404077568f9ffdce748a9eb2fc913"
+dependencies = [
+ "anyhow",
+ "bitflags 2.13.2",
+ "indexmap 2.14.2",
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "wasm-encoder 0.251.0",
+ "wasm-metadata 0.251.0",
+ "wasmparser 0.251.0",
+ "wit-parser 0.251.0",
+]
+
+[[package]]
 name = "wit-component"
 version = "0.261.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11809,9 +11928,28 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "wasm-encoder 0.261.0",
- "wasm-metadata",
+ "wasm-metadata 0.261.0",
  "wasmparser 0.261.0",
- "wit-parser",
+ "wit-parser 0.261.0",
+]
+
+[[package]]
+name = "wit-parser"
+version = "0.251.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e960732e824fab95099971a09e638979347c94ca48568d3c854c945729196947"
+dependencies = [
+ "anyhow",
+ "hashbrown 0.17.1",
+ "id-arena",
+ "indexmap 2.14.2",
+ "log",
+ "semver",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "unicode-xid",
+ "wasmparser 0.251.0",
 ]
 
 [[package]]
