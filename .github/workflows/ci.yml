@@ -244,6 +244,12 @@ jobs:
   # vizij-web and run it with --ignored.
   snapshot-regression:
     runs-on: ubuntu-latest
+    env:
+      # In a debug build wgpu names every Vulkan object it creates
+      # (vkSetDebugUtilsObjectNameEXT). Ubuntu 26.04's Vulkan loader (1.4.341)
+      # can crash there while the headless tests create their devices in
+      # parallel, so this job's tests render without wgpu's debug labels.
+      WGPU_DEBUG: "0"
     steps:
       - uses: actions/checkout@v5
       - name: Install Bevy deps + lavapipe (software Vulkan)
