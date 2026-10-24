@@ -195,7 +195,18 @@ vizij-piper = { path = "../interop/vizij-piper", optional = true }
 bevy = { version = "0.19", default-features = false, features = ["x11", "wayland"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
+# The framework's `android.app.NativeActivity` (no games-activity AAR): Bevy
+# 0.19 selects no Android activity backend by default.
 bevy = { version = "0.19", default-features = false, features = ["android-native-activity"] }
+# The `log` records — the crate's, arora's and Bevy's through tracing's `log`
+# feature — into logcat, where `env_logger` would write to a stderr nobody
+# reads.
+android_logger = { version = "0.15", default-features = false }
+# The speech provider's audio output (rodio 0.20 → cpal 0.15 → oboe) is C++.
+# Statically, oboe links `c++_static` without the `c++abi` it needs, and the
+# library fails to load; on the shared C++ runtime, `libc++_shared.so` ships
+# beside it in the APK (`cargo ndk --link-libcxx-shared`).
+cpal = { version = "0.15", features = ["oboe-shared-stdcxx"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # The browser module (`web`): the shared JS surface of a device — `step`,

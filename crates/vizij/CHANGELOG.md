@@ -8,6 +8,16 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ## [Unreleased]
 
+### Added
+
+- The Android app: an APK around the library (`android/`, a Gradle project
+  over the framework's `NativeActivity`), whose entry point runs the face it
+  ships as a stand-alone device with the open local bridge, full screen,
+  logging into logcat. minSdk 24, targetSdk 34, arm64-v8a and x86_64. CI's
+  `android` workflow builds it and runs it on the x86_64 API 35 emulator
+  with lavapipe, asserting that the face draws and animates with nothing
+  caught in logcat.
+
 ### Fixed
 
 - The browser module's `invoke` and `setValue` (and `writeValues`) read a

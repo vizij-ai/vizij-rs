@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The device serves its open local bridge on a socket. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="Vizij"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:allowBackup="false">
+
+        <!-- The framework's NativeActivity: it loads lib<lib_name>.so, the
+             vizij cdylib, whose android_main (Bevy's native-activity backend)
+             runs the app. Full screen with no title bar; the configuration
+             changes are the app's to handle, since a recreated activity
+             would start a second Bevy app in the same process. -->
+        <activity
+            android:name="android.app.NativeActivity"
+            android:exported="true"
+            android:configChanges="orientation|keyboardHidden|keyboard|navigation|screenSize|smallestScreenSize|screenLayout|density|uiMode"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="vizij" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

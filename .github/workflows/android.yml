@@ -1,0 +1,152 @@
+# The Android app (crates/vizij/android): the vizij cdylib built per ABI, the
+# APK packaged around both, and the rendering smoke on an emulator — the face
+# drawn and animating, nothing caught in logcat.
+#
+# The smoke's emulator is the x86_64 API 35 google_apis image under KVM with
+# `-gpu lavapipe`: GitHub's Linux runners have KVM and no GPU, and lavapipe
+# (the emulator's software Vulkan from 36.4.9) draws a Bevy frame where
+# SwiftShader loses the device to wgpu's 1 s acquire timeout. The face draws
+# under Vulkan only. The library is release-profile code: a debug build's
+# naga debug info crashes the emulator's SPIR-V validator.
+name: android
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # The NDK app/build.gradle names (`ndkVersion`): the library is built with
+  # it and AGP strips the library with it.
+  NDK_VERSION: "30.0.16248370"
+
+jobs:
+  # One runner per ABI: arm64-v8a for tablets and phones, x86_64 for the
+  # emulator. Only main saves the cache (see ci.yml).
+  library:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      matrix:
+        abi: [arm64-v8a, x86_64]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-${{ matrix.abi }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+      - name: Install the NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+      - name: Build libvizij.so (${{ matrix.abi }}, release)
+        run: |
+          cargo ndk -t ${{ matrix.abi }} -P 24 --link-libcxx-shared -o crates/vizij/android/app/src/main/jniLibs \
+            build -p vizij --lib --release --no-default-features --features captions
+          ls -l crates/vizij/android/app/src/main/jniLibs/${{ matrix.abi }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libvizij-${{ matrix.abi }}
+          # The vizij library and the C++ runtime it loads; not the cdylib a
+          # dependency declares (arora-animation-module's), which cargo-ndk
+          # copies too and libvizij.so links statically.
+          path: |
+            crates/vizij/android/app/src/main/jniLibs/${{ matrix.abi }}/libvizij.so
+            crates/vizij/android/app/src/main/jniLibs/${{ matrix.abi }}/libc++_shared.so
+          if-no-files-found: error
+          retention-days: 3
+
+  apk:
+    needs: library
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: libvizij-*
+          path: jniLibs
+      - name: Place the libraries
+        run: |
+          for abi in arm64-v8a x86_64; do
+            mkdir -p crates/vizij/android/app/src/main/jniLibs/$abi
+            cp jniLibs/libvizij-$abi/*.so crates/vizij/android/app/src/main/jniLibs/$abi/
+          done
+      - name: Fetch the face the APK ships
+        # Quori, pinned to the commit the snapshot references were rendered
+        # from, so a re-export cannot change what the smoke shows.
+        run: |
+          mkdir -p crates/vizij/android/app/src/main/assets
+          curl -fsSL "https://raw.githubusercontent.com/vizij-ai/vizij-web/8f9ea2965c6415904ad4e0f87639a370eff0c4d8/apps/vizij-authoring/public/assets/Quori_Current_Extended.glb" \
+            -o crates/vizij/android/app/src/main/assets/face.glb
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install the SDK platform, build tools and NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platforms;android-36" "build-tools;35.0.0" "ndk;$NDK_VERSION" > /dev/null
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "8.14.3"
+      - name: Assemble the APK
+        run: gradle -p crates/vizij/android assembleDebug --no-daemon
+      - name: Stage the APK
+        run: |
+          cp crates/vizij/android/app/build/outputs/apk/debug/app-debug.apk vizij.apk
+          ls -l vizij.apk
+          unzip -l vizij.apk | grep -E 'lib/|assets/'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vizij-apk
+          path: vizij.apk
+          if-no-files-found: error
+
+  smoke:
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: vizij-apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Boot the emulator and run the smoke
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-window -gpu lavapipe -noaudio -no-boot-anim -no-snapshot -camera-back none
+          disable-animations: true
+          pre-emulator-launch-script: $ANDROID_HOME/emulator/emulator -version | head -1
+          script: bash crates/vizij/android/scripts/smoke-test.sh vizij.apk smoke
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-smoke
+          path: smoke
+          if-no-files-found: warn
