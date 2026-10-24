@@ -230,7 +230,10 @@ fn main() -> Result<()> {
         #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
         ros2: cli.ros2.as_deref().map(parse_ros2).transpose()?,
         #[cfg(feature = "studio")]
-        studio: cli.studio.then(|| data_dir().join("studio-identity.json")),
+        studio: cli.studio.then(|| native::StudioConfig {
+            identity: data_dir().join("studio-identity.json"),
+            device_dir: None,
+        }),
     };
     // Frames are the ROS4HRI face image, so they follow that exposure unless
     // a rate is given (see `frames::publish_rate`).

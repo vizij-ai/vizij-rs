@@ -58,7 +58,7 @@ piece of it, not a second device.
 | `native` | the stand-alone device: the face's Arora on a worker thread under arora's operator flow, the bridges the build adds, the `RuntimeHandle` front ends speak through | every target but the browser |
 | `web` | the browser module behind [`@vizij/runtime`](../../npm/@vizij/runtime/README.md): one App per page (`mount`), a JS-paced Arora per Vizij (`loadVizij`, a `VizijRuntime`), Vizijs as rectangles of the canvas (`placeVizij`), picks, `describe` | `wasm32` |
 | `main.rs`, `open.rs` | the CLI, the window, the terminal operator UI, opening a face by drop or dialog | feature `desktop` (default) |
-| `android` (private) | the Android app's entry point (`android_main`): the device on the face the APK ships, the view full screen, logging into logcat; see [Android](#android) | Android |
+| `android` (private) | the Android app's entry point (`android_main`): the device on the face last opened or the one the APK ships, the view full screen, faces received from the activity, logging into logcat; see [Android](#android) | Android |
 
 Features: `desktop` (default) is the CLI and the terminal UI; `captions`
 (default) draws the face standard's caption over the face, with Bevy's UI
@@ -86,15 +86,31 @@ device its bytes (`RuntimeHandle::reload`).
 ## Android
 
 The APK is this crate's cdylib (`libvizij.so`) in the Gradle project under
-`android/`, run by the framework's `android.app.NativeActivity` (Bevy's
-`android-native-activity` backend). Its entry point starts the device on
-the face the APK ships (`assets/face.glb`) under arora's headless front end,
-with the open local bridge on `127.0.0.1:9000` (`adb forward tcp:9000
-tcp:9000` reaches it), and draws the face full screen. Logging goes to
-logcat under the `vizij` tag through `android_logger`; Bevy's `LogPlugin`
-stays disabled, as on desktop. minSdk 24 (the build takes no Bevy `audio`,
-whose AAudio backend would raise it to 26), targetSdk 34; arm64-v8a for
-devices, x86_64 for the emulator. The speech provider is not attached on
+`android/`. Its one activity, `VizijActivity` (Kotlin), is a
+`NativeActivity` (Bevy's `android-native-activity` backend) that loads the
+library and does what native code cannot through a NativeActivity: it takes
+a face from the system's document picker (a long press on the face opens
+it) or from a VIEW intent (a `.glb` or `model/gltf-binary` opened with
+Vizij), copies it to the app's files directory as `model.glb`, and keeps the
+screen on with the system bars hidden (immersive sticky). The library's
+entry point starts the device on `model.glb` when it holds a face that
+composes, so the face last opened comes back on every launch, after a
+reboot too, and on the face the APK ships (`assets/face.glb`) otherwise; a
+face received while the app runs reloads the device. The device runs under
+arora's headless front end, with the open local bridge on `127.0.0.1:9000`
+(`adb forward tcp:9000 tcp:9000` reaches it). A lost GPU device recreates
+the renderer (`RenderErrorPolicy::Recover`) rather than ending the app.
+Logging goes to logcat under the `vizij` tag through `android_logger`;
+Bevy's `LogPlugin` stays disabled, as on desktop. minSdk 24 (the build
+takes no Bevy `audio`, whose AAudio backend would raise it to 26), targetSdk
+34; arm64-v8a for devices, x86_64 for the emulator.
+
+The app is built with the `studio` feature. Studio keeps the device's
+credentials in the app's files directory
+(`arora::studio::connect_with_device_dir`), and the device registers under
+the identity kept there in `studio-identity.json` (`name`, `owners`,
+`model_family`); with none kept it does not connect, since nothing on
+Android asks the operator yet. The speech provider is not attached on
 Android yet: the cloud provider's HTTPS client verifies certificates through
 `rustls-platform-verifier`, which needs its Kotlin component packaged and
 initialised there.
@@ -109,18 +125,20 @@ export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370
 # libc++_shared.so goes beside it: the speech provider's audio output (oboe)
 # is C++ on the shared runtime.
 cargo ndk -t arm64-v8a -P 24 --link-libcxx-shared -o crates/vizij/android/app/src/main/jniLibs \
-  build -p vizij --lib --release --no-default-features --features captions
+  build -p vizij --lib --release --no-default-features --features captions,studio
 # The face the APK ships.
 mkdir -p crates/vizij/android/app/src/main/assets
 cp Quori_Current_Extended.glb crates/vizij/android/app/src/main/assets/face.glb
 gradle -p crates/vizij/android assembleDebug
 ```
 
-`android/scripts/smoke-test.sh <apk> <out-dir>` is the rendering smoke, on
-the emulator or device adb reaches: it installs and launches the APK,
-waits for the face (at least 15 s), and passes when a screenshot shows it,
-two screenshots 5 s apart differ in it, the app is alive and in front, and
-logcat has no `Caught` line, panic or fatal signal. `dumpsys gfxinfo` counts
+`android/scripts/smoke-test.sh <apk> <out-dir> [second-face.glb]` is the
+rendering smoke, on the emulator or device adb reaches: it installs and
+launches the APK, waits for the face (at least 15 s), and passes when a
+screenshot shows it, two screenshots 5 s apart differ in it, the second
+face, opened through a VIEW intent, replaces it and is the one shown after
+a relaunch, the app is alive and in front, and logcat has no `Caught` line,
+panic or fatal signal. `dumpsys gfxinfo` counts
 no Bevy frame, so the screenshots are the evidence. CI's `android`
 workflow builds both ABIs, packages the APK and runs the smoke on the
 x86_64 API 35 `google_apis` image under KVM with `-gpu lavapipe`

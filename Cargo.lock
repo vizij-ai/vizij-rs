@@ -10288,6 +10288,7 @@ dependencies = [
  "futures",
  "getrandom 0.4.3",
  "image",
+ "jni 0.21.1",
  "js-sys",
  "libc",
  "log",

@@ -3,7 +3,7 @@
 # or any emulator or tablet): install, launch, and assert that the face draws
 # and animates.
 #
-#   smoke-test.sh <apk> <out-dir>
+#   smoke-test.sh <apk> <out-dir> [second-face.glb]
 #
 # Passes when, after the launch:
 #   - a screenshot taken at least 15 s after launch, with the app in front,
@@ -14,12 +14,17 @@
 #     up to five pairs are taken, so a moment where the face rests in the same
 #     pose twice does not fail the run;
 #   - the app is alive and in front at the end;
+#   - with a second face given, opened through a VIEW intent (a content://
+#     URI of the file pushed to Downloads, as a file manager sends), it
+#     replaces the face on screen, and after the app is stopped and launched
+#     again it is the face shown (the activity's `model.glb`);
 #   - the app's log has no `Caught` line (Bevy's report of a device loss or
 #     a rendering error), no panic and no fatal signal.
 # `dumpsys gfxinfo` counts HWUI frames only and reads 0 for Bevy, so the
 # screenshots are the frame evidence. <out-dir> keeps the two screenshots
-# (face-a.png, face-b.png), logcat.txt (the app's own lines in
-# logcat-app.txt), meminfo.txt and checks.txt.
+# (face-a.png, face-b.png), with a second face opened.png and
+# relaunched.png, logcat.txt (the app's own lines in logcat-app.txt),
+# meminfo.txt and checks.txt.
 #
 # The emulator-runner action runs its `script` line by line, so the whole
 # smoke lives here.
@@ -27,6 +32,7 @@ set -uo pipefail
 
 APK=$1
 OUT=$2
+SECOND=${3:-}
 PKG=${VIZIJ_SMOKE_PACKAGE:-ai.vizij.app}
 DEADLINE=${VIZIJ_SMOKE_DEADLINE:-120}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -47,6 +53,8 @@ adb shell getprop ro.build.version.sdk | sed 's/^/sdk=/'
 adb shell wm size
 adb uninstall "$PKG" >/dev/null 2>&1 || true
 adb install -r "$APK" || { fail "install failed"; exit 1; }
+# The system's one-time "Viewing full screen" hint would cover the face.
+adb shell settings put secure immersive_mode_confirmations confirmed
 adb logcat -c
 launcher=$(adb shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER "$PKG" | tr -d '\r' | tail -1)
 echo "launching $launcher"
@@ -93,6 +101,41 @@ else
     fail "the face did not move between screenshots 5 s apart"
     measure png "$OUT/first.raw" "$OUT/face-a.png"
     measure png "$prev" "$OUT/face-b.png"
+  fi
+fi
+
+# A second face, opened through a VIEW intent while the app runs, then
+# shown again on the next launch.
+if [ -n "$SECOND" ] && [ -n "$shown" ]; then
+  adb push "$SECOND" /sdcard/Download/vizij-smoke.glb > /dev/null
+  adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
+    -d file:///sdcard/Download/vizij-smoke.glb > /dev/null
+  sleep 3
+  id=$(adb shell content query --uri content://media/external/downloads --projection _id:_display_name \
+    | tr -d '\r' | grep 'vizij-smoke.glb' | sed -E 's/.*_id=([0-9]+).*/\1/' | tail -1)
+  if [ -z "$id" ]; then
+    fail "the second face is not in Downloads"
+  else
+    frame before
+    adb shell am start -a android.intent.action.VIEW -t model/gltf-binary --grant-read-uri-permission \
+      -d "content://media/external/downloads/$id"
+    sleep 20
+    frame opened
+    measure png "$OUT/opened.raw" "$OUT/opened.png"
+    if ! { in_front && measure face "$OUT/opened.raw" && measure replaced "$OUT/before.raw" "$OUT/opened.raw"; }; then
+      fail "the face opened through a VIEW intent is not shown"
+    fi
+    adb shell am force-stop "$PKG"
+    adb shell am start -W -n "$launcher" > /dev/null
+    sleep 25
+    frame relaunched
+    measure png "$OUT/relaunched.raw" "$OUT/relaunched.png"
+    if ! { in_front && measure face "$OUT/relaunched.raw"; }; then
+      fail "no face on screen after the relaunch"
+    fi
+    if ! adb logcat -d | grep -q "vizij: the face last opened"; then
+      fail "the relaunch did not open the face last opened"
+    fi
   fi
 fi
 rm -f "$OUT"/*.raw
