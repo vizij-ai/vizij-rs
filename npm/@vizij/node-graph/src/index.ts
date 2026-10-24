@@ -823,12 +823,13 @@ export class Graph {
    * `value` may be a convenient JS authoring form (`number`, `boolean`, numeric vector) or an
    * already-normalized `ValueJSON`.
    *
-   * Structural edits (e.g., Split sizes) cause the wasm runtime to drop its plan and
-   * delta caches; reset the JS baseline so the next eval consumes the fresh snapshot.
+   * A value is set in place on the wasm runtime's tree. An edit that changes the tree (e.g.,
+   * Split sizes) has the runtime load the graph again and drop its delta cache, so the JS
+   * baseline is reset on every edit and the next eval consumes a fresh snapshot.
    */
   setParam(nodeId: string, key: string, value: Value): void {
-    // Plan cache is invalidated in wasm for structural params; drop the JS baseline too
-    // so the next delta merge starts from a fresh full snapshot.
+    // The wasm runtime may load the graph again; drop the JS baseline so the next delta
+    // merge starts from a fresh full snapshot.
     this.invalidateCachedOutputs(true);
     const payload = toValueJSON(value);
     const target = this.inner as any;

@@ -14,6 +14,11 @@ All notable changes to `vizij-arora-host`. The format follows
   `CUBICSPLINE` tangents); `None` when absent. They serialize as `inTangent`
   and `outTangent`.
 
+### Changed
+
+- Reads graph specs and values with vizij-api-core 3, where it used
+  vizij-api-core 2. No public item changes.
+
 ## [7.5.0] - 2026-10-19
 
 ### Changed

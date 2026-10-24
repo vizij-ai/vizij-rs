@@ -2,8 +2,12 @@
 //! without each input [`required_inputs`] names, and evaluates without any
 //! other.
 
-use super::*;
+#[allow(unused_imports)]
+use crate::eval::*;
 use crate::schema::{registry, required_inputs, NodeSignature, PortSpec, PortType};
+#[allow(unused_imports)]
+use crate::tree_runtime::{evaluate_all, evaluate_all_with_functions, TreeRuntime};
+use crate::types::GraphSpec;
 use crate::types::{InputDefault, NodeParams, NodeSpec, NodeType};
 use hashbrown::HashMap;
 use uuid::Uuid;
@@ -38,7 +42,7 @@ fn rest() -> Rest {
         ..Default::default()
     }
     .with_cache();
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &spec).expect("the arm's FK at rest");
     let port = |name: &str| rt.outputs["fk"][name].value.clone();
     Rest {
@@ -101,8 +105,7 @@ fn params(kind: &NodeType) -> NodeParams {
         #[cfg(feature = "urdf_ik")]
         NodeType::UrdfIkPosition | NodeType::UrdfIkPose | NodeType::UrdfFk => {
             let fixture: serde_json::Value =
-                vizij_test_fixtures::node_graphs::spec("urdf-ik-position")
-                    .expect("the urdf-ik-position fixture");
+                crate::fixtures::spec("urdf-ik-position").expect("the urdf-ik-position fixture");
             let urdf = fixture["spec"]["nodes"]
                 .as_array()
                 .and_then(|nodes| nodes.iter().find(|node| node["id"] == "ik"))
@@ -161,7 +164,7 @@ fn graph(signature: &NodeSignature, inputs: &[&PortSpec], rest: &Rest) -> GraphS
 
 /// Evaluate `spec` once, its `Input` nodes' paths staged.
 fn evaluates(spec: &GraphSpec) -> Result<(), String> {
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     rt.set_input(
         TypedPath::parse("sensor/x").expect("a path"),
         vocab::float(0.5),
@@ -299,7 +302,7 @@ fn validate_refuses_an_unwired_required_input_naming_the_node_and_port() {
     let error = spec.validate().expect_err("Remap has no 'in'");
     assert!(error.contains("'remap'"), "{error}");
     assert!(error.contains("'in'"), "{error}");
-    evaluate_all(&mut GraphRuntime::default(), &spec.clone().with_cache())
+    evaluate_all(&mut TreeRuntime::default(), &spec.clone().with_cache())
         .expect_err("the graph it refuses fails to evaluate");
 }
 
@@ -329,7 +332,7 @@ fn validate_accepts_an_unwired_input_that_reads_as_zero() {
         ..Default::default()
     };
     spec.validate().expect("an unwired Output and Add evaluate");
-    evaluate_all(&mut GraphRuntime::default(), &spec.with_cache()).expect("and they do");
+    evaluate_all(&mut TreeRuntime::default(), &spec.with_cache()).expect("and they do");
 }
 
 /// A graph whose input path has no value staged yet is accepted: the value
@@ -385,7 +388,7 @@ fn validate_refuses_what_the_plan_refuses() {
     for (expected, spec) in cases {
         let error = spec.validate().expect_err(expected);
         assert!(error.contains(expected), "{expected}: {error}");
-        evaluate_all(&mut GraphRuntime::default(), &spec.with_cache())
+        evaluate_all(&mut TreeRuntime::default(), &spec.with_cache())
             .expect_err("the graph it refuses fails to evaluate");
     }
 }

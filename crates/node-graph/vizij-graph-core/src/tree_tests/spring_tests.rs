@@ -6,7 +6,10 @@
 //! many short ones, and steps of a second and a minute — what a page hidden
 //! for a while hands its device — on the springs Quori's program runs.
 
-use super::*;
+#[allow(unused_imports)]
+use crate::eval::*;
+#[allow(unused_imports)]
+use crate::tree_runtime::{evaluate_all, evaluate_all_with_functions, TreeRuntime};
 use crate::types::GraphSpec;
 use serde_json::json;
 use vizij_api_core::Value;
@@ -34,33 +37,31 @@ fn aim(spec: &mut GraphSpec, target: f32) {
 
 /// A spring of `stiffness`, `damping` and `mass` at rest on 1, its target
 /// moved to 0, no time passed yet.
-fn released(stiffness: f32, damping: f32, mass: f32) -> (GraphRuntime, GraphSpec) {
+fn released(stiffness: f32, damping: f32, mass: f32) -> (TreeRuntime, GraphSpec) {
     let mut spec = spring(stiffness, damping, mass);
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &spec).expect("the spring settles on 1");
     aim(&mut spec, 0.0);
     (rt, spec)
 }
 
 /// Advance the graph's clock by `dt` and evaluate it.
-fn step(rt: &mut GraphRuntime, spec: &GraphSpec, dt: f32) {
+fn step(rt: &mut TreeRuntime, spec: &GraphSpec, dt: f32) {
     rt.dt = dt;
     rt.t += dt;
     evaluate_all(rt, spec).expect("the graph evaluates");
 }
 
 /// The spring's position and velocity.
-fn state(rt: &GraphRuntime) -> (f32, f32) {
-    match rt.node_states.get("spring") {
-        Some(graph_runtime::NodeRuntimeState::Spring(spring)) => {
-            (spring.position[0], spring.velocity[0])
-        }
+fn state(rt: &TreeRuntime) -> (f32, f32) {
+    match rt.node_states().get("spring") {
+        Some(context::NodeRuntimeState::Spring(spring)) => (spring.position[0], spring.velocity[0]),
         other => panic!("the spring keeps a spring state, got {other:?}"),
     }
 }
 
 /// The spring's output port.
-fn output(rt: &GraphRuntime) -> f32 {
+fn output(rt: &TreeRuntime) -> f32 {
     match rt
         .outputs
         .get("spring")
@@ -221,7 +222,7 @@ fn a_target_that_is_not_a_number_holds_the_spring_and_keeps_its_state_finite() {
 fn a_spring_seeded_from_a_target_that_is_not_a_number_starts_again_on_the_next() {
     let mut spec = spring(150.0, 30.0, 3.0);
     aim(&mut spec, f32::NAN);
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &spec).expect("the spring is seeded");
     step(&mut rt, &spec, 1.0 / 60.0);
 

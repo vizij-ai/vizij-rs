@@ -2,7 +2,7 @@
 
 > **The vizij vocabulary over `arora_types::value::Value`, plus the Shape/TypedPath/WriteBatch contracts used by every Vizij engine, adapter, and tooling surface.**
 
-Vizij runs on Arora: the store, the modules, the behaviors, and Studio all speak `arora_types::value::Value`. This crate re-exports that `Value` and declares vizij's vocabulary on top of it — the composite type ids, the constructors and accessors, and the helpers engines need to blend, coerce, and serialize values consistently.
+Vizij runs on Arora: the store, the modules, the behaviors, and Studio all speak `arora_types::value::Value`. This crate re-exports that `Value` and declares vizij's vocabulary on top of it — the composite type ids, the constructors and accessors, and the helpers engines need to coerce and serialize values consistently. The geometry types (vec2, vec3, vec4, quat, transform) and blending are [`arora-geometry`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-geometry)'s; this crate re-exports the types and adds colour, records and enumerations.
 
 ---
 
@@ -19,8 +19,8 @@ Vizij runs on Arora: the store, the modules, the behaviors, and Studio all speak
 
 ## Overview
 
-- Rust 2021 library over `arora-types` (plus `serde`, `serde_json`, `hashbrown`, `thiserror`, `uuid`).
-- Re-exports `arora_types::value::Value` and declares the vizij composite type ids (`vec2`/`vec3`/`vec4`/`quat`/`color-rgba`/`transform`) with constructors and accessors.
+- Rust 2021 library over `arora-types` and `arora-geometry` (plus `serde`, `serde_json`, `hashbrown`, `thiserror`, `uuid`).
+- Re-exports `arora_types::value::Value` and the geometry types of `arora-geometry` (`vec2`/`vec3`/`vec4`/`quat`/`transform`), and declares `color-rgba`, records and enumerations, with constructors and accessors.
 - Defines `Shape` metadata shared by animation and graph stacks.
 - Implements canonical `TypedPath` parsing/formatting for target identifiers.
 - Supplies `WriteOp` / `WriteBatch` helpers so engines can communicate deterministic side effects.
@@ -45,10 +45,10 @@ No feature flags are required; the crate is always built with the full surface e
 
 `Value` is Arora's enum; the `value` module gives it vizij semantics:
 
-- **Type ids** (`value::VEC3_TYPE`, `value::TRANSFORM_TYPE`, ...) are UUIDs namespaced under the ASCII bytes of "vizij". Composites are `Value::Structure` with these ids; the ids are shared by module codegen and Studio introspection.
+- **Type ids** (`value::VEC3_TYPE`, `value::TRANSFORM_TYPE`, `value::COLOR_RGBA_TYPE`, ...) are UUIDs namespaced under the ASCII bytes of "vizij". Composites are `Value::Structure` with these ids; the ids are shared by module codegen and Studio introspection. The geometry ids are `arora-geometry`'s, re-exported.
 - **Constructors** build the canonical encoding: `float`, `bool_`, `text`, `vector`, `vec2`, `vec3`, `vec4`, `quat`, `color_rgba`, `transform`, `record`, `array`, `enumeration`.
 - **Accessors** read values back into PODs: `as_float`, `as_bool`, `as_text`, `as_vector`, `as_vec2/3/4`, `as_quat`, `as_color_rgba`, `as_transform`, `as_record`, `as_array`, `as_enumeration`. Kernels decode a value once through these, do their math on plain Rust types, and re-encode at the store boundary.
-- **`kind(&Value) -> VizijKind`** classifies a value for dispatch; anything outside the vocabulary is `VizijKind::Other` and flows through untouched.
+- **`kind(&Value) -> ShapeKind`** classifies a value for dispatch; anything outside the vocabulary is `ShapeKind::Other` and flows through untouched.
 
 Mapping: `f32` -> `F32`, `bool` -> `Boolean`, text -> `String`, numeric vector -> `ArrayF32`, composites -> `Structure`, records -> `KeyValue` (field ids derived from key names), sequences -> `ArrayValue`, enums -> native `Enumeration` (variant ids derived from variant names via `value::variant_id`).
 
@@ -108,7 +108,7 @@ Graph specs are normalised so node shorthands stay ergonomic while the runtime a
   }
 }
 
-// normalised representation consumed by vizij-graph-core
+// normalised representation consumed by arora-dataflow-nodes
 {
   "id": "scale",
   "type": "multiply",
@@ -120,10 +120,10 @@ Graph specs are normalised so node shorthands stay ergonomic while the runtime a
 
 This means authors can skip boilerplate constant nodes, but hosts still receive a deterministic graph definition with explicit edges and defaults.
 
-### Blending and coercion
+### Coercion
 
-- `blend::blend_values` decodes both operands into PODs, blends (lerp for floats/vectors/colors, slerp for quaternions, TRS-wise for transforms, field-wise for records, index-wise for sequences), and re-encodes. `blend::step_blend` picks an operand whole for step-only kinds.
-- `coercion::to_float` / `to_vector` / `to_vec3` give every value a lossy numeric reading so mixed-kind blends and adapters always have something sensible to work with.
+- `coercion::to_float` / `to_vector` give every value a lossy numeric reading so adapters always have something sensible to work with.
+- Blending is `arora_geometry::blend`.
 
 ---
 
@@ -155,13 +155,13 @@ assert_eq!(value::as_vec3(&parsed), Some([0.0, 1.0, 0.0]));
 cargo test -p vizij-api-core
 ```
 
-Modules include unit tests for the constructor/accessor round-trips, blending, coercion, and normalisation. Run `pnpm run test:rust` from the repo root to exercise the entire workspace.
+Modules include unit tests for the constructor/accessor round-trips, coercion, and normalisation. Run `cargo test -p vizij-api-core`.
 
 ---
 
 ## Related Packages
 
-- [`vizij-api-wasm`](../vizij-api-wasm/README.md) – wasm helpers that mirror the same normalisation logic for JavaScript.
-- The node-graph stack (`vizij-graph-core`) and the interop crates depend on these contracts.
+- [`vizij-api-wasm`](https://github.com/vizij-ai/vizij-rs/blob/main/crates/api/vizij-api-wasm/README.md) – wasm helpers that mirror the same normalisation logic for JavaScript.
+- The node graph (`arora-dataflow-nodes`) and Vizij's interop crates depend on these contracts.
 
 Questions or improvements? Open an issue—shared contracts are the backbone of Vizij interoperability. 🔗

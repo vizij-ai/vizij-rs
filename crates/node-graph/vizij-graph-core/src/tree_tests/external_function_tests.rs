@@ -1,6 +1,9 @@
 // ExternalFunction node unit tests: host dispatch, arg zipping, and the no-host error path.
 
-use super::*;
+#[allow(unused_imports)]
+use crate::eval::*;
+#[allow(unused_imports)]
+use crate::tree_runtime::{evaluate_all, evaluate_all_with_functions, TreeRuntime};
 use crate::types::{
     EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
 };
@@ -78,7 +81,7 @@ fn external_function_dispatches_through_host_and_sets_output() {
     let param_id = Uuid::from_u128(0x3333);
     let graph = external_function_graph(function_id, param_id);
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let mut functions = RecordingFunctions::default();
     evaluate_all_with_functions(&mut rt, &graph, &mut functions)
         .expect("external function should evaluate");
@@ -156,7 +159,7 @@ fn task_run_graph() -> GraphSpec {
 }
 
 /// The out-parameter on its keyed slot — `mutated_0` is the first key.
-fn mutated_field(rt: &GraphRuntime, _id: Uuid) -> Option<Value> {
+fn mutated_field(rt: &TreeRuntime, _id: Uuid) -> Option<Value> {
     rt.outputs
         .get("run")
         .and_then(|ports| ports.get("mutated_0"))
@@ -167,7 +170,7 @@ fn mutated_field(rt: &GraphRuntime, _id: Uuid) -> Option<Value> {
 fn task_run_emits_the_call_s_out_parameters_and_latches_them() {
     let graph = task_run_graph();
     let out = Uuid::from_u128(0x4444);
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let mut functions = OutParameterFunctions::default();
 
     // First evaluation: Running, the out parameter as the function set it.
@@ -263,7 +266,7 @@ fn task_run_calls_with_the_stated_args_under_the_live_bundle() {
     graph.edges.push(link("live", "run", "args"));
     let graph = graph.with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let mut functions = ArgsRecordingFunctions::default();
     evaluate_all_with_functions(&mut rt, &graph, &mut functions).expect("the run evaluates");
 
@@ -279,15 +282,19 @@ fn task_run_calls_with_the_stated_args_under_the_live_bundle() {
     );
 }
 
+/// A graph on the tree always runs over a bridge: an external function no
+/// module is registered for fails the evaluation, naming the function.
 #[test]
 fn external_function_without_host_errors() {
     let graph = external_function_graph(Uuid::from_u128(0x2222), Uuid::from_u128(0x3333));
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let err = evaluate_all(&mut rt, &graph)
         .expect_err("evaluating an ExternalFunction without a host must error");
     assert!(
-        err.contains("without a function host"),
+        err.contains(
+            "no module registered for external function 00000000-0000-0000-0000-000000002222"
+        ),
         "unexpected error message: {err}"
     );
 }
@@ -307,7 +314,7 @@ fn external_function_missing_id_errors() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let mut functions = RecordingFunctions::default();
     let err = evaluate_all_with_functions(&mut rt, &graph, &mut functions)
         .expect_err("missing function id must error");
@@ -354,7 +361,7 @@ fn spawn_graph(function: Uuid, shape: Uuid, weight: Uuid) -> GraphSpec {
 
 /// Stage `shape` and evaluate once, returning the runs that evaluation
 /// requested.
-fn spawn_step(rt: &mut GraphRuntime, graph: &GraphSpec, shape: &str) -> Vec<SpawnRequest> {
+fn spawn_step(rt: &mut TreeRuntime, graph: &GraphSpec, shape: &str) -> Vec<SpawnRequest> {
     let path = vizij_api_core::TypedPath::parse("test/shape").expect("path");
     rt.set_input(path, vocab::text(shape), None);
     evaluate_all(rt, graph).expect("the graph evaluates without a host");
@@ -369,7 +376,7 @@ fn spawn_requests_a_run_each_time_its_args_change() {
         Uuid::from_u128(0x7773),
     );
     let graph = spawn_graph(function, shape, weight);
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
 
     // The first evaluation is the baseline, whatever it reads.
     assert!(spawn_step(&mut rt, &graph, "aa").is_empty());
@@ -390,6 +397,27 @@ fn spawn_requests_a_run_each_time_its_args_change() {
     assert!(spawn_step(&mut rt, &graph, "oh").is_empty());
     assert_eq!(rt.outputs["spawn"]["out"].value, vocab::bool_(false));
     assert_eq!(spawn_step(&mut rt, &graph, "sil").len(), 1);
+}
+
+/// An evaluation of a tree built once requests its own runs alone: once its
+/// args hold again, the run an earlier evaluation requested is gone.
+#[test]
+fn an_evaluation_of_a_kept_tree_requests_only_its_own_runs() {
+    let (function, shape, weight) = (
+        Uuid::from_u128(0x7771),
+        Uuid::from_u128(0x7772),
+        Uuid::from_u128(0x7773),
+    );
+    let graph = spawn_graph(function, shape, weight);
+    let mut rt = TreeRuntime::default();
+    assert!(spawn_step(&mut rt, &graph, "aa").is_empty());
+    assert_eq!(spawn_step(&mut rt, &graph, "oh").len(), 1);
+    assert!(
+        spawn_step(&mut rt, &graph, "oh").is_empty(),
+        "its args held"
+    );
+    assert_eq!(rt.outputs["spawn"]["out"].value, vocab::bool_(false));
+    assert_eq!(rt.loads(), 1, "the tree is built once");
 }
 
 /// A new `when` makes the same args a new run, and `when` is not an arg.
@@ -414,9 +442,9 @@ fn spawn_requests_a_run_each_time_its_when_changes() {
     });
     graph.edges.push(link("when", "spawn", "when"));
     let graph = graph.with_cache();
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let when = vizij_api_core::TypedPath::parse("test/when").expect("path");
-    let step = |rt: &mut GraphRuntime, at: f32| {
+    let step = |rt: &mut TreeRuntime, at: f32| {
         rt.set_input(when.clone(), Value::F32(at), None);
         spawn_step(rt, &graph, "pp")
     };
@@ -444,7 +472,7 @@ fn spawn_refuses_an_arg_slot_without_a_parameter_id() {
     );
     graph.nodes[1].params.record_keys = Some(vec!["shape".to_string()]);
     let graph = graph.with_cache();
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let path = vizij_api_core::TypedPath::parse("test/shape").expect("path");
     rt.set_input(path, vocab::text("aa"), None);
     let err = evaluate_all(&mut rt, &graph).expect_err("a slot keyed by a name is refused");

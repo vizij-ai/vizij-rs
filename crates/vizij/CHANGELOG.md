@@ -8,6 +8,14 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ## [Unreleased]
 
+### Changed
+
+- A face's graphs run on arora-behavior-tree (vizij-arora-behavior 8): each
+  frame evaluates the nodes the graphs' outputs read whose inputs changed,
+  so a face at rest costs less per frame. The graphs compute what they did
+  before. The device is built and ticked on the app's worker thread, as
+  before.
+
 ## [1.0.0] - 2026-10-24
 
 ### Changed

@@ -394,9 +394,9 @@ dependencies = [
 
 [[package]]
 name = "arora-behavior"
-version = "9.5.0"
+version = "9.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9c8cde7d2164906bd6bfa5d95bc114546070afe6f57de327946fe6c700c4a18"
+checksum = "ee756f977b7655a4decf3ecc320039a79d929b2f4ea5de8c3a582f66cb03856c"
 dependencies = [
  "arora-types",
  "semver",
@@ -406,9 +406,8 @@ dependencies = [
 
 [[package]]
 name = "arora-behavior-tree"
-version = "9.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be65bdcfee33c7d886274f0d595428c5971e0c9e93664831368c765c7dcec161"
+version = "9.5.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#682ca795454945397ba9aa7a9515ff9573206f27"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
@@ -508,6 +507,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "arora-dataflow-nodes"
+version = "1.0.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#682ca795454945397ba9aa7a9515ff9573206f27"
+dependencies = [
+ "arora-behavior",
+ "arora-geometry",
+ "arora-types",
+ "hashbrown 0.17.1",
+ "k",
+ "serde",
+ "serde_json",
+ "urdf-rs",
+ "uuid",
+]
+
+[[package]]
 name = "arora-engine"
 version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -537,6 +552,15 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "web-sys",
+]
+
+[[package]]
+name = "arora-geometry"
+version = "1.0.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#682ca795454945397ba9aa7a9515ff9573206f27"
+dependencies = [
+ "arora-types",
+ "uuid",
 ]
 
 [[package]]
@@ -612,9 +636,9 @@ dependencies = [
 
 [[package]]
 name = "arora-simple-data-store"
-version = "3.0.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91c5fa013c082c02a554579db5c51a0382fba6b874d1cb6875c631842b8d24ab"
+checksum = "e9d8f70e341106e5f869ab1ce87f8b3a13f6c2013d7131495bb0b65a772c0424"
 dependencies = [
  "arora-types",
 ]
@@ -654,9 +678,8 @@ dependencies = [
 
 [[package]]
 name = "arora-types"
-version = "3.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95b3f779504bdb183114c5f02637f2124fb3854e136e0f83718fbdd55087115d"
+version = "3.9.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=main#682ca795454945397ba9aa7a9515ff9573206f27"
 dependencies = [
  "arora-types-derive",
  "async-trait",
@@ -6975,7 +6998,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -8808,6 +8831,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1_smol"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9999,7 +10028,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.4",
+ "cfg-if 0.1.10",
  "static_assertions",
 ]
 
@@ -10193,6 +10222,7 @@ dependencies = [
  "js-sys",
  "rand 0.10.2",
  "serde_core",
+ "sha1_smol",
  "wasm-bindgen",
 ]
 
@@ -10313,8 +10343,9 @@ dependencies = [
 
 [[package]]
 name = "vizij-api-core"
-version = "2.1.0"
+version = "3.0.0"
 dependencies = [
+ "arora-geometry",
  "arora-types",
  "hashbrown 0.17.1",
  "serde",
@@ -10345,7 +10376,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-behavior"
-version = "7.3.0"
+version = "8.0.0"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
@@ -10403,7 +10434,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-tts"
-version = "7.0.1"
+version = "7.0.2"
 dependencies = [
  "arora",
  "arora-behavior",
@@ -10447,20 +10478,20 @@ dependencies = [
 
 [[package]]
 name = "vizij-graph-core"
-version = "3.1.1"
+version = "4.0.0"
 dependencies = [
- "anyhow",
  "arora-behavior",
+ "arora-behavior-tree",
+ "arora-dataflow-nodes",
+ "arora-geometry",
+ "arora-simple-data-store",
+ "arora-types",
  "criterion",
  "hashbrown 0.17.1",
- "k",
  "serde",
  "serde_json",
- "thiserror 2.0.20",
- "urdf-rs",
  "uuid",
  "vizij-api-core",
- "vizij-test-fixtures",
 ]
 
 [[package]]

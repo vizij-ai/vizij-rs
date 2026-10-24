@@ -4,20 +4,20 @@
 //! [`arora_types::value::Value`], re-exported here as [`Value`]. This module
 //! declares the vizij vocabulary on top of it:
 //!
-//! - **Type ids** for vizij's graphics-flavoured composites (`vec2`/`vec3`/
-//!   `vec4`/`quat`/`color-rgba`/`transform`), which have no Arora primitive
-//!   and map to `Value::Structure` with stable type/field ids. The ids are
-//!   UUIDs namespaced under the ASCII bytes of "vizij" so they are
-//!   self-identifying and collision-free. They are the source of truth for
-//!   vizij's structured values, shared by module codegen and Studio
-//!   introspection.
+//! - **Type ids** for vizij's composites, which have no Arora primitive and
+//!   map to `Value::Structure` with stable type/field ids. The geometry types
+//!   (`vec2`/`vec3`/`vec4`/`quat`/`transform`) are Arora's own, declared by
+//!   `arora-geometry` and re-exported here; `color-rgba` is declared here.
+//!   The ids are UUIDs namespaced under the ASCII bytes of "vizij" so they
+//!   are self-identifying and collision-free. They are shared by module
+//!   codegen and Studio introspection.
 //! - **Constructors** (`vec3([f32; 3]) -> Value`, ...) building the canonical
 //!   encoding for each vocabulary entry.
 //! - **Accessors** (`as_vec3(&Value) -> Option<[f32; 3]>`, ...) reading them
 //!   back into plain Rust types. These are the kernel seam: hot code decodes
 //!   a `Value` once into PODs, does its math on those, and re-encodes at the
 //!   store boundary.
-//! - A coarse [`VizijKind`] classifier for dispatch.
+//! - A coarse [`ShapeKind`] classifier for dispatch.
 //!
 //! Primitive mapping: `f32` -> `Value::F32`, `bool` -> `Value::Boolean`,
 //! text -> `Value::String`, numeric vector -> `Value::ArrayF32`. Records map
@@ -27,51 +27,28 @@
 //! Arora's native `Value::Enumeration` with variant ids derived from the
 //! variant names via [`variant_id`].
 
+use arora_geometry::{float_structure, read_float_structure, Kind};
 use arora_types::gen_uuid_from_str;
 use arora_types::keyvalue::{KeyValue, KeyValueField};
 use uuid::Uuid;
 
+pub use arora_geometry::{
+    as_quat, as_transform, as_vec2, as_vec3, as_vec4, quat, transform, vec2, vec3, vec4, Transform,
+    QUAT_FIELDS, QUAT_TYPE, TRANSFORM_ROTATION, TRANSFORM_SCALE, TRANSFORM_TRANSLATION,
+    TRANSFORM_TYPE, VEC2_FIELDS, VEC2_TYPE, VEC3_FIELDS, VEC3_TYPE, VEC4_FIELDS, VEC4_TYPE,
+};
 pub use arora_types::value::{Enumeration, Structure, StructureField, StructureWithoutId, Value};
 
 // ---- declared type / field ids ------------------------------------------------
 
 /// Namespace for all vizij type ids: the ASCII bytes of "vizij"
 /// (`76 69 7a 69 6a`) in the leading bytes, so every id is self-identifying.
-pub const VIZIJ_NS: u128 = 0x7669_7a69_6a00_0000_0000_0000_0000_0000;
+/// The geometry types' ids live under it too.
+pub const VIZIJ_NS: u128 = arora_geometry::NAMESPACE;
 
 const fn id(offset: u128) -> Uuid {
     Uuid::from_u128(VIZIJ_NS | offset)
 }
-
-/// Type id of the `vec2` structure.
-pub const VEC2_TYPE: Uuid = id(0x0002);
-/// Field ids of the `vec2` structure, in `[x, y]` order.
-pub const VEC2_FIELDS: [Uuid; 2] = [id(0x0002_0001), id(0x0002_0002)];
-
-/// Type id of the `vec3` structure.
-pub const VEC3_TYPE: Uuid = id(0x0003);
-/// Field ids of the `vec3` structure, in `[x, y, z]` order.
-pub const VEC3_FIELDS: [Uuid; 3] = [id(0x0003_0001), id(0x0003_0002), id(0x0003_0003)];
-
-/// Type id of the `vec4` structure.
-pub const VEC4_TYPE: Uuid = id(0x0004);
-/// Field ids of the `vec4` structure, in `[x, y, z, w]` order.
-pub const VEC4_FIELDS: [Uuid; 4] = [
-    id(0x0004_0001),
-    id(0x0004_0002),
-    id(0x0004_0003),
-    id(0x0004_0004),
-];
-
-/// Type id of the `quat` structure (`[x, y, z, w]`).
-pub const QUAT_TYPE: Uuid = id(0x0010);
-/// Field ids of the `quat` structure, in `[x, y, z, w]` order.
-pub const QUAT_FIELDS: [Uuid; 4] = [
-    id(0x0010_0001),
-    id(0x0010_0002),
-    id(0x0010_0003),
-    id(0x0010_0004),
-];
 
 /// Type id of the `color-rgba` structure (linear by convention).
 pub const COLOR_RGBA_TYPE: Uuid = id(0x0020);
@@ -83,15 +60,6 @@ pub const COLOR_RGBA_FIELDS: [Uuid; 4] = [
     id(0x0020_0004),
 ];
 
-/// Type id of the `transform` structure.
-pub const TRANSFORM_TYPE: Uuid = id(0x0030);
-/// Field id of the `transform` translation (a `vec3` structure).
-pub const TRANSFORM_TRANSLATION: Uuid = id(0x0030_0001);
-/// Field id of the `transform` rotation (a `quat` structure).
-pub const TRANSFORM_ROTATION: Uuid = id(0x0030_0002);
-/// Field id of the `transform` scale (a `vec3` structure).
-pub const TRANSFORM_SCALE: Uuid = id(0x0030_0003);
-
 /// Enumeration type id for vizij enums whose variant set is open
 /// (variants identified by [`variant_id`] of their name).
 pub const ENUM_TYPE: Uuid = id(0x0040);
@@ -99,18 +67,7 @@ pub const ENUM_TYPE: Uuid = id(0x0040);
 /// KeyValue id used for vizij records (open string-keyed field sets).
 pub const RECORD_TYPE: Uuid = id(0x0050);
 
-// ---- POD forms ------------------------------------------------------------------
-
-/// Plain-Rust form of the `transform` structure.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Transform {
-    /// Translation as `[x, y, z]`.
-    pub translation: [f32; 3],
-    /// Rotation quaternion as `[x, y, z, w]`.
-    pub rotation: [f32; 4],
-    /// Per-axis scale as `[x, y, z]`.
-    pub scale: [f32; 3],
-}
+// ---- classification ----------------------------------------------------------------
 
 /// Coarse classification of a [`Value`] against the vizij vocabulary.
 ///
@@ -118,7 +75,7 @@ pub struct Transform {
 /// (integers, unit, uuid, unknown structures, ...); such values still flow
 /// through the store untouched, they just have no vizij-specific semantics.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum VizijKind {
+pub enum ShapeKind {
     /// Scalar float (`F32` or `F64`).
     Float,
     /// Boolean.
@@ -150,7 +107,7 @@ pub enum VizijKind {
 }
 
 /// Classify a value against the vizij vocabulary.
-pub fn kind(value: &Value) -> VizijKind {
+pub fn kind(value: &Value) -> ShapeKind {
     match value {
         // The graph has one scalar kind; an integer from the store (the
         // runtime's `dt`, a frame's dimensions) is a number to its arithmetic.
@@ -163,23 +120,23 @@ pub fn kind(value: &Value) -> VizijKind {
         | Value::I8(_)
         | Value::I16(_)
         | Value::I32(_)
-        | Value::I64(_) => VizijKind::Float,
-        Value::Boolean(_) => VizijKind::Bool,
-        Value::String(_) => VizijKind::Text,
-        Value::ArrayF32(_) => VizijKind::Vector,
-        Value::Structure(s) => match s.id {
-            t if t == VEC2_TYPE => VizijKind::Vec2,
-            t if t == VEC3_TYPE => VizijKind::Vec3,
-            t if t == VEC4_TYPE => VizijKind::Vec4,
-            t if t == QUAT_TYPE => VizijKind::Quat,
-            t if t == COLOR_RGBA_TYPE => VizijKind::ColorRgba,
-            t if t == TRANSFORM_TYPE => VizijKind::Transform,
-            _ => VizijKind::Other,
+        | Value::I64(_) => ShapeKind::Float,
+        Value::Boolean(_) => ShapeKind::Bool,
+        Value::String(_) => ShapeKind::Text,
+        Value::ArrayF32(_) => ShapeKind::Vector,
+        Value::Structure(s) => match arora_geometry::kind(value) {
+            Some(Kind::Vec2) => ShapeKind::Vec2,
+            Some(Kind::Vec3) => ShapeKind::Vec3,
+            Some(Kind::Vec4) => ShapeKind::Vec4,
+            Some(Kind::Quat) => ShapeKind::Quat,
+            Some(Kind::Transform) => ShapeKind::Transform,
+            None if s.id == COLOR_RGBA_TYPE => ShapeKind::ColorRgba,
+            None => ShapeKind::Other,
         },
-        Value::KeyValue(_) => VizijKind::Record,
-        Value::ArrayValue(_) => VizijKind::Array,
-        Value::Enumeration(_) => VizijKind::Enum,
-        _ => VizijKind::Other,
+        Value::KeyValue(_) => ShapeKind::Record,
+        Value::ArrayValue(_) => ShapeKind::Array,
+        Value::Enumeration(_) => ShapeKind::Enum,
+        _ => ShapeKind::Other,
     }
 }
 
@@ -205,41 +162,9 @@ pub fn vector(xs: Vec<f32>) -> Value {
     Value::ArrayF32(xs)
 }
 
-/// 2D vector structure.
-pub fn vec2(a: [f32; 2]) -> Value {
-    float_structure(VEC2_TYPE, &VEC2_FIELDS, &a)
-}
-
-/// 3D vector structure.
-pub fn vec3(a: [f32; 3]) -> Value {
-    float_structure(VEC3_TYPE, &VEC3_FIELDS, &a)
-}
-
-/// 4D vector structure.
-pub fn vec4(a: [f32; 4]) -> Value {
-    float_structure(VEC4_TYPE, &VEC4_FIELDS, &a)
-}
-
-/// Quaternion structure (`[x, y, z, w]`).
-pub fn quat(a: [f32; 4]) -> Value {
-    float_structure(QUAT_TYPE, &QUAT_FIELDS, &a)
-}
-
 /// RGBA color structure (linear by convention).
 pub fn color_rgba(a: [f32; 4]) -> Value {
     float_structure(COLOR_RGBA_TYPE, &COLOR_RGBA_FIELDS, &a)
-}
-
-/// Transform structure (translation `vec3`, rotation `quat`, scale `vec3`).
-pub fn transform(t: Transform) -> Value {
-    structure(
-        TRANSFORM_TYPE,
-        vec![
-            (TRANSFORM_TRANSLATION, vec3(t.translation)),
-            (TRANSFORM_ROTATION, quat(t.rotation)),
-            (TRANSFORM_SCALE, vec3(t.scale)),
-        ],
-    )
 }
 
 /// String-keyed record. Field ids derive deterministically from the key names.
@@ -276,30 +201,6 @@ pub fn enumeration(variant: &str, payload: Value) -> Value {
 /// the name itself is not stored in the value.
 pub fn variant_id(variant: &str) -> Uuid {
     gen_uuid_from_str(variant)
-}
-
-fn float_structure(ty: Uuid, fields: &[Uuid], comps: &[f32]) -> Value {
-    structure(
-        ty,
-        fields
-            .iter()
-            .zip(comps)
-            .map(|(id, c)| (*id, Value::F32(*c)))
-            .collect(),
-    )
-}
-
-fn structure(id: Uuid, fields: Vec<(Uuid, Value)>) -> Value {
-    Value::Structure(Structure {
-        id,
-        fields: fields
-            .into_iter()
-            .map(|(id, value)| StructureField {
-                id,
-                value: Box::new(value),
-            })
-            .collect(),
-    })
 }
 
 // ---- accessors --------------------------------------------------------------------
@@ -347,39 +248,9 @@ pub fn as_vector(value: &Value) -> Option<&[f32]> {
     }
 }
 
-/// Read a `vec2` structure.
-pub fn as_vec2(value: &Value) -> Option<[f32; 2]> {
-    read_float_structure(value, VEC2_TYPE, &VEC2_FIELDS)
-}
-
-/// Read a `vec3` structure.
-pub fn as_vec3(value: &Value) -> Option<[f32; 3]> {
-    read_float_structure(value, VEC3_TYPE, &VEC3_FIELDS)
-}
-
-/// Read a `vec4` structure.
-pub fn as_vec4(value: &Value) -> Option<[f32; 4]> {
-    read_float_structure(value, VEC4_TYPE, &VEC4_FIELDS)
-}
-
-/// Read a `quat` structure (`[x, y, z, w]`).
-pub fn as_quat(value: &Value) -> Option<[f32; 4]> {
-    read_float_structure(value, QUAT_TYPE, &QUAT_FIELDS)
-}
-
 /// Read a `color-rgba` structure (`[r, g, b, a]`).
 pub fn as_color_rgba(value: &Value) -> Option<[f32; 4]> {
     read_float_structure(value, COLOR_RGBA_TYPE, &COLOR_RGBA_FIELDS)
-}
-
-/// Read a `transform` structure into its POD form.
-pub fn as_transform(value: &Value) -> Option<Transform> {
-    let s = as_structure(value, TRANSFORM_TYPE)?;
-    Some(Transform {
-        translation: as_vec3(read_field(s, TRANSFORM_TRANSLATION)?)?,
-        rotation: as_quat(read_field(s, TRANSFORM_ROTATION)?)?,
-        scale: as_vec3(read_field(s, TRANSFORM_SCALE)?)?,
-    })
 }
 
 /// Read a record as `(name, value)` pairs, sorted by name for determinism
@@ -427,33 +298,6 @@ pub fn as_enumeration(value: &Value) -> Option<(Uuid, &Value)> {
         Value::Enumeration(e) => Some((e.variant_id, &e.value)),
         _ => None,
     }
-}
-
-fn as_structure(value: &Value, ty: Uuid) -> Option<&Structure> {
-    match value {
-        Value::Structure(s) if s.id == ty => Some(s),
-        _ => None,
-    }
-}
-
-fn read_field(s: &Structure, field: Uuid) -> Option<&Value> {
-    s.fields
-        .iter()
-        .find(|f| f.id == field)
-        .map(|f| f.value.as_ref())
-}
-
-fn read_float_structure<const N: usize>(
-    value: &Value,
-    ty: Uuid,
-    fields: &[Uuid; N],
-) -> Option<[f32; N]> {
-    let s = as_structure(value, ty)?;
-    let mut out = [0.0f32; N];
-    for (slot, field_id) in out.iter_mut().zip(fields) {
-        *slot = as_float(read_field(s, *field_id)?)?;
-    }
-    Some(out)
 }
 
 #[cfg(test)]
@@ -569,38 +413,38 @@ mod tests {
 
     #[test]
     fn kinds_classify_the_vocabulary() {
-        assert_eq!(kind(&float(1.0)), VizijKind::Float);
-        assert_eq!(kind(&Value::F64(1.0)), VizijKind::Float);
-        assert_eq!(kind(&bool_(true)), VizijKind::Bool);
-        assert_eq!(kind(&text("x")), VizijKind::Text);
-        assert_eq!(kind(&vector(vec![1.0])), VizijKind::Vector);
-        assert_eq!(kind(&vec2([0.0; 2])), VizijKind::Vec2);
-        assert_eq!(kind(&vec3([0.0; 3])), VizijKind::Vec3);
-        assert_eq!(kind(&vec4([0.0; 4])), VizijKind::Vec4);
-        assert_eq!(kind(&quat([0.0, 0.0, 0.0, 1.0])), VizijKind::Quat);
-        assert_eq!(kind(&color_rgba([0.0; 4])), VizijKind::ColorRgba);
+        assert_eq!(kind(&float(1.0)), ShapeKind::Float);
+        assert_eq!(kind(&Value::F64(1.0)), ShapeKind::Float);
+        assert_eq!(kind(&bool_(true)), ShapeKind::Bool);
+        assert_eq!(kind(&text("x")), ShapeKind::Text);
+        assert_eq!(kind(&vector(vec![1.0])), ShapeKind::Vector);
+        assert_eq!(kind(&vec2([0.0; 2])), ShapeKind::Vec2);
+        assert_eq!(kind(&vec3([0.0; 3])), ShapeKind::Vec3);
+        assert_eq!(kind(&vec4([0.0; 4])), ShapeKind::Vec4);
+        assert_eq!(kind(&quat([0.0, 0.0, 0.0, 1.0])), ShapeKind::Quat);
+        assert_eq!(kind(&color_rgba([0.0; 4])), ShapeKind::ColorRgba);
         assert_eq!(
             kind(&transform(Transform {
                 translation: [0.0; 3],
                 rotation: [0.0, 0.0, 0.0, 1.0],
                 scale: [1.0; 3],
             })),
-            VizijKind::Transform
+            ShapeKind::Transform
         );
-        assert_eq!(kind(&record([])), VizijKind::Record);
-        assert_eq!(kind(&array(vec![])), VizijKind::Array);
-        assert_eq!(kind(&enumeration("v", float(0.0))), VizijKind::Enum);
+        assert_eq!(kind(&record([])), ShapeKind::Record);
+        assert_eq!(kind(&array(vec![])), ShapeKind::Array);
+        assert_eq!(kind(&enumeration("v", float(0.0))), ShapeKind::Enum);
         // Integers are scalars to the graph, like the runtime's `dt`.
-        assert_eq!(kind(&Value::U32(3)), VizijKind::Float);
-        assert_eq!(kind(&Value::U64(16_000_000)), VizijKind::Float);
+        assert_eq!(kind(&Value::U32(3)), ShapeKind::Float);
+        assert_eq!(kind(&Value::U64(16_000_000)), ShapeKind::Float);
         assert_eq!(as_float(&Value::U64(16_000_000)), Some(16_000_000.0));
-        assert_eq!(kind(&Value::Unit), VizijKind::Other);
+        assert_eq!(kind(&Value::Unit), ShapeKind::Other);
         // Unknown structure ids are outside the vocabulary.
         let foreign = Value::Structure(Structure {
             id: Uuid::from_u128(0x9999),
             fields: vec![],
         });
-        assert_eq!(kind(&foreign), VizijKind::Other);
+        assert_eq!(kind(&foreign), ShapeKind::Other);
         assert_eq!(as_vec2(&foreign), None);
     }
 

@@ -41,115 +41,19 @@ use std::collections::{HashMap, HashSet};
 use arora_behavior::graph::{GraphDiff, LinkSource};
 use arora_behavior::{
     built_in, interpreter_module, BehaviorContext, BehaviorError, BehaviorInterpreter,
-    BehaviorStatus, Graph, RunPolicy, TaskHandle, TaskId,
+    BehaviorStatus, FunctionIndex, Graph, RunPolicy, TaskHandle, TaskId,
 };
-use arora_types::call::{Call, CallBridge, CallResult};
+use arora_types::call::{Call, CallBridge};
 use arora_types::data::{DataStore, Key, StateChange};
 use arora_types::record::module::frozen;
 use arora_types::value::{Structure, StructureField, Type, Value};
 use uuid::Uuid;
 use vizij_api_core::{TypedPath, WriteOp};
-use vizij_graph_core::eval::{evaluate_writes_with_functions, GraphRuntime, NodeFunctions};
 pub use vizij_graph_core::task;
+use vizij_graph_core::tree_runtime::{Evaluation, TreeRuntime};
 use vizij_graph_core::types::{
     EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
 };
-
-/// Adapts an Arora [`CallBridge`] to graph-core's [`NodeFunctions`] host interface.
-///
-/// A graph `ExternalFunction` node carries an opaque function [`Uuid`] for the function it invokes.
-/// The engine routes a [`Call`] by its `module_id` and refuses one naming no module, so this
-/// adapter must know which module each function lives in; it holds a `function -> module` map
-/// supplied at construction. The map is built from module-load summaries (arora-engine's
-/// `LoadedModule { id, function_ids }`); this crate does not own that plumbing.
-struct CallBridgeFunctions<'a> {
-    bridge: &'a mut dyn CallBridge,
-    /// function id -> module id, so a bare function handle can be dispatched to `arora_call`.
-    function_modules: &'a HashMap<Uuid, Uuid>,
-}
-
-impl CallBridgeFunctions<'_> {
-    fn dispatch(
-        &mut self,
-        module_id: Uuid,
-        function: Uuid,
-        args: &[(Uuid, Value)],
-    ) -> Result<Value, String> {
-        Ok(self.dispatch_full(module_id, function, args)?.ret)
-    }
-
-    /// The call's whole result: its return value and its mutable parameters.
-    fn dispatch_full(
-        &mut self,
-        module_id: Uuid,
-        function: Uuid,
-        args: &[(Uuid, Value)],
-    ) -> Result<CallResult, String> {
-        let args: Vec<StructureField> = args
-            .iter()
-            .map(|(id, value)| StructureField {
-                id: *id,
-                value: Box::new(value.clone()),
-            })
-            .collect();
-        self.bridge
-            .arora_call(Call {
-                module_id: Some(module_id),
-                id: function,
-                args,
-            })
-            .map_err(|e| format!("module call failed: {e}"))
-    }
-}
-
-impl NodeFunctions for CallBridgeFunctions<'_> {
-    fn call(&mut self, function: Uuid, args: &[(Uuid, Value)]) -> Result<Value, String> {
-        let module_id = *self
-            .function_modules
-            .get(&function)
-            .ok_or_else(|| format!("no module registered for external function {function}"))?;
-        self.dispatch(module_id, function, args)
-    }
-
-    /// The call's return value with its mutable parameters after the call —
-    /// what a `say` run's fragment reads the streamed viseme from.
-    fn call_module_with_outputs(
-        &mut self,
-        module: Option<Uuid>,
-        function: Uuid,
-        args: &[(Uuid, Value)],
-    ) -> Result<(Value, Vec<(Uuid, Value)>), String> {
-        let module_id = match module {
-            Some(module_id) => module_id,
-            None => *self
-                .function_modules
-                .get(&function)
-                .ok_or_else(|| format!("no module registered for external function {function}"))?,
-        };
-        let result = self.dispatch_full(module_id, function, args)?;
-        let mutated = result
-            .mutated
-            .into_iter()
-            .map(|field| (field.id, *field.value))
-            .collect();
-        Ok((result.ret, mutated))
-    }
-
-    /// A task-run call names its module itself, so it dispatches without a
-    /// `function -> module` entry; one falls back to the map like any other
-    /// external function.
-    fn call_module(
-        &mut self,
-        module: Option<Uuid>,
-        function: Uuid,
-        args: &[(Uuid, Value)],
-    ) -> Result<Value, String> {
-        match module {
-            Some(module_id) => self.dispatch(module_id, function, args),
-            None => self.call(function, args),
-        }
-    }
-}
 
 /// The handle-side index of one live run: the function it implements and
 /// the status key it reports on. The run itself is graph structure — its
@@ -275,14 +179,23 @@ pub struct ProcessingGraph {
     /// Whether [`graph`](Self::graph) changed since [`spec`](Self::spec) was
     /// last lowered.
     dirty: bool,
-    rt: GraphRuntime,
+    /// The evaluator: [`spec`](Self::spec) imported into a behavior tree,
+    /// its nodes detached calls of the node functions, run for what the
+    /// graph's outputs read.
+    rt: TreeRuntime,
+    /// The version of [`spec`](Self::spec) the evaluator was last loaded
+    /// with, and the size of the function index it placed calls by: a spec
+    /// of another version, or an index of another size, is loaded at the
+    /// next tick.
+    loaded: Option<(u64, usize)>,
     /// Store paths staged into the graph before each evaluation, each with
     /// the store key it is read under: the lowered spec's `input` paths, once
     /// each, derived each time the graph is re-lowered.
     inputs: Inputs,
-    /// function id -> module id, so `ExternalFunction` nodes can be dispatched through the
-    /// [`CallBridge`]. See [`CallBridgeFunctions`] for why this map is needed and where it
-    /// should come from.
+    /// function id -> module id, so `ExternalFunction` nodes, which name a
+    /// function alone, can be dispatched through the [`CallBridge`], which
+    /// routes a call by its module. The map is built from the device's
+    /// module-load summaries.
     function_modules: HashMap<Uuid, Uuid>,
     /// Live task runs by the identity their [`TaskHandle`] carries. Each run is
     /// a grafted fragment in [`graph`](Self::graph); this index holds its
@@ -434,6 +347,14 @@ pub fn input_paths(spec: &GraphSpec) -> Vec<TypedPath> {
         .collect()
 }
 
+/// The evaluator of a [`ProcessingGraph`]: a behavior tree evaluating what
+/// the graph's outputs read, its writes applied by the graph.
+fn evaluator() -> TreeRuntime {
+    let mut rt = TreeRuntime::new(Evaluation::Demanded);
+    rt.set_collect_outputs(false);
+    rt
+}
+
 impl ProcessingGraph {
     /// Build from a Vizij graph spec: encode it to the shared model's
     /// [`graph_codec`] form (the retained, editable source of truth). Errors only
@@ -447,7 +368,8 @@ impl ProcessingGraph {
             graph,
             spec: GraphSpec::default(),
             dirty: true,
-            rt: GraphRuntime::default(),
+            rt: evaluator(),
+            loaded: None,
             inputs: Inputs::default(),
             function_modules: HashMap::new(),
             runs: HashMap::new(),
@@ -645,31 +567,28 @@ impl ProcessingGraph {
         Ok(())
     }
 
-    /// Lower a grafted run in place rather than the whole graph again. The
-    /// run is a component of its own — its edges join its nodes only, and it
-    /// meets the rest of the graph through store paths — so its nodes go
-    /// after everything lowered so far and its plan after theirs, which is
+    /// Add a grafted run's nodes to the lowered spec rather than lowering
+    /// the whole graph again. The run is a component of its own — its edges
+    /// join its nodes only, and it meets the rest of the graph through store
+    /// paths — so its nodes go after everything lowered so far, which is
     /// where a full lowering puts them too: the run's `flow` is the runner's
     /// last child. Whatever is not a separate component is left to a full
-    /// lowering.
+    /// lowering. The evaluator imports the spec of the new version at the
+    /// next tick.
     fn lower_grafted_run(&mut self, diff: graph_codec::GraphSpecDiff) {
         if !diff.remove_nodes.is_empty() || !diff.remove_edges.is_empty() {
             self.dirty = true;
             return;
         }
-        let first = self.spec.nodes.len();
         self.spec.nodes.extend(diff.upsert_nodes);
         self.spec.edges.extend(diff.upsert_edges);
         self.relowered();
-        match self.rt.plan.append_component(&self.spec, first) {
-            Ok(()) => self.inputs = Inputs::of(&self.spec),
-            Err(_) => self.dirty = true,
-        }
+        self.inputs = Inputs::of(&self.spec);
     }
 
-    /// Take a pruned run's nodes out of the lowered graph and its plan in
-    /// place — nothing else read them, being a component of its own. Left to
-    /// a full lowering when they were not.
+    /// Take a pruned run's nodes out of the lowered spec in place: nothing
+    /// else read them, being a component of its own. The evaluator imports
+    /// the spec of the new version at the next tick.
     fn lower_pruned_run(&mut self, task: TaskId) {
         let prefix = run_node_prefix(task);
         let removed: Vec<usize> = self
@@ -694,15 +613,12 @@ impl ProcessingGraph {
             !removed_ids.contains(&edge.from.node_id) && !removed_ids.contains(&edge.to.node_id)
         });
         self.relowered();
-        match self.rt.plan.remove_nodes(&self.spec, &removed) {
-            Ok(()) => self.inputs = Inputs::of(&self.spec),
-            Err(_) => self.dirty = true,
-        }
+        self.inputs = Inputs::of(&self.spec);
     }
 
-    /// A lowered spec changed in place: a new version for the plan to serve.
-    /// Its fingerprint is not recomputed — the plan is keyed by version —
-    /// and is cleared rather than left stale.
+    /// The lowered spec changed: a new version, which the evaluator imports
+    /// at the next tick. Its fingerprint is not computed — the evaluator is
+    /// keyed by version — and is cleared rather than left stale.
     fn relowered(&mut self) {
         self.spec.version += 1;
         self.spec.fingerprint = 0;
@@ -848,7 +764,7 @@ impl ProcessingGraph {
     }
 
     /// Re-lower the evaluator's spec from the retained graph and refresh the
-    /// input paths, keeping the runtime warm and the plan-cache version
+    /// input paths, keeping the runtime warm and the spec's version
     /// monotonic. A spec that fails [`GraphSpec::validate`] is refused, and
     /// the evaluator keeps the spec it has.
     fn lower(&mut self) -> Result<(), BehaviorError> {
@@ -857,13 +773,13 @@ impl ProcessingGraph {
         spec.validate()
             .map_err(|message| BehaviorError { message })?;
         self.inputs = Inputs::of(&spec);
-        // Carry the version forward before re-caching. A freshly decoded spec
-        // restarts at version 0 (→ 1 after `with_cache`); bumping from the
-        // current version keeps it strictly increasing, so the version-keyed
-        // `PlanCache` always rebuilds the plan for the new topology rather than
-        // serving the previous graph's plan.
+        // Carry the version forward. A freshly decoded spec restarts at
+        // version 0; bumping from the current version keeps it strictly
+        // increasing, so the evaluator, keyed by version, imports the new
+        // graph rather than keep running the previous one.
         spec.version = self.spec.version;
-        self.spec = spec.with_cache();
+        self.spec = spec;
+        self.relowered();
         self.dirty = false;
         Ok(())
     }
@@ -894,6 +810,7 @@ impl ProcessingGraph {
     ///
     /// Until this is populated, an `ExternalFunction` node errors with "no module registered".
     pub fn set_function_modules(&mut self, function_modules: HashMap<Uuid, Uuid>) {
+        self.rt.set_function_modules(function_modules.clone());
         self.function_modules = function_modules;
     }
 
@@ -903,11 +820,29 @@ impl ProcessingGraph {
     /// for tests.
     ///
     /// `call_bridge` is the Arora host call interface; `ExternalFunction` nodes dispatch through
-    /// it, resolving each function to its module via the `function id -> module id` map.
+    /// it, resolving each function to its module via the `function id -> module id` map. With no
+    /// function described, each `ExternalFunction` node is called at every tick
+    /// ([`tick_store_with`](Self::tick_store_with)).
     pub fn tick_store(
         &mut self,
         store: &dyn DataStore,
         call_bridge: &mut dyn CallBridge,
+        dt: f32,
+    ) -> Result<(), BehaviorError> {
+        self.tick_store_with(store, call_bridge, &FunctionIndex::new(), dt)
+    }
+
+    /// [`tick_store`](Self::tick_store), placing each `ExternalFunction` node by the
+    /// description `functions` gives of its function, as the device's index does at each
+    /// tick: a call to a function that returns nothing is left out, one to a function that
+    /// takes no parameter is called at every tick, and any other is called when its
+    /// arguments change ([`vizij_graph_core::functions::placement`]). The graph is imported
+    /// again when the index changes size, as when a module loads.
+    pub fn tick_store_with(
+        &mut self,
+        store: &dyn DataStore,
+        call_bridge: &mut dyn CallBridge,
+        functions: &FunctionIndex,
         dt: f32,
     ) -> Result<(), BehaviorError> {
         // The holds and releases sent since the last tick hold from this one.
@@ -935,11 +870,17 @@ impl ProcessingGraph {
             }
         }
 
-        let mut functions = CallBridgeFunctions {
-            bridge: call_bridge,
-            function_modules: &self.function_modules,
-        };
-        evaluate_writes_with_functions(&mut self.rt, &self.spec, &mut functions)
+        // The evaluator follows the spec: a spec changed since the last tick
+        // is imported again, every node it keeps keeping its state.
+        let loaded = (self.spec.version, functions.len());
+        if self.loaded != Some(loaded) {
+            self.rt
+                .load_with_functions(&self.spec, functions)
+                .map_err(|message| BehaviorError { message })?;
+            self.loaded = Some(loaded);
+        }
+        self.rt
+            .evaluate_with(call_bridge)
             .map_err(|message| BehaviorError { message })?;
 
         // Write the graph's outputs back to the store, but for the keys it
@@ -1414,7 +1355,7 @@ impl BehaviorInterpreter for ProcessingGraph {
 
     fn tick(&mut self, ctx: &mut BehaviorContext) -> Result<BehaviorStatus, BehaviorError> {
         let dt = built_in_dt_seconds(ctx.store);
-        self.tick_store(ctx.store, &mut *ctx.call_bridge, dt)?;
+        self.tick_store_with(ctx.store, &mut *ctx.call_bridge, ctx.functions, dt)?;
         // A node graph is continuous: tick it again next step.
         Ok(BehaviorStatus::Running)
     }
@@ -1808,8 +1749,8 @@ mod tests {
     /// A load keeps the graph runtime warm: the graph clock (surfaced by a
     /// `Time` node, which reads `rt.t`) stays continuous across a recompose
     /// instead of restarting at zero. Guards the runtime-continuity behavior
-    /// and, with `load_swaps_the_graph_in_place`, the version-carry that keeps
-    /// the plan cache from serving the old plan for the new graph.
+    /// and, with `load_swaps_the_graph_in_place`, the version-carry that has
+    /// the evaluator import the new graph rather than keep the old one.
     fn clock_graph_json(output: &str) -> serde_json::Value {
         json!({
             "nodes": [
@@ -2178,7 +2119,8 @@ mod tests {
         assert_eq!(tick(&mut graph, &mut bridge), Some(float(3.0)));
     }
 
-    /// The order a plan follows and what it binds, in comparable form.
+    /// The order the lowered spec evaluates in and what it binds, in
+    /// comparable form.
     fn lowered(graph: &ProcessingGraph) -> Vec<String> {
         let mut out: Vec<String> = graph
             .spec
@@ -2186,13 +2128,8 @@ mod tests {
             .iter()
             .map(|n| format!("node {}", n.id))
             .collect();
-        let order: Vec<&str> = graph
-            .rt
-            .plan
-            .order
-            .iter()
-            .map(|&idx| graph.spec.nodes[idx].id.as_str())
-            .collect();
+        let order = vizij_graph_core::topo_order(&graph.spec.nodes, &graph.spec.edges)
+            .expect("the lowered spec orders");
         out.push(format!("order {order:?}"));
         let mut edges: Vec<String> = graph
             .spec
@@ -2241,7 +2178,6 @@ mod tests {
 
         graph.dirty = true;
         graph.lower().unwrap();
-        graph.rt.plan.ensure_versioned(&graph.spec).unwrap();
         assert_eq!(lowered(&graph), in_place);
     }
 
@@ -2405,6 +2341,101 @@ mod tests {
         graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
         assert_eq!(vizij_nodes(&graph), nodes_before);
         assert_eq!(bridge.calls.len(), 2, "an ended run is never invoked again");
+    }
+
+    /// A graph's calls to other modules are placed by the descriptions the
+    /// device's function index gives: a call to a function returning
+    /// nothing is left out, and any other runs at every tick, its arguments
+    /// changed or not, as a module's function may keep state they do not
+    /// show (the animation module's `step(dt)`).
+    #[test]
+    fn calls_to_other_modules_follow_their_functions_descriptions() {
+        use arora_types::record::module::frozen::{Function, Parameter};
+        use arora_types::record::ty::{FrozenTy, PrimitiveKind};
+
+        let module = Uuid::from_u128(0x0a0);
+        let parameter = Uuid::from_u128(0x0a1);
+        let [step, notify, states] = [0x0b1, 0x0b2, 0x0b3].map(Uuid::from_u128);
+        let describe = |id: Uuid, parameters: &[Uuid], returns: PrimitiveKind| {
+            arora_behavior::ModuleFunction {
+                module_id: module,
+                function_id: id,
+                function_name: id.to_string(),
+                function: Function {
+                    parameter_ordering: parameters.to_vec(),
+                    parameters: parameters
+                        .iter()
+                        .map(|id| {
+                            let parameter = Parameter {
+                                name: "x".into(),
+                                ty: FrozenTy::from(PrimitiveKind::F32),
+                                mutable: false,
+                            };
+                            (*id, parameter)
+                        })
+                        .collect(),
+                    return_ty: FrozenTy::from(returns),
+                },
+            }
+        };
+        let functions: FunctionIndex = [
+            (step, describe(step, &[parameter], PrimitiveKind::F32)),
+            (notify, describe(notify, &[parameter], PrimitiveKind::Unit)),
+            (states, describe(states, &[], PrimitiveKind::F32)),
+        ]
+        .into_iter()
+        .collect();
+        let call = |id: &str, function: Uuid, takes: bool| {
+            let param_ids: Vec<String> = if takes {
+                vec![parameter.to_string()]
+            } else {
+                Vec::new()
+            };
+            json!({ "id": id, "type": "externalfunction",
+                    "params": { "function": function.to_string(), "param_ids": param_ids } })
+        };
+        let spec = parse_spec(
+            &json!({
+                "nodes": [
+                    { "id": "x", "type": "input", "params": { "path": "cmd/x", "value": 0.0 } },
+                    call("step", step, true),
+                    call("notify", notify, true),
+                    call("states", states, false),
+                    { "id": "step-out", "type": "output", "params": { "path": "out/step" } },
+                    { "id": "states-out", "type": "output", "params": { "path": "out/states" } },
+                ],
+                "edges": [
+                    { "from": { "node_id": "x" }, "to": { "node_id": "step", "input": "args_0" } },
+                    { "from": { "node_id": "x" }, "to": { "node_id": "notify", "input": "args_0" } },
+                    { "from": { "node_id": "step" }, "to": { "node_id": "step-out", "input": "in" } },
+                    { "from": { "node_id": "states" }, "to": { "node_id": "states-out", "input": "in" } },
+                ],
+            })
+            .to_string(),
+        )
+        .expect("spec");
+        let mut graph = ProcessingGraph::from_spec(spec).expect("graph");
+        graph.set_function_modules(HashMap::from([
+            (step, module),
+            (notify, module),
+            (states, module),
+        ]));
+        let store = SimpleDataStore::new();
+        let mut bridge = RunBridge::new(Vec::new());
+        for x in [0.5, 0.5, 0.5, 0.75] {
+            store.write(StateChange::set("cmd/x", float(x))).unwrap();
+            graph
+                .tick_store_with(&store, &mut bridge, &functions, 0.016)
+                .expect("tick");
+        }
+        let count = |function: Uuid| bridge.calls.iter().filter(|c| c.id == function).count();
+        assert_eq!(
+            count(step),
+            4,
+            "called at every tick, its argument repeated"
+        );
+        assert_eq!(count(states), 4, "called at every tick");
+        assert_eq!(count(notify), 0, "returns nothing, so nothing reads it");
     }
 
     /// A run of a function no fragment and no module implements is refused
@@ -3498,12 +3529,12 @@ mod tests {
         assert_eq!(read(&store, "actuator/y"), Some(float(0.75)));
     }
 
-    /// The interpreter is `Send` and `Sync` whether or not anything holds
-    /// through it, and so is a hold handle.
+    /// A hold handle is `Send` and `Sync`, so a client on another thread
+    /// holds keys through it. The interpreter runs a behavior tree, which is
+    /// single-threaded: a device builds it on the thread that ticks it.
     #[test]
-    fn the_interpreter_and_its_key_holds_are_send_and_sync() {
+    fn the_key_holds_are_send_and_sync() {
         fn send_and_sync<T: Send + Sync>() {}
-        send_and_sync::<ProcessingGraph>();
         send_and_sync::<KeyHolds>();
     }
 

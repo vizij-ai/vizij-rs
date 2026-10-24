@@ -6,16 +6,12 @@
 //! the declared `Array`/`List`/`Tuple` shapes all validate against it — the
 //! distinction lives in the shape alone.
 
-use std::borrow::Cow;
-
-use crate::types::{NodeSpec, SelectorSegment};
-use hashbrown::HashMap;
 use vizij_api_core::shape::Field;
 use vizij_api_core::value as vocab;
-use vizij_api_core::value::VizijKind;
+use vizij_api_core::value::ShapeKind;
 use vizij_api_core::{Shape, ShapeId, Value};
 
-use super::value_layout::{flatten_numeric, PortValue};
+use super::value_layout::flatten_numeric;
 
 /// Infer the [`Shape`] for a [`Value`].
 pub fn infer_shape(value: &Value) -> Shape {
@@ -31,22 +27,22 @@ pub fn infer_shape(value: &Value) -> Shape {
 /// `Scalar`, matching their scalar numeric coercion.
 pub fn infer_shape_id(value: &Value) -> ShapeId {
     match vocab::kind(value) {
-        VizijKind::Float => ShapeId::Scalar,
-        VizijKind::Bool => ShapeId::Bool,
-        VizijKind::Text => ShapeId::Text,
-        VizijKind::Vec2 => ShapeId::Vec2,
-        VizijKind::Vec3 => ShapeId::Vec3,
-        VizijKind::Vec4 => ShapeId::Vec4,
-        VizijKind::Quat => ShapeId::Quat,
-        VizijKind::ColorRgba => ShapeId::ColorRgba,
-        VizijKind::Transform => ShapeId::Transform,
-        VizijKind::Vector => {
+        ShapeKind::Float => ShapeId::Scalar,
+        ShapeKind::Bool => ShapeId::Bool,
+        ShapeKind::Text => ShapeId::Text,
+        ShapeKind::Vec2 => ShapeId::Vec2,
+        ShapeKind::Vec3 => ShapeId::Vec3,
+        ShapeKind::Vec4 => ShapeId::Vec4,
+        ShapeKind::Quat => ShapeId::Quat,
+        ShapeKind::ColorRgba => ShapeId::ColorRgba,
+        ShapeKind::Transform => ShapeId::Transform,
+        ShapeKind::Vector => {
             let len = vocab::as_vector(value).map(<[f32]>::len).unwrap_or(0);
             ShapeId::Vector {
                 len: if len == 0 { None } else { Some(len) },
             }
         }
-        VizijKind::Record => {
+        ShapeKind::Record => {
             // `as_record` yields entries sorted by name.
             let fields: Vec<Field> = vocab::as_record(value)
                 .unwrap_or_default()
@@ -58,7 +54,7 @@ pub fn infer_shape_id(value: &Value) -> ShapeId {
                 .collect();
             ShapeId::Record(fields)
         }
-        VizijKind::Array => {
+        ShapeKind::Array => {
             let items = vocab::as_array(value).unwrap_or_default();
             if let Some(first) = items.first() {
                 let first_shape = infer_shape_id(first);
@@ -72,59 +68,28 @@ pub fn infer_shape_id(value: &Value) -> ShapeId {
                 ShapeId::Array(Box::new(ShapeId::Scalar), 0)
             }
         }
-        VizijKind::Enum => match vocab::as_enumeration(value) {
+        ShapeKind::Enum => match vocab::as_enumeration(value) {
             Some((variant, payload)) => {
                 ShapeId::Enum(vec![(variant.to_string(), infer_shape_id(payload))])
             }
             None => ShapeId::Scalar,
         },
-        VizijKind::Other => ShapeId::Scalar,
+        ShapeKind::Other => ShapeId::Scalar,
     }
-}
-
-/// Ensure outputs match their declared shapes, updating cached shapes in-place.
-#[allow(dead_code)]
-pub fn enforce_output_shapes(
-    spec: &NodeSpec,
-    outputs: &mut HashMap<String, PortValue>,
-) -> Result<(), String> {
-    if spec.output_shapes.is_empty() {
-        return Ok(());
-    }
-
-    for (key, declared) in spec.output_shapes.iter() {
-        let port = outputs.get_mut(key).ok_or_else(|| {
-            format!(
-                "node '{}' missing declared output '{}' during evaluation",
-                spec.id, key
-            )
-        })?;
-
-        if !value_matches_shape(&declared.id, &port.value) {
-            return Err(format!(
-                "node '{}' output '{}' does not match declared shape {:?}",
-                spec.id, key, declared.id
-            ));
-        }
-
-        port.shape = declared.clone();
-    }
-
-    Ok(())
 }
 
 /// Check whether `value` conforms to the expected `shape`.
 pub fn value_matches_shape(shape: &ShapeId, value: &Value) -> bool {
     match shape {
-        ShapeId::Scalar => vocab::kind(value) == VizijKind::Float,
-        ShapeId::Bool => vocab::kind(value) == VizijKind::Bool,
-        ShapeId::Vec2 => vocab::kind(value) == VizijKind::Vec2,
-        ShapeId::Vec3 => vocab::kind(value) == VizijKind::Vec3,
-        ShapeId::Vec4 => vocab::kind(value) == VizijKind::Vec4,
-        ShapeId::Quat => vocab::kind(value) == VizijKind::Quat,
-        ShapeId::ColorRgba => vocab::kind(value) == VizijKind::ColorRgba,
-        ShapeId::Transform => vocab::kind(value) == VizijKind::Transform,
-        ShapeId::Text => vocab::kind(value) == VizijKind::Text,
+        ShapeId::Scalar => vocab::kind(value) == ShapeKind::Float,
+        ShapeId::Bool => vocab::kind(value) == ShapeKind::Bool,
+        ShapeId::Vec2 => vocab::kind(value) == ShapeKind::Vec2,
+        ShapeId::Vec3 => vocab::kind(value) == ShapeKind::Vec3,
+        ShapeId::Vec4 => vocab::kind(value) == ShapeKind::Vec4,
+        ShapeId::Quat => vocab::kind(value) == ShapeKind::Quat,
+        ShapeId::ColorRgba => vocab::kind(value) == ShapeKind::ColorRgba,
+        ShapeId::Transform => vocab::kind(value) == ShapeKind::Transform,
+        ShapeId::Text => vocab::kind(value) == ShapeKind::Text,
         ShapeId::Vector { len } => match vocab::as_vector(value) {
             Some(items) => match len {
                 Some(expected) => items.len() == *expected,
@@ -240,140 +205,6 @@ pub fn null_of_shape_numeric(shape: &ShapeId) -> Value {
     }
 }
 
-/// Apply selector segments to a value and optional shape metadata, returning the projected value.
-///
-/// The selection walks `value` and `shape` by reference and clones only what
-/// it selects: a field of a large record costs the field, not the record.
-pub fn project_by_selector(
-    value: &Value,
-    shape: Option<&ShapeId>,
-    selector: &[SelectorSegment],
-) -> Result<(Value, Option<ShapeId>), String> {
-    let Some((segment, rest)) = selector.split_first() else {
-        return Ok((value.clone(), shape.cloned()));
-    };
-    let (next_value, next_shape) = match segment {
-        SelectorSegment::Field(field) => (
-            select_field(value, field)?,
-            shape.and_then(|shape| field_shape(shape, field)),
-        ),
-        SelectorSegment::Index(idx) => (
-            select_index(value, *idx)?,
-            shape.and_then(|shape| index_shape(shape, *idx)),
-        ),
-    };
-    let next_value = next_value.as_ref();
-    let next_shape = next_shape.unwrap_or_else(|| Cow::Owned(infer_shape_id(next_value)));
-    project_by_selector(next_value, Some(&next_shape), rest)
-}
-
-/// The value field `field` of `value` selects: a record's field, a
-/// transform's part, an enumeration's payload when `field` names its variant.
-fn select_field<'a>(value: &'a Value, field: &str) -> Result<Cow<'a, Value>, String> {
-    match vocab::kind(value) {
-        VizijKind::Record => vocab::record_field(value, field)
-            .map(Cow::Borrowed)
-            .ok_or_else(|| format!("selector field '{}' missing in record", field)),
-        VizijKind::Transform => vocab::as_transform(value)
-            .and_then(|t| transform_field_value(field, &t))
-            .map(Cow::Owned)
-            .ok_or_else(|| format!("selector field '{}' invalid for transform", field)),
-        VizijKind::Enum => {
-            let (variant, payload) = vocab::as_enumeration(value)
-                .ok_or_else(|| format!("selector field '{}' invalid", field))?;
-            if vocab::variant_id(field) == variant || variant.to_string() == *field {
-                Ok(Cow::Borrowed(payload))
-            } else {
-                Err(format!(
-                    "selector field '{}' does not match enum variant '{}'",
-                    field, variant
-                ))
-            }
-        }
-        _ => Err(format!(
-            "selector field '{}' unsupported for value {:?}",
-            field,
-            infer_shape_id(value)
-        )),
-    }
-}
-
-/// The declared shape of field `field` of a value of shape `shape`, if the
-/// shape declares one.
-fn field_shape<'a>(shape: &'a ShapeId, field: &str) -> Option<Cow<'a, ShapeId>> {
-    match shape {
-        ShapeId::Record(fields) => fields
-            .iter()
-            .find(|f| f.name == *field)
-            .map(|f| Cow::Borrowed(&f.shape)),
-        ShapeId::Transform => transform_field_shape(field).map(Cow::Owned),
-        ShapeId::Enum(variants) => variants
-            .iter()
-            .find(|(tag, _)| tag == field)
-            .map(|(_, shape)| Cow::Borrowed(shape)),
-        _ => None,
-    }
-}
-
-/// The value index `idx` of `value` selects: a component of a numeric
-/// value, an item of an array.
-fn select_index(value: &Value, idx: usize) -> Result<Cow<'_, Value>, String> {
-    let owned = |component: Option<Value>, what: &str| {
-        component
-            .map(Cow::Owned)
-            .ok_or_else(|| format!("selector index {} out of bounds for {}", idx, what))
-    };
-    match vocab::kind(value) {
-        VizijKind::Vector => {
-            let items = vocab::as_vector(value).unwrap_or_default();
-            owned(
-                items.get(idx).copied().map(vocab::float),
-                &format!("vector of len {}", items.len()),
-            )
-        }
-        VizijKind::Array => {
-            let items = vocab::as_array(value).unwrap_or_default();
-            items.get(idx).map(Cow::Borrowed).ok_or_else(|| {
-                format!(
-                    "selector index {} out of bounds for array of len {}",
-                    idx,
-                    items.len()
-                )
-            })
-        }
-        VizijKind::Vec2 => owned(component(vocab::as_vec2(value), idx), "vec2"),
-        VizijKind::Vec3 => owned(component(vocab::as_vec3(value), idx), "vec3"),
-        VizijKind::Vec4 => owned(component(vocab::as_vec4(value), idx), "vec4"),
-        VizijKind::Quat => owned(component(vocab::as_quat(value), idx), "quat"),
-        VizijKind::ColorRgba => owned(component(vocab::as_color_rgba(value), idx), "color"),
-        _ => Err(format!(
-            "selector index {} unsupported for value {:?}",
-            idx,
-            infer_shape_id(value)
-        )),
-    }
-}
-
-/// The declared shape of item `idx` of a value of shape `shape`, if the
-/// shape declares one.
-fn index_shape(shape: &ShapeId, idx: usize) -> Option<Cow<'_, ShapeId>> {
-    match shape {
-        ShapeId::Vector { .. }
-        | ShapeId::Vec2
-        | ShapeId::Vec3
-        | ShapeId::Vec4
-        | ShapeId::Quat
-        | ShapeId::ColorRgba => Some(Cow::Owned(ShapeId::Scalar)),
-        ShapeId::Array(inner, _) | ShapeId::List(inner) => Some(Cow::Borrowed(&**inner)),
-        ShapeId::Tuple(entries) => entries.get(idx).map(Cow::Borrowed),
-        _ => None,
-    }
-}
-
-fn component<const N: usize>(arr: Option<[f32; N]>, idx: usize) -> Option<Value> {
-    arr.and_then(|a| a.get(idx).copied()).map(vocab::float)
-}
-
 /// Attempt to coerce a numeric value into a declared numeric-like shape.
 pub fn coerce_numeric_to_shape(target: &ShapeId, value: &Value) -> Option<Value> {
     let flat = flatten_numeric(value)?;
@@ -458,117 +289,4 @@ fn take_components<const N: usize>(scalars: &[f32], offset: &mut usize) -> Optio
         *offset += 1;
     }
     Some(arr)
-}
-
-fn transform_field_value(field: &str, t: &vocab::Transform) -> Option<Value> {
-    match field {
-        "translation" | "position" => Some(vocab::vec3(t.translation)),
-        "rotation" => Some(vocab::quat(t.rotation)),
-        "scale" => Some(vocab::vec3(t.scale)),
-        _ => None,
-    }
-}
-
-fn transform_field_shape(field: &str) -> Option<ShapeId> {
-    match field {
-        "translation" | "position" => Some(ShapeId::Vec3),
-        "rotation" => Some(ShapeId::Quat),
-        "scale" => Some(ShapeId::Vec3),
-        _ => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn field(name: &str) -> SelectorSegment {
-        SelectorSegment::Field(name.to_string())
-    }
-
-    /// A record's field, an array item, a tuple entry and an enumeration's
-    /// payload select with the shape their parent declares, and a part no
-    /// shape declares takes the shape of its value.
-    #[test]
-    fn selection_takes_the_declared_shape_of_the_part() {
-        let value = vocab::record([
-            (
-                "values",
-                vocab::record([("a", vocab::float(1.0)), ("b", vocab::text("x"))]),
-            ),
-            (
-                "items",
-                vocab::array(vec![vocab::vec3([1.0, 2.0, 3.0]), vocab::float(4.0)]),
-            ),
-            ("choice", vocab::enumeration("on", vocab::float(5.0))),
-        ]);
-        let declared = ShapeId::Record(vec![
-            Field {
-                name: "values".into(),
-                shape: ShapeId::Record(vec![Field {
-                    name: "a".into(),
-                    shape: ShapeId::Vector { len: Some(1) },
-                }]),
-            },
-            Field {
-                name: "items".into(),
-                shape: ShapeId::Tuple(vec![ShapeId::Vec3, ShapeId::Scalar]),
-            },
-        ]);
-
-        let (a, shape) =
-            project_by_selector(&value, Some(&declared), &[field("values"), field("a")]).unwrap();
-        assert_eq!(a, vocab::float(1.0));
-        assert_eq!(shape, Some(ShapeId::Vector { len: Some(1) }));
-
-        let (b, shape) =
-            project_by_selector(&value, Some(&declared), &[field("values"), field("b")]).unwrap();
-        assert_eq!(b, vocab::text("x"));
-        assert_eq!(shape, Some(ShapeId::Text));
-
-        let (y, shape) = project_by_selector(
-            &value,
-            Some(&declared),
-            &[
-                field("items"),
-                SelectorSegment::Index(0),
-                SelectorSegment::Index(1),
-            ],
-        )
-        .unwrap();
-        assert_eq!(y, vocab::float(2.0));
-        assert_eq!(shape, Some(ShapeId::Scalar));
-
-        let (payload, _) =
-            project_by_selector(&value, None, &[field("choice"), field("on")]).unwrap();
-        assert_eq!(payload, vocab::float(5.0));
-
-        let (whole, shape) = project_by_selector(&value, Some(&declared), &[]).unwrap();
-        assert_eq!(whole, value);
-        assert_eq!(shape, Some(declared));
-    }
-
-    /// A missing field, an out-of-range index and a variant the value is not
-    /// say what failed.
-    #[test]
-    fn a_failed_selection_says_why() {
-        let value = vocab::record([
-            ("v", vocab::vec2([1.0, 2.0])),
-            ("e", vocab::enumeration("on", vocab::float(1.0))),
-        ]);
-        let error =
-            |selector: &[SelectorSegment]| project_by_selector(&value, None, selector).unwrap_err();
-        assert_eq!(
-            error(&[field("missing")]),
-            "selector field 'missing' missing in record"
-        );
-        assert_eq!(
-            error(&[field("v"), SelectorSegment::Index(2)]),
-            "selector index 2 out of bounds for vec2"
-        );
-        assert!(
-            error(&[field("e"), field("off")]).starts_with("selector field 'off' does not match")
-        );
-        assert!(error(&[field("v"), field("x")]).starts_with("selector field 'x' unsupported"));
-    }
 }

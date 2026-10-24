@@ -27,8 +27,9 @@ file summarises, it does not replace, those sources.
 ## Workspace Snapshot
 - **API stack**: Shared value/type/WriteBatch contracts (`crates/api`), plus
   wasm adapters reused across other stacks.
-- **Node graph stack**: `vizij-graph-core`,
-  `vizij-graph-wasm`, and npm `@vizij/node-graph`.
+- **Node graph stack**: `vizij-graph-core` (the graph format, the importer onto
+  arora-behavior-tree, `TreeRuntime`, over arora-sdk's `arora-dataflow-nodes`,
+  the node functions), `vizij-graph-wasm`, and npm `@vizij/node-graph`.
 - **Interop (Arora) stack**: `crates/interop/*` adapts the Vizij stacks onto
   Arora runtime seams — `vizij-arora` (Value interop), `vizij-arora-store`,
   `vizij-arora-hal` and `vizij-arora-behavior`; a device's animations play
@@ -94,9 +95,13 @@ Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unkno
   crates.io) plays a device's animations, host-linked in `crates/vizij`
   (`modules::animation`); `module_animation` converts a face's authored
   animation into its clip format 2.0.
-- **Node graph**: `vizij-graph-core` evaluates deterministic data-flow graphs.
+- **Node graph**: a graph runs on arora-sdk's behavior tree: `vizij-graph-core`
+  imports it as a tree's detached nodes, calls of `arora-dataflow-nodes`'
+  functions, and runs it (`TreeRuntime`).
   Features like `urdf_ik` are enabled by default and surfaced through the wasm
   build scripts. The wasm crate handles JSON normalisation for JS consumers.
+  Until the arora crates are published, the workspace patches them to an
+  arora-sdk branch (root `Cargo.toml`).
 - **Test fixtures**: `vizij-test-fixtures` maps names from `fixtures/manifest.json`
   to on-disk JSON assets and offers helpers to load them in tests. The npm
   package ships pre-bundled fixture JSON for browser scenarios.
