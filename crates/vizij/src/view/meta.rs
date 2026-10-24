@@ -217,7 +217,8 @@ pub struct Primitive {
     pub shape: PrimitiveShape,
     /// `width` and `height`; 1 where unstated.
     pub size: [f32; 2],
-    /// `fillColor`, linear RGB; white where unstated.
+    /// `fillColor`, linear RGB: whole, with any component Studio names per
+    /// axis (`fillColor.g`) standing over it; white where unstated.
     pub fill: [f32; 3],
     /// `fillOpacity`; 1 where unstated.
     pub opacity: f32,
@@ -242,17 +243,25 @@ impl PrimitiveShape {
     }
 }
 
+/// The components of a primitive's colours, as Studio names them per axis.
+const RGB: [&str; 3] = ["r", "g", "b"];
+
 /// The features of an `ellipse` or `rectangle` that are not a shape's, read
 /// as the shape's they amount to: the size is the scale on X and Y, the fill
-/// is the material. `None` for a feature the conversion drops.
+/// is the material. A colour is whole or per axis (`fillColor.g`, as Studio
+/// writes it). `None` for a feature the conversion drops.
 fn primitive_feature(name: &str) -> Option<Option<(FeatureKind, Option<usize>)>> {
-    Some(match name {
-        "width" => Some((FeatureKind::Scale, Some(0))),
-        "height" => Some((FeatureKind::Scale, Some(1))),
-        "fillColor" => Some((FeatureKind::Color, None)),
-        "fillOpacity" => Some((FeatureKind::Opacity, None)),
+    let (base, axis) = match name.split_once('.') {
+        Some((base, axis)) => (base, Some(RGB.iter().position(|c| *c == axis)?)),
+        None => (name, None),
+    };
+    Some(match (base, axis) {
+        ("width", None) => Some((FeatureKind::Scale, Some(0))),
+        ("height", None) => Some((FeatureKind::Scale, Some(1))),
+        ("fillColor", axis) => Some((FeatureKind::Color, axis)),
+        ("fillOpacity", None) => Some((FeatureKind::Opacity, None)),
         // The stroke is a line around the fill; a shape has none.
-        "strokeColor" | "strokeOpacity" | "strokeWidth" | "strokeOffset" => None,
+        ("strokeColor", _) | ("strokeOpacity" | "strokeWidth" | "strokeOffset", None) => None,
         _ => return None,
     })
 }
@@ -529,11 +538,19 @@ impl FaceMeta {
                         number("width").unwrap_or(1.0),
                         number("height").unwrap_or(1.0),
                     ],
-                    fill: rd
-                        .features
-                        .get("fillColor")
-                        .and_then(RawFeature::rgb)
-                        .unwrap_or([1.0; 3]),
+                    fill: {
+                        let mut fill = rd
+                            .features
+                            .get("fillColor")
+                            .and_then(RawFeature::rgb)
+                            .unwrap_or([1.0; 3]);
+                        for (component, axis) in fill.iter_mut().zip(RGB) {
+                            if let Some(n) = number(&format!("fillColor.{axis}")) {
+                                *component = n;
+                            }
+                        }
+                        fill
+                    },
                     opacity: number("fillOpacity").unwrap_or(1.0),
                 }
             });
@@ -1056,6 +1073,74 @@ mod tests {
             FeatureKind::Color
         );
         assert!(!meta.animatables.contains_key(&stroke.to_string()));
+    }
+
+    /// Studio's ellipses and rectangles name their colours per axis: the
+    /// fill's components state the primitive's fill, over a whole one; an
+    /// axis on an animatable of its own binds that component of the colour,
+    /// a component `<id>.<axis>` of a compound animatable binds it whole; a
+    /// per-axis stroke is dropped with the rest of the stroke.
+    #[test]
+    fn a_primitive_takes_its_colours_per_axis() {
+        let (green, compound, stroke) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let still =
+            |value: serde_json::Value| serde_json::json!({ "animated": false, "value": value });
+        let axis = |id: String, default: f64| serde_json::json!({ "animated": true, "value": { "id": id, "type": "number", "default": default } });
+        let element = |name: &str, kind: &str, features: serde_json::Value| {
+            serde_json::json!({
+                "name": name,
+                "extensions": { "RobotData": {
+                    "id": name, "type": kind, "features": features,
+                } }
+            })
+        };
+        let gltf = serde_json::json!({
+            "nodes": [
+                // Studio's seeded faces: every component static.
+                element("Eye", "ellipse", serde_json::json!({
+                    "translation.x": still(serde_json::json!(-0.7)),
+                    "rotation.r": still(serde_json::json!(0)),
+                    "width": still(serde_json::json!(0.55)),
+                    "height": still(serde_json::json!(0.4)),
+                    "fillColor.r": still(serde_json::json!(0.29)),
+                    "fillColor.g": still(serde_json::json!(0.78)),
+                    "fillColor.b": still(serde_json::json!(0.94)),
+                })),
+                // A whole fill, one component of it animated on its own.
+                element("Mouth", "rectangle", serde_json::json!({
+                    "width": still(serde_json::json!(1.4)),
+                    "height": still(serde_json::json!(0.2)),
+                    "fillColor": still(serde_json::json!({ "r": 1, "g": 1, "b": 1 })),
+                    "fillColor.g": axis(green.to_string(), 0.5),
+                    "strokeColor.r": axis(stroke.to_string(), 0.0),
+                })),
+                element("Brow", "rectangle", serde_json::json!({
+                    "width": still(serde_json::json!(1)),
+                    "height": still(serde_json::json!(0.1)),
+                    "fillColor.r": axis(format!("{compound}.r"), 0.1),
+                    "fillColor.g": axis(format!("{compound}.g"), 0.2),
+                    "fillColor.b": axis(format!("{compound}.b"), 0.3),
+                })),
+            ]
+        });
+        let meta = FaceMeta::from_gltf_json(&gltf).expect("parses");
+        let fill = |i: usize| meta.elements[i].primitive.expect("a primitive").fill;
+        assert_eq!(fill(0), [0.29, 0.78, 0.94]);
+        assert_eq!(fill(1), [1.0, 0.5, 1.0]);
+        assert_eq!(fill(2), [0.1, 0.2, 0.3]);
+
+        let green = &meta.animatables[&green.to_string()];
+        assert_eq!(
+            (green.feature.clone(), green.axis, green.rest),
+            (FeatureKind::Color, Some(1), Rest::Scalar(0.5))
+        );
+        let compound = &meta.animatables[&compound.to_string()];
+        assert_eq!(
+            (compound.feature.clone(), compound.axis, compound.rest),
+            (FeatureKind::Color, None, Rest::Components([0.1, 0.2, 0.3]))
+        );
+        assert_eq!(meta.animatables.len(), 2);
+        assert_eq!(meta.unbound, [stroke.to_string()]);
     }
 
     /// A GLB declaring no rootBounds is framed on its scene's bounding box,

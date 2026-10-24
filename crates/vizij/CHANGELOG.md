@@ -8,6 +8,8 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-24
+
 ### Changed
 
 - A face's graphs run on arora-behavior-tree (vizij-arora-behavior 8): each
@@ -56,44 +58,6 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   with an error naming the node and the port. The face's running graph and
   its program and skill runs go on as they were.
 
-### Added
-
-- The browser module's `holdKeys(keys)` and `releaseKeys(keys?)` on a
-  Vizij's device: held store keys keep the values clients write, against
-  every write of the face's composition — its graphs, its program and skill
-  runs, its animations — until released. A release settles as the device's
-  operations do: on a device nothing steps, a step at a zero dt in which
-  the released keys take their writers' values; under `run`, the run's next
-  step.
-
-- Captions over the face (feature `captions`, on by default): the face
-  standard's `standard/vizij/caption/{text,speaker}` shows at the bottom of
-  each face's rectangle, in eight-word chunks held long enough to read and
-  queued behind the caption showing, blue for the face's own speech
-  (`__system__`) and white otherwise, in the embedded Inter font. It is in
-  every frame the view publishes. Under `--ros2` a closed caption on
-  `/closed_captions` (`hri_actions_msgs/ClosedCaption`) captions the face
-  through the ROS4HRI mapping; a face whose composition writes neither key
-  has both open to any client.
-- Under `--ros2` with the ROS4HRI profile, the device's health on
-  `/diagnostics` once a second: the view's frame rate, and the face's id,
-  its compliance level with the face standard and every path its
-  composition writes from more than one source, a warning.
-- A face's free input outside the shipped profiles takes its range, as
-  `list_keys` states it, from: its input node's `params.min` and
-  `params.max`, when both are there and `max` exceeds `min` (both optional);
-  else the `range` the rig declares for it in `metadata.vizij.inputs`, as the
-  authoring app exports for every rig input; else `[0, 1]`. A key a shipped
-  profile declares keeps that profile's range; types are unchanged.
-  `face::declare_keys` takes the rig's ranges, which `face::rig_ranges` reads
-  off the bundle.
-- The browser module's `channelKeys(gltf, channels)`: the store key each
-  animation track channel drives on the Vizij whose glTF JSON document is
-  `gltf`, without loading it — one key per channel, resolved through the
-  bundle's rig as the loaded Vizij's `moduleAnimation` keys the track.
-
-### Changed
-
 - The browser module's operations that change a device settle on a device
   nothing steps: `loadGraph`, `applyGraphEdits`, `call`, `invoke`, `spawn`
   and `halt`, and `setValue`/`writeValues` with them. While no `run()` is
@@ -106,12 +70,22 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   at once, with no step. A call issued from inside a step, by a callback the
   device makes, is an ordinary call: the next step applies it, a `step(0)`
   once the current step has ended while no `run()` is going (arora-web 10.2).
-- Builds on arora 13 and, in the browser module, arora-web 10: the device's
+- Builds on arora 15 and, in the browser module, arora-web 12: the device's
   behavior-tree interpreter receives its method index at each tick
-  (arora-behavior-tree 9). Nothing a face, a page or a bridge client sees
-  changes.
+  (arora-behavior-tree 9).
+- **Breaking.** A WebAssembly guest loads only as a component of Arora's
+  `arora:module` world, built for `wasm32-wasip2`, whose header names the
+  `wasm-component` executor; a `wasm32-wasip1` core module whose header names
+  `wasm` no longer loads. A call to a guest whose arguments do not match the
+  parameters its header declares fails, naming the parameter, and reaches no
+  guest.
+- **Breaking.** Under `--studio` the device speaks to Studio through
+  `arora-studio-bridge-client` 10 (protocol 3): it publishes each key under
+  its own path as it wrote it, a component's feedback under both
+  `<id>.<axis>.position` and `<id>.position.<axis>`, which a Studio reads
+  from its studio client 10 on.
 - **Breaking.** A face's animations play through Arora's animation module,
-  `@arora/animation` 3.0.0 (`arora-animation-module` 1, from crates.io),
+  `@arora/animation` 3.0.0 (`arora-animation-module` 2, from crates.io),
   host-linked in place of Vizij's `@vizij/animation`: same module, function
   and parameter ids, one state per device.
   `modules::animation::module_animation` gives the module's format 2.0
@@ -184,6 +158,42 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   valid ROS 2 name tokens: a Studio-exported face's keys, named by UUID, get
   topics (an id starting with a digit gains a leading `_`).
 
+### Added
+
+- The browser module's `holdKeys(keys)` and `releaseKeys(keys?)` on a
+  Vizij's device: held store keys keep the values clients write, against
+  every write of the face's composition — its graphs, its program and skill
+  runs, its animations — until released. A release settles as the device's
+  operations do: on a device nothing steps, a step at a zero dt in which
+  the released keys take their writers' values; under `run`, the run's next
+  step.
+
+- Captions over the face (feature `captions`, on by default): the face
+  standard's `standard/vizij/caption/{text,speaker}` shows at the bottom of
+  each face's rectangle, in eight-word chunks held long enough to read and
+  queued behind the caption showing, blue for the face's own speech
+  (`__system__`) and white otherwise, in the embedded Inter font. It is in
+  every frame the view publishes. Under `--ros2` a closed caption on
+  `/closed_captions` (`hri_actions_msgs/ClosedCaption`) captions the face
+  through the ROS4HRI mapping; a face whose composition writes neither key
+  has both open to any client.
+- Under `--ros2` with the ROS4HRI profile, the device's health on
+  `/diagnostics` once a second: the view's frame rate, and the face's id,
+  its compliance level with the face standard and every path its
+  composition writes from more than one source, a warning.
+- A face's free input outside the shipped profiles takes its range, as
+  `list_keys` states it, from: its input node's `params.min` and
+  `params.max`, when both are there and `max` exceeds `min` (both optional);
+  else the `range` the rig declares for it in `metadata.vizij.inputs`, as the
+  authoring app exports for every rig input; else `[0, 1]`. A key a shipped
+  profile declares keeps that profile's range; types are unchanged.
+  `face::declare_keys` takes the rig's ranges, which `face::rig_ranges` reads
+  off the bundle.
+- The browser module's `channelKeys(gltf, channels)`: the store key each
+  animation track channel drives on the Vizij whose glTF JSON document is
+  `gltf`, without loading it — one key per channel, resolved through the
+  bundle's rig as the loaded Vizij's `moduleAnimation` keys the track.
+
 ### Fixed
 
 - An animatable that several elements share moves every one of them, as
@@ -206,6 +216,13 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   has not drained as the latest value per key: a page that never calls
   `drainChanges` no longer grows its memory with every step. A drain
   answers each changed key's latest value, as before.
+- An ellipse's or a rectangle's fill named per axis, as Studio writes it
+  (`fillColor.r`, `fillColor.g`, `fillColor.b`), colours it: a static
+  component states that component of the fill, over a whole `fillColor`; an
+  animated one binds that component of the colour, or the whole colour for
+  a component `<id>.<axis>` of a compound animatable. Such a fill used to
+  draw white and bind nothing. A per-axis stroke colour is dropped with the
+  rest of the stroke.
 
 ## [0.2.0] - 2026-10-12
 

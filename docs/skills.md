@@ -79,16 +79,12 @@ writes the weights: each `standard/vizij/viseme/<shape>` is a free input,
 under `--ros2` a subscribed topic ([ROS4HRI
 support](ros4hri.md#driving-a-key-from-ros-2)).
 
-One producer exists outside the players and does not reach them:
-
-- **The web.** vizij-web runs its own lipsync in JS, against the face's pose
-  weights directly (`rig/<faceId>/poses/<poseId>.weight`) rather than the
-  standard's viseme surface — `@vizij/speech-react`'s Polly speech-mark cursor
-  in vizij-standalone, a phoneme aligner in the agent-face tutorial, each with
-  its own crossfade. The skills registry
-  ([`@vizij/runtime`](../npm/@vizij/runtime/README.md)) serves the fragments to
-  the web, but the standalone app does not yet register the viseme players,
-  so the two platforms lip-sync by different means.
+The browser runs the same players: a face loaded with
+[`@vizij/runtime`](../npm/@vizij/runtime/README.md) is a device with these
+skills, and vizij-web's apps call them — vizij-standalone and the authoring
+app speak through `say`, and the agent-face tutorial's phoneme aligner calls
+`play_viseme` once per shape — so a face lip-syncs by the same means on every
+platform.
 
 ## Calling a skill
 

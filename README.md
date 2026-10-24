@@ -106,7 +106,8 @@ your own AWS-backed deployment, and where text enters — is in
 |---|---|
 | Show a face on a robot, drive it from ROS 2 | the [`vizij` app](crates/vizij/README.md) + [ROS4HRI support](docs/ros4hri.md) |
 | Author or edit a face (design, rig, animate, program) | the **authoring app** in [vizij-web](https://github.com/vizij-ai/vizij-web) (`apps/vizij-authoring`) |
-| Show a face on a desktop, kiosk, or Android tablet | **[vizij-standalone](https://github.com/vizij-ai/vizij-web/tree/main/apps/vizij-standalone)** (vizij-web) |
+| Show a face on a desktop or kiosk | the [`vizij` app](crates/vizij/README.md), released with installers per OS ([installing a release](crates/vizij/README.md#installing-a-release)) |
+| Show a face on an Android tablet | **[vizij-standalone](https://github.com/vizij-ai/vizij-web/tree/main/apps/vizij-standalone)** (vizij-web) |
 | Embed a live face in my own web app | [`@vizij/runtime`](npm/@vizij/runtime/README.md) (the browser device) + the React packages in [vizij-web](https://github.com/vizij-ai/vizij-web) |
 | Pilot faces from [Semio Studio](https://studio.semio.ai) | the `--studio` flag ([app README](crates/vizij/README.md)) or the standalone's studio-bridge build |
 | Pack, validate, or embed profiles and mappings into face assets | [`vizij-bundle`](crates/tools/vizij-bundle/README.md) — the model: [profiles and mappings](docs/profiles-and-mappings.md) |
