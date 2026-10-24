@@ -29,6 +29,11 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   kept there (`studio-identity.json`). `native::BridgeConfig::studio` is a
   `native::StudioConfig` (the identity file and an optional device
   directory) rather than the identity file's path.
+- The Android app speaks: `say` goes to the cloud provider at its default
+  deployment (vizij-arora-tts 7.1, whose HTTPS client trusts the bundled
+  webpki roots), its audio played through cpal's oboe backend. The Android
+  smoke invokes `say` through the open local bridge and passes when the run
+  succeeds with the face reporting the utterance and showing its visemes.
 
 ### Fixed
 

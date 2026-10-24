@@ -6,8 +6,17 @@ All notable changes to `vizij-arora-tts`. The format follows
 
 ## [Unreleased]
 
+## [7.1.0] - 2026-10-24
+
 ### Changed
 
+- The native HTTPS client trusts the Mozilla CA set `webpki-roots` bundles,
+  over rustls on ring, on every OS, where it trusted the platform's verifier
+  (`rustls-platform-verifier`, reqwest's default TLS). On Android that
+  verifier panics unless its Kotlin component is packaged and initialised,
+  so the provider now speaks there. A root installed only in the OS store,
+  such as a TLS-intercepting proxy's, is no longer trusted. The browser
+  build is unchanged: `fetch` verifies.
 - Licensed under Apache-2.0, where it was MIT OR Apache-2.0. Releases up
   to 7.0.1 keep the licence they were published under.
 

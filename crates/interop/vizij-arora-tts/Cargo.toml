@@ -1,6 +1,6 @@
 [package]
 name = "vizij-arora-tts"
-version = "7.0.1"
+version = "7.1.0"
 edition.workspace = true
 license = "Apache-2.0"
 description = "Vizij's text-to-speech as an Arora host module: say(text, voice) -> Status streaming the current viseme (a face-standard shape) and the utterance while its audio plays through its out-parameters, over the Vizij TTS cloud provider, natively (rodio) and in the browser (the page's playback). The contract is vizij-arora-behavior's speech skill, shared by every provider."
@@ -13,8 +13,15 @@ arora-engine = { version = "7", default-features = false }
 arora-types = "3"
 log = "0.4"
 # Synthesis, the same on every target: `json` on, reqwest picks `fetch` on
-# wasm32 and hyper natively.
-reqwest = { version = "0.13", features = ["json"] }
+# wasm32 and hyper natively. reqwest's defaults without its default TLS, whose
+# verifier is the platform's (`rustls-platform-verifier`): natively the client
+# trusts the bundled webpki roots instead (below).
+reqwest = { version = "0.13", default-features = false, features = [
+  "charset",
+  "http2",
+  "json",
+  "system-proxy",
+] }
 serde = { workspace = true }
 uuid = "1"
 # The behavior `Status` a `say` call returns.
@@ -27,6 +34,18 @@ vizij-arora-behavior = { version = "7", path = "../vizij-arora-behavior" }
 # through rodio (cpal + symphonia, pure Rust: nothing to install).
 rodio = "0.20"
 tokio = { version = "1", features = ["rt-multi-thread", "time"] }
+# The native client's TLS: rustls on ring, rooted in the Mozilla CA set
+# webpki-roots bundles, the same on every OS — Android's platform verifier
+# works only once its Kotlin component is packaged and initialised.
+reqwest = { version = "0.13", default-features = false, features = [
+  "rustls-no-provider",
+] }
+rustls = { version = "0.23", default-features = false, features = [
+  "ring",
+  "std",
+  "tls12",
+] }
+webpki-roots = "1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # The browser producer: a `spawn_local` future fetches, the page's hook plays.

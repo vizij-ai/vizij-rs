@@ -10417,7 +10417,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-tts"
-version = "7.0.1"
+version = "7.1.0"
 dependencies = [
  "arora",
  "arora-behavior",
@@ -10427,6 +10427,7 @@ dependencies = [
  "log",
  "reqwest",
  "rodio",
+ "rustls",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
@@ -10438,6 +10439,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
+ "webpki-roots",
 ]
 
 [[package]]

@@ -110,10 +110,11 @@ credentials in the app's files directory
 (`arora::studio::connect_with_device_dir`), and the device registers under
 the identity kept there in `studio-identity.json` (`name`, `owners`,
 `model_family`); with none kept it does not connect, since nothing on
-Android asks the operator yet. The speech provider is not attached on
-Android yet: the cloud provider's HTTPS client verifies certificates through
-`rustls-platform-verifier`, which needs its Kotlin component packaged and
-initialised there.
+Android asks the operator yet. `say` speaks through the cloud provider at its
+default deployment, its audio played through cpal's oboe backend; the
+provider's HTTPS client trusts the Mozilla CA set webpki-roots bundles, as on
+every native target, so nothing of the platform verifier's Kotlin side is
+packaged.
 
 Building it takes the NDK `android/app/build.gradle` names (`ndkVersion`),
 `cargo-ndk`, a JDK 17 or later and Gradle 8.14:
@@ -137,7 +138,9 @@ rendering smoke, on the emulator or device adb reaches: it installs and
 launches the APK, waits for the face (at least 15 s), and passes when a
 screenshot shows it, two screenshots 5 s apart differ in it, the second
 face, opened through a VIEW intent, replaces it and is the one shown after
-a relaunch, the app is alive and in front, and logcat has no `Caught` line,
+a relaunch, a `say` through the local bridge (`android/scripts/say.py`)
+succeeds with the face reporting the utterance and showing its visemes, the
+app is alive and in front, and logcat has no `Caught` line,
 panic or fatal signal. `dumpsys gfxinfo` counts
 no Bevy frame, so the screenshots are the evidence. CI's `android`
 workflow builds both ABIs, packages the APK and runs the smoke on the
