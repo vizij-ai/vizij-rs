@@ -1,5 +1,12 @@
 # Changelog
 
+## 9.0.2
+
+### Patch Changes
+
+- 6ff76f3: The module runs its constructors once, when it is instantiated, so a call into it runs only its own code. `invoke`, which builds its answer as JavaScript values and calls into the module for each one, answers in about the time `call` takes for the same value: its answer used to take 10 to 30 times as long as `call`'s, the module's constructors running on each of those calls. Every other operation sheds the same cost per call into the module.
+- 8ab9850: `invoke`, `setValue`, `writeValues` and `moduleAnimation` cost linearly in the size of the values they carry. A large record, such as a long animation converted by `moduleAnimation` and passed to `load_clip` or `reload_clip`, used to cost superlinearly the first time: it went through an intermediate JSON tree holding about sixty times its text in the wasm heap. It is now read straight into an Arora value, and written straight from one.
+
 ## 9.0.1
 
 ### Patch Changes
