@@ -89,6 +89,8 @@ The canonical JSON form of a value is Arora `Value`'s own serde: `{"f32": 1.0}`,
 
 This normaliser is the single entry point for migrating persisted documents (e.g. Value-bearing JSON embedded in `.glb` face bundles) to the canonical form. Values serialise back to JSON with plain `serde_json`; there is no producer of the legacy forms. `json::writebatch_from_json` reads write batches whose values use any accepted form.
 
+`json::parse_value_str` reads the same forms from JSON text. Canonical serde reads straight into the `Value`, holding about three times the text at once; a `serde_json::Value` tree holds about sixty, so a large value that arrives as text — a browser call's argument — is read with it rather than parsed to a tree first.
+
 Graph specs are normalised so node shorthands stay ergonomic while the runtime always sees the canonical schema:
 
 - Node `type` strings are lowercased and legacy `kind` aliases are rewritten.

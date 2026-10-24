@@ -8,6 +8,17 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ## [Unreleased]
 
+### Fixed
+
+- The browser module's `invoke` and `setValue` (and `writeValues`) read a
+  value's text straight into an Arora `Value`, through
+  `vizij_api_core::json::parse_value_str`. A large record no longer goes
+  through a `serde_json::Value` tree that held about sixty times its text in
+  the wasm heap; growing the heap that far made the first such call
+  superlinear in the record's size. A form the normalizer does not recognize
+  still reaches Arora as given, for Arora to report. `moduleAnimation`
+  serializes its answer without such a tree either.
+
 ## [1.0.0] - 2026-10-24
 
 ### Changed

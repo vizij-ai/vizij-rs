@@ -28,6 +28,7 @@
 //! the same rules.
 
 use serde::de::Error as _;
+use serde::Deserialize as _;
 use serde_json::{json, Map, Value as JsonValue};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -64,13 +65,30 @@ pub enum JsonError {
 /// Parse any accepted JSON payload form (see the module header) into a
 /// [`Value`], using the [`NumericArrayPolicy::AutoVectorKinds`] policy.
 pub fn parse_value(value: JsonValue) -> Result<Value, serde_json::Error> {
-    parse_value_with_policy(value, NumericArrayPolicy::AutoVectorKinds)
+    parse_value_with_policy(&value, NumericArrayPolicy::AutoVectorKinds)
 }
 
 /// Variant of [`parse_value`] using [`NumericArrayPolicy::AlwaysVector`],
 /// mirroring the staging graph normalizer.
 pub fn parse_value_staging(value: JsonValue) -> Result<Value, serde_json::Error> {
-    parse_value_with_policy(value, NumericArrayPolicy::AlwaysVector)
+    parse_value_with_policy(&value, NumericArrayPolicy::AlwaysVector)
+}
+
+/// [`parse_value`] from JSON text. Canonical Arora serde reads straight into
+/// the [`Value`]; only the other forms are read through a `serde_json::Value`
+/// tree first. That tree holds tens of bytes per byte of text; a large
+/// canonical value, which is what Arora clients send, is read here holding a
+/// few.
+pub fn parse_value_str(json: &str) -> Result<Value, serde_json::Error> {
+    // Canonical serde is an object, read first here as `parse_object` reads
+    // it second: the tagged form it tries first has two keys, which an
+    // externally tagged `Value` never parses from.
+    if json.trim_start().starts_with('{') {
+        if let Ok(value) = serde_json::from_str::<Value>(json) {
+            return Ok(value);
+        }
+    }
+    parse_value(serde_json::from_str(json)?)
 }
 
 /// Normalize any accepted JSON payload form into canonical Arora `Value`
@@ -87,14 +105,14 @@ pub fn normalize_value_json_staging(value: JsonValue) -> JsonValue {
 }
 
 fn normalize_value_json_with_policy(value: JsonValue, policy: NumericArrayPolicy) -> JsonValue {
-    match parse_value_with_policy(value.clone(), policy) {
+    match parse_value_with_policy(&value, policy) {
         Ok(parsed) => serde_json::to_value(&parsed).unwrap_or(value),
         Err(_) => value,
     }
 }
 
 fn parse_value_with_policy(
-    value: JsonValue,
+    value: &JsonValue,
     policy: NumericArrayPolicy,
 ) -> Result<Value, serde_json::Error> {
     match value {
@@ -102,16 +120,16 @@ fn parse_value_with_policy(
             n.as_f64()
                 .ok_or_else(|| serde_json::Error::custom("non-finite number"))? as f32,
         )),
-        JsonValue::Bool(b) => Ok(bool_(b)),
-        JsonValue::String(s) => Ok(text(&s)),
+        JsonValue::Bool(b) => Ok(bool_(*b)),
+        JsonValue::String(s) => Ok(text(s)),
         JsonValue::Array(items) => parse_array(items, policy),
-        JsonValue::Object(obj) => parse_object(obj, policy),
+        JsonValue::Object(obj) => parse_object(value, obj, policy),
         JsonValue::Null => Err(serde_json::Error::custom("null is not a value")),
     }
 }
 
 fn parse_array(
-    items: Vec<JsonValue>,
+    items: &[JsonValue],
     policy: NumericArrayPolicy,
 ) -> Result<Value, serde_json::Error> {
     if items.iter().all(|x| x.is_number()) {
@@ -129,28 +147,38 @@ fn parse_array(
             NumericArrayPolicy::AlwaysVector => vector(xs),
         });
     }
+    parse_sequence(items, policy)
+}
+
+/// Each item in any accepted form, as an Arora array.
+fn parse_sequence(
+    items: &[JsonValue],
+    policy: NumericArrayPolicy,
+) -> Result<Value, serde_json::Error> {
     Ok(array(
         items
-            .into_iter()
+            .iter()
             .map(|item| parse_value_with_policy(item, policy))
             .collect::<Result<Vec<_>, _>>()?,
     ))
 }
 
+/// `value`, the object `obj`, in any accepted form.
 fn parse_object(
-    obj: Map<String, JsonValue>,
+    value: &JsonValue,
+    obj: &Map<String, JsonValue>,
     policy: NumericArrayPolicy,
 ) -> Result<Value, serde_json::Error> {
     // Tagged form: { "type": ..., "data": ... }.
     if obj.contains_key("type") && obj.contains_key("data") {
-        return parse_tagged(&obj, policy);
+        return parse_tagged(obj, policy);
     }
 
     // Canonical Arora serde passes through. (Legacy shorthands never parse
     // here: their keys are not Arora tags, except `bool` — identical in both
     // vocabularies — and `enum`, whose legacy payload lacks the
     // `id`/`variant_id` fields Arora requires and thus falls through.)
-    if let Ok(parsed) = serde_json::from_value::<Value>(JsonValue::Object(obj.clone())) {
+    if let Ok(parsed) = Value::deserialize(value) {
         return Ok(parsed);
     }
 
@@ -191,7 +219,7 @@ fn parse_object(
     }
     if let Some(e) = obj.get("enum").and_then(|x| x.as_object()) {
         let tag = e.get("tag").and_then(|x| x.as_str()).unwrap_or_default();
-        let payload = e.get("value").cloned().unwrap_or(JsonValue::Null);
+        let payload = e.get("value").unwrap_or(&JsonValue::Null);
         return Ok(enumeration(tag, parse_value_with_policy(payload, policy)?));
     }
     if let Some(entries) = obj.get("record").and_then(|x| x.as_object()) {
@@ -199,32 +227,25 @@ fn parse_object(
     }
     for key in ["array", "list", "tuple"] {
         if let Some(items) = obj.get(key).and_then(|x| x.as_array()) {
-            return Ok(array(
-                items
-                    .iter()
-                    .cloned()
-                    .map(|item| parse_value_with_policy(item, policy))
-                    .collect::<Result<Vec<_>, _>>()?,
-            ));
+            return parse_sequence(items, policy);
         }
     }
 
     // Raw component objects: {x, y}, {x, y, z}, {x, y, z, w}.
     if obj.contains_key("x") && obj.contains_key("y") {
-        let raw = JsonValue::Object(obj.clone());
         match obj.len() {
             2 => {
-                if let Ok(a) = parse_components::<2>(&raw, "raw vec2") {
+                if let Ok(a) = parse_components::<2>(value, "raw vec2") {
                     return Ok(vec2(a));
                 }
             }
             3 => {
-                if let Ok(a) = parse_components::<3>(&raw, "raw vec3") {
+                if let Ok(a) = parse_components::<3>(value, "raw vec3") {
                     return Ok(vec3(a));
                 }
             }
             4 => {
-                if let Ok(a) = parse_components::<4>(&raw, "raw quat") {
+                if let Ok(a) = parse_components::<4>(value, "raw quat") {
                     return Ok(quat(a));
                 }
             }
@@ -267,7 +288,6 @@ fn parse_tagged(
         .ok_or_else(|| serde_json::Error::custom("'type' must be a string"))?;
     let data = obj
         .get("data")
-        .cloned()
         .ok_or_else(|| serde_json::Error::custom("missing 'data'"))?;
     match ty {
         "float" => Ok(float(
@@ -281,11 +301,11 @@ fn parse_tagged(
         "text" => Ok(text(data.as_str().ok_or_else(|| {
             serde_json::Error::custom("text data must be a string")
         })?)),
-        "vec2" => parse_components::<2>(&data, "vec2").map(vec2),
-        "vec3" => parse_components::<3>(&data, "vec3").map(vec3),
-        "vec4" => parse_components::<4>(&data, "vec4").map(vec4),
-        "quat" => parse_components::<4>(&data, "quat").map(quat),
-        "colorrgba" => parse_components::<4>(&data, "colorrgba").map(color_rgba),
+        "vec2" => parse_components::<2>(data, "vec2").map(vec2),
+        "vec3" => parse_components::<3>(data, "vec3").map(vec3),
+        "vec4" => parse_components::<4>(data, "vec4").map(vec4),
+        "quat" => parse_components::<4>(data, "quat").map(quat),
+        "colorrgba" => parse_components::<4>(data, "colorrgba").map(color_rgba),
         "vector" => {
             let items = data
                 .as_array()
@@ -313,7 +333,6 @@ fn parse_tagged(
                 .ok_or_else(|| serde_json::Error::custom("enum tag must be a string"))?;
             let payload = parts
                 .get(1)
-                .cloned()
                 .ok_or_else(|| serde_json::Error::custom("enum data must be [tag, value]"))?;
             Ok(enumeration(tag, parse_value_with_policy(payload, policy)?))
         }
@@ -327,13 +346,7 @@ fn parse_tagged(
             let items = data
                 .as_array()
                 .ok_or_else(|| serde_json::Error::custom("sequence data must be an array"))?;
-            Ok(array(
-                items
-                    .iter()
-                    .cloned()
-                    .map(|item| parse_value_with_policy(item, policy))
-                    .collect::<Result<Vec<_>, _>>()?,
-            ))
+            parse_sequence(items, policy)
         }
         other => Err(serde_json::Error::custom(format!(
             "unknown value type tag '{other}'"
@@ -347,7 +360,7 @@ fn parse_record(
 ) -> Result<Value, serde_json::Error> {
     let fields = entries
         .iter()
-        .map(|(key, val)| Ok((key.as_str(), parse_value_with_policy(val.clone(), policy)?)))
+        .map(|(key, val)| Ok((key.as_str(), parse_value_with_policy(val, policy)?)))
         .collect::<Result<Vec<_>, serde_json::Error>>()?;
     Ok(record(fields))
 }
@@ -1071,6 +1084,37 @@ mod tests {
         assert_eq!(normalize_value_json(unknown.clone()), unknown);
         assert!(parse_value(unknown).is_err());
         assert!(parse_value(json!(null)).is_err());
+    }
+
+    #[test]
+    fn text_parses_every_form_as_its_json_does() {
+        let forms = [
+            json!({ "f32": 1.5 }),
+            json!({ "struct": { "id": "76697a69-6a00-0000-0000-000000000100", "fields": [
+                { "id": "76697a69-6a00-0000-0100-000000000001", "value": { "str": "a" } },
+            ] } }),
+            json!({ "vec3": [1, 2, 3] }),
+            json!({ "record": { "a": 1.0, "b": { "text": "hi" } } }),
+            json!({ "enum": { "tag": "t", "value": 1.0 } }),
+            json!({ "type": "vec2", "data": [1, 2] }),
+            json!({ "x": 1.0, "y": 2.0 }),
+            json!([1, 2, 3]),
+            json!(2.5),
+            json!(true),
+            // A bare string is text, though `"unit"` is a canonical `Value`.
+            json!("unit"),
+        ];
+        for form in forms {
+            let text = serde_json::to_string(&form).unwrap();
+            assert_eq!(
+                parse_value_str(&format!("  {text}")).unwrap(),
+                parse_value(form.clone()).unwrap(),
+                "{text}"
+            );
+        }
+        assert!(parse_value_str(r#"{ "mystery": 1 }"#).is_err());
+        assert!(parse_value_str("null").is_err());
+        assert!(parse_value_str("{ not json").is_err());
     }
 
     #[test]
