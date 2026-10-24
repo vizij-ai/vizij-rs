@@ -37,6 +37,7 @@
 //! reached from the page.
 
 use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
 use std::sync::Mutex;
@@ -1022,12 +1023,22 @@ impl VizijRuntime {
             .ok_or_else(|| JsValue::from_str("an animation needs an id"))?;
         let module_animation: arora_types::value::Value =
             crate::modules::animation::module_animation(&animation, &self.channel_keys).into();
-        to_js(&serde_json::json!({
-            "id": animation.id,
-            "name": animation.name,
-            "duration": animation.duration,
-            "moduleAnimation": module_animation,
-        }))
+        // Serialized as it is, not through a `serde_json::Value` tree: a long
+        // animation's tree would hold tens of times its text in the wasm heap.
+        #[derive(serde::Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Converted<'a> {
+            id: &'a str,
+            name: &'a Option<String>,
+            duration: f64,
+            module_animation: arora_types::value::Value,
+        }
+        to_js(&Converted {
+            id: &animation.id,
+            name: &animation.name,
+            duration: animation.duration,
+            module_animation,
+        })
     }
 }
 
@@ -1235,27 +1246,49 @@ fn parse_face_config(json: Option<&str>) -> Result<(FaceConfig, bool), JsValue> 
     ))
 }
 
-/// Normalize one value's JSON from any accepted vizij payload form (canonical
-/// Arora `Value` serde, or a vizij shorthand like `{"float": 0.5}` /
-/// `{"vec3": [1, 2, 3]}`) to the canonical form the store deserializes. Values
-/// the normalizer doesn't recognize are passed through unchanged.
+/// One value's JSON, normalized: the canonical Arora `Value` it reads as, or the
+/// text as given when the normalizer does not recognize it, for Arora to
+/// report.
+#[derive(serde::Serialize)]
+#[serde(untagged)]
+enum Normalized<'a> {
+    Canonical(arora_types::value::Value),
+    AsGiven(&'a serde_json::value::RawValue),
+}
+
+/// `value_json` in any accepted vizij payload form (canonical Arora `Value`
+/// serde, or a vizij shorthand like `{"float": 0.5}` / `{"vec3": [1, 2, 3]}`),
+/// read from its text: a large canonical value is read with a working set close
+/// to its own size, where a `serde_json::Value` tree would hold tens of times
+/// its text in the wasm heap.
+fn normalize(value_json: &serde_json::value::RawValue) -> Result<Normalized<'_>, JsValue> {
+    use serde_json::error::Category;
+    match vizij_api_core::json::parse_value_str(value_json.get()) {
+        Ok(value) => Ok(Normalized::Canonical(value)),
+        Err(e) if e.classify() == Category::Data => Ok(Normalized::AsGiven(value_json)),
+        Err(e) => Err(JsValue::from_str(&format!("value is not JSON: {e}"))),
+    }
+}
+
+/// Normalize one value's JSON to the canonical form the store deserializes
+/// (see [`normalize`]).
 fn normalize_value_str(value_json: &str) -> Result<String, JsValue> {
-    let value: serde_json::Value = serde_json::from_str(value_json)
+    let raw: &serde_json::value::RawValue = serde_json::from_str(value_json)
         .map_err(|e| JsValue::from_str(&format!("value is not JSON: {e}")))?;
-    let normalized = vizij_api_core::json::normalize_value_json(value);
-    serde_json::to_string(&normalized)
+    serde_json::to_string(&normalize(raw)?)
         .map_err(|e| JsValue::from_str(&format!("serialize value: {e}")))
 }
 
-/// Normalize every value in a `{path: value}` write batch to the canonical Arora
-/// `Value` serde (see [`normalize_value_str`]). Keys are left untouched.
+/// Normalize every value in a `{name: value}` object — a write batch's paths,
+/// a by-name call's arguments — to the canonical Arora `Value` serde (see
+/// [`normalize`]). Keys are left untouched.
 fn normalize_values_map_str(values_json: &str) -> Result<String, JsValue> {
-    let map: serde_json::Map<String, serde_json::Value> = serde_json::from_str(values_json)
+    let map: BTreeMap<String, &serde_json::value::RawValue> = serde_json::from_str(values_json)
         .map_err(|e| JsValue::from_str(&format!("values are not a JSON object: {e}")))?;
-    let normalized: serde_json::Map<String, serde_json::Value> = map
+    let normalized = map
         .into_iter()
-        .map(|(path, value)| (path, vizij_api_core::json::normalize_value_json(value)))
-        .collect();
+        .map(|(name, value)| Ok((name, normalize(value)?)))
+        .collect::<Result<BTreeMap<_, _>, JsValue>>()?;
     serde_json::to_string(&normalized)
         .map_err(|e| JsValue::from_str(&format!("serialize values: {e}")))
 }

@@ -43,7 +43,8 @@ required-features = ["desktop"]
 [dependencies]
 anyhow = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
+# `raw_value`: a by-name call's arguments are read one value's text at a time.
+serde_json = { workspace = true, features = ["raw_value"] }
 clap = { version = "4", features = ["derive"], optional = true }
 log = "0.4"
 env_logger = { version = "0.11", optional = true }

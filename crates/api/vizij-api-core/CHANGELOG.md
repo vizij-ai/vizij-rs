@@ -6,7 +6,20 @@ All notable changes to `vizij-api-core`. The format follows
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-24
+
+### Added
+
+- `json::parse_value_str` reads a value in any accepted form from JSON text.
+  Canonical Arora serde reads straight into the `Value`, holding about three
+  times the text at once; only the other forms go through a
+  `serde_json::Value` tree, which holds about sixty.
+
 ### Changed
+
+- `parse_value` and `normalize_value_json` read the JSON tree by reference:
+  they no longer copy it whole, nor copy each object they try as canonical
+  serde.
 
 - Licensed under Apache-2.0, where it was MIT OR Apache-2.0. Releases up
   to 2.1.0 keep the licence they were published under.
