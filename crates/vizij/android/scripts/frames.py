@@ -20,9 +20,10 @@ LIT = 24
 # The face covers at least this share of the band (Quori covers a third of a
 # letterboxed phone screen).
 FACE_SHARE = 0.01
-# A moved face differs in at least this many pixels of the band (an eye or
-# lid moving at the emulator's smallest screen).
-MOVED_PIXELS = 200
+# A moved face differs in at least this share of the band: Quori's eyes
+# moving change 0.3 % of it on a 320x640 screen and 0.8 % on a 1080x2220
+# one.
+MOVED_SHARE = 0.001
 
 
 def read(path):
@@ -63,8 +64,9 @@ def moved(a_path, b_path):
     if (width, height) != (width_b, height_b):
         print(f"{a_path} and {b_path} differ in size")
         return True
+    rows = band(width, height)
     changed = 0
-    for y in band(width, height):
+    for y in rows:
         row = y * width * 4
         if a[row : row + width * 4] == b[row : row + width * 4]:
             continue
@@ -72,8 +74,9 @@ def moved(a_path, b_path):
             o = row + x * 4
             if max(abs(a[o + c] - b[o + c]) for c in range(3)) > LIT:
                 changed += 1
-    print(f"{a_path} -> {b_path}: {changed} pixels changed (moved needs {MOVED_PIXELS})")
-    return changed >= MOVED_PIXELS
+    share = changed / (len(rows) * width)
+    print(f"{a_path} -> {b_path}: {changed} pixels changed, {share:.4f} of the band (moved needs {MOVED_SHARE})")
+    return share >= MOVED_SHARE
 
 
 def png(path, out):

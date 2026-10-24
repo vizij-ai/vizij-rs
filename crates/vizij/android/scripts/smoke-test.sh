@@ -14,11 +14,12 @@
 #     up to five pairs are taken, so a moment where the face rests in the same
 #     pose twice does not fail the run;
 #   - the app is alive and in front at the end;
-#   - logcat has no `Caught` line (Bevy's report of a device loss or a
-#     rendering error), no panic and no fatal signal.
+#   - the app's log has no `Caught` line (Bevy's report of a device loss or
+#     a rendering error), no panic and no fatal signal.
 # `dumpsys gfxinfo` counts HWUI frames only and reads 0 for Bevy, so the
 # screenshots are the frame evidence. <out-dir> keeps the two screenshots
-# (face-a.png, face-b.png), logcat.txt, meminfo.txt and checks.txt.
+# (face-a.png, face-b.png), logcat.txt (the app's own lines in
+# logcat-app.txt), meminfo.txt and checks.txt.
 #
 # The emulator-runner action runs its `script` line by line, so the whole
 # smoke lives here.
@@ -103,13 +104,18 @@ echo "pid=${pid:-none}; ${front}"
 in_front || fail "the app is not in front"
 
 adb shell dumpsys meminfo "$PKG" > "$OUT/meminfo.txt" 2>&1 || true
+# The whole log, and the app's own lines, which the checks read: system
+# processes log `Caught` too (`RkpdBootReceiver: Caught boot intent`).
 adb logcat -d -v threadtime > "$OUT/logcat.txt"
+uid=$(adb shell pm list packages -U "$PKG" | tr -d '\r' | sed -nE "s/^package:$PKG uid:([0-9]+).*/\1/p")
+adb logcat -d -v threadtime --uid "$uid" > "$OUT/logcat-app.txt"
 sed -n '/App Summary/,/TOTAL SWAP/p' "$OUT/meminfo.txt"
-echo "--- adapter and errors in logcat"
-grep -E "AdapterInfo|Caught|panicked|Encountered a panic|Quitting the application|Fatal signal|FATAL EXCEPTION|UnsatisfiedLinkError|vizij:" "$OUT/logcat.txt" | cut -c1-240 | head -40
-if grep -qE "Caught" "$OUT/logcat.txt"; then fail "logcat has a Caught line"; fi
-if grep -qE "panicked at|Encountered a panic" "$OUT/logcat.txt"; then fail "the app panicked"; fi
-if grep -qE "Fatal signal|FATAL EXCEPTION|UnsatisfiedLinkError" "$OUT/logcat.txt"; then fail "the app crashed"; fi
+echo "--- adapter and errors in the app's log"
+grep -E "AdapterInfo|Caught|panicked|Encountered a panic|Quitting the application|Fatal signal|FATAL EXCEPTION|UnsatisfiedLinkError|vizij:" "$OUT/logcat-app.txt" | cut -c1-240 | head -40
+if [ ! -s "$OUT/logcat-app.txt" ]; then fail "no log from the app (uid ${uid:-unknown})"; fi
+if grep -qE "Caught" "$OUT/logcat-app.txt"; then fail "the app's log has a Caught line"; fi
+if grep -qE "panicked at|Encountered a panic" "$OUT/logcat-app.txt"; then fail "the app panicked"; fi
+if grep -qE "Fatal signal|FATAL EXCEPTION|UnsatisfiedLinkError" "$OUT/logcat-app.txt"; then fail "the app crashed"; fi
 
 {
   echo "face shown after: ${shown:-never} s"
