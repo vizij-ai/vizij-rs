@@ -13,6 +13,10 @@
 #   - two screenshots 5 s apart differ in the face (its program animates it);
 #     up to five pairs are taken, so a moment where the face rests in the same
 #     pose twice does not fail the run;
+#   - a `say` invoked through the open local bridge (`adb forward`,
+#     scripts/say.py) succeeds, the face reporting the utterance and showing
+#     visemes while it plays: the cloud provider reached over TLS, its audio
+#     played through oboe;
 #   - the app is alive and in front at the end;
 #   - with a second face given, opened through a VIEW intent (a content://
 #     URI of the file pushed to Downloads, as a file manager sends), it
@@ -24,7 +28,7 @@
 # screenshots are the frame evidence. <out-dir> keeps the two screenshots
 # (face-a.png, face-b.png), with a second face opened.png and
 # relaunched.png, logcat.txt (the app's own lines in logcat-app.txt),
-# meminfo.txt and checks.txt.
+# meminfo.txt, say.txt and checks.txt.
 #
 # The emulator-runner action runs its `script` line by line, so the whole
 # smoke lives here.
@@ -104,6 +108,14 @@ else
   fi
 fi
 
+# A `say` through the local bridge, followed to its end.
+if [ -n "$shown" ]; then
+  adb forward tcp:9000 tcp:9000 > /dev/null
+  python3 -I "$HERE/say.py" 9000 "Hello from Vizij on Android." | tee "$OUT/say.txt" \
+    || fail "say did not speak"
+  adb forward --remove tcp:9000
+fi
+
 # A second face, opened through a VIEW intent while the app runs, then
 # shown again on the next launch.
 if [ -n "$SECOND" ] && [ -n "$shown" ]; then
@@ -178,4 +190,4 @@ if [ "${#failures[@]}" -gt 0 ]; then
   echo "smoke failed: ${failures[*]}"
   exit 1
 fi
-echo "smoke passed: the face draws and animates"
+echo "smoke passed: the face draws, animates and speaks"

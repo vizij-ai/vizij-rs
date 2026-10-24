@@ -170,10 +170,11 @@ fn face_config() -> FaceConfig {
         ros4hri: true,
         #[cfg(feature = "studio")]
         studio: true,
-        // No speech provider: the cloud provider's HTTPS client verifies
-        // through `rustls-platform-verifier`, which on Android needs its
-        // Kotlin component packaged and initialised before the first request.
-        speech: None,
+        // The cloud provider at its default deployment; its audio plays
+        // through cpal's oboe backend.
+        speech: Some(std::sync::Arc::new(|| {
+            vizij_arora_tts::host_module(vizij_arora_tts::Config::cloud())
+        })),
     }
 }
 

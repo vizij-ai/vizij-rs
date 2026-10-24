@@ -354,12 +354,20 @@ struct VisemeResponse {
 
 /// Fetch audio (mp3) + the viseme timeline from the TTS provider — the same
 /// two endpoints the web demo's `fetchVisemeData` uses. The same on every
-/// target: reqwest selects `fetch` on wasm32.
+/// target: reqwest selects `fetch` on wasm32, where the browser verifies the
+/// connection; natively the client trusts the Mozilla CA set webpki-roots
+/// bundles, on every OS.
 pub async fn synthesize(
     base: &str,
     voice: &str,
     text: &str,
 ) -> Result<(Vec<u8>, Vec<SpeechMark>), String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    let client = reqwest::Client::builder()
+        .use_preconfigured_tls(webpki_tls())
+        .build()
+        .map_err(|e| format!("https client: {e}"))?;
+    #[cfg(target_arch = "wasm32")]
     let client = reqwest::Client::new();
     let body = TtsRequest { voice, text };
     let audio = client
@@ -387,6 +395,27 @@ pub async fn synthesize(
         .map_err(|e| format!("get-visemes decode: {e}"))?
         .visemes;
     Ok((audio, marks))
+}
+
+/// The native client's TLS: rustls on ring, trusting only the Mozilla CA
+/// set webpki-roots bundles. The same on every OS, Android included, where
+/// the platform verifier works only once its Kotlin component is packaged
+/// and initialised; the price is that a root installed in the OS store alone
+/// (a TLS-intercepting proxy's) is not trusted. The provider is named rather
+/// than taken from the process default, which a binary linking both ring and
+/// aws-lc-rs leaves unset.
+#[cfg(not(target_arch = "wasm32"))]
+fn webpki_tls() -> rustls::ClientConfig {
+    let roots = rustls::RootCertStore {
+        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+    };
+    rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .expect("ring supports the default protocol versions")
+    .with_root_certificates(roots)
+    .with_no_client_auth()
 }
 
 /// A shape change on the audio timeline, in milliseconds from its start.
@@ -537,7 +566,14 @@ pub mod platform {
             let base = config.api_base.clone();
             let handle = TOKIO_HANDLE.spawn(async move {
                 let (audio, marks) = match synthesize(&base, &voice, &text).await {
-                    Ok(pair) => pair,
+                    Ok((audio, marks)) => {
+                        log::info!(
+                            "tts: synthesized {} bytes of audio, {} visemes",
+                            audio.len(),
+                            marks.len()
+                        );
+                        (audio, marks)
+                    }
                     Err(e) => {
                         log::error!("tts: synthesis failed: {e}");
                         return Status::Failure;
