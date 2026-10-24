@@ -10508,6 +10508,7 @@ name = "vizij-wasm"
 version = "0.1.0"
 dependencies = [
  "vizij",
+ "wasm-bindgen",
 ]
 
 [[package]]
