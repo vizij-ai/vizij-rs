@@ -1,0 +1,8 @@
+# Build inputs the recipe produces (README.md): the cdylib per ABI, and the
+# face the APK ships.
+/app/src/main/jniLibs/
+/app/src/main/assets/
+# Gradle's own.
+.gradle/
+build/
+local.properties

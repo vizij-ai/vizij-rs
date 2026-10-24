@@ -13,8 +13,12 @@
 //! profile maps Semio Studio's keys onto the face; the desktop binary (`main.rs`, feature
 //! `desktop`) puts a CLI, a window and a terminal UI on it. The browser
 //! module ([`web`], the wasm-bindgen surface behind `@vizij/runtime`) and the
-//! Android activity build on the same library without the desktop half.
+//! Android app (the private `android` module, the entry point of the APK the
+//! crate's `android/` Gradle project packages) build on the same library
+//! without the desktop half.
 
+#[cfg(target_os = "android")]
+mod android;
 pub mod face;
 pub mod modules;
 #[cfg(not(target_arch = "wasm32"))]

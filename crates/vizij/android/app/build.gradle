@@ -1,0 +1,45 @@
+plugins {
+    id 'com.android.application'
+}
+
+// The APK's version is the crate's: versionName is vizij's version, and
+// versionCode orders it (major * 10000 + minor * 100 + patch).
+def crateVersion = {
+    def manifest = file('../../Cargo.toml').text
+    def matcher = manifest =~ /(?m)^version\s*=\s*"(\d+)\.(\d+)\.(\d+)"/
+    if (!matcher.find()) {
+        throw new GradleException('no version = "x.y.z" in crates/vizij/Cargo.toml')
+    }
+    [name: "${matcher.group(1)}.${matcher.group(2)}.${matcher.group(3)}",
+     code: matcher.group(1).toInteger() * 10000 + matcher.group(2).toInteger() * 100 + matcher.group(3).toInteger()]
+}()
+
+android {
+    namespace 'ai.vizij.app'
+    compileSdk 36
+    // The NDK cargo-ndk builds the library with; AGP strips the library's
+    // symbols with it, and packages it unstripped when it is not installed.
+    ndkVersion '30.0.16248370'
+
+    defaultConfig {
+        applicationId 'ai.vizij.app'
+        minSdk 24
+        targetSdk 34
+        versionCode crateVersion.code
+        versionName crateVersion.name
+        // arm64 for tablets and phones; x86_64 for the CI emulator. An ABI
+        // whose library was not built is simply absent from the APK.
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Signed with the debug keystore, so a release APK installs
+            // without release signing secrets.
+            signingConfig signingConfigs.debug
+        }
+    }
+}
