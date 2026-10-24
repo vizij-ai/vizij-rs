@@ -97,11 +97,27 @@ pub struct BridgeConfig {
     /// `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics.
     #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
     pub ros2: Option<(String, u16)>,
-    /// `--studio`: attach the Semio Studio bridge, the device registered from
-    /// the identity persisted in this file, else from the operator's answers
-    /// (persisted there afterwards), else from the environment alone.
+    /// `--studio`: attach the Semio Studio bridge.
     #[cfg(feature = "studio")]
-    pub studio: Option<std::path::PathBuf>,
+    pub studio: Option<StudioConfig>,
+}
+
+/// Where a device's Studio connection keeps what it registers as and what it
+/// signs in with.
+#[cfg(feature = "studio")]
+#[derive(Clone)]
+pub struct StudioConfig {
+    /// The identity the device registers under (name, owners, model
+    /// family), kept across launches. Without it, the device registers from
+    /// the operator's answers, persisted here afterwards, else from the
+    /// environment alone.
+    pub identity: std::path::PathBuf,
+    /// The device directory Studio's credentials live in (its `studio/`
+    /// subdirectory), for a platform that gives the app its data directory,
+    /// as Android does; `None` for the one arora finds from the environment.
+    /// Inside a given directory nobody is asked: without a kept identity the
+    /// device does not connect, since arora 15 has no operator flow there.
+    pub device_dir: Option<std::path::PathBuf>,
 }
 
 impl Default for BridgeConfig {
@@ -132,17 +148,23 @@ struct Identity {
 /// The Studio bridge for one generation, the device registered under the
 /// persisted identity when there is one, else as the operator answers (the
 /// terminal UI's prompt; an unattended run declines), which is then
-/// persisted. `None` when Studio is declined or fails.
+/// persisted; in a given device directory, only under a persisted identity
+/// ([`StudioConfig::device_dir`]). `None` when Studio is declined or fails.
 #[cfg(feature = "studio")]
 async fn studio_bridge(
-    identity: &std::path::Path,
+    studio: &StudioConfig,
     operator: Option<&dyn arora::operator::Operator>,
 ) -> Option<Box<dyn arora_bridge::Bridge>> {
+    let identity = studio.identity.as_path();
     let persisted: Option<Identity> = std::fs::read_to_string(identity)
         .ok()
         .and_then(|json| serde_json::from_str(&json).ok());
     if let Some(known) = persisted {
-        let bridge = match arora::studio::connect().await {
+        let connected = match &studio.device_dir {
+            Some(dir) => arora::studio::connect_with_device_dir(dir).await,
+            None => arora::studio::connect().await,
+        };
+        let bridge = match connected {
             Ok(bridge) => bridge,
             Err(e) => {
                 log::error!("studio bridge: {e:?}");
@@ -167,6 +189,13 @@ async fn studio_bridge(
             Err(e) => log::error!("studio registration: {e:?}"),
         }
         return Some(bridge);
+    }
+    if studio.device_dir.is_some() {
+        log::info!(
+            "Studio: no identity kept in {}, not connecting",
+            identity.display()
+        );
+        return None;
     }
     let connected = match operator {
         Some(operator) => arora::studio::connect_with_operator(operator).await,
@@ -225,8 +254,8 @@ pub async fn attach_bridges(
     let _ = operator;
     // Studio first: the bridge whose identity the device carries.
     #[cfg(feature = "studio")]
-    if let Some(identity) = &bridges.studio {
-        if let Some(bridge) = studio_bridge(identity, operator).await {
+    if let Some(studio) = &bridges.studio {
+        if let Some(bridge) = studio_bridge(studio, operator).await {
             builder = builder.with_bridge(bridge);
         }
     }

@@ -2,6 +2,7 @@
 
     frames.py face <frame.raw>            exit 0 when the face shows
     frames.py moved <a.raw> <b.raw>       exit 0 when the face moved between them
+    frames.py replaced <a.raw> <b.raw>    exit 0 when another face replaced it
     frames.py png <frame.raw> <out.png>   write the frame as a PNG
 
 A raw frame is the screencap header (width, height, pixel format, and from
@@ -24,6 +25,9 @@ FACE_SHARE = 0.01
 # moving change 0.3 % of it on a 320x640 screen and 0.8 % on a 1080x2220
 # one.
 MOVED_SHARE = 0.001
+# A face replaced by another differs in at least this share of the band
+# (Toasty over Quori, about 40 %).
+REPLACED_SHARE = 0.05
 
 
 def read(path):
@@ -58,12 +62,13 @@ def face(path):
     return share >= FACE_SHARE
 
 
-def moved(a_path, b_path):
+def changed_pixels(a_path, b_path):
+    """The pixels of the band that differ between two frames, and the band's
+    size; `None` for frames of different sizes."""
     width, height, a = read(a_path)
     width_b, height_b, b = read(b_path)
     if (width, height) != (width_b, height_b):
-        print(f"{a_path} and {b_path} differ in size")
-        return True
+        return None
     rows = band(width, height)
     changed = 0
     for y in rows:
@@ -74,9 +79,29 @@ def moved(a_path, b_path):
             o = row + x * 4
             if max(abs(a[o + c] - b[o + c]) for c in range(3)) > LIT:
                 changed += 1
-    share = changed / (len(rows) * width)
+    return changed, len(rows) * width
+
+
+def moved(a_path, b_path):
+    counted = changed_pixels(a_path, b_path)
+    if counted is None:
+        print(f"{a_path} and {b_path} differ in size")
+        return True
+    changed, total = counted
+    share = changed / total
     print(f"{a_path} -> {b_path}: {changed} pixels changed, {share:.4f} of the band (moved needs {MOVED_SHARE})")
     return share >= MOVED_SHARE
+
+
+def replaced(a_path, b_path):
+    counted = changed_pixels(a_path, b_path)
+    if counted is None:
+        print(f"{a_path} and {b_path} differ in size")
+        return False
+    changed, total = counted
+    share = changed / total
+    print(f"{a_path} -> {b_path}: {share:.4f} of the band changed (replaced needs {REPLACED_SHARE})")
+    return share >= REPLACED_SHARE
 
 
 def png(path, out):
@@ -103,5 +128,5 @@ def png(path, out):
 
 if __name__ == "__main__":
     command, *args = sys.argv[1:]
-    ok = {"face": face, "moved": moved, "png": png}[command](*args)
+    ok = {"face": face, "moved": moved, "replaced": replaced, "png": png}[command](*args)
     sys.exit(0 if ok else 1)

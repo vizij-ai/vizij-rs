@@ -1,6 +1,8 @@
 // The Android packaging of the vizij crate: an APK around the crate's cdylib
 // (libvizij.so), which cargo-ndk builds into app/src/main/jniLibs/<abi>/
-// before Gradle runs. The recipe is in crates/vizij/README.md (Android).
+// before Gradle runs, and the one Kotlin activity that runs it. The recipe
+// is in crates/vizij/README.md (Android).
 plugins {
     id 'com.android.application' version '8.11.0' apply false
+    id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
 }

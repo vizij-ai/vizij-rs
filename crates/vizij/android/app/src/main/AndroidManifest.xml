@@ -10,14 +10,17 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:allowBackup="false">
 
-        <!-- The framework's NativeActivity: it loads lib<lib_name>.so, the
+        <!-- VizijActivity, a NativeActivity: it loads lib<lib_name>.so, the
              vizij cdylib, whose android_main (Bevy's native-activity backend)
-             runs the app. Full screen with no title bar; the configuration
-             changes are the app's to handle, since a recreated activity
-             would start a second Bevy app in the same process. -->
+             runs the app, and copies the faces it receives to
+             filesDir/model.glb. One instance (singleTask), so a face opened
+             while the app runs arrives through onNewIntent; the
+             configuration changes are the app's to handle, since a recreated
+             activity would start a second Bevy app in the same process. -->
         <activity
-            android:name="android.app.NativeActivity"
+            android:name=".VizijActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:configChanges="orientation|keyboardHidden|keyboard|navigation|screenSize|smallestScreenSize|screenLayout|density|uiMode"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
             <meta-data
@@ -26,6 +29,25 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- A GLB opened with Vizij from a file manager or a browser, by
+                 its type. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="model/gltf-binary" />
+            </intent-filter>
+            <!-- A GLB whose provider names no type, by its extension. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.glb" />
             </intent-filter>
         </activity>
     </application>

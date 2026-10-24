@@ -17,6 +17,18 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   `android` workflow builds it and runs it on the x86_64 API 35 emulator
   with lavapipe, asserting that the face draws and animates with nothing
   caught in logcat.
+- The Android app's activity, `VizijActivity` (Kotlin, a `NativeActivity`):
+  a face opened from the system's document picker (a long press on the
+  face) or with Vizij from a file manager (VIEW intents) is copied to the
+  app's files directory as `model.glb` and shown; the app opens on the face
+  last opened, the shipped one when there is none. Full screen in immersive
+  sticky mode, the screen kept on. A lost GPU device recreates the renderer
+  rather than ending the app.
+- The Android app is built with the Studio bridge: its credentials live in
+  the app's files directory, and the device registers under the identity
+  kept there (`studio-identity.json`). `native::BridgeConfig::studio` is a
+  `native::StudioConfig` (the identity file and an optional device
+  directory) rather than the identity file's path.
 
 ### Fixed
 
