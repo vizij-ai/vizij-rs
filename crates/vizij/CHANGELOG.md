@@ -211,6 +211,13 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   has not drained as the latest value per key: a page that never calls
   `drainChanges` no longer grows its memory with every step. A drain
   answers each changed key's latest value, as before.
+- An ellipse's or a rectangle's fill named per axis, as Studio writes it
+  (`fillColor.r`, `fillColor.g`, `fillColor.b`), colours it: a static
+  component states that component of the fill, over a whole `fillColor`; an
+  animated one binds that component of the colour, or the whole colour for
+  a component `<id>.<axis>` of a compound animatable. Such a fill used to
+  draw white and bind nothing. A per-axis stroke colour is dropped with the
+  rest of the stroke.
 
 ## [0.2.0] - 2026-10-12
 
