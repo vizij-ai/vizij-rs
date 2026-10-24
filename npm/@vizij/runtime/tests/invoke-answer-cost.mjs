@@ -93,8 +93,9 @@ for (let round = 0; round < 9; round++) {
 }
 ratios.sort((a, b) => a - b);
 const ratio = ratios[Math.floor(ratios.length / 2)];
-// With the constructors run on every crossing, it takes about 17 times call's.
-const MOST = 2.5;
+// With the constructors run on every crossing, it takes about 17 times call's;
+// without, 1.3 times on a quiet host and up to about 2 on a busy CI runner.
+const MOST = 4;
 assert.ok(
   ratio <= MOST,
   `an invoke answer of ${tracks} values took ${ratio.toFixed(1)}x call's (more than ${MOST}x)`
