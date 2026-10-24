@@ -108,12 +108,20 @@ fi
 # shown again on the next launch.
 if [ -n "$SECOND" ] && [ -n "$shown" ]; then
   adb push "$SECOND" /sdcard/Download/vizij-smoke.glb > /dev/null
-  adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
-    -d file:///sdcard/Download/vizij-smoke.glb > /dev/null
-  sleep 3
-  id=$(adb shell content query --uri content://media/external/downloads --projection _id:_display_name \
-    | tr -d '\r' | grep 'vizij-smoke.glb' | sed -E 's/.*_id=([0-9]+).*/\1/' | tail -1)
+  # The media store indexes the file in its own time: ask, and look, for up
+  # to a minute.
+  id=""
+  for _ in $(seq 1 12); do
+    adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
+      -d file:///sdcard/Download/vizij-smoke.glb > /dev/null
+    sleep 5
+    id=$(adb shell content query --uri content://media/external/downloads --projection _id:_display_name \
+      | tr -d '\r' | grep 'vizij-smoke.glb' | sed -E 's/.*_id=([0-9]+).*/\1/' | tail -1)
+    [ -n "$id" ] && break
+  done
   if [ -z "$id" ]; then
+    adb shell ls -l /sdcard/Download
+    adb shell content query --uri content://media/external/downloads --projection _id:_display_name:_data
     fail "the second face is not in Downloads"
   else
     frame before
