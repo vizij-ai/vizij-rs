@@ -190,6 +190,13 @@ futures = "0.3"
 # plays its audio; note it links GPLv3 code into the binary.
 rodio = { version = "0.20", optional = true }
 vizij-piper = { path = "../interop/vizij-piper", optional = true }
+# The settings pane (`settings`), drawn with egui over the view: 0.42 is the
+# line for Bevy 0.19. Its rendering, its embedded fonts and its picking
+# backend (a press on the pane is the pane's, not the face's); not its
+# clipboard (arboard), URL opener or bevy_ui integration.
+bevy_egui = { version = "0.42", default-features = false, features = ["render", "default_fonts", "picking"], optional = true }
+# The pane's operator implements arora's `Operator`, an async trait.
+async-trait = { version = "0.1", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 bevy = { version = "0.19", default-features = false, features = ["x11", "wayland"] }
@@ -263,11 +270,12 @@ default = ["desktop", "captions"]
 # text and the build carries no text shaping — the browser module, whose
 # download pays for every engine crate, leaves it out.
 captions = ["bevy/bevy_text", "bevy/bevy_ui", "bevy/bevy_ui_render"]
-# The desktop app: the CLI and the terminal operator UI. Off, the library is
-# the view, the composition and the native driver with a headless front end
-# — what the Android activity builds on; the browser module builds on the
-# view and the composition alone.
+# The desktop app: the CLI, the terminal operator UI and the settings pane.
+# Off, the library is the view, the composition and the native driver with a
+# headless front end — what the Android activity builds on; the browser
+# module builds on the view and the composition alone.
 desktop = [
+    "settings",
     "arora/tui",
     "dep:crossterm",
     "dep:clap",
@@ -277,6 +285,12 @@ desktop = [
     "dep:reqwest",
     "dep:winit",
 ]
+# The settings pane over the face (`settings`): the background colour, the
+# device info and the Studio association, the settings kept in the app's data
+# directory; the pane is the device's operator (the registration's questions,
+# the access requests). The desktop app has it; the Android app is built with
+# it; the browser module, whose page has its own UI, leaves it out.
+settings = ["dep:bevy_egui", "dep:async-trait"]
 # `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics,
 # over one RMW backend per build — the bridge's `dds` / `zenoh` features are
 # mutually exclusive, exposed here under the bridge's consumer convention:

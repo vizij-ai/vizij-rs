@@ -5,9 +5,12 @@
 //!
 //! Front ends are interchangeable: the terminal UI, a panel or a file dialog
 //! all speak to the running device through a [`RuntimeHandle`], and the view
-//! learns of the outcome through [`ViewEvent`]s.
+//! learns of the outcome through [`ViewEvent`]s. Who answers the device's
+//! questions — the registration Studio needs, a client's access request — is
+//! the front end's operator, or the app's own ([`Mode::OperatedBy`]).
 
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -53,9 +56,40 @@ pub struct Runtime {
 #[derive(Clone)]
 pub struct RuntimeHandle {
     commands: UnboundedSender<Command>,
+    studio: Arc<Mutex<StudioStatus>>,
 }
 
 impl RuntimeHandle {
+    /// Where the device stands with Semio Studio.
+    pub fn studio(&self) -> StudioStatus {
+        self.studio
+            .lock()
+            .map(|status| status.clone())
+            .unwrap_or_default()
+    }
+
+    /// Connect to Studio for the rest of the run: the device restarts on its
+    /// face with the Studio bridge, registered under the identity it keeps,
+    /// else as the operator answers. Nothing happens in a run with no Studio
+    /// ([`StudioStatus::Off`]).
+    pub fn associate(&self) {
+        let _ = self.commands.unbounded_send(Command::Associate(None));
+    }
+
+    /// [`associate`](Self::associate), keeping `name` and `owners` as the
+    /// identity the device registers under first: the way to associate a
+    /// device whose operator is not asked ([`StudioStatus::Idle`]'s `form`).
+    pub fn associate_as(&self, name: String, owners: Vec<String>) {
+        let identity = Identity {
+            name,
+            owners,
+            model_family: None,
+        };
+        let _ = self
+            .commands
+            .unbounded_send(Command::Associate(Some(identity)));
+    }
+
     /// Load another face from its GLB bytes: the device restarts on its
     /// graphs and the view swaps over ([`ViewEvent::LoadFace`]). A GLB
     /// that does not compose is an error in the log, not a dead device.
@@ -72,15 +106,46 @@ impl RuntimeHandle {
 enum Command {
     Reload(Vec<u8>),
     Background([u8; 3]),
+    /// Connect to Studio, keeping this identity first when one is given.
+    Associate(Option<Identity>),
+}
+
+/// Where the device stands with Semio Studio, as a front end shows it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum StudioStatus {
+    /// The run has no Studio: the build leaves it out, or the app configures
+    /// none.
+    #[default]
+    Off,
+    /// Not connected: the run did not ask for Studio, and the device keeps
+    /// no identity it connects with at launch. With `form`, associating it
+    /// takes the identity from the front end ([`RuntimeHandle::associate_as`]):
+    /// in a given device directory the operator is not asked, since arora 15
+    /// has no operator flow there. Otherwise [`RuntimeHandle::associate`]
+    /// connects, the operator answering for a device that keeps no identity.
+    Idle { form: bool },
+    /// Connecting; the operator may be asked for the registration.
+    Connecting,
+    /// Registered with Studio as this.
+    Connected(arora_bridge::DeviceInfo),
+    /// The operator declined Studio, leaving the owner empty.
+    Declined,
+    /// The connection failed, for this reason.
+    Failed(String),
 }
 
 /// How the device fronts the operator.
+#[derive(Clone)]
 pub enum Mode {
     /// The standard arora operator flow (`AroraBuilder::run`): the terminal UI
     /// on an interactive terminal (headless front end otherwise) with the
     /// vizij commands installed, the open local bridge served where
     /// [`BridgeConfig::local`] says, logging owned by the front end's sink.
     Operator,
+    /// [`Mode::Operator`], the app's operator answering the device's
+    /// questions in place of the front end's: the settings pane, while the
+    /// terminal UI keeps its log pane and its commands.
+    OperatedBy(Arc<dyn arora::operator::Operator>),
     /// Build and step quietly: no bridge, no front end, no commands served —
     /// the snapshot harness, where the process' own logger stays in charge
     /// and a port conflict with a running window instance cannot occur.
@@ -118,6 +183,22 @@ pub struct StudioConfig {
     /// Inside a given directory nobody is asked: without a kept identity the
     /// device does not connect, since arora 15 has no operator flow there.
     pub device_dir: Option<std::path::PathBuf>,
+    /// When the device connects; [`RuntimeHandle::associate`] connects it for
+    /// the rest of the run whatever this says.
+    pub connect: Connect,
+}
+
+/// When a device configured for Studio connects to it.
+#[cfg(feature = "studio")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Connect {
+    /// At launch: the run asks for Studio (`--studio`).
+    AtLaunch,
+    /// At launch when the device keeps an identity: a device associated once
+    /// comes back associated, and one never associated contacts nobody.
+    IfKept,
+    /// Only once a front end asks ([`RuntimeHandle::associate`]).
+    WhenAsked,
 }
 
 impl Default for BridgeConfig {
@@ -135,9 +216,10 @@ impl Default for BridgeConfig {
 }
 
 /// What a device registers with Studio as, kept across launches so the
-/// operator answers once: arora regenerates the name per launch otherwise.
-#[cfg(feature = "studio")]
+/// operator answers once, and the only record of it in a given device
+/// directory, where arora 15 keeps none.
 #[derive(serde::Serialize, serde::Deserialize)]
+#[cfg_attr(not(feature = "studio"), allow(dead_code))]
 struct Identity {
     name: String,
     owners: Vec<String>,
@@ -145,20 +227,61 @@ struct Identity {
     model_family: Option<String>,
 }
 
+/// The identity kept at `path`, if one reads.
+#[cfg(feature = "studio")]
+fn kept_identity(path: &std::path::Path) -> Option<Identity> {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|json| serde_json::from_str(&json).ok())
+}
+
+/// Keep `identity` at `path`, for this launch and the next ones.
+#[cfg(feature = "studio")]
+fn keep_identity(path: &std::path::Path, identity: &Identity) {
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    match serde_json::to_string_pretty(identity)
+        .map_err(|e| e.to_string())
+        .and_then(|json| std::fs::write(path, json).map_err(|e| e.to_string()))
+    {
+        Ok(()) => log::info!("Studio identity kept in {}", path.display()),
+        Err(e) => log::warn!("cannot keep the Studio identity: {e}"),
+    }
+}
+
 /// The Studio bridge for one generation, the device registered under the
 /// persisted identity when there is one, else as the operator answers (the
-/// terminal UI's prompt; an unattended run declines), which is then
-/// persisted; in a given device directory, only under a persisted identity
-/// ([`StudioConfig::device_dir`]). `None` when Studio is declined or fails.
+/// terminal UI's prompt or the settings pane; an unattended run declines),
+/// which is then persisted; in a given device directory, only under a
+/// persisted identity ([`StudioConfig::device_dir`]). `None` when the run
+/// does not connect ([`StudioConfig::connect`]) or Studio is declined or
+/// fails; `status` says which.
 #[cfg(feature = "studio")]
 async fn studio_bridge(
     studio: &StudioConfig,
     operator: Option<&dyn arora::operator::Operator>,
+    status: &Mutex<StudioStatus>,
 ) -> Option<Box<dyn arora_bridge::Bridge>> {
+    let report = |now: StudioStatus| {
+        if let Ok(mut status) = status.lock() {
+            *status = now;
+        }
+    };
     let identity = studio.identity.as_path();
-    let persisted: Option<Identity> = std::fs::read_to_string(identity)
-        .ok()
-        .and_then(|json| serde_json::from_str(&json).ok());
+    let persisted = kept_identity(identity);
+    let connects = match studio.connect {
+        Connect::AtLaunch => true,
+        Connect::IfKept => persisted.is_some(),
+        Connect::WhenAsked => false,
+    };
+    if !connects {
+        report(StudioStatus::Idle {
+            form: studio.device_dir.is_some() && persisted.is_none(),
+        });
+        return None;
+    }
+    report(StudioStatus::Connecting);
     if let Some(known) = persisted {
         let connected = match &studio.device_dir {
             Some(dir) => arora::studio::connect_with_device_dir(dir).await,
@@ -168,6 +291,7 @@ async fn studio_bridge(
             Ok(bridge) => bridge,
             Err(e) => {
                 log::error!("studio bridge: {e:?}");
+                report(StudioStatus::Failed(format!("{e:#}")));
                 return None;
             }
         };
@@ -179,14 +303,20 @@ async fn studio_bridge(
             software_version: None,
             owners: known.owners.clone(),
         };
-        match bridge.update_device_info(Some(info)).await {
-            Ok(_) => log::info!(
-                "registered with Studio as {:?} (owners {:?}, from {})",
-                known.name,
-                known.owners,
-                identity.display()
-            ),
-            Err(e) => log::error!("studio registration: {e:?}"),
+        match bridge.update_device_info(Some(info.clone())).await {
+            Ok(_) => {
+                log::info!(
+                    "registered with Studio as {:?} (owners {:?}, from {})",
+                    known.name,
+                    known.owners,
+                    identity.display()
+                );
+                report(StudioStatus::Connected(info));
+            }
+            Err(e) => {
+                log::error!("studio registration: {e:?}");
+                report(StudioStatus::Failed(format!("registration: {e}")));
+            }
         }
         return Some(bridge);
     }
@@ -195,6 +325,7 @@ async fn studio_bridge(
             "Studio: no identity kept in {}, not connecting",
             identity.display()
         );
+        report(StudioStatus::Idle { form: true });
         return None;
     }
     let connected = match operator {
@@ -203,33 +334,28 @@ async fn studio_bridge(
     };
     match connected {
         Ok(Some(bridge)) => {
-            if let Ok(Some(info)) = bridge.get_device_info().await {
+            let info = bridge.get_device_info().await.ok().flatten();
+            if let Some(info) = &info {
                 if let (Some(name), false) = (info.name.clone(), info.owners.is_empty()) {
                     let known = Identity {
                         name,
                         owners: info.owners.clone(),
                         model_family: info.model_family.clone(),
                     };
-                    if let Some(dir) = identity.parent() {
-                        let _ = std::fs::create_dir_all(dir);
-                    }
-                    match serde_json::to_string_pretty(&known)
-                        .map_err(|e| e.to_string())
-                        .and_then(|json| std::fs::write(identity, json).map_err(|e| e.to_string()))
-                    {
-                        Ok(()) => log::info!("Studio identity kept in {}", identity.display()),
-                        Err(e) => log::warn!("cannot keep the Studio identity: {e}"),
-                    }
+                    keep_identity(identity, &known);
                 }
             }
+            report(StudioStatus::Connected(info.unwrap_or_default()));
             Some(bridge)
         }
         Ok(None) => {
             log::info!("Studio declined (no owner)");
+            report(StudioStatus::Declined);
             None
         }
         Err(e) => {
             log::error!("studio bridge: {e:?}");
+            report(StudioStatus::Failed(format!("{e:#}")));
             None
         }
     }
@@ -240,8 +366,11 @@ async fn studio_bridge(
 /// Each relays the device as its store and modules describe it — keys, what
 /// they are, which a remote may write, and functions — so nothing is declared
 /// to a bridge. A bridge that fails to build is logged and skipped, not fatal.
+/// Returned beside the builder: the access requests the Studio bridge yields,
+/// for the operator to rule on; `studio` says where the device stands with
+/// Studio.
 #[cfg_attr(
-    not(any(feature = "ros2-dds", feature = "ros2-zenoh")),
+    not(all(any(feature = "ros2-dds", feature = "ros2-zenoh"), feature = "studio")),
     allow(unused_variables)
 )]
 pub async fn attach_bridges(
@@ -249,13 +378,16 @@ pub async fn attach_bridges(
     bridges: &BridgeConfig,
     ros4hri: bool,
     operator: Option<&dyn arora::operator::Operator>,
-) -> arora::AroraBuilder {
-    #[cfg(not(feature = "studio"))]
-    let _ = operator;
+    studio: &Mutex<StudioStatus>,
+) -> (arora::AroraBuilder, arora_bridge::AccessRequestStream) {
+    #[cfg_attr(not(feature = "studio"), allow(unused_mut))]
+    let mut access_requests: arora_bridge::AccessRequestStream =
+        Box::pin(futures::stream::pending());
     // Studio first: the bridge whose identity the device carries.
     #[cfg(feature = "studio")]
-    if let Some(studio) = &bridges.studio {
-        if let Some(bridge) = studio_bridge(studio, operator).await {
+    if let Some(config) = &bridges.studio {
+        if let Some(bridge) = studio_bridge(config, operator, studio).await {
+            access_requests = bridge.access_requests().await;
             builder = builder.with_bridge(bridge);
         }
     }
@@ -283,7 +415,7 @@ pub async fn attach_bridges(
             }
         );
     }
-    builder
+    (builder, access_requests)
 }
 
 /// Load the face from its GLB bytes (its graph kinds filtered by `config`)
@@ -306,6 +438,7 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
     let store = BlackboardStore::new();
     let (events_tx, events_rx) = std::sync::mpsc::channel();
     let (commands_tx, commands_rx) = futures::channel::mpsc::unbounded();
+    let studio = Arc::new(Mutex::new(StudioStatus::Off));
     let _ = events_tx.send(ViewEvent::LoadFace {
         face_id: FACE.to_string(),
         meta: Box::new(meta.clone()),
@@ -323,38 +456,31 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
         // The supervisor stages and announces each generation from the meta; the
         // view keeps its own copy for the initial face.
         let meta = meta.clone();
-        thread::Builder::new()
-            .name("arora".into())
-            .spawn(move || match mode {
-                Mode::Operator => supervise(
-                    spec,
-                    meta,
-                    config,
-                    bridges,
-                    rig,
-                    store,
-                    events_tx,
-                    commands_rx,
-                ),
-                Mode::Quiet => {
-                    if config.stage_neutral {
-                        stage_neutral_pose(&store, &meta);
-                    }
-                    let speech = config.speech.as_ref().map(|build| build());
-                    let Some(builder) = builder_for(&spec, rig, store, &meta.bundle.skills, speech)
-                    else {
-                        return;
-                    };
-                    match builder.build() {
-                        Ok(mut arora) => {
-                            load_face_animations(&mut arora, &meta);
-                            spawn_face_program(&mut arora, &meta, &config.program);
-                            step_forever(&mut arora)
-                        }
-                        Err(e) => log::error!("building the arora device: {e:?}"),
-                    }
-                }
-            })?
+        let glb = glb.to_vec();
+        let studio = studio.clone();
+        thread::Builder::new().name("arora".into()).spawn(move || {
+            let operator = match mode {
+                Mode::Operator => None,
+                Mode::OperatedBy(operator) => Some(operator),
+                Mode::Quiet => return run_quiet(&spec, &meta, &config, rig, store),
+            };
+            let face = Generation {
+                spec,
+                meta,
+                glb,
+                contended: Vec::new(),
+            };
+            supervise(
+                face,
+                config,
+                bridges,
+                operator,
+                (rig, store),
+                events_tx,
+                commands_rx,
+                studio,
+            )
+        })?
     };
 
     Ok(Runtime {
@@ -364,26 +490,70 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
         events: events_rx,
         handle: RuntimeHandle {
             commands: commands_tx,
+            studio,
         },
         _thread: thread,
     })
 }
 
-/// The operator flow, generation by generation: each reload stops the
-/// running device and rebuilds it — graphs, rig, store — on the new face,
-/// and the view follows through [`ViewEvent::LoadFace`]. Runs until a
-/// generation ends without a reload (a device error; the terminal UI's quit
-/// exits the process).
-#[allow(clippy::too_many_arguments)]
-fn supervise(
-    mut spec: String,
-    mut meta: FaceMeta,
-    config: FaceConfig,
-    bridges: BridgeConfig,
+/// The quiet mode's device: built once and stepped, with no bridge and no
+/// front end ([`Mode::Quiet`]).
+fn run_quiet(
+    spec: &str,
+    meta: &FaceMeta,
+    config: &FaceConfig,
     rig: RigHal,
     store: BlackboardStore,
+) {
+    if config.stage_neutral {
+        stage_neutral_pose(&store, meta);
+    }
+    let speech = config.speech.as_ref().map(|build| build());
+    let Some(builder) = builder_for(spec, rig, store, &meta.bundle.skills, speech) else {
+        return;
+    };
+    match builder.build() {
+        Ok(mut arora) => {
+            load_face_animations(&mut arora, meta);
+            spawn_face_program(&mut arora, meta, &config.program);
+            step_forever(&mut arora)
+        }
+        Err(e) => log::error!("building the arora device: {e:?}"),
+    }
+}
+
+/// The face a generation runs: its composed spec and meta, its GLB, and what
+/// its composition contends.
+struct Generation {
+    spec: String,
+    meta: FaceMeta,
+    glb: Vec<u8>,
+    contended: Vec<vizij_arora_host::Contention>,
+}
+
+/// Why a generation ends: another face to run, or the Studio connection asked
+/// for.
+enum Rebuild {
+    Face(Box<Generation>),
+    Associate(Option<Identity>),
+}
+
+/// The operator flow, generation by generation: each reload stops the
+/// running device and rebuilds it — graphs, rig, store — on the new face,
+/// and the view follows through [`ViewEvent::LoadFace`]; an association
+/// rebuilds it on the same face with the Studio bridge. `operator`, when
+/// given, answers in place of the front end's. Runs until a generation ends
+/// on its own (a device error; the terminal UI's quit exits the process).
+#[allow(clippy::too_many_arguments)]
+fn supervise(
+    mut face: Generation,
+    config: FaceConfig,
+    mut bridges: BridgeConfig,
+    operator: Option<Arc<dyn arora::operator::Operator>>,
+    handles: (RigHal, BlackboardStore),
     events: Sender<ViewEvent>,
     mut commands: UnboundedReceiver<Command>,
+    studio: Arc<Mutex<StudioStatus>>,
 ) {
     let tokio_rt = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -393,123 +563,180 @@ fn supervise(
         Err(e) => return log::error!("tokio runtime: {e}"),
     };
     // The first generation runs on the handles the view already holds; a
-    // reload's face swap is announced only after the new front end is up, so
-    // the view's swap (and everything it logs) lands in the live pane.
-    let mut fresh = Some((rig, store));
-    // Set on a reload so the next generation announces the new face to the
-    // view, with what its composition contends.
-    let mut pending_glb: Option<Vec<u8>> = None;
-    let mut contended = Vec::new();
+    // later one's face is announced only after its front end is up, so the
+    // view's swap (and everything it logs) lands in the live pane.
+    let mut fresh = Some(handles);
     loop {
-        let (rig, store) = fresh
-            .take()
-            .unwrap_or_else(|| (RigHal::new(), BlackboardStore::new()));
-        let (frontend, tui) = operator_frontend();
-        if let Some(glb) = pending_glb.take() {
-            rig.set_model_glb(glb.clone());
-            let _ = events.send(ViewEvent::LoadFace {
-                face_id: FACE.to_string(),
-                meta: Box::new(meta.clone()),
-                glb,
-                rig: rig.clone(),
-            });
-            let _ = events.send(ViewEvent::Composed {
-                face_id: FACE.to_string(),
-                contended: std::mem::take(&mut contended),
-            });
+        let (mut frontend, tui) = operator_frontend();
+        if let (Some(frontend), Some(operator)) = (frontend.as_mut(), &operator) {
+            frontend.operator = operator.clone();
+            frontend.interactive = true;
         }
+        let (rig, store) = match fresh.take() {
+            Some(handles) => handles,
+            None => {
+                let (rig, store) = (RigHal::new(), BlackboardStore::new());
+                rig.set_model_glb(face.glb.clone());
+                let _ = events.send(ViewEvent::LoadFace {
+                    face_id: FACE.to_string(),
+                    meta: Box::new(face.meta.clone()),
+                    glb: face.glb.clone(),
+                    rig: rig.clone(),
+                });
+                let _ = events.send(ViewEvent::Composed {
+                    face_id: FACE.to_string(),
+                    contended: face.contended.clone(),
+                });
+                (rig, store)
+            }
+        };
         if config.stage_neutral {
-            stage_neutral_pose(&store, &meta);
+            stage_neutral_pose(&store, &face.meta);
         }
         // What the face's keys are — the inputs a remote may drive, where
         // each rests — said to the store, which every bridge relays.
         declare_keys(
             &store,
-            &spec,
-            &meta.bundle.programs,
-            &meta.bundle.neutral_stage_writes(),
-            &rig_ranges(&meta.bundle),
+            &face.spec,
+            &face.meta.bundle.programs,
+            &face.meta.bundle.neutral_stage_writes(),
+            &rig_ranges(&face.meta.bundle),
         );
         let speech = config.speech.as_ref().map(|build| build());
-        let Some(builder) = builder_for(&spec, rig, store.clone(), &meta.bundle.skills, speech)
-        else {
+        let Some(builder) = builder_for(
+            &face.spec,
+            rig,
+            store.clone(),
+            &face.meta.bundle.skills,
+            speech,
+        ) else {
             return;
         };
-        let reload = tokio_rt.block_on(async {
+        let associable = studio_configured(&bridges);
+        let rebuild = tokio_rt.block_on(async {
             let operator = frontend.as_ref().map(|frontend| frontend.operator.clone());
-            let builder =
-                attach_bridges(builder, &bridges, config.ros4hri, operator.as_deref()).await;
-            // A reload drops the run future — arora's stop story: the
+            let (builder, access_requests) = attach_bridges(
+                builder,
+                &bridges,
+                config.ros4hri,
+                operator.as_deref(),
+                &studio,
+            )
+            .await;
+            // A rebuild drops the run future — arora's stop story: the
             // teardown is complete and synchronous (front end released, local
             // bridge's port freed) before the next generation starts.
             tokio::select! {
-                result = run_generation(builder, frontend, &meta, &config.program) => {
+                result = run_generation(builder, frontend, access_requests, &face.meta, &config.program) => {
                     if let Err(e) = result {
                         log::error!("arora device stopped: {e:?}");
                     }
                     None
                 }
-                reload = pump(tui, &mut commands, &config, &events) => Some(reload),
+                rebuild = pump(tui, &mut commands, &config, &events, associable) => Some(rebuild),
             }
         });
-        let Some((loaded, glb)) = reload else {
-            break;
-        };
-        spec = loaded.spec;
-        meta = loaded.meta;
-        contended = loaded.contended;
-        pending_glb = Some(glb);
+        match rebuild {
+            None => break,
+            Some(Rebuild::Face(next)) => face = *next,
+            Some(Rebuild::Associate(identity)) => associate(&mut bridges, identity),
+        }
     }
+}
+
+/// Whether the run is configured for Studio, so that associating it means
+/// something.
+fn studio_configured(bridges: &BridgeConfig) -> bool {
+    #[cfg(feature = "studio")]
+    return bridges.studio.is_some();
+    #[cfg(not(feature = "studio"))]
+    {
+        let _ = bridges;
+        false
+    }
+}
+
+/// Connect the run to Studio from its next generation on, keeping `identity`
+/// first when one is given.
+fn associate(bridges: &mut BridgeConfig, identity: Option<Identity>) {
+    #[cfg(feature = "studio")]
+    if let Some(studio) = bridges.studio.as_mut() {
+        if let Some(identity) = &identity {
+            keep_identity(&studio.identity, identity);
+        }
+        studio.connect = Connect::AtLaunch;
+    }
+    #[cfg(not(feature = "studio"))]
+    let _ = (bridges, identity);
 }
 
 /// Run one device generation: build it — the face's animations loaded, its
 /// `program` running — hand the front end its live view, and step until the
-/// run ends. The steps of arora's own operator flow
-/// (`AroraBuilder::run`), taken here because this app owns the generation
-/// loop; the access requests a bridge would yield are not served (no bridge
-/// yields any).
+/// run ends, the front end's operator ruling on the `access_requests` the
+/// while. The steps of arora's own operator flow (`AroraBuilder::run`),
+/// taken here because this app owns the generation loop.
 async fn run_generation(
     builder: arora::AroraBuilder,
     frontend: Option<arora::operator::Frontend>,
+    access_requests: arora_bridge::AccessRequestStream,
     meta: &FaceMeta,
     program: &ProgramSelect,
 ) -> Result<()> {
     let mut arora = builder.build().context("failed to build the device")?;
     load_face_animations(&mut arora, meta);
     spawn_face_program(&mut arora, meta, program);
-    if let Some(frontend) = frontend {
+    let operator = frontend.map(|frontend| {
         (frontend.on_ready)(arora.store().subscribe(), None, None);
+        frontend.operator
+    });
+    let run = arora.run(arora::Arora::DEFAULT_STEP_PERIOD);
+    tokio::pin!(run);
+    // Served in this future, as arora serves them: dropping the generation
+    // drops a ruling in flight with it. The stream ending ends nothing.
+    if let Some(operator) = operator {
+        tokio::select! {
+            result = &mut run => return result.map_err(|e| anyhow::anyhow!("runtime error: {e}")),
+            () = arora::operator::serve_access_requests(access_requests, operator) => {}
+        }
     }
-    arora
-        .run(arora::Arora::DEFAULT_STEP_PERIOD)
-        .await
-        .map_err(|e| anyhow::anyhow!("runtime error: {e}"))
+    run.await.map_err(|e| anyhow::anyhow!("runtime error: {e}"))
 }
 
 /// Serve one device generation's front ends: the terminal UI's command
 /// events (`g` reads the GLB at the given path, `b` parses a background) and
 /// the [`RuntimeHandle`] commands, each validated here — a bad path, a GLB
 /// that does not compose or a malformed colour is an error in the log, not
-/// a dead device. Returns when a face has been validated for a reload, with
-/// what the supervisor needs to rebuild; a generation whose front ends have
-/// all gone quiet (a headless run, every handle dropped) never returns, so
-/// that the pump merely ending cannot stop a healthy run.
+/// a dead device. Returns when the device is to be rebuilt: on a face
+/// validated for a reload, or on an association in a run `associable` to
+/// Studio. A generation whose front ends have all gone quiet (a headless run,
+/// every handle dropped) never returns, so that the pump merely ending
+/// cannot stop a healthy run.
 async fn pump(
     tui: BoxStream<'static, Command>,
     commands: &mut UnboundedReceiver<Command>,
     config: &FaceConfig,
     events: &Sender<ViewEvent>,
-) -> (LoadedFace, Vec<u8>) {
+    associable: bool,
+) -> Rebuild {
     let mut front_ends = futures::stream::select(tui, commands.by_ref());
     while let Some(command) = front_ends.next().await {
         match command {
             Command::Reload(glb) => match load_face(&glb, config) {
-                Ok(loaded) => return (loaded, glb),
+                Ok(loaded) => {
+                    return Rebuild::Face(Box::new(Generation {
+                        spec: loaded.spec,
+                        meta: loaded.meta,
+                        glb,
+                        contended: loaded.contended,
+                    }))
+                }
                 Err(e) => log::error!("cannot load the face: {e:#}"),
             },
             Command::Background(rgb) => {
                 let _ = events.send(ViewEvent::Background(rgb));
             }
+            Command::Associate(identity) if associable => return Rebuild::Associate(identity),
+            Command::Associate(_) => log::warn!("this run has no Studio to associate with"),
         }
     }
     futures::future::pending().await
@@ -733,5 +960,80 @@ mod ros4hri_profile_tests {
                 );
             }
         }
+    }
+}
+
+/// When a device configured for Studio contacts it: never before it is
+/// asked to or keeps an identity, and what it says of itself then.
+#[cfg(all(test, feature = "studio"))]
+mod studio_tests {
+    use super::*;
+
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("vizij-studio-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    async fn status_of(config: &StudioConfig) -> StudioStatus {
+        let status = Mutex::new(StudioStatus::Off);
+        assert!(
+            studio_bridge(config, None, &status).await.is_none(),
+            "nothing is contacted"
+        );
+        status.into_inner().unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_device_never_associated_contacts_nobody_until_asked() {
+        let dir = scratch("never");
+        // Android's: a device directory, connecting when an identity is kept.
+        let in_dir = StudioConfig {
+            identity: dir.join("studio-identity.json"),
+            device_dir: Some(dir.clone()),
+            connect: Connect::IfKept,
+        };
+        assert_eq!(
+            status_of(&in_dir).await,
+            StudioStatus::Idle { form: true },
+            "the identity comes from the front end's form"
+        );
+        // The desktop's without `--studio`: the operator answers once asked.
+        let desktop = StudioConfig {
+            device_dir: None,
+            connect: Connect::WhenAsked,
+            ..in_dir.clone()
+        };
+        assert_eq!(
+            status_of(&desktop).await,
+            StudioStatus::Idle { form: false }
+        );
+    }
+
+    #[test]
+    fn associating_keeps_the_identity_given_and_connects_from_then_on() {
+        let dir = scratch("associate");
+        let identity = dir.join("studio-identity.json");
+        let mut bridges = BridgeConfig {
+            studio: Some(StudioConfig {
+                identity: identity.clone(),
+                device_dir: Some(dir.clone()),
+                connect: Connect::IfKept,
+            }),
+            ..BridgeConfig::default()
+        };
+        associate(
+            &mut bridges,
+            Some(Identity {
+                name: "vizij-test".into(),
+                owners: vec!["uid-1".into()],
+                model_family: None,
+            }),
+        );
+        let kept = kept_identity(&identity).expect("the identity is kept");
+        assert_eq!(kept.name, "vizij-test");
+        assert_eq!(kept.owners, ["uid-1"]);
+        assert_eq!(bridges.studio.unwrap().connect, Connect::AtLaunch);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

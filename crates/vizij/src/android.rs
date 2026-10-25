@@ -18,10 +18,23 @@
 //! received while the app runs reaches the device through
 //! [`RuntimeHandle::reload`]. A long press on the face opens the picker.
 //!
+//! With the `settings` feature, a tap on the face shows the settings pane's
+//! Settings button ([`crate::settings`]): the pane keeps its settings in the
+//! app's files directory, opens the picker on its Open a face…, and is the
+//! device's operator. The back gesture closes the pane, and with the pane
+//! closed moves the app to the back (`VizijActivity.leaveApp`); the pane keeps
+//! clear of the system bars and the display's cutout, which the activity
+//! reports (`insetsChanged`).
+//!
 //! Studio keeps its credentials in the app's files directory (the device
 //! directory) and the device registers under the identity kept there,
-//! `studio-identity.json` (name, owners, model family); with none kept, the
-//! device does not connect.
+//! `studio-identity.json` (name, owners, model family). A launch connects
+//! only with an identity kept, so that an install nobody associated — a CI
+//! emulator's — registers nothing; the pane's identity form keeps one and
+//! connects. The pane is not asked the registration's questions: arora 15
+//! asks nobody in a given device directory, and the one way to give it the
+//! app's — `DEVICE_DIR` in the environment — is not sound here, since the
+//! process' JVM threads may read the environment while `set_var` writes it.
 //!
 //! Logging goes to logcat through [`android_logger`], installed before the
 //! device's front end looks for a logger; Bevy's `LogPlugin` stays disabled,
@@ -54,6 +67,10 @@ const OPENED_FACE: &str = "model.glb";
 #[cfg(feature = "studio")]
 const STUDIO_IDENTITY: &str = "studio-identity.json";
 
+/// The settings pane's settings, in the app's files directory.
+#[cfg(feature = "settings")]
+const SETTINGS: &str = "settings.json";
+
 /// How long a still touch is held to open the picker.
 const LONG_PRESS_SECS: f32 = 1.0;
 
@@ -79,19 +96,25 @@ fn main() {
 /// activity is destroyed.
 fn run() -> Result<()> {
     let android = android_app()?;
+    #[cfg(feature = "settings")]
+    let pane = crate::settings::PaneOperator::default();
+    #[cfg(feature = "settings")]
+    let mode = Mode::OperatedBy(std::sync::Arc::new(pane.clone()));
+    #[cfg(not(feature = "settings"))]
+    let mode = Mode::Operator;
     let Runtime {
         meta,
         events,
         handle,
         ..
-    } = start_device(android)?;
+    } = start_device(android, mode)?;
     log::info!(
         "vizij: {} elements, {} animatables, {} bundle graphs",
         meta.elements.len(),
         meta.animatables.len(),
         meta.bundle.graphs.len(),
     );
-    let _ = DEVICE.set(handle);
+    let _ = DEVICE.set(handle.clone());
 
     let mut app = App::new();
     // The in-memory asset source is registered before the default plugins,
@@ -118,17 +141,26 @@ fn run() -> Result<()> {
         })
         .add_plugins(view::ViewPlugin)
         .add_systems(Update, long_press);
+    #[cfg(feature = "settings")]
+    app.add_plugins(crate::settings::SettingsPlugin {
+        handle,
+        operator: pane,
+        file: files_dir(android).join(SETTINGS),
+    })
+    .add_systems(Update, (open_picker_on_ask, leave_on_back, follow_insets));
+    #[cfg(not(feature = "settings"))]
+    let _ = handle;
     app.run();
     Ok(())
 }
 
 /// The device on the face last opened, or on the shipped face when none was
 /// or the one opened does not compose.
-fn start_device(android: &AndroidApp) -> Result<Runtime> {
+fn start_device(android: &AndroidApp, mode: Mode) -> Result<Runtime> {
     if let Some(path) = opened_face_path(android).filter(|path| path.exists()) {
         match std::fs::read(&path)
             .with_context(|| format!("cannot read {}", path.display()))
-            .and_then(|glb| native::start(&glb, face_config(), bridges(android), Mode::Operator))
+            .and_then(|glb| native::start(&glb, face_config(), bridges(android), mode.clone()))
         {
             Ok(runtime) => {
                 log::info!("vizij: the face last opened ({})", path.display());
@@ -141,7 +173,7 @@ fn start_device(android: &AndroidApp) -> Result<Runtime> {
     }
     let glb = shipped_face(android)?;
     log::info!("vizij: the shipped face");
-    native::start(&glb, face_config(), bridges(android), Mode::Operator)
+    native::start(&glb, face_config(), bridges(android), mode)
 }
 
 /// The open local bridge, and with the `studio` feature the Studio bridge in
@@ -155,6 +187,7 @@ fn bridges(android: &AndroidApp) -> BridgeConfig {
             .map(|files| native::StudioConfig {
                 identity: files.join(STUDIO_IDENTITY),
                 device_dir: Some(files),
+                connect: native::Connect::IfKept,
             }),
         ..BridgeConfig::default()
     }
@@ -256,14 +289,93 @@ fn long_press(touches: Res<Touches>, time: Res<Time>, mut held: Local<Option<(u6
 
 /// Call `VizijActivity.openPicker()` on the activity.
 fn open_picker() -> Result<()> {
+    call_activity("openPicker")
+}
+
+/// Call the activity's `method`, which takes nothing and returns nothing.
+fn call_activity(method: &str) -> Result<()> {
     let android = android_app()?;
     // SAFETY: both pointers are the activity's, valid while the app runs:
     // the process' JavaVM and a global reference to the activity object.
     let vm = unsafe { jni::JavaVM::from_raw(android.vm_as_ptr().cast()) }?;
     let mut env = vm.attach_current_thread()?;
     let activity = unsafe { jni::objects::JObject::from_raw(android.activity_as_ptr().cast()) };
-    env.call_method(&activity, "openPicker", "()V", &[])?;
+    env.call_method(&activity, method, "()V", &[])?;
     Ok(())
+}
+
+/// The app's files directory: the face last opened, the Studio identity and
+/// credentials, the settings.
+#[cfg(feature = "settings")]
+fn files_dir(android: &AndroidApp) -> PathBuf {
+    android
+        .internal_data_path()
+        .unwrap_or_else(std::env::temp_dir)
+}
+
+/// The pane's Open a face… opens the picker.
+#[cfg(feature = "settings")]
+fn open_picker_on_ask(mut asked: MessageReader<crate::settings::OpenFace>) {
+    if asked.read().count() > 0 {
+        if let Err(e) = open_picker() {
+            log::error!("vizij: cannot open the picker: {e:#}");
+        }
+    }
+}
+
+/// A back gesture the pane did not take moves the app to the back, as the
+/// standalone's did.
+#[cfg(feature = "settings")]
+fn leave_on_back(mut back: MessageReader<crate::settings::LeaveApp>) {
+    if back.read().count() > 0 {
+        if let Err(e) = call_activity("leaveApp") {
+            log::error!("vizij: cannot leave the app: {e:#}");
+        }
+    }
+}
+
+/// The insets the activity last reported, in physical pixels (left, top,
+/// right, bottom), until the pane reads them.
+static INSETS: Mutex<Option<[i32; 4]>> = Mutex::new(None);
+
+/// `VizijActivity.insetsChanged(left, top, right, bottom)`: the system bars'
+/// and the display cutout's insets, in physical pixels, as the window's
+/// insets change. Exported whatever the features, as the activity calls it.
+#[unsafe(no_mangle)]
+extern "system" fn Java_ai_vizij_app_VizijActivity_insetsChanged(
+    _env: *mut c_void,
+    _this: *mut c_void,
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
+) {
+    if let Ok(mut insets) = INSETS.lock() {
+        *insets = Some([left, top, right, bottom]);
+    }
+}
+
+/// The pane keeps clear of the insets the activity reported, in logical
+/// pixels.
+#[cfg(feature = "settings")]
+fn follow_insets(
+    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    mut safe: ResMut<crate::settings::SafeArea>,
+) {
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let Some([left, top, right, bottom]) = INSETS.lock().ok().and_then(|mut insets| insets.take())
+    else {
+        return;
+    };
+    let scale = window.scale_factor();
+    *safe = crate::settings::SafeArea {
+        left: left as f32 / scale,
+        top: top as f32 / scale,
+        right: right as f32 / scale,
+        bottom: bottom as f32 / scale,
+    };
 }
 
 /// A lost device recovers: the renderer is created anew and the face drawn

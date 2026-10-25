@@ -1,7 +1,8 @@
 //! Opening another face while the window runs: a GLB dropped on the window,
-//! or picked in the system's file dialog (`O`). Either way the bytes go to
-//! the running device through its [`RuntimeHandle`]; the device restarts on
-//! the new face and the view follows.
+//! or picked in the system's file dialog (`O`, or the settings pane's Open a
+//! face…). Either way the bytes go to the running device through its
+//! [`RuntimeHandle`]; the device restarts on the new face and the view
+//! follows.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -11,6 +12,7 @@ use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
 use bevy::window::FileDragAndDrop;
 use vizij::native::RuntimeHandle;
+use vizij::settings::OpenFace;
 
 pub struct OpenPlugin(pub RuntimeHandle);
 
@@ -44,18 +46,23 @@ fn dropped(mut drops: MessageReader<FileDragAndDrop>, handle: Res<Handle>) {
     }
 }
 
-/// `O` opens the system's file dialog (async: a sheet, the frames go on);
-/// the pick, once made, loads. The dialog is created on the main thread —
-/// [`NonSendMarker`] pins the system there — and polled here each frame with
-/// a no-op waker, which loses nothing: the dialog's future re-arms on every
-/// poll.
+/// `O` (unless the settings pane takes the keys, as a text field does) or
+/// the pane's Open a face… opens the system's file dialog (async: a sheet,
+/// the frames go on); the pick, once made, loads. The dialog is created on
+/// the main thread — [`NonSendMarker`] pins the system there — and polled
+/// here each frame with a no-op waker, which loses nothing: the dialog's
+/// future re-arms on every poll.
 fn dialog(
     _main_thread: NonSendMarker,
     keys: Res<ButtonInput<KeyCode>>,
+    typing: Option<Res<bevy_egui::input::EguiWantsInput>>,
+    mut asked: MessageReader<OpenFace>,
     mut dialog: NonSendMut<Dialog>,
     handle: Res<Handle>,
 ) {
-    if dialog.0.is_none() && keys.just_pressed(KeyCode::KeyO) {
+    let typing = typing.is_some_and(|wants| wants.wants_any_keyboard_input());
+    let asked = asked.read().count() > 0 || (!typing && keys.just_pressed(KeyCode::KeyO));
+    if dialog.0.is_none() && asked {
         let picker = rfd::AsyncFileDialog::new()
             .add_filter("face", &["glb"])
             .set_title("Open a face");

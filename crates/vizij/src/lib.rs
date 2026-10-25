@@ -11,7 +11,9 @@
 //! device's hardware, on a worker thread under arora's operator flow, with
 //! the bridges a build adds, and with the `studio` feature the [`studio`]
 //! profile maps Semio Studio's keys onto the face; the desktop binary (`main.rs`, feature
-//! `desktop`) puts a CLI, a window and a terminal UI on it. The browser
+//! `desktop`) puts a CLI, a window and a terminal UI on it, and the
+//! [`settings`] pane (feature `settings`) a Settings page over the face that
+//! is the device's operator. The browser
 //! module ([`web`], the wasm-bindgen surface behind `@vizij/runtime`) and the
 //! Android app (the private `android` module, the entry point of the APK the
 //! crate's `android/` Gradle project packages) build on the same library
@@ -23,6 +25,8 @@ pub mod face;
 pub mod modules;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod native;
+#[cfg(all(feature = "settings", not(target_arch = "wasm32")))]
+pub mod settings;
 #[cfg(feature = "studio")]
 pub mod studio;
 pub mod view;

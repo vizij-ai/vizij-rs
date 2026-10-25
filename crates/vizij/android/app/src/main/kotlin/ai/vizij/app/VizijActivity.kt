@@ -23,6 +23,10 @@ import java.io.File
  * file at launch, so the face last opened is the one a relaunch — after a
  * reboot too — shows; while the library runs, [modelOpened] tells it the file
  * changed.
+ *
+ * The library's settings pane keeps clear of the system bars and the
+ * display's cutout, which [insetsChanged] reports, and a back gesture the
+ * pane does not take leaves the app ([leaveApp]).
  */
 class VizijActivity : NativeActivity() {
 
@@ -37,6 +41,11 @@ class VizijActivity : NativeActivity() {
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
         hideSystemBars()
+        window.decorView.setOnApplyWindowInsetsListener { view, insets ->
+            val safe = safeInsets(insets)
+            insetsChanged(safe[0], safe[1], safe[2], safe[3])
+            view.onApplyWindowInsets(insets)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -65,6 +74,30 @@ class VizijActivity : NativeActivity() {
             @Suppress("DEPRECATION")
             startActivityForResult(pick, PICK_FACE)
         }
+    }
+
+    /** Move the app to the back, as the system's back does; the library calls this on a back gesture it does not take. */
+    @Suppress("unused")
+    fun leaveApp() {
+        runOnUiThread { moveTaskToBack(true) }
+    }
+
+    /**
+     * Where the screen's edges are covered — the system bars, shown or
+     * hidden (a swipe shows them over the app), and the display's cutout —
+     * as left, top, right, bottom, in pixels.
+     */
+    private fun safeInsets(insets: WindowInsets): IntArray = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+            val covered = insets.getInsetsIgnoringVisibility(
+                WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout(),
+            )
+            intArrayOf(covered.left, covered.top, covered.right, covered.bottom)
+        }
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.P -> insets.displayCutout?.let {
+            intArrayOf(it.safeInsetLeft, it.safeInsetTop, it.safeInsetRight, it.safeInsetBottom)
+        } ?: IntArray(4)
+        else -> IntArray(4)
     }
 
     @Deprecated("The AndroidX result API is not available to a NativeActivity.")
@@ -122,6 +155,9 @@ class VizijActivity : NativeActivity() {
 
     /** The library's: `filesDir/model.glb` changed, load it. */
     private external fun modelOpened()
+
+    /** The library's: the edges [safeInsets] reports changed. */
+    private external fun insetsChanged(left: Int, top: Int, right: Int, bottom: Int)
 
     companion object {
         private const val TAG = "vizij"

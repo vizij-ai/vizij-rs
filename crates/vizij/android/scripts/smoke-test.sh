@@ -17,6 +17,13 @@
 #     scripts/say.py) succeeds, the face reporting the utterance and showing
 #     visemes while it plays: the cloud provider reached over TLS, its audio
 #     played through oboe;
+#   - a tap on the face shows the settings pane's Settings button, which
+#     opens the pane; a background picked there (a swatch) fills the screen
+#     once the back gesture closes the pane, the app still in front, and
+#     again after the app is stopped and launched again. The buttons are
+#     found on the screenshots by their colours (scripts/frames.py find). The
+#     pane's Studio form is left alone: the app, which keeps no identity,
+#     registers nothing with Studio;
 #   - the app is alive and in front at the end;
 #   - with a second face given, opened through a VIEW intent (a content://
 #     URI of the file pushed to Downloads, as a file manager sends), it
@@ -28,7 +35,8 @@
 # screenshots are the frame evidence. <out-dir> keeps the two screenshots
 # (face-a.png, face-b.png), with a second face opened.png and
 # relaunched.png, logcat.txt (the app's own lines in logcat-app.txt),
-# meminfo.txt, say.txt and checks.txt.
+# meminfo.txt, say.txt and checks.txt; the pane's controls.png, pane.png,
+# background.png and background-relaunched.png.
 #
 # The emulator-runner action runs its `script` line by line, so the whole
 # smoke lives here.
@@ -158,6 +166,47 @@ if [ -n "$SECOND" ] && [ -n "$shown" ]; then
     fi
   fi
 fi
+# The settings pane, opened and closed, and the background it keeps.
+BUTTON=2563eb
+SWATCH=0f766e
+if [ -n "$shown" ]; then
+  read -r width height < <(adb shell wm size | tr -d '\r' | sed -nE 's/.*: ([0-9]+)x([0-9]+).*/\1 \2/p' | tail -1)
+  adb shell input tap $((width / 2)) $((height / 2))
+  sleep 2
+  frame controls
+  measure png "$OUT/controls.raw" "$OUT/controls.png"
+  if ! at=$(measure find "$OUT/controls.raw" "$BUTTON"); then
+    fail "a tap on the face does not show the Settings button"
+  else
+    # shellcheck disable=SC2086 # "x y", two arguments
+    adb shell input tap $at
+    sleep 2
+    frame pane
+    measure png "$OUT/pane.raw" "$OUT/pane.png"
+    if ! at=$(measure find "$OUT/pane.raw" "$SWATCH"); then
+      fail "the Settings button does not open the pane"
+    else
+      # shellcheck disable=SC2086
+      adb shell input tap $at
+      sleep 1
+      adb shell input keyevent KEYCODE_BACK
+      sleep 2
+      frame closed
+      measure png "$OUT/closed.raw" "$OUT/background.png"
+      in_front || fail "the back gesture with the pane open left the app"
+      # The pane covers the screen: the background shows once it is closed.
+      measure background "$OUT/closed.raw" "$SWATCH" \
+        || fail "the background picked in the pane does not show once the pane is closed"
+      adb shell am force-stop "$PKG"
+      adb shell am start -W -n "$launcher" > /dev/null
+      sleep 25
+      frame kept
+      measure png "$OUT/kept.raw" "$OUT/background-relaunched.png"
+      { in_front && measure background "$OUT/kept.raw" "$SWATCH"; } \
+        || fail "the background picked in the pane does not come back after a relaunch"
+    fi
+  fi
+fi
 rm -f "$OUT"/*.raw
 
 pid=$(adb shell pidof "$PKG" | tr -d '\r')
@@ -190,4 +239,4 @@ if [ "${#failures[@]}" -gt 0 ]; then
   echo "smoke failed: ${failures[*]}"
   exit 1
 fi
-echo "smoke passed: the face draws, animates and speaks"
+echo "smoke passed: the face draws, animates and speaks; the settings pane opens, closes and keeps the background"
