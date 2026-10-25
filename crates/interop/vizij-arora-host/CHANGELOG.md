@@ -4,6 +4,20 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [7.7.0] - Unreleased
+
+### Added
+
+- `Bundle::hardware_version` and `Bundle::software_version`: the face's
+  versions, its bundle's `metadata.hardwareVersion` and
+  `metadata.softwareVersion`, trimmed; `None` when absent or blank. The
+  hardware version is the version of the face itself — its shapes, what can
+  move in them and the layout giving those movements their meaning — such as
+  `quori-1.3`; the software version that of what it runs — its profiles,
+  exposed inputs, programs, extra rigs and animations — such as `1.2`.
+- A `Bundle` built with a struct literal that names every field must name
+  the new ones, or end in `..Default::default()`.
+
 ## [7.6.0] - Unreleased
 
 ### Added

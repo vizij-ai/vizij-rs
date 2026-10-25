@@ -396,6 +396,17 @@ export interface Animation {
 export interface VizijDescription {
   /** The `faceId` the GLB's bundle declares, if any. */
   faceId: string | null;
+  /** The face's hardware version, its bundle's `metadata.hardwareVersion`:
+   * the version of the face itself — its shapes, what can move in them and
+   * the layout giving those movements their meaning — such as `quori-1.3`.
+   * `null` when the bundle states none (or a blank one); a device showing
+   * the face then reports its `faceId` as its hardware version. */
+  hardwareVersion: string | null;
+  /** The face's software version, its bundle's `metadata.softwareVersion`:
+   * the version of what the face runs — its profiles, exposed inputs,
+   * programs, extra rigs and animations — such as `1.2`. `null` when the
+   * bundle states none (or a blank one). */
+  softwareVersion: string | null;
   /** The prefix the Vizij's own paths live under (`rig/<faceId>/`). */
   rigPrefix: string;
   /** The bounds the view frames: the authored `rootBounds`, or for a GLB

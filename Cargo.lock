@@ -10663,7 +10663,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-host"
-version = "7.6.0"
+version = "7.7.0"
 dependencies = [
  "anyhow",
  "arora-behavior",

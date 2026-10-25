@@ -108,6 +108,10 @@ try {
     }
   }
 
+  // A face that states no version reads none.
+  assert.equal(quori.hardwareVersion, null);
+  assert.equal(quori.softwareVersion, null);
+
   // The metadata, as authored.
   assert.equal(quori.metadata.faceId, "quori_latest");
   assert.equal(quori.metadata.activeMotionGraphId, "authoring.motiongraph.program.1");

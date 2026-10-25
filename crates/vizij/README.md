@@ -341,6 +341,17 @@ with `retrieveModels` and fetches it with `retrieveModelGlb`
 ([studio-bridge#104](https://github.com/semio-ai/studio-bridge/pull/104)).
 The older `retrieveGlb` (`GET_MODEL_GLB`) has no answer on the device.
 
+The device's model is what its HAL describes (`RigHal`'s `describe`): the
+family `vizij`, the face's hardware version — its bundle's
+`metadata.hardwareVersion`, else its `faceId` — and its software version,
+`metadata.softwareVersion`, when the face states one. Each device generation
+describes its face, so loading another face connects the Studio bridge anew
+with that face's model. arora registers the model, each field unless
+`MODEL_FAMILY`, `HARDWARE_VERSION` or `SOFTWARE_VERSION` is set; arora 15
+does so when it registers the device — from the environment, or from the
+registration an interactive run saved — and takes no model in a given device
+directory, so the Android app reports none.
+
 `--ros2` attaches [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2)
 with its ROS4HRI exposure preset:
 

@@ -246,7 +246,7 @@ pub fn load_vizij(
     });
     let LoadedFace { meta, spec, .. } =
         face::load_face(&glb, &config).map_err(|e| JsValue::from_str(&format!("{e:#}")))?;
-    let rig = RigHal::new();
+    let rig = RigHal::with_description(face::description(&meta.bundle));
     let store = BlackboardStore::new();
     if stage_neutral {
         face::stage_neutral_pose(&store, &meta);
@@ -515,7 +515,8 @@ pub fn memory_bytes() -> f64 {
     (core::arch::wasm32::memory_size(0) * 65536) as f64
 }
 
-/// What a GLB declares, without loading it: `{ faceId, rigPrefix, rootBounds,
+/// What a GLB declares, without loading it: `{ faceId, hardwareVersion,
+/// softwareVersion, rigPrefix, rootBounds,
 /// elements: [{ id, name, kind, material, morphTargets }], animatables:
 /// { <id>: { node, nodes, feature } }, graphs: [{ id, kind }], programs: [{ id,
 /// label, graph }], activeProgramId, neutralInputs, poses,
@@ -555,6 +556,8 @@ fn describe_json(meta: &FaceMeta) -> serde_json::Value {
     neutral.sort_by(|a, b| a.0.cmp(&b.0));
     serde_json::json!({
         "faceId": meta.bundle.face_id,
+        "hardwareVersion": meta.bundle.hardware_version,
+        "softwareVersion": meta.bundle.software_version,
         "rigPrefix": meta.bundle.rig_prefix(),
         "rootBounds": meta.root_bounds.map(|(cx, cy, w, h)| serde_json::json!({
             "center": { "x": cx, "y": cy }, "size": { "x": w, "y": h }
