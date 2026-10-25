@@ -3,6 +3,11 @@
     frames.py face <frame.raw>            exit 0 when the face shows
     frames.py moved <a.raw> <b.raw>       exit 0 when the face moved between them
     frames.py replaced <a.raw> <b.raw>    exit 0 when another face replaced it
+    frames.py find <frame.raw> RRGGBB     print where the colour shows, as "x y";
+                                          exit 0 when it shows
+    frames.py background <frame.raw> RRGGBB
+                                          exit 0 when the colour fills the
+                                          background
     frames.py png <frame.raw> <out.png>   write the frame as a PNG
 
 A raw frame is the screencap header (width, height, pixel format, and from
@@ -28,6 +33,16 @@ MOVED_SHARE = 0.001
 # A face replaced by another differs in at least this share of the band
 # (Toasty over Quori, about 40 %).
 REPLACED_SHARE = 0.05
+# How far, per channel, a pixel may be from a colour sought and be it: the
+# settings pane's fills, drawn opaque, land within a step or two of their
+# value.
+NEAR = 3
+# A colour sought shows when at least this many pixels are it: a button or a
+# swatch of the settings pane is hundreds of them, a stray match a few.
+SHOWN_PIXELS = 200
+# A background fills at least this share of the band: the face, letterboxed
+# on a phone, covers about a third of it.
+BACKGROUND_SHARE = 0.25
 
 
 def read(path):
@@ -104,6 +119,50 @@ def replaced(a_path, b_path):
     return share >= REPLACED_SHARE
 
 
+def near(pixels, offset, rgb):
+    return all(abs(pixels[offset + c] - rgb[c]) <= NEAR for c in range(3))
+
+
+def rgb_of(hex_colour):
+    hex_colour = hex_colour.lstrip("#")
+    return [int(hex_colour[i : i + 2], 16) for i in (0, 2, 4)]
+
+
+def find(path, hex_colour):
+    """Where `hex_colour` shows on the whole screen: the centre of the pixels
+    that are it, printed as "x y" for `adb shell input tap`."""
+    width, height, pixels = read(path)
+    rgb = rgb_of(hex_colour)
+    xs = ys = count = 0
+    for y in range(0, height, 2):
+        for x in range(0, width, 2):
+            if near(pixels, (y * width + x) * 4, rgb):
+                xs += x
+                ys += y
+                count += 1
+    # Every other row and column is sampled: a quarter of the pixels.
+    shown = count * 4 >= SHOWN_PIXELS
+    if shown:
+        print(f"{xs // count} {ys // count}")
+    print(f"{path}: #{hex_colour} on about {count * 4} pixels", file=sys.stderr)
+    return shown
+
+
+def background(path, hex_colour):
+    width, height, pixels = read(path)
+    rgb = rgb_of(hex_colour)
+    rows = band(width, height)
+    count = sum(
+        1
+        for y in rows
+        for x in range(0, width, 2)
+        if near(pixels, (y * width + x) * 4, rgb)
+    )
+    share = count / (len(rows) * ((width + 1) // 2))
+    print(f"{path}: #{hex_colour} on {share:.4f} of the band (a background needs {BACKGROUND_SHARE})")
+    return share >= BACKGROUND_SHARE
+
+
 def png(path, out):
     width, height, pixels = read(path)
     rows = b"".join(
@@ -128,5 +187,12 @@ def png(path, out):
 
 if __name__ == "__main__":
     command, *args = sys.argv[1:]
-    ok = {"face": face, "moved": moved, "replaced": replaced, "png": png}[command](*args)
+    ok = {
+        "face": face,
+        "moved": moved,
+        "replaced": replaced,
+        "find": find,
+        "background": background,
+        "png": png,
+    }[command](*args)
     sys.exit(0 if ok else 1)

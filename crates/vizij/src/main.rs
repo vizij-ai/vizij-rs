@@ -14,6 +14,7 @@ mod open;
 
 use vizij::face::{self, FaceConfig};
 use vizij::native::{self, BridgeConfig, Mode, Runtime};
+use vizij::settings::{PaneOperator, SettingsPlugin};
 use vizij::view::{self, frames, snapshot, FaceAssets};
 
 /// Vizij: render a GLB face natively over an arora device.
@@ -80,8 +81,9 @@ struct Cli {
     #[arg(long, default_value = "763x486")]
     size: String,
 
-    /// Background clear color, hex RRGGBB. (The web comparison harness passes
-    /// 101114, the web page's own background.)
+    /// Background clear color, hex RRGGBB; in a window, that of a face the
+    /// settings pane keeps no background for. (The web comparison harness
+    /// passes 101114, the web page's own background.)
     #[arg(long, default_value = "000000")]
     background: String,
 
@@ -197,10 +199,14 @@ fn main() -> Result<()> {
         .split(',')
         .map(|kind| kind.trim().to_string())
         .collect();
-    let mode = if cli.snapshot.is_some() {
-        Mode::Quiet
-    } else {
-        Mode::Operator
+    // With a window, the settings pane answers the device's questions; the
+    // terminal UI keeps its log pane and its commands. A run with no window
+    // answers on the terminal.
+    let pane = (cli.snapshot.is_none() && !cli.headless).then(PaneOperator::default);
+    let mode = match (&cli.snapshot, &pane) {
+        (Some(_), _) => Mode::Quiet,
+        (None, Some(pane)) => Mode::OperatedBy(std::sync::Arc::new(pane.clone())),
+        (None, None) => Mode::Operator,
     };
     // Which program plays: an explicit `--program` wins; `--no-autoplay` forces
     // none; otherwise the window autoplays the bundle's active program while the
@@ -229,10 +235,17 @@ fn main() -> Result<()> {
             .serve_control_panel(!cli.no_web_control),
         #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
         ros2: cli.ros2.as_deref().map(parse_ros2).transpose()?,
+        // Kept whether or not `--studio` asks: the settings pane associates a
+        // run that did not.
         #[cfg(feature = "studio")]
-        studio: cli.studio.then(|| native::StudioConfig {
+        studio: Some(native::StudioConfig {
             identity: data_dir().join("studio-identity.json"),
             device_dir: None,
+            connect: if cli.studio {
+                native::Connect::AtLaunch
+            } else {
+                native::Connect::WhenAsked
+            },
         }),
     };
     // Frames are the ROS4HRI face image, so they follow that exposure unless
@@ -290,7 +303,7 @@ fn main() -> Result<()> {
             &cli,
             &meta,
             events,
-            handle,
+            (handle, pane.unwrap_or_default()),
             options,
             frame_config,
             diagnostics,
@@ -298,7 +311,8 @@ fn main() -> Result<()> {
     }
 }
 
-/// The app's data directory: the remembered face and the Studio identity.
+/// The app's data directory: the remembered face, the Studio identity and the
+/// settings pane's `settings.json`.
 fn data_dir() -> std::path::PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(std::env::temp_dir)
@@ -416,7 +430,7 @@ fn run_window(
     cli: &Cli,
     meta: &view::meta::FaceMeta,
     events: std::sync::mpsc::Receiver<view::ViewEvent>,
-    handle: native::RuntimeHandle,
+    (handle, pane): (native::RuntimeHandle, PaneOperator),
     options: view::ViewOptions,
     frame_config: frames::FrameConfig,
     diagnostics: bool,
@@ -462,6 +476,11 @@ fn run_window(
     )
     .insert_resource(options)
     .add_plugins(view::ViewPlugin)
+    .add_plugins(SettingsPlugin {
+        handle: handle.clone(),
+        operator: pane,
+        file: data_dir().join("settings.json"),
+    })
     .add_plugins(open::OpenPlugin(handle));
     // Frame publishing works with a window too (not only headless): capture the
     // window and push the frame onto the device's reading feed.

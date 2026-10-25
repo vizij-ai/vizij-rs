@@ -10,6 +10,33 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Added
 
+- The settings pane (`vizij::settings`, feature `settings`, which `desktop`
+  enables and the Android app is built with): the Vizij standalone's
+  Settings page over the face, drawn with egui (bevy_egui 0.42). A tap or
+  click on the face shows its Settings button; the pane holds the face shown
+  and Open a face… (the file dialog on desktop, the document picker on
+  Android), the background (swatches and a colour picker), kept per face in
+  `settings.json` in the app's data directory, and the device's standing
+  with Semio Studio, what it is registered as and its association. Close,
+  the Android back gesture and Escape close it; on Android the back gesture
+  with the pane closed moves the app to the back, and the pane keeps clear
+  of the system bars and the display's cutout.
+- The pane is the device's operator (`settings::PaneOperator`, through
+  `native::Mode::OperatedBy`): the registration's questions (`ask_text`) and
+  the access requests (`decide_access`, allowed after
+  `DEFAULT_ACCESS_GRACE` unanswered) open it. In the desktop window it
+  answers in place of the terminal UI; `--headless` keeps the terminal. The
+  device serves its Studio bridge's access requests through its operator.
+- `RuntimeHandle::studio` says where the device stands with Studio
+  (`native::StudioStatus`); `RuntimeHandle::associate` connects a run that
+  did not ask for Studio for the rest of the run, the device restarting on
+  its face with the Studio bridge, and `associate_as` keeps the identity a
+  front end gives first. `native::StudioConfig::connect` (`native::Connect`)
+  says when a device connects: at launch (`--studio`), at launch when it
+  keeps an identity (Android), or once asked (the desktop without
+  `--studio`). On Android, a fresh install registers with Studio through
+  the pane's identity form; one nobody associated still contacts nobody.
+
 - The Android app: an APK around the library (`android/`, a Gradle project
   over the framework's `NativeActivity`), whose entry point runs the face it
   ships as a stand-alone device with the open local bridge, full screen,

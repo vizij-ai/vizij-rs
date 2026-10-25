@@ -1,8 +1,9 @@
 # The Android app (crates/vizij/android): the vizij cdylib built per ABI, the
 # APK packaged around both, and the rendering smoke on an emulator — the face
 # drawn and animating, a `say` spoken through the cloud provider, a second
-# face opened through a VIEW intent and shown again on the next launch,
-# nothing caught in logcat.
+# face opened through a VIEW intent and shown again on the next launch, the
+# settings pane opened by a tap and closed by the back gesture with the
+# background picked there kept across a launch, nothing caught in logcat.
 #
 # The smoke's emulator is the x86_64 API 35 google_apis image under KVM with
 # `-gpu lavapipe`: GitHub's Linux runners have KVM and no GPU, and lavapipe
@@ -56,12 +57,13 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
-      # The Android app is built with the Studio bridge (`studio`), which the
-      # crate's default features leave out.
+      # The Android app is built with the Studio bridge (`studio`) and the
+      # settings pane (`settings`) beside the captions, without the desktop
+      # half the crate's default features bring.
       - name: Build libvizij.so (${{ matrix.abi }}, release)
         run: |
           cargo ndk -t ${{ matrix.abi }} -P 24 --link-libcxx-shared -o crates/vizij/android/app/src/main/jniLibs \
-            build -p vizij --lib --release --no-default-features --features captions,studio
+            build -p vizij --lib --release --no-default-features --features captions,studio,settings
           ls -l crates/vizij/android/app/src/main/jniLibs/${{ matrix.abi }}
       - uses: actions/upload-artifact@v4
         with:

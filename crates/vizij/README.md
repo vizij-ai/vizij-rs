@@ -58,9 +58,11 @@ piece of it, not a second device.
 | `native` | the stand-alone device: the face's Arora on a worker thread under arora's operator flow, the bridges the build adds, the `RuntimeHandle` front ends speak through | every target but the browser |
 | `web` | the browser module behind [`@vizij/runtime`](../../npm/@vizij/runtime/README.md): one App per page (`mount`), a JS-paced Arora per Vizij (`loadVizij`, a `VizijRuntime`), Vizijs as rectangles of the canvas (`placeVizij`), picks, `describe` | `wasm32` |
 | `main.rs`, `open.rs` | the CLI, the window, the terminal operator UI, opening a face by drop or dialog | feature `desktop` (default) |
+| `settings` | the settings pane over the face (egui): the background kept per face, the device info, the Studio association; the pane is the device's operator (`settings::PaneOperator`); see [The settings pane](#the-settings-pane) | feature `settings` (in `desktop`), every target but the browser |
 | `android` (private) | the Android app's entry point (`android_main`): the device on the face last opened or the one the APK ships, the view full screen, faces received from the activity, logging into logcat; see [Android](#android) | Android |
 
-Features: `desktop` (default) is the CLI and the terminal UI; `captions`
+Features: `desktop` (default) is the CLI, the terminal UI and the settings
+pane; `settings` is the pane alone, which the Android app is built with; `captions`
 (default) draws the face standard's caption over the face, with Bevy's UI
 text and an embedded Inter font; `studio`,
 `ros2-dds` / `ros2-zenoh` and `tts-piper` add the bridges and the local
@@ -105,12 +107,26 @@ Bevy's `LogPlugin` stays disabled, as on desktop. minSdk 24 (the build
 takes no Bevy `audio`, whose AAudio backend would raise it to 26), targetSdk
 34; arm64-v8a for devices, x86_64 for the emulator.
 
+The app is built with the settings pane ([below](#the-settings-pane)): a
+tap on the face shows its Settings button, the back gesture closes the pane,
+and with the pane closed moves the app to the back, as the standalone's back
+did. The pane keeps clear of the system bars and the display's cutout, which
+the activity reports (`insetsChanged`), and keeps its settings in the app's
+files directory.
+
 The app is built with the `studio` feature. Studio keeps the device's
 credentials in the app's files directory
 (`arora::studio::connect_with_device_dir`), and the device registers under
 the identity kept there in `studio-identity.json` (`name`, `owners`,
-`model_family`); with none kept it does not connect, since nothing on
-Android asks the operator yet. `say` speaks through the cloud provider at its
+`model_family`). A launch with none kept contacts nobody, so an install
+nobody associated, a CI emulator's among them, registers no device; the
+settings pane's identity form (the owner UIDs and a name) keeps one and
+connects. The registration's questions do not reach the pane on Android:
+arora 15 asks nobody in a given device directory
+(`connect_with_device_dir`), and handing it the app's directory as
+`DEVICE_DIR` for `connect_with_operator` is not sound there, as the JVM's
+threads may read the environment while `set_var` writes it. The pane rules
+on access requests on both platforms. `say` speaks through the cloud provider at its
 default deployment, its audio played through cpal's oboe backend; the
 provider's HTTPS client trusts the Mozilla CA set webpki-roots bundles, as on
 every native target, so nothing of the platform verifier's Kotlin side is
@@ -126,7 +142,7 @@ export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370
 # libc++_shared.so goes beside it: the speech provider's audio output (oboe)
 # is C++ on the shared runtime.
 cargo ndk -t arm64-v8a -P 24 --link-libcxx-shared -o crates/vizij/android/app/src/main/jniLibs \
-  build -p vizij --lib --release --no-default-features --features captions,studio
+  build -p vizij --lib --release --no-default-features --features captions,studio,settings
 # The face the APK ships.
 mkdir -p crates/vizij/android/app/src/main/assets
 cp Quori_Current_Extended.glb crates/vizij/android/app/src/main/assets/face.glb
@@ -139,7 +155,11 @@ launches the APK, waits for the face (at least 15 s), and passes when a
 screenshot shows it, two screenshots 5 s apart differ in it, the second
 face, opened through a VIEW intent, replaces it and is the one shown after
 a relaunch, a `say` through the local bridge (`android/scripts/say.py`)
-succeeds with the face reporting the utterance and showing its visemes, the
+succeeds with the face reporting the utterance and showing its visemes, a
+tap shows the settings pane's Settings button, which opens the pane, a
+background picked there fills the screen once the back gesture closes it
+and again after a relaunch (the buttons found on the screenshots by their
+colours, `android/scripts/frames.py find`), the
 app is alive and in front, and logcat has no `Caught` line,
 panic or fatal signal. `dumpsys gfxinfo` counts
 no Bevy frame, so the screenshots are the evidence. CI's `android`
@@ -218,7 +238,7 @@ limit, and no GLES build draws.
 | `--frame-rate <hz>` | `15` when exposed as ROS4HRI, else off | publish rendered frames as HAL readings under the key of their transport; 0 disables |
 | `--frame-format <fmt>` | `png` | encoding of published frames: `png` writes `display/face/compressed`, a `sensor_msgs/CompressedImage`; `raw` writes `display/face`, a `sensor_msgs/Image` |
 | `--frame-id <name>` | the face's id from its GLB | the TF frame published frames are stamped with (`header.frame_id`) |
-| `--background <rrggbb>` | `000000` | clear color |
+| `--background <rrggbb>` | `000000` | clear color; in a window, that of a face the settings pane keeps no background for |
 | `--ambient <f>` | `π/2` | ambient intensity of the [lighting model](#lighting-model) |
 | `--unlit` | off | render materials unlit (albedo passthrough) |
 | `--fit <contain\|cover\|stretch>` | `contain` | how the face fits the window: letterbox, crop the excess axis, or distort to the window's aspect |
@@ -276,7 +296,7 @@ local bridge:
 | Flag | Feature | Effect |
 |---|---|---|
 | `--ros2 [namespace][:domain]` | `ros2-dds` (alias `ros2`) or `ros2-zenoh` | join the ROS graph as a ROS4HRI face (see below) |
-| `--studio` | `studio` | attach the Semio Studio bridge: the device registers under the identity kept in the app's data directory (`studio-identity.json`), else as the operator answers on the terminal (then kept), else from the environment (`DEVICE_OWNERS`, …) |
+| `--studio` | `studio` | attach the Semio Studio bridge: the device registers under the identity kept in the app's data directory (`studio-identity.json`), else as the operator answers — the settings pane in a window, the terminal without one — (then kept), else from the environment (`DEVICE_OWNERS`, …); without the flag, the pane's Associate attaches it for the rest of the run |
 
 Under `--studio` the face serves **Studio's keys** (`vizij::studio`, the
 Studio-key profile), so a Studio user who claims the device drives the
@@ -607,8 +627,37 @@ Zenoh backend does not. Run it with `--ignored` to re-measure.
 [VIZ-118]: https://linear.app/semio-ai/issue/VIZ-118
 
 
-## Not yet here
+## The settings pane
 
-The operator surface is the arora TUI and the store: an in-window operator
-panel (egui) — the Studio registration prompt where there is no terminal, as
-on Android — is not built. See `docs/proposal-vizij-native-app.md`.
+The Vizij standalone's Settings page, over the face in the desktop window
+and on Android (`vizij::settings`, drawn with egui through a camera of its
+own above the faces'). A tap or click on the face shows the Settings button
+at the bottom of the screen, and the device's name at the top once Studio
+registered it; another tap hides them. The button opens the pane, which
+Close, the Android back gesture and Escape close. It holds:
+
+- **Current face**, by its id, and **Open a face…**: the file dialog on
+  desktop (as `O` does), the document picker on Android (as a long press
+  does);
+- **Background**: swatches and a colour picker. The colour is kept for the
+  face shown, by its id, in `settings.json` in the app's data directory (the
+  desktop's data directory above, Android's files directory), so a face
+  opened again shows the background chosen for it; a face with none kept
+  shows the app's (`--background` on desktop, black on Android);
+- **Device**, in a build with `studio`: where the device stands with Semio
+  Studio (`RuntimeHandle::studio`), what it is registered as, and the
+  association. A run that did not ask for Studio associates from here
+  (`RuntimeHandle::associate`): the device restarts on its face with the
+  Studio bridge, under its kept identity, else as the operator answers. On
+  Android the identity form keeps the identity first
+  (`RuntimeHandle::associate_as`).
+
+The pane is the device's operator (`settings::PaneOperator`, an
+`arora::operator::Operator`, given as `native::Mode::OperatedBy`): a
+question the registration asks (`ask_text`) opens the pane on it, and waits
+for the answer, skippable unless it is required; a client's access request
+(`decide_access`) opens it with Allow, Reject, Always allow and Always
+reject, and is allowed after `arora::operator::DEFAULT_ACCESS_GRACE`
+unanswered, as the unattended operator rules. On desktop the pane answers
+in place of the terminal UI, which keeps its log pane and commands; a run
+with no window (`--headless`) answers on the terminal.
