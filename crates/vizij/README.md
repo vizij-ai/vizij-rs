@@ -656,6 +656,9 @@ Close, the Android back gesture and Escape close. It holds:
   as an association does. A device not associated yet shows the identity it
   keeps, or a blank form, and **Associate with Semio Studio** associates it
   under what the form holds: the edit is what the association registers.
+  The pane then shows what Studio holds: a registration writes the fields
+  the identity gives, so a model family cleared on the device stays in
+  Studio, and the pane says so.
   Each owner is registered as an owner: arora 15's device info carries one
   owner list (`arora_bridge::DeviceInfo::owners`), so the editor and viewer
   roles of Studio's device record are not set from the device.

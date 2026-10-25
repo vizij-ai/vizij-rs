@@ -33,8 +33,10 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   registers with each time it connects. Saving it on a registered device
   registers the edit within the run, the device restarting on its face with
   the Studio bridge (`Bridge::update_device_info`); on a device not
-  associated yet, the form is what Associate registers. Each owner is
-  registered as an owner: arora 15's device info carries no other role.
+  associated yet, the form is what Associate registers. The pane then shows
+  the record Studio returns, which keeps a model family cleared on the
+  device. Each owner is registered as an owner: arora 15's device info
+  carries no other role.
 - `RuntimeHandle::studio` says where the device stands with Studio
   (`native::StudioStatus`, whose `Idle` carries the identity a device not
   associated keeps); `RuntimeHandle::associate` connects a run that did not

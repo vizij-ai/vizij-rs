@@ -166,8 +166,9 @@ struct Form {
     /// the pane opened or its standing with Studio last changed. `None`
     /// fills them again.
     filled_from: Option<DeviceInfo>,
-    /// The form was sent and not edited since.
-    sent: bool,
+    /// The identity the form sent, until it is edited again or the pane
+    /// closes; nothing is sent again meanwhile.
+    sent: Option<Identity>,
 }
 
 impl Form {
@@ -366,7 +367,7 @@ fn draw(
         // A form left unsaved is dropped: the pane opens on what the device
         // registers as.
         pane.form.filled_from = None;
-        pane.form.sent = false;
+        pane.form.sent = None;
         if pane.controls {
             draw_controls(&ctx, &mut pane, &safe);
         }
@@ -640,11 +641,22 @@ fn device_section(ui: &mut egui::Ui, pane: &mut Pane) {
                 ui.label(dim(format!("Software {software}")));
             }
             pane.form.fill(&info);
-            if pane.form.sent && !pane.form.differs_from(&info) {
-                ui.label(
-                    egui::RichText::new("Saved — device re-registered.")
-                        .color(egui::Color32::from_rgb(74, 222, 128)),
-                );
+            // Studio's record after the registration, against what was sent:
+            // an update leaves a field the identity leaves out as it was.
+            match &pane.form.sent {
+                Some(sent) if holds(&info, sent) => {
+                    ui.label(
+                        egui::RichText::new("Saved — registered with Semio Studio.")
+                            .color(egui::Color32::from_rgb(74, 222, 128)),
+                    );
+                }
+                Some(_) => {
+                    ui.label(dim(
+                        "Saved. Studio keeps the device as shown: a model family cleared \
+                         here stays in Studio.",
+                    ));
+                }
+                None => {}
             }
             device_form(ui, &mut pane.form, &info, "Save device info", true)
         }
@@ -671,6 +683,13 @@ fn device_section(ui: &mut egui::Ui, pane: &mut Pane) {
     if let Some(identity) = sent {
         pane.handle.register(identity);
     }
+}
+
+/// Whether Studio's record `info` holds the identity `sent`.
+fn holds(info: &DeviceInfo, sent: &Identity) -> bool {
+    info.name.as_deref() == Some(sent.name.as_str())
+        && info.owners == sent.owners
+        && info.model_family == sent.model_family
 }
 
 /// The device's name, model family and owners, filled from `info`, which
@@ -737,16 +756,17 @@ fn device_form(
         form.owners.push(String::new());
     }
     if edited {
-        form.sent = false;
+        form.sent = None;
     }
     let owned = !form.owners().is_empty();
     if !owned {
         ui.label(dim("A device registers under one owner at least."));
     }
-    let ready = owned && (!registered || form.differs_from(info));
+    let ready = owned && form.sent.is_none() && (!registered || form.differs_from(info));
     if ui.add_enabled(ready, primary(action)).clicked() {
-        form.sent = true;
-        return Some(form.identity());
+        let identity = form.identity();
+        form.sent = Some(identity.clone());
+        return Some(identity);
     }
     None
 }
@@ -821,8 +841,8 @@ mod tests {
         assert!(!form.differs_from(&renamed));
     }
 
-    /// Each row is one owner: blanks and repeats are dropped, and the model
-    /// family cleared registers none.
+    /// Each row is one owner: blanks and repeats are dropped, and a model
+    /// family emptied gives none.
     #[test]
     fn the_rows_give_each_owner_once() {
         let mut form = Form::default();
@@ -836,7 +856,30 @@ mod tests {
         form.model_family = "  ".into();
         assert_eq!(form.owners(), ["uid-1", "uid-2"]);
         assert_eq!(form.identity().model_family, None);
-        assert!(form.differs_from(&registered()), "the model family cleared");
+        assert!(form.differs_from(&registered()), "the model family emptied");
+    }
+
+    /// The record Studio holds after a registration holds what was sent
+    /// only when every field the identity gives is there: Studio keeps a
+    /// model family the identity leaves out.
+    #[test]
+    fn studio_s_record_holds_what_was_sent_field_by_field() {
+        let sent = Identity {
+            name: "vizij-bench".into(),
+            owners: vec!["uid-1".into(), "uid-2".into()],
+            model_family: Some("vizij".into()),
+        };
+        assert!(holds(&registered(), &sent));
+        let cleared = Identity {
+            model_family: None,
+            ..sent.clone()
+        };
+        assert!(!holds(&registered(), &cleared), "Studio kept the family");
+        let reordered = Identity {
+            owners: vec!["uid-2".into(), "uid-1".into()],
+            ..sent
+        };
+        assert!(!holds(&registered(), &reordered));
     }
 
     /// A device not associated opens on a row for its first owner, and a

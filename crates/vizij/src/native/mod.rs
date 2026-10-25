@@ -115,13 +115,12 @@ pub enum StudioStatus {
     /// none.
     #[default]
     Off,
-    /// Not connected: the run did not ask for Studio, and the device keeps
-    /// no identity it connects with at launch. Carries the identity it
-    /// keeps, if any: what associating it registers, unless a front end
-    /// gives another (the settings pane's device form). In a given device
-    /// directory a front end must give one, since arora 15 asks no operator
-    /// there; elsewhere [`RuntimeHandle::associate`] connects, the operator
-    /// answering for a device that keeps none.
+    /// Not connected, as the run's [`Connect`] says: the run did not ask for
+    /// Studio, or (Android) the device keeps no identity. Carries the
+    /// identity it keeps, if any: what [`RuntimeHandle::associate`]
+    /// registers. In a given device directory a device that keeps none
+    /// associates only under an identity a front end gives, since arora 15
+    /// asks no operator there; elsewhere `associate` asks the operator.
     Idle(Option<arora_bridge::DeviceInfo>),
     /// Connecting; the operator may be asked for the registration.
     Connecting,
@@ -318,14 +317,16 @@ async fn studio_bridge(
         };
         let info = known.device_info();
         match bridge.update_device_info(Some(info.clone())).await {
-            Ok(_) => {
+            Ok(held) => {
                 log::info!(
                     "registered with Studio as {:?} (owners {:?}, from {})",
                     known.name,
                     known.owners,
                     identity.display()
                 );
-                report(StudioStatus::Connected(info));
+                // What Studio holds after the update, which keeps a field the
+                // identity leaves out (a model family cleared) as it was.
+                report(StudioStatus::Connected(held.unwrap_or(info)));
             }
             Err(e) => {
                 log::error!("studio registration: {e:?}");
