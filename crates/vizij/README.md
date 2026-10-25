@@ -120,8 +120,9 @@ credentials in the app's files directory
 the identity kept there in `studio-identity.json` (`name`, `owners`,
 `model_family`). A launch with none kept contacts nobody, so an install
 nobody associated, a CI emulator's among them, registers no device; the
-settings pane's identity form (the owner UIDs and a name) keeps one and
-connects. The registration's questions do not reach the pane on Android:
+settings pane's device form (a name, a model family and the owner UIDs)
+keeps one and connects, and edits it later. The registration's questions do
+not reach the pane on Android:
 arora 15 asks nobody in a given device directory
 (`connect_with_device_dir`), and handing it the app's directory as
 `DEVICE_DIR` for `connect_with_operator` is not sound there, as the JVM's
@@ -645,12 +646,19 @@ Close, the Android back gesture and Escape close. It holds:
   opened again shows the background chosen for it; a face with none kept
   shows the app's (`--background` on desktop, black on Android);
 - **Device**, in a build with `studio`: where the device stands with Semio
-  Studio (`RuntimeHandle::studio`), what it is registered as, and the
-  association. A run that did not ask for Studio associates from here
-  (`RuntimeHandle::associate`): the device restarts on its face with the
-  Studio bridge, under its kept identity, else as the operator answers. On
-  Android the identity form keeps the identity first
-  (`RuntimeHandle::associate_as`).
+  Studio (`RuntimeHandle::studio`), and what it registers as — its name,
+  model family and owners, one Studio user id (Firebase UID) per row — in a
+  form, on desktop and Android. The form edits the identity the device keeps
+  (`studio-identity.json`) and registers with each time it connects. On a
+  registered device, **Save device info** keeps the edit and registers it
+  within the run: the device restarts on its face with the Studio bridge,
+  which registers the identity as it connects (`Bridge::update_device_info`),
+  as an association does. A device not associated yet shows the identity it
+  keeps, or a blank form, and **Associate with Semio Studio** associates it
+  under what the form holds: the edit is what the association registers.
+  Each owner is registered as an owner: arora 15's device info carries one
+  owner list (`arora_bridge::DeviceInfo::owners`), so the editor and viewer
+  roles of Studio's device record are not set from the device.
 
 The pane is the device's operator (`settings::PaneOperator`, an
 `arora::operator::Operator`, given as `native::Mode::OperatedBy`): a

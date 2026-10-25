@@ -30,8 +30,9 @@
 //! directory) and the device registers under the identity kept there,
 //! `studio-identity.json` (name, owners, model family). A launch connects
 //! only with an identity kept, so that an install nobody associated — a CI
-//! emulator's — registers nothing; the pane's identity form keeps one and
-//! connects. The pane is not asked the registration's questions: arora 15
+//! emulator's — registers nothing; the pane's device form keeps one and
+//! connects, and edits it later, registering the edit. The pane is not
+//! asked the registration's questions: arora 15
 //! asks nobody in a given device directory, and the one way to give it the
 //! app's — `DEVICE_DIR` in the environment — is not sound here, since the
 //! process' JVM threads may read the environment while `set_var` writes it.
