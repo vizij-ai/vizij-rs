@@ -241,6 +241,9 @@ fn main() -> Result<()> {
         studio: Some(native::StudioConfig {
             identity: data_dir().join("studio-identity.json"),
             device_dir: None,
+            saved_registration: arora::device_dir::from_env()
+                .ok()
+                .map(|dir| dir.join("studio").join("device.json")),
             connect: if cli.studio {
                 native::Connect::AtLaunch
             } else {

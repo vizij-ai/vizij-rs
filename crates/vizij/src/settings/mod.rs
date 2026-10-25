@@ -13,10 +13,13 @@
 //! - the **background**, kept per face in `settings.json` in the app's data
 //!   directory ([`store`]): opening a face again brings back the background
 //!   chosen for it, and a face with none kept shows the app's;
-//! - the **device**: where it stands with Semio Studio, what it is
-//!   registered as, and the association — [`RuntimeHandle::associate`], or
-//!   the identity form where the operator is not asked
-//!   ([`StudioStatus::Idle`]);
+//! - the **device**: where it stands with Semio Studio
+//!   ([`RuntimeHandle::studio`]). Associated, what Studio holds of it, read
+//!   only: its name and owners are edited in Semio Studio. Not associated,
+//!   the form its first association takes: its owners, Studio user ids each
+//!   registered as an owner (arora 15 registers no other role), and a name;
+//!   **Associate with Semio Studio** restarts the device on its face with
+//!   the Studio bridge, registered under them;
 //! - the device's **questions**: the pane is its operator ([`PaneOperator`]).
 //!   A question the registration asks, or a client's access request, opens
 //!   the pane on it; an access request counts down to being allowed.
@@ -33,7 +36,7 @@ pub use operator::PaneOperator;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use arora_bridge::AccessDecision;
+use arora_bridge::{AccessDecision, DeviceInfo};
 use bevy::camera::visibility::RenderLayers;
 use bevy::camera::CameraOutputMode;
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
@@ -151,11 +154,46 @@ struct Pane {
     press: Option<Press>,
 }
 
-/// The identity form's fields.
-#[derive(Default)]
+/// The form a device not associated with Studio associates from.
 struct Form {
-    owners: String,
+    /// Blank for a generated one.
     name: String,
+    /// One owner's Studio user id per row.
+    owners: Vec<String>,
+    /// Associate was pressed: nothing is sent again until the pane closes.
+    sent: bool,
+}
+
+impl Default for Form {
+    /// A row to type the first owner in.
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            owners: vec![String::new()],
+            sent: false,
+        }
+    }
+}
+
+impl Form {
+    /// The owners the rows give: trimmed, blanks and repeats dropped.
+    fn owners(&self) -> Vec<String> {
+        let mut owners: Vec<String> = Vec::new();
+        for owner in self.owners.iter().map(|owner| owner.trim()) {
+            if !owner.is_empty() && !owners.iter().any(|kept| kept == owner) {
+                owners.push(owner.to_string());
+            }
+        }
+        owners
+    }
+
+    /// The name the device associates under, a blank one generated.
+    fn name(&self) -> String {
+        Some(self.name.trim())
+            .filter(|name| !name.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(generated_name)
+    }
 }
 
 /// A press in progress: where and when it began, and whether it began on
@@ -296,8 +334,13 @@ fn draw(
     );
     if pane.open {
         draw_pane(&ctx, &mut pane, &mut options, &safe, &mut open_face);
-    } else if pane.controls {
-        draw_controls(&ctx, &mut pane, &safe);
+    } else {
+        // Closed, the pane may associate again: a form sent that did not
+        // associate the device shows once more.
+        pane.form.sent = false;
+        if pane.controls {
+            draw_controls(&ctx, &mut pane, &safe);
+        }
     }
     Ok(())
 }
@@ -544,14 +587,18 @@ fn background_section(ui: &mut egui::Ui, pane: &mut Pane, options: &mut ViewOpti
     }
 }
 
-/// Where the device stands with Studio, and its association.
+fn dim(text: impl Into<String>) -> egui::RichText {
+    egui::RichText::new(text).color(egui::Color32::from_gray(170))
+}
+
+/// Where the device stands with Studio: associated, what Studio holds of
+/// it; otherwise the form its first association takes.
 fn device_section(ui: &mut egui::Ui, pane: &mut Pane) {
     let status = pane.handle.studio();
     if status == StudioStatus::Off {
         return;
     }
     title(ui, "Device");
-    let dim = |text: String| egui::RichText::new(text).color(egui::Color32::from_gray(170));
     match status {
         StudioStatus::Off => {}
         StudioStatus::Connecting => {
@@ -559,40 +606,22 @@ fn device_section(ui: &mut egui::Ui, pane: &mut Pane) {
         }
         StudioStatus::Connected(info) => {
             ui.label("Registered with Semio Studio");
-            egui::Grid::new("device-info")
-                .num_columns(2)
-                .spacing(egui::vec2(16.0, 6.0))
-                .show(ui, |ui| {
-                    let rows = [
-                        ("Device name", info.name.clone()),
-                        (
-                            "Owners",
-                            (!info.owners.is_empty()).then(|| info.owners.join(", ")),
-                        ),
-                        ("Model family", info.model_family.clone()),
-                        ("Software", info.software_version.clone()),
-                    ];
-                    for (label, value) in rows {
-                        if let Some(value) = value.filter(|value| !value.is_empty()) {
-                            ui.label(dim(label.to_string()));
-                            ui.label(value);
-                            ui.end_row();
-                        }
-                    }
-                });
+            registration(ui, &info);
         }
-        StudioStatus::Idle { form: true } => identity_form(ui, pane),
-        StudioStatus::Idle { form: false } => {
-            ui.label("Not associated with Semio Studio.");
-            if ui.add(primary("Associate with Semio Studio")).clicked() {
+        StudioStatus::Idle(Some(info)) => {
+            ui.label("Associated with Semio Studio, not connected.");
+            registration(ui, &info);
+            if ui.add(primary("Connect to Semio Studio")).clicked() {
                 pane.handle.associate();
             }
+        }
+        StudioStatus::Idle(None) => {
+            ui.label("Not associated with Semio Studio.");
+            association_form(ui, pane);
         }
         StudioStatus::Declined => {
             ui.label("Studio declined: no owner was given.");
-            if ui.add(primary("Associate with Semio Studio")).clicked() {
-                pane.handle.associate();
-            }
+            association_form(ui, pane);
         }
         StudioStatus::Failed(reason) => {
             ui.label(format!("The Studio connection failed: {reason}"));
@@ -603,42 +632,85 @@ fn device_section(ui: &mut egui::Ui, pane: &mut Pane) {
     }
 }
 
-/// The identity a device registers under where its operator is not asked:
-/// the standalone's owner prompt and device name.
-fn identity_form(ui: &mut egui::Ui, pane: &mut Pane) {
-    ui.label("Register with Semio Studio");
+/// What Studio holds of an associated device, read only.
+fn registration(ui: &mut egui::Ui, info: &DeviceInfo) {
+    egui::Grid::new("device-info")
+        .num_columns(2)
+        .spacing(egui::vec2(16.0, 6.0))
+        .show(ui, |ui| {
+            let rows = [
+                ("Device name", info.name.clone()),
+                (
+                    "Owners",
+                    (!info.owners.is_empty()).then(|| info.owners.join("\n")),
+                ),
+                ("Model family", info.model_family.clone()),
+                ("Software", info.software_version.clone()),
+            ];
+            for (label, value) in rows {
+                if let Some(value) = value.filter(|value| !value.is_empty()) {
+                    ui.label(dim(label));
+                    ui.label(value);
+                    ui.end_row();
+                }
+            }
+        });
+    ui.label(dim("Its name and owners are edited in Semio Studio.").small());
+}
+
+/// The device's first association: its owners, one Studio user id per row
+/// with Remove and Add owner, and a name, generated when left blank.
+fn association_form(ui: &mut egui::Ui, pane: &mut Pane) {
+    let form = &mut pane.form;
+    ui.label(dim("Owners"));
     ui.label(
-        egui::RichText::new(
-            "Enter your Semio Studio user ID (Firebase UID) so this device appears in your Studio \
-             account. You can enter several, comma-separated.",
+        dim(
+            "Each owner's Semio Studio user ID (Firebase UID): the device appears in their \
+             Studio account.",
         )
-        .color(egui::Color32::from_gray(170)),
+        .small(),
     );
+    let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+    let mut removed = None;
+    for (index, owner) in form.owners.iter_mut().enumerate() {
+        ui.allocate_ui_with_layout(
+            row,
+            egui::Layout::right_to_left(egui::Align::Center),
+            |ui| {
+                if ui.button("Remove").clicked() {
+                    removed = Some(index);
+                }
+                ui.add(
+                    egui::TextEdit::singleline(owner)
+                        .hint_text("Studio user ID")
+                        .desired_width(ui.available_width()),
+                );
+            },
+        );
+    }
+    if let Some(index) = removed {
+        form.owners.remove(index);
+    }
+    if ui.button("Add owner").clicked() {
+        form.owners.push(String::new());
+    }
+    ui.label(dim("Device name"));
     ui.add(
-        egui::TextEdit::singleline(&mut pane.form.owners)
-            .hint_text("Firebase UID(s), comma-separated")
+        egui::TextEdit::singleline(&mut form.name)
+            .hint_text("Blank for a generated one")
             .desired_width(f32::INFINITY),
     );
-    ui.add(
-        egui::TextEdit::singleline(&mut pane.form.name)
-            .hint_text("Device name — blank for a generated one")
-            .desired_width(f32::INFINITY),
-    );
-    let owners: Vec<String> = pane
-        .form
-        .owners
-        .split(',')
-        .map(|owner| owner.trim().to_string())
-        .filter(|owner| !owner.is_empty())
-        .collect();
+    let owners = form.owners();
+    if owners.is_empty() {
+        ui.label(dim("A device associates under one owner at least."));
+    }
+    let ready = !owners.is_empty() && !form.sent;
     if ui
-        .add_enabled(!owners.is_empty(), primary("Register"))
+        .add_enabled(ready, primary("Associate with Semio Studio"))
         .clicked()
     {
-        let name = Some(pane.form.name.trim())
-            .filter(|name| !name.is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(generated_name);
+        form.sent = true;
+        let name = form.name();
         pane.handle.associate_as(name, owners);
     }
 }
@@ -663,4 +735,39 @@ fn generated_name() -> String {
         })
         .collect();
     format!("vizij-{suffix}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The form opens on a row for the first owner, and a name left blank
+    /// is generated.
+    #[test]
+    fn the_form_opens_on_one_owner_row_and_generates_a_blank_name() {
+        let mut form = Form::default();
+        assert_eq!(form.owners, [""]);
+        assert!(form.owners().is_empty());
+        form.owners[0] = "uid-1".into();
+        assert_eq!(form.owners(), ["uid-1"]);
+        let name = form.name();
+        assert!(name.starts_with("vizij-"), "{name}");
+        form.name = "  vizij-bench ".into();
+        assert_eq!(form.name(), "vizij-bench");
+    }
+
+    /// Each row is one owner: blanks and repeats are dropped.
+    #[test]
+    fn the_rows_give_each_owner_once() {
+        let form = Form {
+            owners: vec![
+                " uid-1 ".into(),
+                String::new(),
+                "uid-2".into(),
+                "uid-1".into(),
+            ],
+            ..Form::default()
+        };
+        assert_eq!(form.owners(), ["uid-1", "uid-2"]);
+    }
 }

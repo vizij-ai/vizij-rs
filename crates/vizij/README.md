@@ -116,12 +116,12 @@ files directory.
 
 The app is built with the `studio` feature. Studio keeps the device's
 credentials in the app's files directory
-(`arora::studio::connect_with_device_dir`), and the device registers under
-the identity kept there in `studio-identity.json` (`name`, `owners`,
-`model_family`). A launch with none kept contacts nobody, so an install
-nobody associated, a CI emulator's among them, registers no device; the
-settings pane's identity form (the owner UIDs and a name) keeps one and
-connects. The registration's questions do not reach the pane on Android:
+(`arora::studio::connect_with_device_dir`), and the device's identity
+there in `studio-identity.json` (`name`, `owners`, `model_family`). A launch
+with none kept contacts nobody, so an install nobody associated, a CI
+emulator's among them, registers no device; the settings pane's association
+form (the owner UIDs and a name) keeps one and connects. The registration's
+questions do not reach the pane on Android:
 arora 15 asks nobody in a given device directory
 (`connect_with_device_dir`), and handing it the app's directory as
 `DEVICE_DIR` for `connect_with_operator` is not sound there, as the JVM's
@@ -296,7 +296,7 @@ local bridge:
 | Flag | Feature | Effect |
 |---|---|---|
 | `--ros2 [namespace][:domain]` | `ros2-dds` (alias `ros2`) or `ros2-zenoh` | join the ROS graph as a ROS4HRI face (see below) |
-| `--studio` | `studio` | attach the Semio Studio bridge: the device registers under the identity kept in the app's data directory (`studio-identity.json`), else as the operator answers — the settings pane in a window, the terminal without one — (then kept), else from the environment (`DEVICE_OWNERS`, …); without the flag, the pane's Associate attaches it for the rest of the run |
+| `--studio` | `studio` | attach the Semio Studio bridge: the device connects under the identity kept in the app's data directory (`studio-identity.json`), registering it only while Studio holds no record of the device, else as the operator answers — the settings pane in a window, the terminal without one — (Studio's record then kept), else from the environment (`DEVICE_OWNERS`, …); without the flag, the pane's Associate (a device not associated) or Connect (one associated) attaches it for the rest of the run |
 
 Under `--studio` the face serves **Studio's keys** (`vizij::studio`, the
 Studio-key profile), so a Studio user who claims the device drives the
@@ -645,12 +645,28 @@ Close, the Android back gesture and Escape close. It holds:
   opened again shows the background chosen for it; a face with none kept
   shows the app's (`--background` on desktop, black on Android);
 - **Device**, in a build with `studio`: where the device stands with Semio
-  Studio (`RuntimeHandle::studio`), what it is registered as, and the
-  association. A run that did not ask for Studio associates from here
-  (`RuntimeHandle::associate`): the device restarts on its face with the
-  Studio bridge, under its kept identity, else as the operator answers. On
-  Android the identity form keeps the identity first
-  (`RuntimeHandle::associate_as`).
+  Studio (`RuntimeHandle::studio`), on desktop and Android alike.
+  - An associated device — registered, or keeping an identity
+    (`studio-identity.json`), or on desktop the registration arora's
+    operator saved (`studio/device.json` in arora's device directory) —
+    shows what Studio holds of it, read only: its name, owners, model family
+    and software. Its name and owners are Studio's, edited in Semio Studio:
+    the device registers its identity only while Studio holds no record of
+    it, and otherwise keeps Studio's record as its identity. A desktop run
+    that did not ask for Studio connects with **Connect to Semio Studio**.
+  - A device not associated shows the form its first association takes:
+    its owners, one Studio user id (Firebase UID) per row with Remove and
+    Add owner, and a device name, generated when left blank. **Associate
+    with Semio Studio** keeps them as the device's identity and restarts it
+    on its face with the Studio bridge, which registers them. Each owner is
+    registered as an owner: arora 15's device info carries one owner list
+    (`arora_bridge::DeviceInfo::owners`), so the editor and viewer roles of
+    Studio's device record are not set from the device.
+
+  On desktop, arora 15 itself registers the registration its operator saved
+  as the client connects (arora's `studio` docs), so a device associated
+  through arora's operator has the name and owners saved there written to
+  Studio at each connection.
 
 The pane is the device's operator (`settings::PaneOperator`, an
 `arora::operator::Operator`, given as `native::Mode::OperatedBy`): a

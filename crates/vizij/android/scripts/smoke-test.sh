@@ -21,9 +21,11 @@
 #     opens the pane; a background picked there (a swatch) fills the screen
 #     once the back gesture closes the pane, the app still in front, and
 #     again after the app is stopped and launched again. The buttons are
-#     found on the screenshots by their colours (scripts/frames.py find). The
-#     pane's Studio form is left alone: the app, which keeps no identity,
-#     registers nothing with Studio;
+#     found on the screenshots by their colours (scripts/frames.py find);
+#   - the pane, opened again and dragged from a swatch, scrolls to its
+#     device form, which runs past the end of a phone's screen, and stays
+#     over the face. The form is never sent: the app, which keeps no
+#     identity, registers nothing with Studio;
 #   - the app is alive and in front at the end;
 #   - with a second face given, opened through a VIEW intent (a content://
 #     URI of the file pushed to Downloads, as a file manager sends), it
@@ -36,7 +38,7 @@
 # (face-a.png, face-b.png), with a second face opened.png and
 # relaunched.png, logcat.txt (the app's own lines in logcat-app.txt),
 # meminfo.txt, say.txt and checks.txt; the pane's controls.png, pane.png,
-# background.png and background-relaunched.png.
+# background.png, background-relaunched.png and device-form.png.
 #
 # The emulator-runner action runs its `script` line by line, so the whole
 # smoke lives here.
@@ -204,6 +206,42 @@ if [ -n "$shown" ]; then
       measure png "$OUT/kept.raw" "$OUT/background-relaunched.png"
       { in_front && measure background "$OUT/kept.raw" "$SWATCH"; } \
         || fail "the background picked in the pane does not come back after a relaunch"
+      # The device form, at the end of the pane. The drag starts on the
+      # swatch picked, a button, where no text takes it, and is slow enough
+      # not to fling. Nothing is typed and nothing is pressed in the form.
+      adb shell input tap $((width / 2)) $((height / 2))
+      sleep 2
+      frame controls-again
+      if ! at=$(measure find "$OUT/controls-again.raw" "$BUTTON"); then
+        fail "a tap on the relaunched face does not show the Settings button"
+      else
+        # shellcheck disable=SC2086
+        adb shell input tap $at
+        sleep 2
+        frame pane-again
+        if ! swatch=$(measure find "$OUT/pane-again.raw" "$SWATCH"); then
+          fail "the Settings button does not open the pane again"
+        else
+          read -r x y <<< "$swatch"
+          to=$(( y - height * 45 / 100 ))
+          [ "$to" -ge 5 ] || to=5
+          adb shell input swipe "$x" "$y" "$x" "$to" 1000
+          sleep 2
+          frame device-form
+          measure png "$OUT/device-form.raw" "$OUT/device-form.png"
+          in_front || fail "the pane's device form left the app"
+          # The form runs past the screen's end: the drag scrolls the pane
+          # to it, and the pane stays over the face, which the background
+          # picked does not fill.
+          measure moved "$OUT/pane-again.raw" "$OUT/device-form.raw" \
+            || fail "the pane does not scroll to its device form"
+          if measure background "$OUT/device-form.raw" "$SWATCH"; then
+            fail "the pane does not stay open on its device form"
+          fi
+          adb shell input keyevent KEYCODE_BACK
+          sleep 2
+        fi
+      fi
     fi
   fi
 fi
@@ -239,4 +277,4 @@ if [ "${#failures[@]}" -gt 0 ]; then
   echo "smoke failed: ${failures[*]}"
   exit 1
 fi
-echo "smoke passed: the face draws, animates and speaks; the settings pane opens, closes and keeps the background"
+echo "smoke passed: the face draws, animates and speaks; the settings pane opens, closes, keeps the background and shows the device form"

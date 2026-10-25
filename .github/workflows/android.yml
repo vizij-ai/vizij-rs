@@ -3,7 +3,9 @@
 # drawn and animating, a `say` spoken through the cloud provider, a second
 # face opened through a VIEW intent and shown again on the next launch, the
 # settings pane opened by a tap and closed by the back gesture with the
-# background picked there kept across a launch, nothing caught in logcat.
+# background picked there kept across a launch, its device form shown and
+# never sent (the emulator registers nothing with Studio), nothing caught in
+# logcat.
 #
 # The smoke's emulator is the x86_64 API 35 google_apis image under KVM with
 # `-gpu lavapipe`: GitHub's Linux runners have KVM and no GPU, and lavapipe
