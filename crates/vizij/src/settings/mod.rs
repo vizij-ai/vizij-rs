@@ -13,13 +13,13 @@
 //! - the **background**, kept per face in `settings.json` in the app's data
 //!   directory ([`store`]): opening a face again brings back the background
 //!   chosen for it, and a face with none kept shows the app's;
-//! - the **device**: where it stands with Semio Studio, and what it
-//!   registers as — its name, model family and owners — in a form. Saving
-//!   the form keeps the identity and registers it: an associated device is
-//!   registered anew, the device restarting on its face with the Studio
-//!   bridge; one not associated yet associates under it. The owners are
-//!   Studio user ids, each an owner: arora 15 registers no other role
-//!   ([`RuntimeHandle::studio`]);
+//! - the **device**: where it stands with Semio Studio
+//!   ([`RuntimeHandle::studio`]). Associated, what Studio holds of it, read
+//!   only: its name and owners are edited in Semio Studio. Not associated,
+//!   the form its first association takes: its owners, Studio user ids each
+//!   registered as an owner (arora 15 registers no other role), and a name;
+//!   **Associate with Semio Studio** restarts the device on its face with
+//!   the Studio bridge, registered under them;
 //! - the device's **questions**: the pane is its operator ([`PaneOperator`]).
 //!   A question the registration asks, or a client's access request, opens
 //!   the pane on it; an access request counts down to being allowed.
@@ -48,7 +48,7 @@ use bevy_egui::{
     egui, EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext,
 };
 
-use crate::native::{Identity, RuntimeHandle, StudioStatus};
+use crate::native::{RuntimeHandle, StudioStatus};
 use crate::view::meta::FaceMeta;
 use crate::view::{Face, Superseded, ViewOptions};
 
@@ -154,40 +154,28 @@ struct Pane {
     press: Option<Press>,
 }
 
-/// The device form: what the device registers with Studio as, as the
-/// person edits it.
-#[derive(Default)]
+/// The form a device not associated with Studio associates from.
 struct Form {
+    /// Blank for a generated one.
     name: String,
-    model_family: String,
     /// One owner's Studio user id per row.
     owners: Vec<String>,
-    /// What the fields were filled from: what the device registers as when
-    /// the pane opened or its standing with Studio last changed. `None`
-    /// fills them again.
-    filled_from: Option<DeviceInfo>,
-    /// The identity the form sent, until it is edited again or the pane
-    /// closes; nothing is sent again meanwhile.
-    sent: Option<Identity>,
+    /// Associate was pressed: nothing is sent again until the pane closes.
+    sent: bool,
+}
+
+impl Default for Form {
+    /// A row to type the first owner in.
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            owners: vec![String::new()],
+            sent: false,
+        }
+    }
 }
 
 impl Form {
-    /// Fill the fields from `info`, unless they already were: what the
-    /// person typed stays while the device stands where it stood.
-    fn fill(&mut self, info: &DeviceInfo) {
-        if self.filled_from.as_ref() == Some(info) {
-            return;
-        }
-        self.name = info.name.clone().unwrap_or_default();
-        self.model_family = info.model_family.clone().unwrap_or_default();
-        self.owners = info.owners.clone();
-        // A row to type the first owner in.
-        if self.owners.is_empty() {
-            self.owners.push(String::new());
-        }
-        self.filled_from = Some(info.clone());
-    }
-
     /// The owners the rows give: trimmed, blanks and repeats dropped.
     fn owners(&self) -> Vec<String> {
         let mut owners: Vec<String> = Vec::new();
@@ -199,29 +187,12 @@ impl Form {
         owners
     }
 
-    fn model_family(&self) -> Option<String> {
-        Some(self.model_family.trim())
-            .filter(|family| !family.is_empty())
+    /// The name the device associates under, a blank one generated.
+    fn name(&self) -> String {
+        Some(self.name.trim())
+            .filter(|name| !name.is_empty())
             .map(str::to_string)
-    }
-
-    /// Whether the fields say other than `info` registers.
-    fn differs_from(&self, info: &DeviceInfo) -> bool {
-        self.name.trim() != info.name.as_deref().unwrap_or_default().trim()
-            || self.model_family() != info.model_family
-            || self.owners() != info.owners
-    }
-
-    /// The identity the fields give, a blank name generated.
-    fn identity(&self) -> Identity {
-        Identity {
-            name: Some(self.name.trim())
-                .filter(|name| !name.is_empty())
-                .map(str::to_string)
-                .unwrap_or_else(generated_name),
-            owners: self.owners(),
-            model_family: self.model_family(),
-        }
+            .unwrap_or_else(generated_name)
     }
 }
 
@@ -364,10 +335,9 @@ fn draw(
     if pane.open {
         draw_pane(&ctx, &mut pane, &mut options, &safe, &mut open_face);
     } else {
-        // A form left unsaved is dropped: the pane opens on what the device
-        // registers as.
-        pane.form.filled_from = None;
-        pane.form.sent = None;
+        // Closed, the pane may associate again: a form sent that did not
+        // associate the device shows once more.
+        pane.form.sent = false;
         if pane.controls {
             draw_controls(&ctx, &mut pane, &safe);
         }
@@ -621,105 +591,77 @@ fn dim(text: impl Into<String>) -> egui::RichText {
     egui::RichText::new(text).color(egui::Color32::from_gray(170))
 }
 
-/// Where the device stands with Studio, and what it registers as.
+/// Where the device stands with Studio: associated, what Studio holds of
+/// it; otherwise the form its first association takes.
 fn device_section(ui: &mut egui::Ui, pane: &mut Pane) {
     let status = pane.handle.studio();
     if status == StudioStatus::Off {
         return;
     }
     title(ui, "Device");
-    const ASSOCIATE: &str = "Associate with Semio Studio";
-    let sent = match status {
-        StudioStatus::Off => None,
+    match status {
+        StudioStatus::Off => {}
         StudioStatus::Connecting => {
             ui.label("Connecting to Semio Studio…");
-            None
         }
         StudioStatus::Connected(info) => {
             ui.label("Registered with Semio Studio");
-            if let Some(software) = info.software_version.as_deref().filter(|v| !v.is_empty()) {
-                ui.label(dim(format!("Software {software}")));
-            }
-            pane.form.fill(&info);
-            // Studio's record after the registration, against what was sent:
-            // an update leaves a field the identity leaves out as it was.
-            match &pane.form.sent {
-                Some(sent) if holds(&info, sent) => {
-                    ui.label(
-                        egui::RichText::new("Saved — registered with Semio Studio.")
-                            .color(egui::Color32::from_rgb(74, 222, 128)),
-                    );
-                }
-                Some(_) => {
-                    ui.label(dim(
-                        "Saved. Studio keeps the device as shown: a model family cleared \
-                         here stays in Studio.",
-                    ));
-                }
-                None => {}
-            }
-            device_form(ui, &mut pane.form, &info, "Save device info", true)
+            registration(ui, &info);
         }
-        StudioStatus::Idle(kept) => {
+        StudioStatus::Idle(Some(info)) => {
+            ui.label("Associated with Semio Studio, not connected.");
+            registration(ui, &info);
+            if ui.add(primary("Connect to Semio Studio")).clicked() {
+                pane.handle.associate();
+            }
+        }
+        StudioStatus::Idle(None) => {
             ui.label("Not associated with Semio Studio.");
-            let info = kept.unwrap_or_default();
-            pane.form.fill(&info);
-            device_form(ui, &mut pane.form, &info, ASSOCIATE, false)
+            association_form(ui, pane);
         }
         StudioStatus::Declined => {
             ui.label("Studio declined: no owner was given.");
-            let info = DeviceInfo::default();
-            pane.form.fill(&info);
-            device_form(ui, &mut pane.form, &info, ASSOCIATE, false)
+            association_form(ui, pane);
         }
         StudioStatus::Failed(reason) => {
             ui.label(format!("The Studio connection failed: {reason}"));
             if ui.add(primary("Try again")).clicked() {
                 pane.handle.associate();
             }
-            None
         }
-    };
-    if let Some(identity) = sent {
-        pane.handle.register(identity);
     }
 }
 
-/// Whether Studio's record `info` holds the identity `sent`.
-fn holds(info: &DeviceInfo, sent: &Identity) -> bool {
-    info.name.as_deref() == Some(sent.name.as_str())
-        && info.owners == sent.owners
-        && info.model_family == sent.model_family
+/// What Studio holds of an associated device, read only.
+fn registration(ui: &mut egui::Ui, info: &DeviceInfo) {
+    egui::Grid::new("device-info")
+        .num_columns(2)
+        .spacing(egui::vec2(16.0, 6.0))
+        .show(ui, |ui| {
+            let rows = [
+                ("Device name", info.name.clone()),
+                (
+                    "Owners",
+                    (!info.owners.is_empty()).then(|| info.owners.join("\n")),
+                ),
+                ("Model family", info.model_family.clone()),
+                ("Software", info.software_version.clone()),
+            ];
+            for (label, value) in rows {
+                if let Some(value) = value.filter(|value| !value.is_empty()) {
+                    ui.label(dim(label));
+                    ui.label(value);
+                    ui.end_row();
+                }
+            }
+        });
+    ui.label(dim("Its name and owners are edited in Semio Studio.").small());
 }
 
-/// The device's name, model family and owners, filled from `info`, which
-/// the device registers as or, not associated, would. Returns the identity
-/// to register once `action` is pressed: with an owner at least, and for a
-/// `registered` device only when it changes.
-fn device_form(
-    ui: &mut egui::Ui,
-    form: &mut Form,
-    info: &DeviceInfo,
-    action: &str,
-    registered: bool,
-) -> Option<Identity> {
-    let mut edited = false;
-    ui.label(dim("Device name"));
-    edited |= ui
-        .add(
-            egui::TextEdit::singleline(&mut form.name)
-                .hint_text("Blank for a generated one")
-                .desired_width(f32::INFINITY),
-        )
-        .changed();
-    ui.label(dim("Model family"));
-    edited |= ui
-        .add(
-            egui::TextEdit::singleline(&mut form.model_family)
-                .hint_text("Optional")
-                .desired_width(f32::INFINITY),
-        )
-        .changed();
+/// The device's first association: its owners, one Studio user id per row
+/// with Remove and Add owner, and a name, generated when left blank.
+fn association_form(ui: &mut egui::Ui, pane: &mut Pane) {
+    let form = &mut pane.form;
     ui.label(dim("Owners"));
     ui.label(
         dim(
@@ -738,37 +680,39 @@ fn device_form(
                 if ui.button("Remove").clicked() {
                     removed = Some(index);
                 }
-                edited |= ui
-                    .add(
-                        egui::TextEdit::singleline(owner)
-                            .hint_text("Studio user ID")
-                            .desired_width(ui.available_width()),
-                    )
-                    .changed();
+                ui.add(
+                    egui::TextEdit::singleline(owner)
+                        .hint_text("Studio user ID")
+                        .desired_width(ui.available_width()),
+                );
             },
         );
     }
     if let Some(index) = removed {
         form.owners.remove(index);
-        edited = true;
     }
     if ui.button("Add owner").clicked() {
         form.owners.push(String::new());
     }
-    if edited {
-        form.sent = None;
+    ui.label(dim("Device name"));
+    ui.add(
+        egui::TextEdit::singleline(&mut form.name)
+            .hint_text("Blank for a generated one")
+            .desired_width(f32::INFINITY),
+    );
+    let owners = form.owners();
+    if owners.is_empty() {
+        ui.label(dim("A device associates under one owner at least."));
     }
-    let owned = !form.owners().is_empty();
-    if !owned {
-        ui.label(dim("A device registers under one owner at least."));
+    let ready = !owners.is_empty() && !form.sent;
+    if ui
+        .add_enabled(ready, primary("Associate with Semio Studio"))
+        .clicked()
+    {
+        form.sent = true;
+        let name = form.name();
+        pane.handle.associate_as(name, owners);
     }
-    let ready = owned && form.sent.is_none() && (!registered || form.differs_from(info));
-    if ui.add_enabled(ready, primary(action)).clicked() {
-        let identity = form.identity();
-        form.sent = Some(identity.clone());
-        return Some(identity);
-    }
-    None
 }
 
 /// A `vizij-<random>` device name, as the standalone generated.
@@ -797,102 +741,33 @@ fn generated_name() -> String {
 mod tests {
     use super::*;
 
-    fn registered() -> DeviceInfo {
-        DeviceInfo {
-            name: Some("vizij-bench".into()),
-            model_family: Some("vizij".into()),
-            owners: vec!["uid-1".into(), "uid-2".into()],
-            ..DeviceInfo::default()
-        }
-    }
-
-    /// The form opens on what the device registers as, and keeps what the
-    /// person types until the device stands elsewhere.
+    /// The form opens on a row for the first owner, and a name left blank
+    /// is generated.
     #[test]
-    fn the_form_holds_the_registration_and_the_person_s_edits() {
+    fn the_form_opens_on_one_owner_row_and_generates_a_blank_name() {
         let mut form = Form::default();
-        form.fill(&registered());
-        assert_eq!(form.name, "vizij-bench");
-        assert_eq!(form.model_family, "vizij");
-        assert_eq!(form.owners, ["uid-1", "uid-2"]);
-        assert!(!form.differs_from(&registered()));
-
-        form.name = "vizij-renamed".into();
-        form.owners.push("uid-3".into());
-        form.fill(&registered());
-        assert_eq!(form.name, "vizij-renamed", "an edit stays");
-        assert!(form.differs_from(&registered()));
-        assert_eq!(
-            form.identity(),
-            Identity {
-                name: "vizij-renamed".into(),
-                owners: vec!["uid-1".into(), "uid-2".into(), "uid-3".into()],
-                model_family: Some("vizij".into()),
-            }
-        );
-
-        // Registered anew as edited: the form follows.
-        let renamed = DeviceInfo {
-            name: Some("vizij-renamed".into()),
-            ..registered()
-        };
-        form.fill(&renamed);
-        assert_eq!(form.owners, ["uid-1", "uid-2"]);
-        assert!(!form.differs_from(&renamed));
-    }
-
-    /// Each row is one owner: blanks and repeats are dropped, and a model
-    /// family emptied gives none.
-    #[test]
-    fn the_rows_give_each_owner_once() {
-        let mut form = Form::default();
-        form.fill(&registered());
-        form.owners = vec![
-            " uid-1 ".into(),
-            String::new(),
-            "uid-2".into(),
-            "uid-1".into(),
-        ];
-        form.model_family = "  ".into();
-        assert_eq!(form.owners(), ["uid-1", "uid-2"]);
-        assert_eq!(form.identity().model_family, None);
-        assert!(form.differs_from(&registered()), "the model family emptied");
-    }
-
-    /// The record Studio holds after a registration holds what was sent
-    /// only when every field the identity gives is there: Studio keeps a
-    /// model family the identity leaves out.
-    #[test]
-    fn studio_s_record_holds_what_was_sent_field_by_field() {
-        let sent = Identity {
-            name: "vizij-bench".into(),
-            owners: vec!["uid-1".into(), "uid-2".into()],
-            model_family: Some("vizij".into()),
-        };
-        assert!(holds(&registered(), &sent));
-        let cleared = Identity {
-            model_family: None,
-            ..sent.clone()
-        };
-        assert!(!holds(&registered(), &cleared), "Studio kept the family");
-        let reordered = Identity {
-            owners: vec!["uid-2".into(), "uid-1".into()],
-            ..sent
-        };
-        assert!(!holds(&registered(), &reordered));
-    }
-
-    /// A device not associated opens on a row for its first owner, and a
-    /// name left blank is generated as it registers.
-    #[test]
-    fn a_device_not_associated_opens_blank_and_gets_a_generated_name() {
-        let mut form = Form::default();
-        form.fill(&DeviceInfo::default());
         assert_eq!(form.owners, [""]);
         assert!(form.owners().is_empty());
         form.owners[0] = "uid-1".into();
-        let identity = form.identity();
-        assert!(identity.name.starts_with("vizij-"), "{}", identity.name);
-        assert_eq!(identity.owners, ["uid-1"]);
+        assert_eq!(form.owners(), ["uid-1"]);
+        let name = form.name();
+        assert!(name.starts_with("vizij-"), "{name}");
+        form.name = "  vizij-bench ".into();
+        assert_eq!(form.name(), "vizij-bench");
+    }
+
+    /// Each row is one owner: blanks and repeats are dropped.
+    #[test]
+    fn the_rows_give_each_owner_once() {
+        let form = Form {
+            owners: vec![
+                " uid-1 ".into(),
+                String::new(),
+                "uid-2".into(),
+                "uid-1".into(),
+            ],
+            ..Form::default()
+        };
+        assert_eq!(form.owners(), ["uid-1", "uid-2"]);
     }
 }

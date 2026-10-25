@@ -76,13 +76,18 @@ impl RuntimeHandle {
         let _ = self.commands.unbounded_send(Command::Associate(None));
     }
 
-    /// Keep `identity` as what the device registers with Studio as, and
-    /// register it: the device restarts on its face with the Studio bridge,
-    /// which registers the identity as it connects
-    /// (`Bridge::update_device_info`). A device not associated yet associates
-    /// under it; an associated one is registered anew, so an edit reaches
-    /// Studio within the run. Nothing happens in a run with no Studio.
-    pub(crate) fn register(&self, identity: Identity) {
+    /// [`associate`](Self::associate) a device that keeps no identity yet
+    /// under `name` and `owners` (Studio user ids), the identity it then
+    /// keeps: the first association, from the settings pane's form. A device
+    /// that keeps one already connects under it, the name and owners being
+    /// Studio's once it is associated.
+    #[cfg_attr(not(feature = "settings"), allow(dead_code))]
+    pub(crate) fn associate_as(&self, name: String, owners: Vec<String>) {
+        let identity = Identity {
+            name,
+            owners,
+            model_family: None,
+        };
         let _ = self
             .commands
             .unbounded_send(Command::Associate(Some(identity)));
@@ -104,7 +109,8 @@ impl RuntimeHandle {
 enum Command {
     Reload(Vec<u8>),
     Background([u8; 3]),
-    /// Connect to Studio, keeping this identity first when one is given.
+    /// Connect to Studio, keeping this identity first when one is given and
+    /// none is kept.
     Associate(Option<Identity>),
 }
 
@@ -116,11 +122,12 @@ pub enum StudioStatus {
     #[default]
     Off,
     /// Not connected, as the run's [`Connect`] says: the run did not ask for
-    /// Studio, or (Android) the device keeps no identity. Carries the
-    /// identity it keeps, if any: what [`RuntimeHandle::associate`]
-    /// registers. In a given device directory a device that keeps none
-    /// associates only under an identity a front end gives, since arora 15
-    /// asks no operator there; elsewhere `associate` asks the operator.
+    /// Studio, or (Android) the device keeps no identity. Carries what the
+    /// device is associated as, if it is: the identity it keeps, else on
+    /// desktop the registration arora saved for it
+    /// ([`StudioConfig::saved_registration`]); [`RuntimeHandle::associate`]
+    /// connects it under that. A device associated as nothing associates
+    /// under the identity a front end's form gives.
     Idle(Option<arora_bridge::DeviceInfo>),
     /// Connecting; the operator may be asked for the registration.
     Connecting,
@@ -170,10 +177,11 @@ pub struct BridgeConfig {
 #[cfg(feature = "studio")]
 #[derive(Clone)]
 pub struct StudioConfig {
-    /// The identity the device registers under (name, owners, model
-    /// family), kept across launches. Without it, the device registers from
-    /// the operator's answers, persisted here afterwards, else from the
-    /// environment alone.
+    /// The identity the device is associated as (name, owners, model
+    /// family), kept across launches: the association form's, then Studio's
+    /// record. Without it, the device registers from the operator's answers,
+    /// Studio's record persisted here afterwards, else from the environment
+    /// alone.
     pub identity: std::path::PathBuf,
     /// The device directory Studio's credentials live in (its `studio/`
     /// subdirectory), for a platform that gives the app its data directory,
@@ -181,6 +189,13 @@ pub struct StudioConfig {
     /// Inside a given directory nobody is asked: without a kept identity the
     /// device does not connect, since arora 15 has no operator flow there.
     pub device_dir: Option<std::path::PathBuf>,
+    /// The registration arora saves when its operator answers
+    /// (`studio/device.json` in arora's device directory, the fields of the
+    /// kept identity), for a device directory arora finds from the
+    /// environment: a device that keeps no identity but has it is associated
+    /// already, and connects under it, nobody asked. `None` where arora's
+    /// operator never answers, as in a given device directory.
+    pub saved_registration: Option<std::path::PathBuf>,
     /// When the device connects; [`RuntimeHandle::associate`] connects it for
     /// the rest of the run whatever this says.
     pub connect: Connect,
@@ -213,25 +228,20 @@ impl Default for BridgeConfig {
     }
 }
 
-/// What a device registers with Studio as — its name, owners and model
+/// What a device is associated with Studio as — its name, owners and model
 /// family — kept across launches (`StudioConfig::identity`): what the
-/// operator answered, or the settings pane gave, and what the device
-/// registers with each time it connects.
-///
-/// It is the device's one editable record of it. In a given device directory
-/// arora 15 keeps none; elsewhere an association the operator answered also
-/// leaves arora's saved registration (`studio/device.json` in arora's device
-/// directory), which arora 15 gives an embedder no way to write: arora
-/// registers that as the client connects, and this identity right after, so
-/// this is what Studio holds.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+/// settings pane's form gave on its first association, or what Studio held
+/// once the operator's answers registered it, then what Studio holds each
+/// time it connects. The device registers it only while Studio holds no
+/// record of it: once associated, the name and owners are Studio's.
+#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(not(feature = "studio"), allow(dead_code))]
-pub(crate) struct Identity {
-    pub(crate) name: String,
+struct Identity {
+    name: String,
     /// The owners' Semio Studio user ids (Firebase UIDs).
-    pub(crate) owners: Vec<String>,
+    owners: Vec<String>,
     #[serde(default)]
-    pub(crate) model_family: Option<String>,
+    model_family: Option<String>,
 }
 
 #[cfg_attr(not(feature = "studio"), allow(dead_code))]
@@ -244,6 +254,17 @@ impl Identity {
             owners: self.owners.clone(),
             ..arora_bridge::DeviceInfo::default()
         }
+    }
+
+    /// The identity a record gives: a name and an owner at least, as arora
+    /// requires of its saved registration.
+    fn of(info: &arora_bridge::DeviceInfo) -> Option<Self> {
+        let name = info.name.clone().filter(|name| !name.trim().is_empty())?;
+        (!info.owners.is_empty()).then(|| Self {
+            name,
+            owners: info.owners.clone(),
+            model_family: info.model_family.clone(),
+        })
     }
 }
 
@@ -270,13 +291,20 @@ fn keep_identity(path: &std::path::Path, identity: &Identity) {
     }
 }
 
-/// The Studio bridge for one generation, the device registered under the
+/// The registration arora saved at `path`, when it gives a name and an
+/// owner: arora ignores one that does not.
+#[cfg(feature = "studio")]
+fn saved_registration(path: &std::path::Path) -> Option<Identity> {
+    kept_identity(path).filter(|saved| !saved.name.trim().is_empty() && !saved.owners.is_empty())
+}
+
+/// The Studio bridge for one generation, the device connected under the
 /// persisted identity when there is one, else as the operator answers (the
 /// terminal UI's prompt or the settings pane; an unattended run declines),
-/// which is then persisted; in a given device directory, only under a
-/// persisted identity ([`StudioConfig::device_dir`]). `None` when the run
-/// does not connect ([`StudioConfig::connect`]) or Studio is declined or
-/// fails; `status` says which.
+/// and Studio's record then persisted; in a given device directory, only
+/// under a persisted identity ([`StudioConfig::device_dir`]). `None` when
+/// the run does not connect ([`StudioConfig::connect`]) or Studio is
+/// declined or fails; `status` says which.
 #[cfg(feature = "studio")]
 async fn studio_bridge(
     studio: &StudioConfig,
@@ -296,8 +324,14 @@ async fn studio_bridge(
         Connect::WhenAsked => false,
     };
     if !connects {
+        let associated = persisted.or_else(|| {
+            studio
+                .saved_registration
+                .as_deref()
+                .and_then(saved_registration)
+        });
         report(StudioStatus::Idle(
-            persisted.as_ref().map(Identity::device_info),
+            associated.as_ref().map(Identity::device_info),
         ));
         return None;
     }
@@ -315,18 +349,37 @@ async fn studio_bridge(
                 return None;
             }
         };
-        let info = known.device_info();
-        match bridge.update_device_info(Some(info.clone())).await {
-            Ok(held) => {
+        // Studio's record is Studio's: the identity is registered only while
+        // Studio holds none, on the device's first association; afterwards
+        // the device keeps what Studio holds.
+        let held = match bridge.get_device_info().await {
+            Ok(Some(held)) if Identity::of(&held).is_some() => Ok(held),
+            Ok(_) => {
+                let info = known.device_info();
                 log::info!(
-                    "registered with Studio as {:?} (owners {:?}, from {})",
+                    "registering with Studio as {:?} (owners {:?}, from {})",
                     known.name,
                     known.owners,
                     identity.display()
                 );
-                // What Studio holds after the update, which keeps a field the
-                // identity leaves out (a model family cleared) as it was.
-                report(StudioStatus::Connected(held.unwrap_or(info)));
+                bridge
+                    .update_device_info(Some(info.clone()))
+                    .await
+                    .map(|held| held.unwrap_or(info))
+            }
+            Err(e) => Err(e),
+        };
+        match held {
+            Ok(held) => {
+                log::info!(
+                    "Studio holds the device as {:?} (owners {:?})",
+                    held.name,
+                    held.owners
+                );
+                if let Some(record) = Identity::of(&held).filter(|record| *record != known) {
+                    keep_identity(identity, &record);
+                }
+                report(StudioStatus::Connected(held));
             }
             Err(e) => {
                 log::error!("studio registration: {e:?}");
@@ -350,15 +403,8 @@ async fn studio_bridge(
     match connected {
         Ok(Some(bridge)) => {
             let info = bridge.get_device_info().await.ok().flatten();
-            if let Some(info) = &info {
-                if let (Some(name), false) = (info.name.clone(), info.owners.is_empty()) {
-                    let known = Identity {
-                        name,
-                        owners: info.owners.clone(),
-                        model_family: info.model_family.clone(),
-                    };
-                    keep_identity(identity, &known);
-                }
+            if let Some(known) = info.as_ref().and_then(Identity::of) {
+                keep_identity(identity, &known);
             }
             report(StudioStatus::Connected(info.unwrap_or_default()));
             Some(bridge)
@@ -672,12 +718,21 @@ fn studio_configured(bridges: &BridgeConfig) -> bool {
 }
 
 /// Connect the run to Studio from its next generation on, keeping `identity`
-/// first when one is given.
+/// first when one is given and the device keeps none: a device associated
+/// already connects under what it keeps, its name and owners being Studio's.
 fn associate(bridges: &mut BridgeConfig, identity: Option<Identity>) {
     #[cfg(feature = "studio")]
     if let Some(studio) = bridges.studio.as_mut() {
         if let Some(identity) = &identity {
-            keep_identity(&studio.identity, identity);
+            if kept_identity(&studio.identity).is_none() {
+                keep_identity(&studio.identity, identity);
+            } else {
+                log::warn!(
+                    "the device keeps an identity in {}: its name and owners are edited in \
+                     Semio Studio",
+                    studio.identity.display()
+                );
+            }
         }
         studio.connect = Connect::AtLaunch;
     }
@@ -1006,6 +1061,7 @@ mod studio_tests {
         let in_dir = StudioConfig {
             identity: dir.join("studio-identity.json"),
             device_dir: Some(dir.clone()),
+            saved_registration: None,
             connect: Connect::IfKept,
         };
         assert_eq!(
@@ -1013,9 +1069,10 @@ mod studio_tests {
             StudioStatus::Idle(None),
             "the identity comes from the front end's form"
         );
-        // The desktop's without `--studio`: the operator answers once asked.
+        // The desktop's without `--studio`, arora having saved nothing.
         let desktop = StudioConfig {
             device_dir: None,
+            saved_registration: Some(dir.join("studio").join("device.json")),
             connect: Connect::WhenAsked,
             ..in_dir.clone()
         };
@@ -1023,13 +1080,14 @@ mod studio_tests {
     }
 
     /// A desktop run that did not ask for Studio keeps its identity to
-    /// itself, and says what associating it registers.
+    /// itself, and says what it is associated as.
     #[tokio::test]
     async fn an_idle_device_says_the_identity_it_keeps() {
         let dir = scratch("idle-kept");
         let config = StudioConfig {
             identity: dir.join("studio-identity.json"),
             device_dir: None,
+            saved_registration: None,
             connect: Connect::WhenAsked,
         };
         let identity = Identity {
@@ -1047,39 +1105,69 @@ mod studio_tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// A desktop whose operator registered it through arora, keeping no
+    /// identity of its own, is associated as arora's saved registration; one
+    /// that names no owner is no association.
+    #[tokio::test]
+    async fn a_desktop_arora_registered_is_associated_as_arora_saved_it() {
+        let dir = scratch("arora-saved");
+        let saved = dir.join("studio").join("device.json");
+        let config = StudioConfig {
+            identity: dir.join("studio-identity.json"),
+            device_dir: None,
+            saved_registration: Some(saved.clone()),
+            connect: Connect::WhenAsked,
+        };
+        std::fs::create_dir_all(saved.parent().unwrap()).unwrap();
+        std::fs::write(
+            &saved,
+            r#"{ "owners": ["uid-1"], "name": "pepper-lab", "model_family": "pepper" }"#,
+        )
+        .unwrap();
+        let StudioStatus::Idle(Some(info)) = status_of(&config).await else {
+            panic!("associated as arora's saved registration");
+        };
+        assert_eq!(info.name.as_deref(), Some("pepper-lab"));
+        assert_eq!(info.owners, ["uid-1"]);
+
+        std::fs::write(&saved, r#"{ "owners": [], "name": "pepper-lab" }"#).unwrap();
+        assert_eq!(status_of(&config).await, StudioStatus::Idle(None));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
-    fn associating_keeps_the_identity_given_and_connects_from_then_on() {
+    fn associating_keeps_the_first_identity_given_and_connects_from_then_on() {
         let dir = scratch("associate");
         let identity = dir.join("studio-identity.json");
         let mut bridges = BridgeConfig {
             studio: Some(StudioConfig {
                 identity: identity.clone(),
                 device_dir: Some(dir.clone()),
+                saved_registration: None,
                 connect: Connect::IfKept,
             }),
             ..BridgeConfig::default()
         };
+        let first = || Identity {
+            name: "vizij-test".into(),
+            owners: vec!["uid-1".into()],
+            model_family: None,
+        };
+        associate(&mut bridges, Some(first()));
+        assert_eq!(kept_identity(&identity), Some(first()));
+        assert_eq!(bridges.studio.as_ref().unwrap().connect, Connect::AtLaunch);
+
+        // Associated, the device's name and owners are Studio's: another
+        // identity given is not kept.
         associate(
             &mut bridges,
             Some(Identity {
-                name: "vizij-test".into(),
-                owners: vec!["uid-1".into()],
+                name: "vizij-renamed".into(),
+                owners: vec!["uid-2".into()],
                 model_family: None,
             }),
         );
-        let kept = kept_identity(&identity).expect("the identity is kept");
-        assert_eq!(kept.name, "vizij-test");
-        assert_eq!(kept.owners, ["uid-1"]);
-        assert_eq!(bridges.studio.as_ref().unwrap().connect, Connect::AtLaunch);
-
-        // An edit of an associated device replaces what it keeps, every field.
-        let edited = Identity {
-            name: "vizij-renamed".into(),
-            owners: vec!["uid-2".into(), "uid-3".into()],
-            model_family: Some("vizij".into()),
-        };
-        associate(&mut bridges, Some(edited.clone()));
-        assert_eq!(kept_identity(&identity), Some(edited));
+        assert_eq!(kept_identity(&identity), Some(first()));
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -1100,5 +1188,35 @@ mod studio_tests {
                 ..arora_bridge::DeviceInfo::default()
             }
         );
+    }
+
+    /// A record of Studio's gives an identity with a name and an owner: one
+    /// without is a device Studio holds no record of.
+    #[test]
+    fn a_record_with_a_name_and_an_owner_gives_an_identity() {
+        let record = arora_bridge::DeviceInfo {
+            name: Some("vizij-bench".into()),
+            owners: vec!["uid-1".into()],
+            software_version: Some("1.0".into()),
+            ..arora_bridge::DeviceInfo::default()
+        };
+        assert_eq!(
+            Identity::of(&record),
+            Some(Identity {
+                name: "vizij-bench".into(),
+                owners: vec!["uid-1".into()],
+                model_family: None,
+            })
+        );
+        let ownerless = arora_bridge::DeviceInfo {
+            owners: Vec::new(),
+            ..record.clone()
+        };
+        assert_eq!(Identity::of(&ownerless), None);
+        let unnamed = arora_bridge::DeviceInfo {
+            name: Some("  ".into()),
+            ..record
+        };
+        assert_eq!(Identity::of(&unnamed), None);
     }
 }

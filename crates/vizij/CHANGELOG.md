@@ -17,7 +17,7 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   and Open a face… (the file dialog on desktop, the document picker on
   Android), the background (swatches and a colour picker), kept per face in
   `settings.json` in the app's data directory, and the device's standing
-  with Semio Studio and what it registers as. Close,
+  with Semio Studio, what it is registered as and its association. Close,
   the Android back gesture and Escape close it; on Android the back gesture
   with the pane closed moves the app to the back, and the pane keeps clear
   of the system bars and the display's cutout.
@@ -27,25 +27,27 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   `DEFAULT_ACCESS_GRACE` unanswered) open it. In the desktop window it
   answers in place of the terminal UI; `--headless` keeps the terminal. The
   device serves its Studio bridge's access requests through its operator.
-- The pane's device form edits what the device registers with Studio as —
-  its name, model family and owners, one Studio user id per row — on desktop
-  and Android: the identity the device keeps (`studio-identity.json`) and
-  registers with each time it connects. Saving it on a registered device
-  registers the edit within the run, the device restarting on its face with
-  the Studio bridge (`Bridge::update_device_info`); on a device not
-  associated yet, the form is what Associate registers. The pane then shows
-  the record Studio returns, which keeps a model family cleared on the
-  device. Each owner is registered as an owner: arora 15's device info
-  carries no other role.
+- The pane's Device section, on desktop and Android alike: a device not
+  associated shows the form its first association takes — its owners, one
+  Studio user id per row with Remove and Add owner, and a name, generated
+  when left blank — which Associate with Semio Studio registers; an
+  associated one shows what Studio holds of it, read only, its name and
+  owners being edited in Semio Studio. Each owner is registered as an
+  owner: arora 15's device info carries no other role.
+- A device registers the identity it keeps (`studio-identity.json`) only
+  while Studio holds no record of it; otherwise it keeps Studio's record as
+  its identity. A desktop that keeps no identity but has the registration
+  arora's operator saved (`native::StudioConfig::saved_registration`) is
+  associated as that.
 - `RuntimeHandle::studio` says where the device stands with Studio
-  (`native::StudioStatus`, whose `Idle` carries the identity a device not
-  associated keeps); `RuntimeHandle::associate` connects a run that did not
+  (`native::StudioStatus`, whose `Idle` carries what a device not connected
+  is associated as); `RuntimeHandle::associate` connects a run that did not
   ask for Studio for the rest of the run, the device restarting on its face
   with the Studio bridge. `native::StudioConfig::connect` (`native::Connect`)
   says when a device connects: at launch (`--studio`), at launch when it
   keeps an identity (Android), or once asked (the desktop without
   `--studio`). On Android, a fresh install registers with Studio through
-  the pane's device form; one nobody associated still contacts nobody.
+  the pane's association form; one nobody associated still contacts nobody.
 
 - The Android app: an APK around the library (`android/`, a Gradle project
   over the framework's `NativeActivity`), whose entry point runs the face it

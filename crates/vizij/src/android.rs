@@ -27,12 +27,12 @@
 //! reports (`insetsChanged`).
 //!
 //! Studio keeps its credentials in the app's files directory (the device
-//! directory) and the device registers under the identity kept there,
-//! `studio-identity.json` (name, owners, model family). A launch connects
-//! only with an identity kept, so that an install nobody associated — a CI
-//! emulator's — registers nothing; the pane's device form keeps one and
-//! connects, and edits it later, registering the edit. The pane is not
-//! asked the registration's questions: arora 15
+//! directory) and the device's identity there, `studio-identity.json`
+//! (name, owners, model family). A launch connects only with an identity
+//! kept, so that an install nobody associated — a CI emulator's — registers
+//! nothing; the pane's association form keeps one and connects. Once
+//! associated, the device's name and owners are Studio's, edited in Semio
+//! Studio. The pane is not asked the registration's questions: arora 15
 //! asks nobody in a given device directory, and the one way to give it the
 //! app's — `DEVICE_DIR` in the environment — is not sound here, since the
 //! process' JVM threads may read the environment while `set_var` writes it.
@@ -188,6 +188,7 @@ fn bridges(android: &AndroidApp) -> BridgeConfig {
             .map(|files| native::StudioConfig {
                 identity: files.join(STUDIO_IDENTITY),
                 device_dir: Some(files),
+                saved_registration: None,
                 connect: native::Connect::IfKept,
             }),
         ..BridgeConfig::default()
