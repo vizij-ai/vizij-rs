@@ -4,6 +4,13 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [7.7.1] - Unreleased
+
+### Changed
+
+- Reads graph specs and values with vizij-api-core 3, where it used
+  vizij-api-core 2. No public item changes.
+
 ## [7.7.0] - Unreleased
 
 ### Added

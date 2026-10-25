@@ -4,6 +4,40 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [8.0.0] - 2026-10-22
+
+### Changed
+
+- `ProcessingGraph` evaluates its graph on arora-behavior-tree.
+  vizij-graph-core imports the lowered spec as a behavior tree whose
+  detached nodes call arora-dataflow-nodes' node functions, and each tick
+  runs the nodes the graph's outputs read whose arguments changed. A graph
+  computes what it computed before: the face fixtures' tests pass
+  unchanged. A
+  spec of a new version (a LOAD, an EDIT, a grafted or pruned run) is
+  imported again at the next tick, and every node it keeps keeps its state.
+- An `ExternalFunction` node is placed by the description the device's
+  function index gives of its function, which `tick` reads: a call to a
+  function that returns nothing and writes nothing back is left out, and
+  any other is called at every tick, as before: a module's function may
+  keep state its arguments do not show (the animation module's
+  `step(dt)`). `tick_store_with` takes the index; `tick_store` describes
+  no function, so each such node is called at every tick.
+- A tick costs less when few of a graph's inputs change, and more when many
+  do on graphs of a few thousand nodes or fewer. Measured against the
+  write-only evaluation this replaces, a 950-node graph ticks 2.2 times
+  faster at rest and 1.6 times slower with every input moving; a
+  19,000-node graph ticks 8 and 3.3 times faster. Importing a graph costs
+  2 to 3.5 times what lowering it did.
+- The graph types are vizij-graph-core 4's, whose node vocabulary is
+  arora-dataflow-nodes', and the value types vizij-api-core 3's. `task`
+  re-exports `vizij_graph_core::task`, which is arora-dataflow-nodes'.
+- `ProcessingGraph` is neither `Send` nor `Sync`, because a behavior tree
+  holds its nodes in `Rc`s. A device builds and ticks it on one thread.
+  `KeyHolds` stays `Send` and `Sync`, so a client on another thread still
+  holds keys through it.
+- Requires vizij-graph-core 4 and vizij-api-core 3.
+
 ## [7.3.0] - Unreleased
 
 ### Changed

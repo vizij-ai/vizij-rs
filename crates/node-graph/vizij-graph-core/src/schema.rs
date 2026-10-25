@@ -2908,3 +2908,67 @@ pub fn registry() -> Registry {
         nodes,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::kind::Kind;
+    use crate::ports::{ports, Variadic};
+
+    /// The registry describes the ports each node kind's function declares,
+    /// in the same order, and covers every kind it can evaluate.
+    #[test]
+    fn the_registry_describes_the_ports_the_functions_declare() {
+        let ids = |specs: &[PortSpec]| specs.iter().map(|port| port.id).collect::<Vec<_>>();
+        let variadic = |spec: &Option<VariadicSpec>| {
+            spec.as_ref().map(|group| Variadic {
+                id: group.id,
+                keyed: group.keyed,
+            })
+        };
+        let nodes = registry().nodes;
+        for signature in &nodes {
+            let kind = &signature.type_id;
+            let Some(declared) = kind.kind().map(|kind| ports(&kind)) else {
+                // An `input` or `output` node: the importer's ports.
+                let inputs = match kind {
+                    NodeType::Output => vec!["in"],
+                    _ => vec![],
+                };
+                assert_eq!(ids(&signature.inputs), inputs, "{kind:?}'s inputs");
+                assert_eq!(ids(&signature.outputs), ["out"], "{kind:?}'s outputs");
+                continue;
+            };
+            assert_eq!(ids(&signature.inputs), declared.inputs, "{kind:?}'s inputs");
+            assert_eq!(
+                ids(&signature.outputs),
+                declared.outputs,
+                "{kind:?}'s outputs"
+            );
+            assert_eq!(
+                variadic(&signature.variadic_inputs),
+                declared.variadic_inputs,
+                "{kind:?}'s variadic inputs"
+            );
+            assert_eq!(
+                variadic(&signature.variadic_outputs),
+                declared.variadic_outputs,
+                "{kind:?}'s variadic outputs"
+            );
+        }
+        let urdf =
+            |kind: &Kind| matches!(kind, Kind::UrdfIkPosition | Kind::UrdfIkPose | Kind::UrdfFk);
+        for kind in crate::functions::KINDS {
+            if urdf(kind) && !cfg!(feature = "urdf_ik") {
+                // The registry describes them with the feature alone.
+                continue;
+            }
+            assert!(
+                nodes
+                    .iter()
+                    .any(|signature| signature.type_id.kind().as_ref() == Some(kind)),
+                "the registry describes {kind:?}"
+            );
+        }
+    }
+}

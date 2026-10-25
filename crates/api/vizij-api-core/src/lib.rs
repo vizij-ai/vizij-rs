@@ -1,10 +1,10 @@
 //! `vizij-api-core`: the vizij vocabulary over `arora_types::value::Value`,
-//! plus the Shape, typed-path, write-batch, blend, coercion, and JSON helpers
-//! shared across Vizij runtimes.
+//! plus the Shape, typed-path, write-batch, coercion, and JSON helpers
+//! shared across Vizij runtimes. The geometry types and blending are
+//! `arora-geometry`'s.
 
-/// Blend helpers shared by animation and graph runtimes.
+/// Blackboard storage and per-entry conflict tracking across writes.
 pub mod blackboard;
-pub mod blend;
 /// Coercion helpers for adapting values across shape boundaries.
 pub mod coercion;
 /// JSON normalization: legacy payload forms in, Arora `Value` serde out.
@@ -24,6 +24,6 @@ pub use shape::{Shape, ShapeId};
 /// Parsed typed-path contract used for graph inputs, sinks, and blackboard lookups.
 pub use typed_path::TypedPath;
 /// The runtime value (Arora's), its vizij classifier, and the transform POD.
-pub use value::{kind, Transform, Value, VizijKind};
+pub use value::{kind, ShapeKind, Transform, Value};
 /// Ordered write operations collected during a frame.
 pub use write_ops::{WriteBatch, WriteOp};

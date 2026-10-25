@@ -362,7 +362,7 @@ vizij-rs/
 │  │  ├─ vizij-api-core            # Shared Value/Shape/TypedPath types
 │  │  └─ vizij-api-wasm            # wasm-bindgen helpers for Value/WriteBatch JSON
 │  ├─ node-graph/
-│  │  ├─ vizij-graph-core          # Data-flow node graph evaluator
+│  │  ├─ vizij-graph-core          # Node graph format and its evaluation on the behavior tree
 │  │  ├─ vizij-graph-wasm          # wasm-bindgen binding
 │  │  └─ vizij-graph-registry-export # Registry export utility used by npm tooling
 │  ├─ interop/                     # Adapters that run the Vizij stacks on Arora seams
@@ -402,7 +402,7 @@ package.
 | Node graph     | `vizij-graph-core`       | `vizij-graph-wasm`         | `@vizij/node-graph`     |
 | Test fixtures  | `vizij-test-fixtures`    | —                          | `@vizij/test-fixtures`       |
 
-Shared API crates (`vizij-api-core`, `vizij-api-wasm`) provide the Value/Shape/TypedPath contract that keeps the stacks interoperable.
+Shared API crates (`vizij-api-core`, `vizij-api-wasm`) provide the Value/Shape/TypedPath contract that keeps the stacks interoperable. A node graph runs on arora-sdk's behavior tree: `vizij-graph-core` translates it into a tree's detached nodes, calls of arora-sdk's `arora-dataflow-nodes` functions.
 `vizij-test-fixtures` exposes the JSON assets defined under `fixtures/`, while `vizij-graph-registry-export` supports registry generation for the node-graph npm tooling.
 
 Each WASM crate exposes a stable `abi_version()` (currently `2`); the npm wrappers verify this at runtime and instruct you to rebuild if versions drift.
@@ -436,7 +436,7 @@ These packages build quickly (`pnpm run build:shared`) and should be rebuilt whe
 ## Development Tips
 
 - **ABI mismatches**: If you see `ABI mismatch: expected 2` from a wasm wrapper, rebuild the Rust crate and rerun `pnpm run build:wasm:<stack>` to regenerate JS glue.
-- **Time-dependent nodes**: the Vizij graph runtime advances `GraphRuntime.t`/`dt` on each evaluation. Ensure any custom integrations do the same when you drive a `GraphRuntime` elsewhere.
+- **Time-dependent nodes**: a graph host sets `t`/`dt` on its `TreeRuntime` before each evaluation, as `ProcessingGraph` and `vizij-graph-wasm` do.
 - **URDF features**: Enable the `urdf_ik` feature on `vizij-graph-core` if you need robotics nodes in native builds (`cargo build -p vizij-graph-core --features urdf_ik`). The WASM package ships with the feature enabled by default.
 - **Fixtures**: The `fixtures/` directory includes ready-to-use JSON files for graphs and animations. They are mirrored into `npm/@vizij/test-fixtures` for web consumers.
 
