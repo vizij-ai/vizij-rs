@@ -478,6 +478,27 @@ pub fn parse_rgb(hex: &str) -> Result<[u8; 3]> {
 /// header and its executable bytes.
 pub type GuestModule = (arora_types::module::low::Header, Vec<u8>);
 
+/// The model family every Vizij device reports.
+const MODEL_FAMILY: &str = "vizij";
+
+/// What the device showing `bundle`'s face says it is ([`RigHal::describe`],
+/// which arora reports to Semio Studio): the `vizij` family, the face's
+/// hardware version, else its id, and its software version, if it has one.
+/// The face is the device's hardware, so a face that states no version is
+/// still told apart by its id; nothing stands in for a software version.
+///
+/// [`RigHal::describe`]: arora_hal::Hal::describe
+pub(crate) fn description(bundle: &Bundle) -> arora_hal::HalDescription {
+    arora_hal::HalDescription {
+        model_family: Some(MODEL_FAMILY.to_string()),
+        hardware_version: bundle
+            .hardware_version
+            .clone()
+            .or_else(|| bundle.face_id.clone()),
+        software_version: bundle.software_version.clone(),
+    }
+}
+
 /// The device builder over the Vizij seams: the composed graph as the behavior,
 /// with the animation module loaded so the composed animation source's
 /// `ExternalFunction` nodes dispatch and its transport is callable, the rest
@@ -1056,6 +1077,42 @@ mod tests {
                 Some(number().resting_at(float(0.5))),
             ]
         );
+    }
+
+    /// A face describes its device as a Vizij of its versions; without a
+    /// hardware version, of its id; without either, of no version.
+    #[test]
+    fn a_face_describes_its_device_by_its_versions() {
+        let described = |metadata: serde_json::Value| {
+            super::description(&Bundle::from_bundle_json(
+                &serde_json::json!({ "metadata": metadata }),
+            ))
+        };
+        let versioned = described(serde_json::json!({
+            "faceId": "quori",
+            "hardwareVersion": "quori-1.3",
+            "softwareVersion": "2.0-ros4hri",
+        }));
+        assert_eq!(
+            versioned,
+            arora_hal::HalDescription {
+                model_family: Some("vizij".into()),
+                hardware_version: Some("quori-1.3".into()),
+                software_version: Some("2.0-ros4hri".into()),
+            }
+        );
+        let unversioned = described(serde_json::json!({ "faceId": "quori" }));
+        assert_eq!(
+            unversioned,
+            arora_hal::HalDescription {
+                model_family: Some("vizij".into()),
+                hardware_version: Some("quori".into()),
+                software_version: None,
+            }
+        );
+        let anonymous = described(serde_json::json!({}));
+        assert_eq!(anonymous.model_family.as_deref(), Some("vizij"));
+        assert_eq!(anonymous.hardware_version, None);
     }
 
     /// The device serves the face it shows: its HAL module answers the

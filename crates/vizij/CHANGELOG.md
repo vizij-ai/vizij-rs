@@ -10,6 +10,16 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Added
 
+- The device describes itself as its face's model, which arora registers
+  with Semio Studio: the family `vizij`, the face's hardware version — its
+  bundle's `metadata.hardwareVersion`, else its `faceId` — and its software
+  version, `metadata.softwareVersion`, when the face states one. The rig of
+  each device generation describes its face, so a reload connects the Studio
+  bridge with the new face's model, and the Studio bridge is built with the
+  description (`connect_with_description`,
+  `connect_with_operator_and_description`) where it was built with none.
+  arora 15 builds it with none in a given device directory, so the Android
+  app reports no model. The browser device describes its face the same way.
 - The settings pane (`vizij::settings`, feature `settings`, which `desktop`
   enables and the Android app is built with): the Vizij standalone's
   Settings page over the face, drawn with egui (bevy_egui 0.42). A tap or

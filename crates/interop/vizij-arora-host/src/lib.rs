@@ -5,10 +5,10 @@
 //! - [`compose_sources`] unions several graph sources into the one graph a
 //!   device runs (the rig, the pose-driver, a playing program, …).
 //! - [`Bundle`] reads the face's `VIZIJ_bundle`: its graphs, its motiongraph
-//!   programs, the profiles it declares, the program to autoplay, the
-//!   neutral-pose config, and what an app builds its controls from — the
-//!   poses and their groups, the rig's inputs, the animations
-//!   ([`contents`]) and the bundle's open-ended metadata.
+//!   programs, the profiles it declares, its hardware and software versions,
+//!   the program to autoplay, the neutral-pose config, and what an app builds
+//!   its controls from — the poses and their groups, the rig's inputs, the
+//!   animations ([`contents`]) and the bundle's open-ended metadata.
 //! - [`ProgramSelect`] picks which program plays; [`Bundle::compose`] composes
 //!   the base graphs plus that program.
 //! - [`Bundle::neutral_stage_writes`] resolves the neutral inputs to the store
@@ -90,6 +90,16 @@ pub struct Bundle {
     /// `metadata.faceId` — the rig's namespace (its input paths live under
     /// `rig/<faceId>/`).
     pub face_id: Option<String>,
+    /// `metadata.hardwareVersion` — the version of the face itself: its
+    /// shapes, what can move in them, and the layout that gives those
+    /// movements their meaning (a mouth, eyes). The face's identity with an
+    /// optional suffix, such as `quori-1.3` or `emy-2026-10-13`. `None` when
+    /// absent or blank.
+    pub hardware_version: Option<String>,
+    /// `metadata.softwareVersion` — the version of what the face runs: its
+    /// profiles, exposed inputs, programs, extra rigs and animations, such as
+    /// `1.2` or `2.0-ros4hri`. `None` when absent or blank.
+    pub software_version: Option<String>,
     /// `poses.config.poses`.
     pub poses: Vec<contents::Pose>,
     /// `poses.config.poseGroups`.
@@ -222,6 +232,16 @@ impl Bundle {
             .and_then(|m| m.get("faceId"))
             .and_then(Json::as_str)
             .map(str::to_string);
+        // A blank version is no version: it names nothing a reader could
+        // tell apart.
+        let version = |name: &str| {
+            metadata
+                .and_then(|m| m.get(name))
+                .and_then(Json::as_str)
+                .map(str::trim)
+                .filter(|version| !version.is_empty())
+                .map(str::to_string)
+        };
 
         let pose_groups = contents::pose_groups(bundle);
         let poses = contents::poses(bundle, &pose_groups);
@@ -242,6 +262,8 @@ impl Bundle {
             active_program_id,
             neutral_inputs,
             face_id,
+            hardware_version: version("hardwareVersion"),
+            software_version: version("softwareVersion"),
             poses,
             pose_groups,
             rig_inputs,
@@ -792,6 +814,28 @@ mod tests {
 
     fn graph(nodes: Json, edges: Json) -> Json {
         json!({ "nodes": nodes, "edges": edges })
+    }
+
+    /// The face's versions are its metadata's `hardwareVersion` and
+    /// `softwareVersion`, trimmed; an absent, blank or non-string one is none.
+    #[test]
+    fn the_bundle_reads_the_face_s_versions() {
+        let authored = Bundle::from_bundle_json(&json!({
+            "metadata": {
+                "faceId": "quori",
+                "hardwareVersion": " quori-1.3 ",
+                "softwareVersion": "2.0-ros4hri",
+            },
+        }));
+        assert_eq!(authored.hardware_version.as_deref(), Some("quori-1.3"));
+        assert_eq!(authored.software_version.as_deref(), Some("2.0-ros4hri"));
+
+        let unversioned = Bundle::from_bundle_json(&json!({
+            "metadata": { "faceId": "quori", "hardwareVersion": "  ", "softwareVersion": 2 },
+        }));
+        assert_eq!(unversioned.hardware_version, None);
+        assert_eq!(unversioned.software_version, None);
+        assert_eq!(Bundle::from_bundle_json(&json!({})).hardware_version, None);
     }
 
     /// A path two sources write is contended, its writers in composition

@@ -22,7 +22,7 @@ use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
 use crate::face::{
-    builder_for, declare_keys, load_animations, load_face, rig_ranges, spawn_program,
+    builder_for, declare_keys, description, load_animations, load_face, rig_ranges, spawn_program,
     stage_neutral_pose, FaceConfig, LoadedFace, ProgramSelect,
 };
 use crate::view::meta::FaceMeta;
@@ -305,10 +305,16 @@ fn saved_registration(path: &std::path::Path) -> Option<Identity> {
 /// under a persisted identity ([`StudioConfig::device_dir`]). `None` when
 /// the run does not connect ([`StudioConfig::connect`]) or Studio is
 /// declined or fails; `status` says which.
+///
+/// `description` is what the device's HAL says it is, which arora registers
+/// as the device's model, each field unless its environment variable is set
+/// (`MODEL_FAMILY`, `HARDWARE_VERSION`, `SOFTWARE_VERSION`). arora 15 takes
+/// none in a given device directory, so there the model is not reported.
 #[cfg(feature = "studio")]
 async fn studio_bridge(
     studio: &StudioConfig,
     operator: Option<&dyn arora::operator::Operator>,
+    description: &arora_hal::HalDescription,
     status: &Mutex<StudioStatus>,
 ) -> Option<Box<dyn arora_bridge::Bridge>> {
     let report = |now: StudioStatus| {
@@ -339,7 +345,7 @@ async fn studio_bridge(
     if let Some(known) = persisted {
         let connected = match &studio.device_dir {
             Some(dir) => arora::studio::connect_with_device_dir(dir).await,
-            None => arora::studio::connect().await,
+            None => arora::studio::connect_with_description(description).await,
         };
         let bridge = match connected {
             Ok(bridge) => bridge,
@@ -397,8 +403,12 @@ async fn studio_bridge(
         return None;
     }
     let connected = match operator {
-        Some(operator) => arora::studio::connect_with_operator(operator).await,
-        None => arora::studio::connect().await.map(Some),
+        Some(operator) => {
+            arora::studio::connect_with_operator_and_description(operator, description).await
+        }
+        None => arora::studio::connect_with_description(description)
+            .await
+            .map(Some),
     };
     match connected {
         Ok(Some(bridge)) => {
@@ -429,7 +439,8 @@ async fn studio_bridge(
 /// to a bridge. A bridge that fails to build is logged and skipped, not fatal.
 /// Returned beside the builder: the access requests the Studio bridge yields,
 /// for the operator to rule on; `studio` says where the device stands with
-/// Studio.
+/// Studio. `description` is the device's HAL's, the model the Studio bridge
+/// reports ([`studio_bridge`]).
 #[cfg_attr(
     not(all(any(feature = "ros2-dds", feature = "ros2-zenoh"), feature = "studio")),
     allow(unused_variables)
@@ -439,6 +450,7 @@ pub async fn attach_bridges(
     bridges: &BridgeConfig,
     ros4hri: bool,
     operator: Option<&dyn arora::operator::Operator>,
+    description: &arora_hal::HalDescription,
     studio: &Mutex<StudioStatus>,
 ) -> (arora::AroraBuilder, arora_bridge::AccessRequestStream) {
     #[cfg_attr(not(feature = "studio"), allow(unused_mut))]
@@ -447,7 +459,7 @@ pub async fn attach_bridges(
     // Studio first: the bridge whose identity the device carries.
     #[cfg(feature = "studio")]
     if let Some(config) = &bridges.studio {
-        if let Some(bridge) = studio_bridge(config, operator, studio).await {
+        if let Some(bridge) = studio_bridge(config, operator, description, studio).await {
             access_requests = bridge.access_requests().await;
             builder = builder.with_bridge(bridge);
         }
@@ -492,10 +504,7 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
         spec,
         contended,
     } = load_face(glb, &config)?;
-    // The rig holds the face it shows: the model the device states and serves
-    // (Semio Studio's `retrieveModels` / `retrieveModelGlb`).
-    let rig = RigHal::new();
-    rig.set_model_glb(glb.to_vec());
+    let rig = face_rig(glb, &meta);
     let store = BlackboardStore::new();
     let (events_tx, events_rx) = std::sync::mpsc::channel();
     let (commands_tx, commands_rx) = futures::channel::mpsc::unbounded();
@@ -557,6 +566,16 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
     })
 }
 
+/// The rig of a device showing `meta`'s face from `glb`: it describes the
+/// device as the face's model ([`description`]) and holds the GLB, the model
+/// the device states and serves (Semio Studio's `retrieveModels` /
+/// `retrieveModelGlb`). Each generation's is its face's.
+fn face_rig(glb: &[u8], meta: &FaceMeta) -> RigHal {
+    let rig = RigHal::with_description(description(&meta.bundle));
+    rig.set_model_glb(glb.to_vec());
+    rig
+}
+
 /// The quiet mode's device: built once and stepped, with no bridge and no
 /// front end ([`Mode::Quiet`]).
 fn run_quiet(
@@ -600,8 +619,9 @@ enum Rebuild {
 }
 
 /// The operator flow, generation by generation: each reload stops the
-/// running device and rebuilds it — graphs, rig, store — on the new face,
-/// and the view follows through [`ViewEvent::LoadFace`]; an association
+/// running device and rebuilds it — graphs, rig, store, bridges — on the new
+/// face, its Studio bridge connecting anew with the new face's model, and
+/// the view follows through [`ViewEvent::LoadFace`]; an association
 /// rebuilds it on the same face with the Studio bridge. `operator`, when
 /// given, answers in place of the front end's. Runs until a generation ends
 /// on its own (a device error; the terminal UI's quit exits the process).
@@ -636,8 +656,7 @@ fn supervise(
         let (rig, store) = match fresh.take() {
             Some(handles) => handles,
             None => {
-                let (rig, store) = (RigHal::new(), BlackboardStore::new());
-                rig.set_model_glb(face.glb.clone());
+                let (rig, store) = (face_rig(&face.glb, &face.meta), BlackboardStore::new());
                 let _ = events.send(ViewEvent::LoadFace {
                     face_id: FACE.to_string(),
                     meta: Box::new(face.meta.clone()),
@@ -663,6 +682,9 @@ fn supervise(
             &face.meta.bundle.neutral_stage_writes(),
             &rig_ranges(&face.meta.bundle),
         );
+        // What the device says it is, the generation's face: the model its
+        // Studio bridge reports, as arora's own run passes its HAL's.
+        let description = tokio_rt.block_on(arora_hal::Hal::describe(&rig));
         let speech = config.speech.as_ref().map(|build| build());
         let Some(builder) = builder_for(
             &face.spec,
@@ -681,6 +703,7 @@ fn supervise(
                 &bridges,
                 config.ros4hri,
                 operator.as_deref(),
+                &description,
                 &studio,
             )
             .await;
@@ -1033,6 +1056,102 @@ mod ros4hri_profile_tests {
     }
 }
 
+/// What each device generation says it is: its face's model, the first
+/// generation's and a reload's.
+#[cfg(test)]
+mod model_tests {
+    use super::*;
+    use arora_hal::{Hal, HalDescription};
+
+    /// A GLB holding only a face's bundle: a rig reading one input, and
+    /// `metadata`.
+    fn face_glb(metadata: serde_json::Value) -> Vec<u8> {
+        let gltf = serde_json::json!({
+            "asset": { "version": "2.0" },
+            "nodes": [{ "name": "root", "extensions": { "VIZIJ_bundle": {
+                "version": 1,
+                "metadata": metadata,
+                "graphs": [{ "id": "rig", "kind": "rig", "spec": { "nodes": [
+                    { "id": "x", "type": "input", "params": { "path": "x", "value": 0.0 } },
+                ], "edges": [] } }],
+            } } }],
+        });
+        let mut json = serde_json::to_vec(&gltf).unwrap();
+        while !json.len().is_multiple_of(4) {
+            json.push(b' ');
+        }
+        let mut glb = Vec::new();
+        glb.extend_from_slice(b"glTF");
+        glb.extend_from_slice(&2u32.to_le_bytes());
+        glb.extend_from_slice(&((12 + 8 + json.len()) as u32).to_le_bytes());
+        glb.extend_from_slice(&(json.len() as u32).to_le_bytes());
+        glb.extend_from_slice(b"JSON");
+        glb.extend_from_slice(&json);
+        glb
+    }
+
+    fn config() -> FaceConfig {
+        FaceConfig {
+            wanted: vec!["rig".to_string()],
+            program: ProgramSelect::None,
+            stage_neutral: false,
+            ros4hri: false,
+            #[cfg(feature = "studio")]
+            studio: false,
+            speech: None,
+        }
+    }
+
+    fn vizij(hardware: &str, software: Option<&str>) -> HalDescription {
+        HalDescription {
+            model_family: Some("vizij".into()),
+            hardware_version: Some(hardware.into()),
+            software_version: software.map(str::to_string),
+        }
+    }
+
+    /// The device describes the face it starts on; reloading another face
+    /// rebuilds the device on a rig describing that one, the description the
+    /// generation's Studio bridge reports.
+    #[test]
+    fn each_generation_describes_its_face() {
+        let quori = face_glb(serde_json::json!({
+            "faceId": "quori",
+            "hardwareVersion": "quori-1.3",
+            "softwareVersion": "1.2",
+        }));
+        let device = start(&quori, config(), BridgeConfig::default(), Mode::Quiet)
+            .expect("start the device");
+        assert_eq!(
+            futures::executor::block_on(device.rig.describe()),
+            vizij("quori-1.3", Some("1.2"))
+        );
+
+        let (commands_tx, mut commands) = futures::channel::mpsc::unbounded();
+        let (events, _events) = std::sync::mpsc::channel();
+        let emy = face_glb(serde_json::json!({ "faceId": "emy" }));
+        commands_tx
+            .unbounded_send(Command::Reload(emy))
+            .expect("send the reload");
+        let rebuild = futures::executor::block_on(pump(
+            futures::stream::pending().boxed(),
+            &mut commands,
+            &config(),
+            &events,
+            false,
+        ));
+        let Rebuild::Face(next) = rebuild else {
+            panic!("a reload rebuilds the device on the new face");
+        };
+        let rig = face_rig(&next.glb, &next.meta);
+        assert_eq!(
+            futures::executor::block_on(rig.describe()),
+            vizij("emy", None),
+            "a face stating no version is described by its id"
+        );
+    }
+}
+
 /// When a device configured for Studio contacts it: never before it is
 /// asked to or keeps an identity, and what it says of itself then.
 #[cfg(all(test, feature = "studio"))]
@@ -1048,7 +1167,9 @@ mod studio_tests {
     async fn status_of(config: &StudioConfig) -> StudioStatus {
         let status = Mutex::new(StudioStatus::Off);
         assert!(
-            studio_bridge(config, None, &status).await.is_none(),
+            studio_bridge(config, None, &Default::default(), &status)
+                .await
+                .is_none(),
             "nothing is contacted"
         );
         status.into_inner().unwrap()

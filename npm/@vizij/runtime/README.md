@@ -119,7 +119,7 @@ element id the GLB's RobotData declares, `null` for a press on no element;
 `describe(glb)` reads what a GLB declares without loading it: its elements,
 animatables, bounds, graphs (each with its id and kind) and programs (each
 with its label and graph), and from
-its bundle the poses and their groups, the rig's inputs with their ranges
+its bundle the face's hardware and software versions, the poses and their groups, the rig's inputs with their ranges
 and defaults, the animations, and the bundle's metadata as authored
 (`speechConfig`, `activeMotionGraphId`, …) — everything a page builds its
 controls from.
