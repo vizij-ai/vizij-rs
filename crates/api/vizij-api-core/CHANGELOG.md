@@ -4,7 +4,18 @@ All notable changes to `vizij-api-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [3.0.0] - Unreleased
+
+### Changed
+
+- **Breaking:** the value classifier `VizijKind` is `ShapeKind`. The
+  vocabulary's type and field ids, and the JSON forms, do not change.
+- The geometry types (`vec2`, `vec3`, `vec4`, `quat`, `transform`, with
+  their ids, constructors, accessors and `Transform`) are `arora-geometry`'s,
+  and `value` re-exports them. `color-rgba`, records and enumerations stay
+  here.
+- Blending is `arora_geometry::blend`, and the `blend` module is gone.
+  `coercion::to_vec3` is gone: nothing read a value through it.
 
 ## [2.2.0] - 2026-10-24
 

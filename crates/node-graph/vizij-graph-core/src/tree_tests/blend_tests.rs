@@ -1,6 +1,9 @@
 // Blend node unit tests (broadcasting, mismatch, and basic semantics)
 
-use super::*;
+#[allow(unused_imports)]
+use crate::eval::*;
+#[allow(unused_imports)]
+use crate::tree_runtime::{evaluate_all, evaluate_all_with_functions, TreeRuntime};
 use crate::types::{
     EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
 };
@@ -64,7 +67,7 @@ fn weighted_sum_vector_scalar_weight_broadcasts_and_outputs_descriptive_ports() 
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("weighted sum should evaluate");
     let outputs = rt.outputs.get("ws").expect("ws outputs present");
 
@@ -121,7 +124,7 @@ fn weighted_sum_vector_length_mismatch_returns_nans() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("weighted sum should evaluate");
     let outputs = rt.outputs.get("ws").expect("ws outputs present");
 
@@ -175,7 +178,7 @@ fn blend_weighted_average_computes_normalized_average() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
     let outputs = rt.outputs.get("bavg").expect("bavg outputs present");
 
@@ -206,7 +209,7 @@ fn blend_multiply_computes_product_of_terms() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("blend multiply should evaluate");
     let outputs = rt.outputs.get("mult").expect("mult outputs present");
 
@@ -237,7 +240,7 @@ fn blend_max_selects_value_of_highest_effective_weight() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("blend max should evaluate");
     let outputs = rt.outputs.get("max").expect("max outputs present");
 
@@ -264,7 +267,7 @@ fn blend_max_without_values_or_base_returns_nan() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("blend max should evaluate");
     let outputs = rt.outputs.get("max").expect("max outputs present");
 
@@ -318,7 +321,7 @@ fn default_blend_matches_expected_vec3_output() {
         ..Default::default()
     };
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("default blend should evaluate");
     let outputs = rt.outputs.get("blend").expect("blend outputs present");
 
@@ -369,7 +372,7 @@ fn default_blend_emits_nan_value_when_weight_length_mismatch() {
         ..Default::default()
     };
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("default blend should evaluate");
     let outputs = rt.outputs.get("blend").expect("blend outputs present");
 
@@ -409,7 +412,7 @@ fn case_node_routes_based_on_case_labels_param() {
         fingerprint: 0,
     };
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("case should evaluate");
     let outputs = rt.outputs.get("case").expect("case outputs present");
 
@@ -448,7 +451,7 @@ fn case_node_without_default_emits_nan_when_no_match() {
         fingerprint: 0,
     };
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("case should evaluate");
     let outputs = rt.outputs.get("case").expect("case outputs present");
 

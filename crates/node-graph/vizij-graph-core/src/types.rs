@@ -5,24 +5,14 @@
 
 use hashbrown::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use vizij_api_core::{Shape, TypedPath, Value};
+
+pub use crate::kind::Kind;
+pub use crate::select::{Selector, SelectorSegment};
+use uuid::Uuid;
 
 /// Stable node identifier within a single [`GraphSpec`].
 pub type NodeId = String;
-
-/// One step of a selector path applied to a structured output value.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "lowercase")]
-pub enum SelectorSegment {
-    /// Traverse into a record/struct field by name.
-    Field(String),
-    /// Traverse into an array/vector/list position by zero-based index.
-    Index(usize),
-}
-
-/// Selector path applied after reading an upstream output port.
-pub type Selector = Vec<SelectorSegment>;
 
 /// Canonical node kinds accepted by graph JSON and emitted by the schema registry.
 ///
@@ -176,10 +166,195 @@ pub enum NodeType {
     ///
     /// Where a [`TaskRun`](Self::TaskRun) node *is* one run's call, this node
     /// starts runs: the request is queued on the runtime's
-    /// [`spawns`](crate::eval::GraphRuntime::spawns) and served by the host
+    /// [`spawns`](crate::tree_runtime::TreeRuntime::spawns) and served by the host
     /// once the evaluation is done. The graph keeps no handle — a run it
     /// spawns is the host's to end and clean up.
     Spawn,
+}
+
+impl NodeType {
+    /// The kind of function a node of this type calls: `None` for an
+    /// `input` or `output` node, which read and write the store.
+    pub fn kind(&self) -> Option<Kind> {
+        Some(match self {
+            NodeType::Constant => Kind::Constant,
+            NodeType::Slider => Kind::Slider,
+            NodeType::MultiSlider => Kind::MultiSlider,
+            NodeType::Add => Kind::Add,
+            NodeType::Subtract => Kind::Subtract,
+            NodeType::Multiply => Kind::Multiply,
+            NodeType::Divide => Kind::Divide,
+            NodeType::Power => Kind::Power,
+            NodeType::Log => Kind::Log,
+            NodeType::Abs => Kind::Abs,
+            NodeType::Modulo => Kind::Modulo,
+            NodeType::Sqrt => Kind::Sqrt,
+            NodeType::Sign => Kind::Sign,
+            NodeType::Min => Kind::Min,
+            NodeType::Max => Kind::Max,
+            NodeType::Round => Kind::Round,
+            NodeType::Sin => Kind::Sin,
+            NodeType::Cos => Kind::Cos,
+            NodeType::Tan => Kind::Tan,
+            NodeType::Time => Kind::Time,
+            NodeType::Oscillator => Kind::Oscillator,
+            NodeType::Spring => Kind::Spring,
+            NodeType::Damp => Kind::Damp,
+            NodeType::Slew => Kind::Slew,
+            NodeType::And => Kind::And,
+            NodeType::Or => Kind::Or,
+            NodeType::Not => Kind::Not,
+            NodeType::Xor => Kind::Xor,
+            NodeType::GreaterThan => Kind::GreaterThan,
+            NodeType::LessThan => Kind::LessThan,
+            NodeType::Equal => Kind::Equal,
+            NodeType::NotEqual => Kind::NotEqual,
+            NodeType::If => Kind::If,
+            NodeType::Case => Kind::Case,
+            NodeType::Clamp => Kind::Clamp,
+            NodeType::Remap => Kind::Remap,
+            NodeType::CenteredRemap => Kind::CenteredRemap,
+            NodeType::PiecewiseRemap => Kind::PiecewiseRemap,
+            NodeType::Vec3Cross => Kind::Vec3Cross,
+            NodeType::VectorConstant => Kind::VectorConstant,
+            NodeType::VectorAdd => Kind::VectorAdd,
+            NodeType::VectorSubtract => Kind::VectorSubtract,
+            NodeType::VectorMultiply => Kind::VectorMultiply,
+            NodeType::VectorScale => Kind::VectorScale,
+            NodeType::VectorNormalize => Kind::VectorNormalize,
+            NodeType::VectorDot => Kind::VectorDot,
+            NodeType::VectorLength => Kind::VectorLength,
+            NodeType::VectorIndex => Kind::VectorIndex,
+            NodeType::Join => Kind::Join,
+            NodeType::Split => Kind::Split,
+            NodeType::VectorMin => Kind::VectorMin,
+            NodeType::VectorMax => Kind::VectorMax,
+            NodeType::VectorMean => Kind::VectorMean,
+            NodeType::VectorMedian => Kind::VectorMedian,
+            NodeType::VectorMode => Kind::VectorMode,
+            NodeType::ToVector => Kind::ToVector,
+            NodeType::FromVector => Kind::FromVector,
+            NodeType::SimpleNoise => Kind::SimpleNoise,
+            NodeType::PerlinNoise => Kind::PerlinNoise,
+            NodeType::SimplexNoise => Kind::SimplexNoise,
+            NodeType::WeightedSumVector => Kind::WeightedSumVector,
+            NodeType::DefaultBlend => Kind::DefaultBlend,
+            NodeType::BlendWeightedAverage => Kind::BlendWeightedAverage,
+            NodeType::BlendAdditive => Kind::BlendAdditive,
+            NodeType::BlendMultiply => Kind::BlendMultiply,
+            NodeType::BlendWeightedOverlay => Kind::BlendWeightedOverlay,
+            NodeType::BlendWeightedAverageOverlay => Kind::BlendWeightedAverageOverlay,
+            NodeType::BlendMax => Kind::BlendMax,
+            NodeType::InverseKinematics => Kind::InverseKinematics,
+            NodeType::UrdfIkPosition => Kind::UrdfIkPosition,
+            NodeType::UrdfIkPose => Kind::UrdfIkPose,
+            NodeType::UrdfFk => Kind::UrdfFk,
+            NodeType::BuildRecord => Kind::BuildRecord,
+            NodeType::ReadRecord => Kind::ReadRecord,
+            NodeType::SwitchRecord => Kind::SwitchRecord,
+            NodeType::MergeRecord => Kind::MergeRecord,
+            NodeType::SplitRecord => Kind::SplitRecord,
+            NodeType::MathMultRecord => Kind::MathMultRecord,
+            NodeType::MathAddRecord => Kind::MathAddRecord,
+            NodeType::MathDivRecord => Kind::MathDivRecord,
+            NodeType::MathSubRecord => Kind::MathSubRecord,
+            NodeType::ExternalFunction => Kind::ExternalFunction,
+            NodeType::TaskRun => Kind::TaskRun,
+            NodeType::Spawn => Kind::Spawn,
+            NodeType::Input | NodeType::Output => return None,
+        })
+    }
+}
+
+impl From<Kind> for NodeType {
+    fn from(kind: Kind) -> Self {
+        match kind {
+            Kind::Constant => NodeType::Constant,
+            Kind::Slider => NodeType::Slider,
+            Kind::MultiSlider => NodeType::MultiSlider,
+            Kind::Add => NodeType::Add,
+            Kind::Subtract => NodeType::Subtract,
+            Kind::Multiply => NodeType::Multiply,
+            Kind::Divide => NodeType::Divide,
+            Kind::Power => NodeType::Power,
+            Kind::Log => NodeType::Log,
+            Kind::Abs => NodeType::Abs,
+            Kind::Modulo => NodeType::Modulo,
+            Kind::Sqrt => NodeType::Sqrt,
+            Kind::Sign => NodeType::Sign,
+            Kind::Min => NodeType::Min,
+            Kind::Max => NodeType::Max,
+            Kind::Round => NodeType::Round,
+            Kind::Sin => NodeType::Sin,
+            Kind::Cos => NodeType::Cos,
+            Kind::Tan => NodeType::Tan,
+            Kind::Time => NodeType::Time,
+            Kind::Oscillator => NodeType::Oscillator,
+            Kind::Spring => NodeType::Spring,
+            Kind::Damp => NodeType::Damp,
+            Kind::Slew => NodeType::Slew,
+            Kind::And => NodeType::And,
+            Kind::Or => NodeType::Or,
+            Kind::Not => NodeType::Not,
+            Kind::Xor => NodeType::Xor,
+            Kind::GreaterThan => NodeType::GreaterThan,
+            Kind::LessThan => NodeType::LessThan,
+            Kind::Equal => NodeType::Equal,
+            Kind::NotEqual => NodeType::NotEqual,
+            Kind::If => NodeType::If,
+            Kind::Case => NodeType::Case,
+            Kind::Clamp => NodeType::Clamp,
+            Kind::Remap => NodeType::Remap,
+            Kind::CenteredRemap => NodeType::CenteredRemap,
+            Kind::PiecewiseRemap => NodeType::PiecewiseRemap,
+            Kind::Vec3Cross => NodeType::Vec3Cross,
+            Kind::VectorConstant => NodeType::VectorConstant,
+            Kind::VectorAdd => NodeType::VectorAdd,
+            Kind::VectorSubtract => NodeType::VectorSubtract,
+            Kind::VectorMultiply => NodeType::VectorMultiply,
+            Kind::VectorScale => NodeType::VectorScale,
+            Kind::VectorNormalize => NodeType::VectorNormalize,
+            Kind::VectorDot => NodeType::VectorDot,
+            Kind::VectorLength => NodeType::VectorLength,
+            Kind::VectorIndex => NodeType::VectorIndex,
+            Kind::Join => NodeType::Join,
+            Kind::Split => NodeType::Split,
+            Kind::VectorMin => NodeType::VectorMin,
+            Kind::VectorMax => NodeType::VectorMax,
+            Kind::VectorMean => NodeType::VectorMean,
+            Kind::VectorMedian => NodeType::VectorMedian,
+            Kind::VectorMode => NodeType::VectorMode,
+            Kind::ToVector => NodeType::ToVector,
+            Kind::FromVector => NodeType::FromVector,
+            Kind::SimpleNoise => NodeType::SimpleNoise,
+            Kind::PerlinNoise => NodeType::PerlinNoise,
+            Kind::SimplexNoise => NodeType::SimplexNoise,
+            Kind::WeightedSumVector => NodeType::WeightedSumVector,
+            Kind::DefaultBlend => NodeType::DefaultBlend,
+            Kind::BlendWeightedAverage => NodeType::BlendWeightedAverage,
+            Kind::BlendAdditive => NodeType::BlendAdditive,
+            Kind::BlendMultiply => NodeType::BlendMultiply,
+            Kind::BlendWeightedOverlay => NodeType::BlendWeightedOverlay,
+            Kind::BlendWeightedAverageOverlay => NodeType::BlendWeightedAverageOverlay,
+            Kind::BlendMax => NodeType::BlendMax,
+            Kind::InverseKinematics => NodeType::InverseKinematics,
+            Kind::UrdfIkPosition => NodeType::UrdfIkPosition,
+            Kind::UrdfIkPose => NodeType::UrdfIkPose,
+            Kind::UrdfFk => NodeType::UrdfFk,
+            Kind::BuildRecord => NodeType::BuildRecord,
+            Kind::ReadRecord => NodeType::ReadRecord,
+            Kind::SwitchRecord => NodeType::SwitchRecord,
+            Kind::MergeRecord => NodeType::MergeRecord,
+            Kind::SplitRecord => NodeType::SplitRecord,
+            Kind::MathMultRecord => NodeType::MathMultRecord,
+            Kind::MathAddRecord => NodeType::MathAddRecord,
+            Kind::MathDivRecord => NodeType::MathDivRecord,
+            Kind::MathSubRecord => NodeType::MathSubRecord,
+            Kind::ExternalFunction => NodeType::ExternalFunction,
+            Kind::TaskRun => NodeType::TaskRun,
+            Kind::Spawn => NodeType::Spawn,
+        }
+    }
 }
 
 /// Node-construction parameters consumed selectively by different [`NodeType`] variants.
@@ -331,17 +506,64 @@ pub struct NodeParams {
     pub module: Option<Uuid>,
 }
 
-/// Rounding strategy for [`NodeType::Round`].
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum RoundMode {
-    /// Round toward negative infinity.
-    #[default]
-    Floor,
-    /// Round toward positive infinity.
-    Ceil,
-    /// Round toward zero.
-    Trunc,
+pub use crate::params::RoundMode;
+
+impl NodeParams {
+    /// The parameters the node functions read: all but the store path and
+    /// the keyed-batch fields, which the importer and the tree read.
+    pub fn params(&self) -> crate::params::Params {
+        crate::params::Params {
+            value: self.value.clone(),
+            frequency: self.frequency,
+            phase: self.phase,
+            min: self.min,
+            max: self.max,
+            x: self.x,
+            y: self.y,
+            z: self.z,
+            in_min: self.in_min,
+            in_max: self.in_max,
+            out_min: self.out_min,
+            out_max: self.out_max,
+            round_mode: self.round_mode.clone(),
+            clamp: self.clamp,
+            in_low: self.in_low,
+            in_anchor: self.in_anchor,
+            in_high: self.in_high,
+            out_low: self.out_low,
+            out_anchor: self.out_anchor,
+            out_high: self.out_high,
+            bone1: self.bone1,
+            bone2: self.bone2,
+            bone3: self.bone3,
+            urdf_xml: self.urdf_xml.clone(),
+            root_link: self.root_link.clone(),
+            tip_link: self.tip_link.clone(),
+            seed: self.seed.clone(),
+            weights: self.weights.clone(),
+            max_iters: self.max_iters,
+            tol_pos: self.tol_pos,
+            tol_rot: self.tol_rot,
+            joint_defaults: self.joint_defaults.clone(),
+            index: self.index,
+            sizes: self.sizes.clone(),
+            noise_seed: self.noise_seed,
+            octaves: self.octaves,
+            lacunarity: self.lacunarity,
+            persistence: self.persistence,
+            stiffness: self.stiffness,
+            damping: self.damping,
+            mass: self.mass,
+            half_life: self.half_life,
+            max_rate: self.max_rate,
+            case_labels: self.case_labels.clone(),
+            record_keys: self.record_keys.clone(),
+            keys: self.keys.clone(),
+            function: self.function,
+            param_ids: self.param_ids.clone(),
+            module: self.module,
+        }
+    }
 }
 
 /// Single node declaration within a [`GraphSpec`].
@@ -371,11 +593,12 @@ pub struct GraphSpec {
     /// Directed edges connecting source outputs to target inputs.
     #[serde(default)]
     pub edges: Vec<EdgeSpec>,
-    /// Optional caller-managed cache key for plan reuse. When zero, the runtime falls back to
-    /// hashing to detect structural changes.
+    /// Caller-managed version of the spec: a host keying specs by version
+    /// loads one of a new version again.
     #[serde(default, skip_serializing_if = "crate::types::is_zero")]
     pub version: u64,
-    /// Fingerprint of the structural layout (nodes/edges/params) used alongside `version`.
+    /// Not read by the runtime. It stays in the format, so documents that
+    /// carry it still parse.
     #[serde(default, skip_serializing_if = "crate::types::is_zero")]
     pub fingerprint: u64,
 }
@@ -462,12 +685,8 @@ pub struct EdgeSpec {
 }
 
 impl GraphSpec {
-    /// Recompute the structural fingerprint for this spec without mutating the version counter.
-    pub fn recompute_fingerprint(&self) -> u64 {
-        crate::eval::fingerprint_spec(self)
-    }
-
-    /// Seed or bump the spec version and refresh the fingerprint for plan-cache reuse.
+    /// Seed or bump the spec version, so a host keying specs by version
+    /// loads it again.
     ///
     /// - If `version` is zero, it is set to 1.
     /// - Otherwise, the version is saturated by `saturating_add(1)` to avoid wrap.
@@ -477,7 +696,6 @@ impl GraphSpec {
         } else {
             self.version.saturating_add(1)
         };
-        self.fingerprint = self.recompute_fingerprint();
         self
     }
 
@@ -510,8 +728,6 @@ impl GraphSpec {
             }
         }
 
-        let mut seen_inputs: HashSet<(NodeId, String)> = HashSet::new();
-
         for edge in &self.edges {
             if !known.contains(&edge.from.node_id) {
                 return Err(format!(
@@ -526,15 +742,21 @@ impl GraphSpec {
                 ));
             }
 
-            let key = (edge.to.node_id.clone(), edge.to.input.clone());
-            if !seen_inputs.insert(key.clone()) {
-                return Err(format!("duplicate edge for input '{}:{}'", key.0, key.1));
+            // The keys are copied only for an input no default or edge has
+            // reached yet.
+            let connection_entry = map
+                .entry_ref(edge.to.node_id.as_str())
+                .or_default()
+                .entry_ref(edge.to.input.as_str())
+                .or_default();
+            // An edge sets the source an inline default leaves unset: one set
+            // already is a second edge into the input.
+            if connection_entry.node_id.is_some() {
+                return Err(format!(
+                    "duplicate edge for input '{}:{}'",
+                    edge.to.node_id, edge.to.input
+                ));
             }
-
-            let entry = map.entry(edge.to.node_id.clone()).or_default();
-            let connection_entry = entry
-                .entry(edge.to.input.clone())
-                .or_insert_with(InputConnection::default);
 
             connection_entry.node_id = Some(edge.from.node_id.clone());
             connection_entry.output_key = edge.from.output.clone();

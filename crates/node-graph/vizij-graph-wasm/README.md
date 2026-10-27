@@ -2,7 +2,7 @@
 
 > **wasm-bindgen bridge for Vizij node graphs – load specs, stage inputs, and evaluate graphs from JavaScript.**
 
-`vizij-graph-wasm` compiles `vizij-graph-core` to WebAssembly and exposes a friendly API for TypeScript tooling. The npm wrapper `@vizij/node-graph` builds on this crate.
+`vizij-graph-wasm` compiles `vizij-graph-core` — a node graph run on the behavior tree — to WebAssembly and exposes a friendly API for TypeScript tooling. The npm wrapper `@vizij/node-graph` builds on this crate.
 
 ---
 
@@ -21,7 +21,7 @@
 ## Overview
 
 - Compiles to a `cdylib` via `wasm-bindgen` with ABI guard `abi_version() == 2`.
-- Wraps a `GraphRuntime` inside the `WasmGraph` class (load, stage, step, evaluate, set params).
+- Wraps a `TreeRuntime` inside the `WasmGraph` class (load, stage, step, evaluate, set params).
 - Provides JSON normalisation helpers so authored specs can use ergonomic shorthands.
 - Emits evaluation results with explicit value/shape metadata to keep consumers schema-aware.
 - Optional features:
@@ -102,7 +102,7 @@ console.log(graph.evalAll());
 
 ### Performance notes
 
-- **Slots + delta outputs (new hot path):** For steady-state frames, call `eval_all_slots()` to reuse the cached plan and avoid JSON materialisation, then fetch `get_outputs_delta(version)` (start with `0`) to receive only changed ports plus a monotonic `version`. Use `get_outputs_full()` if you need a full snapshot without re-evaluating.
+- **Slots + delta outputs (new hot path):** For steady-state frames, call `eval_all_slots()` to reuse the loaded tree and avoid JSON materialisation, then fetch `get_outputs_delta(version)` (start with `0`) to receive only changed ports plus a monotonic `version`. Use `get_outputs_full()` if you need a full snapshot without re-evaluating.
   - Delta calls may return `{ full: true, ... }` when the caller's baseline token does not match the runtime's cached baseline (including after `load_graph`, `clear`, or other cache resets). Treat `full: true` as "replace your baseline" rather than merging.
 - **Batch steady frames:** When host inputs don’t change for several ticks, call `eval_steps(steps, dt)` (or `eval_steps_js` via the wasm exports) to advance time inside WASM and return only the final outputs/writes. Avoid this when you must inject new inputs every frame.
 - **Typed-array staging for numeric streams:** Use `stage_input_f32(path, Float32Array)` to bypass JSON encode/decode for hot numeric inputs. Read numeric outputs with `get_output_f32(node_id, output_key)` to obtain a `Float32Array`. Keep the JSON path for mixed or non-numeric data.
@@ -113,7 +113,7 @@ console.log(graph.evalAll());
 ## Key Details
 
 - **Normalisation** – Accepts legacy shorthands like `{ vec3: [...] }` and `{ type: "float", data: 1 }`, auto-lowers node type names, rewrites `kind` → `type`, and normalizes value payloads into Arora `Value` serde form (`{"f32": 1.0}`, `{"bool": true}`, `{"str": "hi"}`, `{"f32s": [...]}`, `{"struct": {...}}`, ...).
-- **Staging** – `stage_input` mirrors `GraphRuntime::set_input`; value payloads normalize through the same rules. Passing `undefined` (via the npm wrapper) removes staged entries safely.
+- **Staging** – `stage_input` mirrors `TreeRuntime::set_input`; value payloads normalize through the same rules. Passing `undefined` (via the npm wrapper) removes staged entries safely.
 - **Evaluation Result** – `eval_all` returns `{ nodes: { [id]: { port: { value, shape } } }, writes: WriteOpJSON[] }`. Values are in Arora `Value` serde form; shapes mirror `vizij_api_core::Shape`.
   ```jsonc
   {
@@ -134,10 +134,10 @@ console.log(graph.evalAll());
     ]
   }
   ```
-- **Plan cache & structural params** – After the first evaluation, `eval_all`/`eval_all_slots` reuse a cached execution plan (topological order + port layouts + resolved input bindings).
-  - Only **structural** edits invalidate the plan (today: `Split.sizes`, plus any future params that affect port layouts/bindings). Structural edits trigger a rebuild on the next `eval_*` call.
-  - Most `set_param` calls are **non-structural** (e.g., `Constant.value`) and keep the plan cache valid so steady-state evaluation can keep using the fast path.
-- **Parameter updates** – `set_param` validates types strictly (no silent coercion). Structural parameter edits invalidate the cached plan so port-layout changes are safe without reloading the graph. All core node parameters plus robotics settings are supported.
+- **The behavior tree** – The first `eval_all`/`eval_all_slots` after `load_graph` imports the graph into a behavior tree (`vizij-graph-core`'s `TreeRuntime`), and later evaluations reuse it. Every evaluation brings every node up to date, and a node calls its function again only when its inputs, its parameters or the clock it reads changed.
+  - `set_param` sets a parameter's value in place on the tree (e.g., `Constant.value`, a spring's `stiffness`).
+  - An edit that changes the tree has the next `eval_*` call load the edited graph, every node keeping its state: `Split.sizes`, `ReadRecord.record_keys`, an input's or output's `path`, or a parameter the node did not set before.
+- **Parameter updates** – `set_param` validates types strictly (no silent coercion). All core node parameters plus robotics settings are supported.
 - **Time management** – Call `set_time`/`step` as needed. `eval_all` computes `dt` based on internal time values when both are invoked. An `eval_all` with no `step` before it evaluates at a `dt` of zero: it carries changed inputs through the graph and moves nothing that time drives (Spring, Damp and Slew hold).
 
 ---
@@ -169,7 +169,7 @@ cargo test -p vizij-graph-wasm
 
 ## Related Packages
 
-- [`vizij-graph-core`](../vizij-graph-core/README.md) – core evaluator used by this crate.
+- [`vizij-graph-core`](../vizij-graph-core/README.md) – the importer and tree runtime this crate runs graphs on.
 - [`npm/@vizij/node-graph`](../../../npm/@vizij/node-graph/README.md) – npm package built from this binding.
 
 Need assistance? Open an issue—predictable WASM bindings keep Vizij graphs portable. 🕸️

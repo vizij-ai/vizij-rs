@@ -6,7 +6,10 @@
 //! were, and a run with zero steps interleaved follows the same course as one
 //! without.
 
-use super::*;
+#[allow(unused_imports)]
+use crate::eval::*;
+#[allow(unused_imports)]
+use crate::tree_runtime::{evaluate_all, evaluate_all_with_functions, TreeRuntime};
 use crate::types::GraphSpec;
 use serde_json::{json, Value as Json};
 use std::collections::BTreeMap;
@@ -58,7 +61,7 @@ impl NodeFunctions for PureFunctions {
 }
 
 /// Advance the graph's clock by `dt` and evaluate it.
-fn step(rt: &mut GraphRuntime, spec: &GraphSpec, dt: f32) {
+fn step(rt: &mut TreeRuntime, spec: &GraphSpec, dt: f32) {
     rt.dt = dt;
     rt.t += dt;
     evaluate_all_with_functions(rt, spec, &mut PureFunctions).expect("the graph evaluates");
@@ -75,7 +78,7 @@ struct Observed {
     states: BTreeMap<String, String>,
 }
 
-fn observed(rt: &GraphRuntime, spec: &GraphSpec) -> Observed {
+fn observed(rt: &TreeRuntime, spec: &GraphSpec) -> Observed {
     let events: Vec<&str> = spec
         .nodes
         .iter()
@@ -99,7 +102,7 @@ fn observed(rt: &GraphRuntime, spec: &GraphSpec) -> Observed {
             })
             .collect(),
         states: rt
-            .node_states
+            .node_states()
             .iter()
             .map(|(node, state)| (node.clone(), format!("{state:?}")))
             .collect(),
@@ -214,8 +217,8 @@ fn cases() -> Vec<(&'static str, GraphSpec)> {
 /// and FK of joints that do.
 #[cfg(feature = "urdf_ik")]
 fn kinematics_cases() -> Vec<(&'static str, GraphSpec)> {
-    let fixture: Json = vizij_test_fixtures::node_graphs::spec("urdf-ik-position")
-        .expect("the urdf-ik-position fixture");
+    let fixture: Json =
+        crate::fixtures::spec("urdf-ik-position").expect("the urdf-ik-position fixture");
     let ik = fixture["spec"]["nodes"]
         .as_array()
         .and_then(|nodes| nodes.iter().find(|node| node["id"] == "ik"))
@@ -273,7 +276,7 @@ fn kinematics_cases() -> Vec<(&'static str, GraphSpec)> {
 #[test]
 fn a_zero_step_changes_no_node_that_keeps_time_or_state() {
     for (kind, spec) in cases() {
-        let mut rt = GraphRuntime::default();
+        let mut rt = TreeRuntime::default();
         for _ in 0..30 {
             step(&mut rt, &spec, DT);
         }
@@ -301,8 +304,8 @@ fn a_zero_step_changes_no_node_that_keeps_time_or_state() {
 #[test]
 fn zero_steps_leave_the_course_of_a_run_unchanged() {
     for (kind, spec) in cases() {
-        let mut plain = GraphRuntime::default();
-        let mut interleaved = GraphRuntime::default();
+        let mut plain = TreeRuntime::default();
+        let mut interleaved = TreeRuntime::default();
         for _ in 0..30 {
             step(&mut plain, &spec, DT);
             step(&mut interleaved, &spec, DT);
@@ -332,7 +335,7 @@ fn set_target(spec: &mut GraphSpec, value: f32) {
     spec.nodes[0].params.value = Some(Value::F32(value));
 }
 
-fn output(rt: &GraphRuntime) -> f32 {
+fn output(rt: &TreeRuntime) -> f32 {
     match rt.outputs.get("node").and_then(|ports| ports.get("out")) {
         Some(port) => vocab::as_float(&port.value).expect("a float output"),
         None => panic!("the node has no output"),
@@ -354,8 +357,8 @@ fn smoothers() -> [(&'static str, Json); 3] {
 fn a_smoother_records_a_target_changed_at_a_zero_step() {
     for (kind, params) in smoothers() {
         let mut spec = smoother(kind, params);
-        let mut paused = GraphRuntime::default();
-        let mut playing = GraphRuntime::default();
+        let mut paused = TreeRuntime::default();
+        let mut playing = TreeRuntime::default();
         step(&mut paused, &spec, 0.0);
         step(&mut playing, &spec, 0.0);
         set_target(&mut spec, 1.0);
@@ -367,7 +370,7 @@ fn a_smoother_records_a_target_changed_at_a_zero_step() {
         assert!(held > 0.0 && held < 1.0, "{kind} in motion ({held})");
 
         set_target(&mut spec, -1.0);
-        let state = format!("{:?}", paused.node_states.get("node"));
+        let state = format!("{:?}", paused.node_states().get("node"));
         step(&mut paused, &spec, 0.0);
         assert_eq!(
             output(&paused),
@@ -375,16 +378,15 @@ fn a_smoother_records_a_target_changed_at_a_zero_step() {
             "{kind}: the value moved at a zero step"
         );
         if kind == "spring" {
-            let Some(graph_runtime::NodeRuntimeState::Spring(spring)) =
-                paused.node_states.get("node")
-            else {
+            let states = paused.node_states();
+            let Some(context::NodeRuntimeState::Spring(spring)) = states.get("node") else {
                 panic!("the spring keeps its state");
             };
             assert_eq!(spring.target, vec![-1.0], "the new target is recorded");
             assert_ne!(spring.velocity, vec![0.0], "the velocity holds");
         } else {
             assert_eq!(
-                format!("{:?}", paused.node_states.get("node")),
+                format!("{:?}", paused.node_states().get("node")),
                 state,
                 "{kind}: the state moved at a zero step"
             );
@@ -405,7 +407,7 @@ fn a_smoother_records_a_target_changed_at_a_zero_step() {
 fn a_negative_or_non_finite_dt_holds_a_smoother() {
     for (kind, params) in smoothers() {
         let mut spec = smoother(kind, params);
-        let mut rt = GraphRuntime::default();
+        let mut rt = TreeRuntime::default();
         step(&mut rt, &spec, 0.0);
         set_target(&mut spec, 1.0);
         for _ in 0..10 {
@@ -429,7 +431,7 @@ fn an_unsmoothed_damp_or_slew_passes_its_target_through_at_a_zero_step() {
         ("slew", json!({ "max_rate": 0.0 })),
     ] {
         let mut spec = smoother(kind, params);
-        let mut rt = GraphRuntime::default();
+        let mut rt = TreeRuntime::default();
         step(&mut rt, &spec, DT);
         set_target(&mut spec, 0.75);
         step(&mut rt, &spec, 0.0);
@@ -462,7 +464,7 @@ fn an_ik_node_solves_again_only_when_its_target_changes() {
         ],
         "edges": [edge("target", "node", "target_pos")],
     }));
-    let joints = |rt: &GraphRuntime| {
+    let joints = |rt: &TreeRuntime| {
         rt.outputs
             .get("node")
             .and_then(|ports| ports.get("out"))
@@ -470,7 +472,7 @@ fn an_ik_node_solves_again_only_when_its_target_changes() {
             .expect("the IK node's joints")
     };
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     step(&mut rt, &spec, DT);
     let solved = joints(&rt);
     for dt in [DT, 0.0] {
@@ -511,7 +513,7 @@ fn an_ik_pose_node_solves_again_for_a_new_rotation() {
             ],
             "edges": [edge("joints", "fk", "joints")],
         }));
-        let mut rt = GraphRuntime::default();
+        let mut rt = TreeRuntime::default();
         step(&mut rt, &spec, DT);
         let port = |name: &str| rt.outputs["fk"][name].value.clone();
         (port("position"), port("rotation"))
@@ -550,8 +552,8 @@ fn an_ik_pose_node_solves_again_for_a_new_rotation() {
             edge("seed", "node", "seed"),
         ],
     }));
-    let joints = |rt: &GraphRuntime| rt.outputs["node"]["out"].value.clone();
-    let mut rt = GraphRuntime::default();
+    let joints = |rt: &TreeRuntime| rt.outputs["node"]["out"].value.clone();
+    let mut rt = TreeRuntime::default();
     step(&mut rt, &spec, DT);
     let solved = joints(&rt);
     step(&mut rt, &spec, 0.0);

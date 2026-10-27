@@ -4,13 +4,16 @@ use std::hint::black_box;
 use std::str::FromStr;
 use std::time::Duration;
 use vizij_api_core::json::normalize_graph_spec_value;
-use vizij_api_core::Shape;
+use vizij_api_core::value as vocab;
+use vizij_api_core::TypedPath;
+use vizij_api_core::{Shape, Value};
+use vizij_graph_core::tree_runtime::{Evaluation, TreeRuntime};
 use vizij_graph_core::types::{
     EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, InputDefault, NodeParams, NodeSpec,
     NodeType,
 };
-use vizij_graph_core::{evaluate_all, GraphRuntime};
-use vizij_test_fixtures::node_graphs;
+#[path = "../src/fixtures.rs"]
+mod node_graphs;
 
 fn link(from: &str, to: &str, input: &str) -> EdgeSpec {
     EdgeSpec {
@@ -131,6 +134,79 @@ fn chain_graph(length: usize) -> GraphSpec {
         prev = add_id;
     }
 
+    GraphSpec {
+        nodes,
+        edges,
+        ..Default::default()
+    }
+    .with_cache()
+}
+
+/// Two chains of Add nodes on composite values, a vec3 chain and a
+/// transform chain, both fed by one moving number and ending in a Spring
+/// that an output reads: every step flattens and rebuilds structures.
+fn composite_chain_graph(length: usize) -> GraphSpec {
+    let constant = |id: String, value: Value| NodeSpec {
+        id,
+        kind: NodeType::Constant,
+        params: NodeParams {
+            value: Some(value),
+            ..Default::default()
+        },
+        output_shapes: HashMap::<String, Shape>::new(),
+        input_defaults: HashMap::<String, InputDefault>::new(),
+    };
+    let mut nodes = vec![input_node("in", "bench/composite/in", 0.0)];
+    let mut edges = Vec::new();
+    for (chain, bias) in [
+        ("vec3", vocab::vec3([0.5, 0.25, 0.125])),
+        (
+            "transform",
+            vocab::transform(vocab::Transform {
+                translation: [0.5, 0.25, 0.125],
+                rotation: [0.0, 0.0, 0.0, 1.0],
+                scale: [1.0, 1.0, 1.0],
+            }),
+        ),
+    ] {
+        let mut prev = "in".to_string();
+        for i in 0..length.max(1) {
+            let bias_id = format!("{chain}_bias_{i}");
+            let add_id = format!("{chain}_add_{i}");
+            nodes.push(constant(bias_id.clone(), bias.clone()));
+            nodes.push(add_node(&add_id));
+            edges.push(link(&prev, &add_id, "operand_1"));
+            edges.push(link(&bias_id, &add_id, "operand_2"));
+            prev = add_id;
+        }
+        let spring_id = format!("{chain}_spring");
+        nodes.push(NodeSpec {
+            id: spring_id.clone(),
+            kind: NodeType::Spring,
+            params: NodeParams::default(),
+            output_shapes: HashMap::<String, Shape>::new(),
+            input_defaults: HashMap::<String, InputDefault>::new(),
+        });
+        edges.push(link(&prev, &spring_id, "in"));
+        // An output reads the spring, so an evaluation of what the outputs
+        // read evaluates the chain.
+        let output_id = format!("{chain}_out");
+        nodes.push(NodeSpec {
+            id: output_id.clone(),
+            kind: NodeType::Output,
+            params: NodeParams {
+                path: Some(
+                    format!("bench/composite/{chain}")
+                        .parse()
+                        .expect("bench output path parses to TypedPath"),
+                ),
+                ..Default::default()
+            },
+            output_shapes: HashMap::<String, Shape>::new(),
+            input_defaults: HashMap::<String, InputDefault>::new(),
+        });
+        edges.push(link(&spring_id, &output_id, "in"));
+    }
     GraphSpec {
         nodes,
         edges,
@@ -472,37 +548,72 @@ fn load_fixture_spec(name: &str) -> GraphSpec {
 
 // Tunables (override via env, comma-separated aligned lists):
 //   GRAPH_KITCHEN_SIZES=1,20,200
-//   GRAPH_COLD_SAMPLES=100,100,10
 //   GRAPH_AMORT_STEPS=500,100,100
 //   GRAPH_AMORT_SAMPLES=100,50,10   (Criterion needs >=10)
 const DEFAULT_KITCHEN_SIZES: &[usize] = &[1, 50, 500];
-const DEFAULT_COLD_SAMPLES: &[usize] = &[100, 10, 10];
 const DEFAULT_AMORT_STEPS: &[u32] = &[500, 100, 100];
 const DEFAULT_AMORT_SAMPLES: &[usize] = &[100, 10, 10];
 
-fn warm_runtime(rt: &mut GraphRuntime, spec: &GraphSpec) {
-    rt.advance_epoch();
-    // First eval builds the plan cache; exclude it from timed loops.
-    evaluate_all(rt, spec).expect("graph evaluation");
+/// The input paths of `spec`'s input nodes.
+fn input_paths(spec: &GraphSpec) -> Vec<TypedPath> {
+    spec.nodes
+        .iter()
+        .filter(|node| node.kind == NodeType::Input)
+        .filter_map(|node| node.params.path.clone())
+        .collect()
 }
 
-fn bench_amortized_per_step(b: &mut criterion::Bencher, spec: &GraphSpec, steps: u32) {
+/// How a benchmark feeds a graph's inputs at each step.
+#[derive(Clone, Copy)]
+enum Inputs {
+    /// Not at all: every input reads its default, and only what the clock
+    /// drives changes.
+    Defaults,
+    /// A new value on every input at every step: everything changes.
+    Moving,
+}
+
+/// The cost of importing, building and lowering `spec` on the tree, and
+/// evaluating it once.
+fn bench_tree_cold(b: &mut criterion::Bencher, spec: &GraphSpec, evaluation: Evaluation) {
+    b.iter(|| {
+        let mut rt = TreeRuntime::new(evaluation);
+        rt.dt = 1.0 / 60.0;
+        rt.load(black_box(spec)).expect("the graph loads");
+        rt.evaluate().expect("graph evaluation");
+    });
+}
+
+/// The amortized cost of one step of `spec` on the tree, once loaded and
+/// evaluated once.
+fn bench_tree_per_step(
+    b: &mut criterion::Bencher,
+    spec: &GraphSpec,
+    steps: u32,
+    evaluation: Evaluation,
+    inputs: Inputs,
+) {
+    let paths = input_paths(spec);
     b.iter_custom(|iters| {
         let mut total = Duration::ZERO;
-        // Reuse a single runtime per iteration to avoid counting plan rebuilds.
         for _ in 0..iters {
-            let mut rt = GraphRuntime {
-                dt: 1.0 / 60.0,
-                t: 0.0,
-                ..Default::default()
-            };
-            warm_runtime(&mut rt, spec);
-
+            let mut rt = TreeRuntime::new(evaluation);
+            rt.dt = 1.0 / 60.0;
+            rt.load(spec).expect("the graph loads");
+            rt.evaluate().expect("graph evaluation");
             let start = std::time::Instant::now();
             for step in 0..steps {
                 rt.t = step as f32 * rt.dt;
-                rt.advance_epoch();
-                evaluate_all(&mut rt, spec).expect("graph evaluation");
+                if let Inputs::Moving = inputs {
+                    for (i, path) in paths.iter().enumerate() {
+                        rt.set_input(
+                            path.clone(),
+                            vizij_api_core::value::float((step + i as u32) as f32),
+                            None,
+                        );
+                    }
+                }
+                rt.evaluate().expect("graph evaluation");
             }
             total += start.elapsed() / steps;
         }
@@ -510,100 +621,76 @@ fn bench_amortized_per_step(b: &mut criterion::Bencher, spec: &GraphSpec, steps:
     });
 }
 
+/// The tree's benchmarks of `spec`: cold, and per step with the inputs at
+/// their defaults and with every input moving, both evaluating what the
+/// outputs read (a device) and every node (an editor).
+fn bench_tree(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    name: &str,
+    spec: &GraphSpec,
+    steps: u32,
+) {
+    for (label, evaluation) in [
+        ("demanded", Evaluation::Demanded),
+        ("every", Evaluation::Every),
+    ] {
+        group.bench_with_input(
+            BenchmarkId::new(format!("tree_{label}/cold"), name),
+            spec,
+            |b, spec| bench_tree_cold(b, spec, evaluation),
+        );
+        for (inputs_label, inputs) in [("defaults", Inputs::Defaults), ("moving", Inputs::Moving)] {
+            group.bench_with_input(
+                BenchmarkId::new(format!("tree_{label}/per_step_{inputs_label}"), name),
+                spec,
+                |b, spec| bench_tree_per_step(b, spec, steps, evaluation, inputs),
+            );
+        }
+    }
+}
+
 fn bench_graphs(c: &mut Criterion) {
     let kitchen_sizes = parse_list("GRAPH_KITCHEN_SIZES", DEFAULT_KITCHEN_SIZES);
-    let cold_samples = parse_list("GRAPH_COLD_SAMPLES", DEFAULT_COLD_SAMPLES);
     let amort_steps = parse_list("GRAPH_AMORT_STEPS", DEFAULT_AMORT_STEPS);
     let amort_samples = parse_list("GRAPH_AMORT_SAMPLES", DEFAULT_AMORT_SAMPLES);
     let len = kitchen_sizes
         .len()
-        .min(cold_samples.len())
         .min(amort_steps.len())
         .min(amort_samples.len());
 
     let mut group = c.benchmark_group("graph_eval");
 
     // Tiny smoke
-    {
-        group.sample_size(50);
-        let spec = chain_graph(8);
-        group.bench_with_input(
-            BenchmarkId::new("cold", "tiny-smoke-8"),
-            &spec,
-            |b, spec| {
-                b.iter(|| {
-                    let mut rt = GraphRuntime {
-                        dt: 1.0 / 60.0,
-                        t: 0.0,
-                        ..Default::default()
-                    };
-                    rt.advance_epoch();
-                    evaluate_all(&mut rt, black_box(spec)).expect("graph evaluation");
-                });
-            },
-        );
-        group.sample_size(10);
-        group.bench_with_input(
-            BenchmarkId::new("amortized_per_step", "tiny-smoke-8"),
-            &spec,
-            |b, spec| bench_amortized_per_step(b, black_box(spec), 100),
-        );
-    }
+    group.sample_size(10);
+    bench_tree(&mut group, "tiny-smoke-8", &chain_graph(8), 100);
+
+    // Composite values
+    bench_tree(
+        &mut group,
+        "composite-chain-32",
+        &composite_chain_graph(32),
+        100,
+    );
 
     // Fixture
-    {
-        let spec = load_fixture_spec("simple-gain-offset");
-        group.sample_size(50);
-        group.bench_with_input(
-            BenchmarkId::new("cold", "fixture/simple-gain-offset"),
-            &spec,
-            |b, spec| {
-                b.iter(|| {
-                    let mut rt = GraphRuntime {
-                        dt: 1.0 / 60.0,
-                        t: 0.0,
-                        ..Default::default()
-                    };
-                    rt.advance_epoch();
-                    evaluate_all(&mut rt, black_box(spec)).expect("graph evaluation");
-                });
-            },
-        );
-        group.sample_size(10);
-        group.bench_with_input(
-            BenchmarkId::new("amortized_per_step", "fixture/simple-gain-offset"),
-            &spec,
-            |b, spec| bench_amortized_per_step(b, black_box(spec), 100),
-        );
-    }
+    bench_tree(
+        &mut group,
+        "fixture/simple-gain-offset",
+        &load_fixture_spec("simple-gain-offset"),
+        100,
+    );
 
     // Kitchen variants
     for i in 0..len {
         let size = kitchen_sizes[i];
-        let cold_sample = cold_samples[i].max(1);
+        let sample = amort_samples[i].max(10); // Criterion min
         let steps = amort_steps[i].max(1);
-        let amort_sample = amort_samples[i].max(10); // Criterion min
-        let name = format!("kitchen-{}-blocks", size);
-        let spec = kitchen_chain(size);
-
-        group.sample_size(cold_sample);
-        group.bench_with_input(BenchmarkId::new("cold", &name), &spec, |b, spec| {
-            b.iter(|| {
-                let mut rt = GraphRuntime {
-                    dt: 1.0 / 60.0,
-                    t: 0.0,
-                    ..Default::default()
-                };
-                rt.advance_epoch();
-                evaluate_all(&mut rt, black_box(spec)).expect("graph evaluation");
-            });
-        });
-
-        group.sample_size(amort_sample);
-        group.bench_with_input(
-            BenchmarkId::new("amortized_per_step", &name),
-            &spec,
-            |b, spec| bench_amortized_per_step(b, black_box(spec), steps),
+        group.sample_size(sample);
+        bench_tree(
+            &mut group,
+            &format!("kitchen-{}-blocks", size),
+            &kitchen_chain(size),
+            steps,
         );
     }
 

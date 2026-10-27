@@ -1,14 +1,15 @@
 [package]
 name = "vizij-api-core"
-version = "2.2.0"
+version = "3.0.0"
 edition = "2021"
 license = "Apache-2.0"
-description = "Vizij's shared Value/Shape/TypedPath contract, kept interoperable across the animation and node-graph stacks."
+description = "Vizij's shared Value/Shape/TypedPath contract over Arora's Value: the geometry types of arora-geometry, color, records and enumerations, with coercion, write batches and the graph-spec JSON forms."
 repository = "https://github.com/vizij-ai/vizij-rs"
 readme = "README.md"
 
 [dependencies]
-arora-types = "3"
+arora-geometry = "1"
+arora-types = "3.9"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

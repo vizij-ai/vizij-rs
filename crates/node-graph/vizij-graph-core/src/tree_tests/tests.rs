@@ -1,6 +1,9 @@
 //! Behavioural coverage for the evaluation pipeline.
 
-use super::*;
+#[allow(unused_imports)]
+use crate::eval::*;
+#[allow(unused_imports)]
+use crate::tree_runtime::{evaluate_all, evaluate_all_with_functions, TreeRuntime};
 use crate::types::{
     EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, InputDefault, NodeParams, NodeSpec,
     NodeType, RoundMode, SelectorSegment,
@@ -38,74 +41,68 @@ fn constant_node(id: &str, value: Value) -> NodeSpec {
     }
 }
 
+/// A spec evaluated again keeps the tree it was built as: the tree is built
+/// once for an unchanged spec.
 #[test]
-fn plan_cache_reuses_layouts_when_spec_version_matches() {
+fn a_spec_evaluated_again_keeps_its_tree() {
     let spec = graph_spec!({
         nodes: vec![constant_node("a", Value::F32(1.0))],
         edges: vec![],
     });
 
-    let mut plan = PlanCache::default();
-    plan.ensure_versioned(&spec).expect("initial plan build");
-
-    // Capture stable pointers to prove layouts/order are reused, not rebuilt.
-    let order_ptr = plan.order.as_ptr();
-    let layouts_ptr = plan.layouts.as_ptr();
-    let bindings_ptr = plan.input_bindings.as_ptr();
-    let node_index_len = plan.node_index.len();
-
-    // Second ensure with the same version should be a no-op.
-    plan.ensure_versioned(&spec)
-        .expect("plan should be reused for same version");
-
-    assert_eq!(plan.order.as_ptr(), order_ptr, "order should be reused");
+    let mut rt = TreeRuntime::default();
+    evaluate_all(&mut rt, &spec).expect("initial build");
+    evaluate_all(&mut rt, &spec).expect("the same spec");
+    assert_eq!(rt.loads(), 1, "the tree is reused");
     assert_eq!(
-        plan.layouts.as_ptr(),
-        layouts_ptr,
-        "layouts should be reused"
-    );
-    assert_eq!(
-        plan.input_bindings.as_ptr(),
-        bindings_ptr,
-        "bindings should be reused"
-    );
-    assert_eq!(
-        plan.node_index.len(),
-        node_index_len,
-        "node index should remain stable"
+        rt.tree()
+            .and_then(|tree| tree.detached_calls(crate::import::tree_node_id("a"))),
+        Some(1),
+        "the constant is called once"
     );
 }
 
+/// A spec of another version builds the tree again.
 #[test]
-fn plan_cache_rebuilds_when_spec_version_changes() {
+fn a_spec_of_another_version_builds_its_tree_again() {
     let base = graph_spec!({
         nodes: vec![constant_node("a", Value::F32(1.0))],
         edges: vec![],
     });
 
-    let mut plan = PlanCache::default();
-    plan.ensure_versioned(&base).expect("initial plan build");
+    let mut rt = TreeRuntime::default();
+    evaluate_all(&mut rt, &base).expect("initial build");
+    assert_eq!(rt.loads(), 1);
 
-    let initial_version = base.version;
-    let order_ptr = plan.order.as_ptr();
-    let layouts_ptr = plan.layouts.as_ptr();
-
-    // Bump the spec generation. This should force a rebuild even if the structure is otherwise
-    // identical (the cache key changed).
     let bumped = base.with_cache();
-    assert!(
-        bumped.version > initial_version,
-        "with_cache should bump version"
-    );
+    evaluate_all(&mut rt, &bumped).expect("the bumped spec");
+    assert_eq!(rt.loads(), 2, "the tree is built again");
+    assert_eq!(rt.outputs["a"]["out"].value, Value::F32(1.0));
+}
 
-    plan.ensure_versioned(&bumped)
-        .expect("plan should rebuild for bumped version");
+/// A load forgets what the module kept for the nodes it removed, so an
+/// editor adding and removing nodes does not grow it.
+#[test]
+fn a_load_forgets_the_nodes_it_removed() {
+    let both = graph_spec!({
+        nodes: vec![
+            constant_node("a", Value::F32(1.0)),
+            constant_node("b", Value::F32(2.0)),
+        ],
+        edges: vec![],
+    });
+    let one = graph_spec!({
+        nodes: vec![constant_node("a", Value::F32(1.0))],
+        edges: vec![],
+    });
 
-    // We expect at least one of these pointers to change because rebuild assigns new vectors.
-    assert!(
-        plan.order.as_ptr() != order_ptr || plan.layouts.as_ptr() != layouts_ptr,
-        "plan rebuild should replace cached buffers"
-    );
+    let mut rt = TreeRuntime::default();
+    evaluate_all(&mut rt, &both).expect("both nodes");
+    assert_eq!(rt.module_sites(), 2);
+    rt.load(&one).expect("one node");
+    rt.evaluate().expect("one node evaluates");
+    assert_eq!(rt.module_sites(), 1, "b is forgotten");
+    assert_eq!(rt.outputs["a"]["out"].value, Value::F32(1.0));
 }
 
 #[test]
@@ -151,7 +148,7 @@ fn piecewise_remap_matches_linear_case() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
 
     let cases = [(0.0, 10.0), (0.5, 15.0), (1.0, 20.0)];
@@ -215,7 +212,7 @@ fn piecewise_remap_handles_segments_and_extrapolation() {
         edges: vec![link("input", "remap", "in")],
     });
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
 
     let cases = [
@@ -283,7 +280,7 @@ fn piecewise_remap_preserves_plateaus_with_duplicate_inputs() {
         edges: vec![link("input", "remap", "in")],
     });
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
 
     let cases = [(0.25, 0.25), (0.5, 0.5), (0.75, 1.5)];
@@ -344,7 +341,7 @@ fn piecewise_remap_allows_duplicate_inputs_with_different_outputs() {
         edges: vec![link("input", "remap", "in")],
     });
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
 
     let cases = [(0.5, 0.5), (0.75, 1.375)];
@@ -405,7 +402,7 @@ fn piecewise_remap_validates_duplicate_breakpoints() {
         edges: vec![link("input", "remap", "in")],
     });
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
 
     rt.set_input(path.clone(), Value::F32(0.5), None);
@@ -476,7 +473,7 @@ fn piecewise_remap_errors_when_inputs_decrease() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
     rt.set_input(path, Value::F32(0.5), None);
 
@@ -531,7 +528,7 @@ fn it_should_respect_declared_shape() {
         ..Default::default()
     }
     .with_cache();
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &spec).expect("shape should match");
     let outputs = rt.outputs.get("a").expect("outputs present");
     let port = outputs.get("out").expect("out port present");
@@ -549,7 +546,7 @@ fn it_should_error_when_shape_mismatches() {
         ..Default::default()
     }
     .with_cache();
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let err = evaluate_all(&mut rt, &spec).expect_err("should fail due to mismatch");
     assert!(err.contains("does not match declared shape"));
 }
@@ -572,7 +569,7 @@ fn abs_node_handles_negative_values() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("abs should evaluate");
     let outputs = rt.outputs.get("abs").expect("abs outputs present");
     let value = &outputs.get("out").expect("out port present").value;
@@ -598,7 +595,7 @@ fn modulo_node_handles_division() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("modulo should evaluate");
     let outputs = rt.outputs.get("mod").expect("mod outputs present");
     match outputs.get("out").map(|pv| pv.value.clone()) {
@@ -625,7 +622,7 @@ fn sqrt_node_handles_vectors() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("sqrt should evaluate");
     let outputs = rt.outputs.get("sqrt").expect("sqrt outputs present");
     match outputs.get("out").map(|pv| pv.value.clone()) {
@@ -652,7 +649,7 @@ fn sign_node_outputs_signum() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("sign should evaluate");
     let outputs = rt.outputs.get("sign").expect("sign outputs present");
     match outputs.get("out").map(|pv| pv.value.clone()) {
@@ -663,7 +660,7 @@ fn sign_node_outputs_signum() {
 
 #[test]
 fn min_max_nodes_select_expected_values() {
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let graph = GraphSpec {
         nodes: vec![
             constant_node("a", Value::F32(3.0)),
@@ -763,7 +760,7 @@ fn round_node_respects_modes() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("round nodes should evaluate");
 
     let floor_vals = match rt
@@ -823,7 +820,7 @@ fn it_should_emit_write_for_output_nodes() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
     assert_eq!(rt.writes.iter().count(), 1);
     let op = rt.writes.iter().next().expect("write present");
@@ -860,7 +857,7 @@ fn writes_batch_json_roundtrip_from_graph() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
     let original = rt.writes.clone();
 
@@ -896,7 +893,7 @@ fn input_defaults_supply_missing_connections() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("defaults should evaluate");
     let outputs = rt.outputs.get("div").expect("divide outputs present");
     let value = outputs.get("out").expect("out port").value.clone();
@@ -937,7 +934,7 @@ fn linked_inputs_override_defaults() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
     let outputs = rt.outputs.get("div").expect("divide outputs present");
     match outputs.get("out").map(|port| &port.value) {
@@ -977,7 +974,7 @@ fn defaults_apply_when_output_key_missing() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
     let outputs = rt.outputs.get("div").expect("divide outputs present");
     match outputs.get("out").map(|port| &port.value) {
@@ -1012,7 +1009,7 @@ fn join_respects_operand_order() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("join should evaluate");
     let outputs = rt.outputs.get("join").expect("join outputs present");
     let port = outputs.get("out").expect("out port present");
@@ -1044,10 +1041,8 @@ fn oscillator_broadcasts_vector_inputs() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime {
-        t: 0.5,
-        ..Default::default()
-    };
+    let mut rt = TreeRuntime::default();
+    rt.t = 0.5;
     evaluate_all(&mut rt, &graph).expect("oscillator should evaluate");
 
     let outputs = rt.outputs.get("osc").expect("osc outputs present");
@@ -1081,7 +1076,7 @@ fn it_should_infer_vector_length_hints() {
         ..Default::default()
     }
     .with_cache();
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &spec).expect("graph should evaluate");
     let outputs = rt.outputs.get("vec").expect("outputs present");
     let port = outputs.get("out").expect("out port");
@@ -1104,7 +1099,7 @@ fn it_should_error_when_declared_output_missing() {
         ..Default::default()
     }
     .with_cache();
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let err = evaluate_all(&mut rt, &spec).expect_err("missing declared output should error");
     assert!(err.contains("missing declared output"));
 }
@@ -1121,9 +1116,176 @@ fn it_should_validate_vector_length_against_declared_shape() {
         nodes: vec![node],
         ..Default::default()
     };
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let err = evaluate_all(&mut rt, &spec).expect_err("vector length mismatch should error");
     assert!(err.contains("does not match declared shape"));
+}
+
+/// What a device runs, the nodes its outputs read, checks each one's
+/// declared shapes as an evaluation of every node does.
+#[test]
+fn a_declared_shape_is_checked_where_an_output_reads_the_node() {
+    let mut node = constant_node("a", Value::ArrayF32(vec![1.0, 2.0, 3.0]));
+    node.output_shapes.insert(
+        "out".to_string(),
+        Shape::new(ShapeId::Vector { len: Some(4) }),
+    );
+    let sink = NodeSpec {
+        id: "sink".to_string(),
+        kind: NodeType::Output,
+        params: NodeParams {
+            path: Some(TypedPath::parse("robot/x").expect("valid path")),
+            ..Default::default()
+        },
+        output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
+    };
+    let spec = GraphSpec {
+        nodes: vec![node, sink],
+        edges: vec![link("a", "sink", "in")],
+        ..Default::default()
+    };
+    let mut rt = TreeRuntime::new(crate::tree_runtime::Evaluation::Demanded);
+    rt.load(&spec).expect("the graph loads");
+    let err = rt
+        .evaluate()
+        .expect_err("vector length mismatch should error");
+    assert!(err.contains("does not match declared shape"), "{err}");
+    assert!(rt.writes.is_empty(), "nothing is written");
+}
+
+/// An `input` or `output` node has the one port `out`: a shape it declares
+/// of another port is refused when the graph loads.
+#[test]
+fn an_input_declaring_the_shape_of_another_port_is_refused() {
+    let input = NodeSpec {
+        id: "in".to_string(),
+        kind: NodeType::Input,
+        params: NodeParams {
+            path: Some(TypedPath::parse("robot/x").expect("valid path")),
+            ..Default::default()
+        },
+        output_shapes: HashMap::from([("extra".to_string(), Shape::new(ShapeId::Scalar))]),
+        input_defaults: HashMap::new(),
+    };
+    let spec = GraphSpec {
+        nodes: vec![input],
+        ..Default::default()
+    };
+    let err = TreeRuntime::default()
+        .load(&spec)
+        .expect_err("the graph is refused");
+    assert_eq!(
+        err,
+        "node 'in' declares the shape of an output 'extra' it does not have"
+    );
+}
+
+/// An `input`'s value fitted to its declared shape is checked against it: a
+/// shape's `NaN`-filled value is not always of the shape.
+#[test]
+fn an_input_s_fitted_value_is_checked_against_its_shape() {
+    let input = NodeSpec {
+        id: "in".to_string(),
+        kind: NodeType::Input,
+        params: NodeParams {
+            path: Some(TypedPath::parse("robot/x").expect("valid path")),
+            ..Default::default()
+        },
+        output_shapes: HashMap::from([("out".to_string(), Shape::new(ShapeId::Enum(vec![])))]),
+        input_defaults: HashMap::new(),
+    };
+    let spec = GraphSpec {
+        nodes: vec![input],
+        ..Default::default()
+    };
+    let err = evaluate_all(&mut TreeRuntime::default(), &spec).expect_err("the shape is refused");
+    assert!(err.contains("does not match declared shape"), "{err}");
+}
+
+/// A declared shape is checked against the node's return as it is: an
+/// option is not the number it holds.
+#[test]
+fn a_declared_shape_is_checked_against_the_return_as_it_is() {
+    struct ReturnsAnOption;
+    impl NodeFunctions for ReturnsAnOption {
+        fn call(&mut self, _: uuid::Uuid, _: &[(uuid::Uuid, Value)]) -> Result<Value, String> {
+            Ok(Value::Option(Some(Box::new(Value::F32(1.0)))))
+        }
+    }
+    let spec = GraphSpec {
+        nodes: vec![NodeSpec {
+            id: "call".to_string(),
+            kind: NodeType::ExternalFunction,
+            params: NodeParams {
+                function: Some(uuid::Uuid::from_u128(0x1)),
+                ..Default::default()
+            },
+            output_shapes: HashMap::from([("out".to_string(), Shape::new(ShapeId::Scalar))]),
+            input_defaults: HashMap::new(),
+        }],
+        ..Default::default()
+    };
+    let err = evaluate_all_with_functions(&mut TreeRuntime::default(), &spec, &mut ReturnsAnOption)
+        .expect_err("the shape is refused");
+    assert!(err.contains("does not match declared shape"), "{err}");
+}
+
+/// A graph's node ids are any strings: one named as the importer would name
+/// a node it adds (a check, a selection, the root) is a node of its own.
+#[test]
+fn a_node_named_like_an_added_one_is_a_node_of_its_own() {
+    let mut checked = constant_node("a", Value::F32(1.0));
+    checked
+        .output_shapes
+        .insert("out".to_string(), Shape::new(ShapeId::Scalar));
+    let spec = GraphSpec {
+        nodes: vec![
+            checked,
+            constant_node("check:a", Value::F32(2.0)),
+            constant_node("root", Value::F32(3.0)),
+            constant_node("select:sink:in", Value::F32(4.0)),
+            constant_node("pose", vocab::record([("x", vocab::float(5.0))])),
+            NodeSpec {
+                id: "sink".to_string(),
+                kind: NodeType::Output,
+                params: NodeParams {
+                    path: Some(TypedPath::parse("robot/x").expect("valid path")),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![link_with_selector(
+            "pose",
+            "out",
+            "sink",
+            "in",
+            vec![SelectorSegment::Field("x".to_string())],
+        )],
+        ..Default::default()
+    };
+    let mut rt = TreeRuntime::default();
+    evaluate_all(&mut rt, &spec).expect("the graph evaluates");
+    for (id, value) in [
+        ("a", 1.0),
+        ("check:a", 2.0),
+        ("root", 3.0),
+        ("select:sink:in", 4.0),
+    ] {
+        assert_eq!(
+            rt.outputs[id]["out"].value,
+            Value::F32(value),
+            "node '{id}'"
+        );
+    }
+    let written: Vec<Value> = rt.writes.iter().map(|op| op.value.clone()).collect();
+    assert_eq!(
+        written,
+        [vocab::float(5.0)],
+        "the selection reaches the sink"
+    );
 }
 
 #[test]
@@ -1168,7 +1330,7 @@ fn input_node_emits_staged_value_with_declared_shape() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     rt.set_input(
         typed_path,
         vocab::vec3([1.0, 2.0, 3.0]),
@@ -1213,7 +1375,7 @@ fn input_node_coerces_vector_to_declared_vec3() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     // Staged value is a generic vector of the right length to coerce to Vec3.
     rt.set_input(
         typed_path,
@@ -1257,7 +1419,7 @@ fn input_node_missing_numeric_returns_null() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("numeric shape should fall back to NaNs");
 
     let port = rt
@@ -1293,7 +1455,7 @@ fn input_node_missing_non_numeric_errors() {
         ..Default::default()
     };
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let err = evaluate_all(&mut rt, &graph).expect_err("non-numeric shape should error");
     assert!(err.contains("missing staged value"));
 }
@@ -1321,7 +1483,7 @@ fn input_node_requires_restaging_each_epoch() {
         ..Default::default()
     };
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     rt.set_input(
         typed_path.clone(),
         vocab::vec3([1.0, 2.0, 3.0]),
@@ -1374,7 +1536,7 @@ fn selector_projects_record_field() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("selector projection should succeed");
 
     let port = rt
@@ -1421,7 +1583,7 @@ fn selector_projects_transform_field_and_nested_index() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("selector projection should succeed");
 
     let port = rt
@@ -1462,7 +1624,7 @@ fn selector_index_out_of_bounds_errors() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let err = evaluate_all(&mut rt, &graph).expect_err("oob selector should error");
     assert!(
         err.contains("out of bounds"),
@@ -1494,7 +1656,7 @@ fn spring_node_transitions_toward_new_target() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &spec).expect("initial evaluate");
 
     spec.nodes[0].params.value = Some(Value::F32(10.0));
@@ -1559,7 +1721,7 @@ fn damp_node_smooths_toward_target() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &spec).expect("initial evaluate");
 
     spec.nodes[0].params.value = Some(Value::F32(1.0));
@@ -1621,7 +1783,7 @@ fn slew_node_limits_rate_of_change() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &spec).expect("initial evaluate");
 
     spec.nodes[0].params.value = Some(Value::F32(5.0));
@@ -1752,7 +1914,7 @@ fn end_to_end_input_selector_scalar_math_output() {
         ("label", vocab::text("ok")),
     ]);
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     rt.set_input(typed_path, record, Some(declared));
 
     evaluate_all(&mut rt, &graph).expect("end-to-end evaluation");
@@ -1779,21 +1941,11 @@ fn end_to_end_input_selector_scalar_math_output() {
     }
 }
 
-/// An evaluation for writes writes what a full one writes, frame after
-/// frame, holds the same ports but for a constant nothing reads, and keeps
-/// no copy of them by name.
+/// An evaluation of what the outputs read writes what a full one writes,
+/// frame after frame, and computes the same ports for every node an output
+/// reads; a node nothing reads is not evaluated.
 #[test]
-fn an_evaluation_for_writes_writes_what_a_full_one_writes() {
-    struct NoFunctions;
-    impl NodeFunctions for NoFunctions {
-        fn call(
-            &mut self,
-            function: uuid::Uuid,
-            _: &[(uuid::Uuid, Value)],
-        ) -> Result<Value, String> {
-            Err(format!("no function {function}"))
-        }
-    }
+fn an_evaluation_of_what_the_outputs_read_writes_what_a_full_one_writes() {
     let path = TypedPath::parse("robot/calc.y").expect("valid path");
     let graph = GraphSpec {
         nodes: vec![
@@ -1825,6 +1977,7 @@ fn an_evaluation_for_writes_writes_what_a_full_one_writes() {
                 output_shapes: HashMap::new(),
                 input_defaults: HashMap::new(),
             },
+            constant_node("unread", vocab::float(9.0)),
         ],
         edges: vec![
             link("t", "scaled", "operand_1"),
@@ -1841,17 +1994,16 @@ fn an_evaluation_for_writes_writes_what_a_full_one_writes() {
     }
     .with_cache();
 
-    let mut full = GraphRuntime::default();
-    let mut for_writes = GraphRuntime::default();
+    let mut full = TreeRuntime::default();
+    let mut for_writes = TreeRuntime::new(crate::tree_runtime::Evaluation::Demanded);
     for frame in 1..=3 {
         for rt in [&mut full, &mut for_writes] {
             rt.dt = 0.25;
             rt.t = 0.25 * frame as f32;
         }
-        evaluate_all_with_functions(&mut full, &graph, &mut NoFunctions).expect("full");
-        evaluate_writes_with_functions(&mut for_writes, &graph, &mut NoFunctions)
-            .expect("for writes");
-        let written = |rt: &GraphRuntime| -> Vec<(String, Value)> {
+        evaluate_all(&mut full, &graph).expect("full");
+        evaluate_all(&mut for_writes, &graph).expect("for writes");
+        let written = |rt: &TreeRuntime| -> Vec<(String, Value)> {
             rt.writes
                 .iter()
                 .map(|op| (op.path.to_string(), op.value.clone()))
@@ -1862,27 +2014,25 @@ fn an_evaluation_for_writes_writes_what_a_full_one_writes() {
             written(&full),
             vec![(path.to_string(), vocab::float(0.5 * frame as f32))]
         );
-        let ports = |rt: &GraphRuntime| -> Vec<Vec<Value>> {
-            rt.outputs_vec
+        assert_eq!(full.outputs.len(), 5, "a full evaluation shows every node");
+        let mut expected = full.outputs.clone();
+        expected.remove("unread");
+        let values = |outputs: &std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, PortValue>,
+        >| {
+            let mut values: Vec<(String, String, Value)> = outputs
                 .iter()
-                .map(|ports| ports.iter().map(|port| port.value.clone()).collect())
-                .collect()
+                .flat_map(|(node, ports)| {
+                    ports
+                        .iter()
+                        .map(move |(port, value)| (node.clone(), port.clone(), value.value.clone()))
+                })
+                .collect();
+            values.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+            values
         };
-        // The record is only read through its `gain`, which the plan
-        // resolved: an evaluation for writes leaves it unevaluated.
-        let pose = full.plan.node_index["pose"];
-        let mut expected = ports(&full);
-        expected[pose].clear();
-        assert_eq!(ports(&for_writes), expected);
-        assert_eq!(
-            full.outputs.len(),
-            4,
-            "a full evaluation keeps every node's ports"
-        );
-        assert!(
-            for_writes.outputs.is_empty(),
-            "an evaluation for writes keeps none by name"
-        );
+        assert_eq!(values(&for_writes.outputs), values(&expected));
     }
 }
 
@@ -1901,7 +2051,7 @@ fn a_constant_follows_its_value_and_its_node() {
         output_shapes: HashMap::new(),
         input_defaults: HashMap::new(),
     };
-    let written = |rt: &GraphRuntime| -> Vec<(String, Value)> {
+    let written = |rt: &TreeRuntime| -> Vec<(String, Value)> {
         rt.writes
             .iter()
             .map(|op| (op.path.to_string(), op.value.clone()))
@@ -1917,7 +2067,7 @@ fn a_constant_follows_its_value_and_its_node() {
         edges: vec![link("a", "out_a", "in"), link("b", "out_b", "in")],
         ..Default::default()
     };
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let b = vocab::record([("x", vocab::float(2.0))]);
     for _ in 0..2 {
         evaluate_all(&mut rt, &graph).expect("evaluation");
@@ -1952,23 +2102,12 @@ fn a_constant_follows_its_value_and_its_node() {
     );
 }
 
-/// A selector reading a constant is resolved when the graph is planned; a
-/// constant also read whole is still evaluated for that read, and one read
-/// only through selectors is not evaluated for writes at all. A new value
-/// takes a new plan — a new version, or for an unversioned spec a new
-/// fingerprint — and is selected from then on.
+/// A selector reading a constant reads the constant once: the constant is
+/// called at its first evaluation and not again while its value holds. A
+/// new value is selected from then on, and a constant also read whole is
+/// read whole too.
 #[test]
-fn a_selection_from_a_constant_is_planned_and_follows_its_value() {
-    struct NoFunctions;
-    impl NodeFunctions for NoFunctions {
-        fn call(
-            &mut self,
-            function: uuid::Uuid,
-            _: &[(uuid::Uuid, Value)],
-        ) -> Result<Value, String> {
-            Err(format!("no function {function}"))
-        }
-    }
+fn a_selection_from_a_constant_reads_it_once_and_follows_its_value() {
     let out = |id: &str, path: &str| NodeSpec {
         id: id.to_string(),
         kind: NodeType::Output,
@@ -1992,7 +2131,7 @@ fn a_selection_from_a_constant_is_planned_and_follows_its_value() {
             ],
         )
     };
-    let written = |rt: &GraphRuntime| -> Vec<(String, Value)> {
+    let written = |rt: &TreeRuntime| -> Vec<(String, Value)> {
         let mut writes: Vec<(String, Value)> = rt
             .writes
             .iter()
@@ -2000,6 +2139,10 @@ fn a_selection_from_a_constant_is_planned_and_follows_its_value() {
             .collect();
         writes.sort_by(|l, r| l.0.cmp(&r.0));
         writes
+    };
+    let calls = |rt: &TreeRuntime| {
+        rt.tree()
+            .and_then(|tree| tree.detached_calls(crate::import::tree_node_id("rec")))
     };
 
     // Read through a selector only.
@@ -2009,28 +2152,20 @@ fn a_selection_from_a_constant_is_planned_and_follows_its_value() {
         ..Default::default()
     }
     .with_cache();
-    let mut rt = GraphRuntime::default();
-    evaluate_writes_with_functions(&mut rt, &graph, &mut NoFunctions).expect("evaluation");
-    assert_eq!(written(&rt), vec![("robot/x".into(), vocab::float(1.0))]);
-    let rec = rt.plan.node_index["rec"];
-    assert!(rt
-        .plan
-        .input_bindings
-        .iter()
-        .flatten()
-        .all(|b| b.source.is_none() || b.source.as_ref().is_some_and(|s| s.node_idx != rec)));
-    assert!(
-        rt.outputs_vec[rec].is_empty(),
-        "the record is not evaluated"
-    );
+    let mut rt = TreeRuntime::new(crate::tree_runtime::Evaluation::Demanded);
+    for _ in 0..3 {
+        evaluate_all(&mut rt, &graph).expect("evaluation");
+        assert_eq!(written(&rt), vec![("robot/x".into(), vocab::float(1.0))]);
+    }
+    assert_eq!(calls(&rt), Some(1), "the record is evaluated once");
 
     // A new value in a new version is selected.
     graph.nodes[0].params.value = Some(record(2.0));
     graph = graph.with_cache();
-    evaluate_writes_with_functions(&mut rt, &graph, &mut NoFunctions).expect("evaluation");
+    evaluate_all(&mut rt, &graph).expect("evaluation");
     assert_eq!(written(&rt), vec![("robot/x".into(), vocab::float(2.0))]);
 
-    // Read whole as well: evaluated for that read, the selection planned.
+    // Read whole as well.
     let mut both = GraphSpec {
         nodes: vec![
             constant_node("rec", record(3.0)),
@@ -2040,8 +2175,8 @@ fn a_selection_from_a_constant_is_planned_and_follows_its_value() {
         edges: vec![picked(), link("rec", "out_rec", "in")],
         ..Default::default()
     };
-    let mut rt = GraphRuntime::default();
-    evaluate_writes_with_functions(&mut rt, &both, &mut NoFunctions).expect("evaluation");
+    let mut rt = TreeRuntime::new(crate::tree_runtime::Evaluation::Demanded);
+    evaluate_all(&mut rt, &both).expect("evaluation");
     assert_eq!(
         written(&rt),
         vec![
@@ -2050,9 +2185,9 @@ fn a_selection_from_a_constant_is_planned_and_follows_its_value() {
         ]
     );
 
-    // Unversioned, edited in place: the fingerprint covers the value.
+    // Unversioned, edited in place: the new value is read.
     both.nodes[0].params.value = Some(record(4.0));
-    evaluate_writes_with_functions(&mut rt, &both, &mut NoFunctions).expect("evaluation");
+    evaluate_all(&mut rt, &both).expect("evaluation");
     assert_eq!(
         written(&rt),
         vec![
@@ -2134,7 +2269,7 @@ fn centered_remap_handles_anchor_segments() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
 
     let cases = [
         (-1.0, 0.0),
@@ -2239,7 +2374,7 @@ fn centered_remap_supports_asymmetric_ranges_and_vectors() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
 
     let cases = [(0.25, 2.0), (2.0, 12.0), (-1.0, -3.0)];
@@ -2302,7 +2437,7 @@ fn to_vector_packs_floats() {
             link("c", "tv", "operand_3"),
         ],
     });
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &spec).expect("to_vector should evaluate");
     let port = rt
         .outputs
@@ -2372,7 +2507,7 @@ fn from_vector_unpacks_with_nan_padding() {
             link_with_output("fv", "element5", "s5", "in"),
         ],
     });
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &spec).expect("from_vector should evaluate");
 
     let fv_out = rt.outputs.get("fv").expect("fv outputs");
@@ -2438,7 +2573,7 @@ fn from_vector_underscore_naming_convention() {
             link_with_output("fv", "elements_2", "s3", "in"),
         ],
     });
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &spec).expect("from_vector should evaluate");
 
     let fv_out = rt.outputs.get("fv").expect("fv outputs");
@@ -2503,7 +2638,7 @@ fn noise_nodes_are_deterministic_and_in_range() {
             edges: vec![],
         });
 
-        let mut rt = GraphRuntime::default();
+        let mut rt = TreeRuntime::default();
         evaluate_all(&mut rt, &spec).expect("noise should evaluate");
         let v1 = match rt
             .outputs
@@ -2533,6 +2668,52 @@ fn noise_nodes_are_deterministic_and_in_range() {
             "noise output must be in [-1, 1], got {v1} for {:?}",
             kind
         );
+    }
+}
+
+/// Far from the origin, over the 16 octaves a noise node allows, the
+/// lattice indices of the last octave approach and reach `i32::MAX`: every
+/// noise still evaluates, in range.
+#[test]
+fn noise_nodes_evaluate_far_from_the_origin_over_sixteen_octaves() {
+    for kind in [
+        NodeType::SimpleNoise,
+        NodeType::PerlinNoise,
+        NodeType::SimplexNoise,
+    ] {
+        for at in [32768.0, 65536.0] {
+            let defaults: HashMap<String, InputDefault> = ["x", "y"]
+                .into_iter()
+                .map(|port| {
+                    let value = Value::F32(at);
+                    (port.to_string(), InputDefault { value, shape: None })
+                })
+                .collect();
+            let spec = graph_spec!({
+                nodes: vec![NodeSpec {
+                    id: "n".to_string(),
+                    kind: kind.clone(),
+                    params: NodeParams {
+                        octaves: Some(16.0),
+                        ..Default::default()
+                    },
+                    output_shapes: HashMap::new(),
+                    input_defaults: defaults,
+                }],
+                edges: vec![],
+            });
+
+            let mut rt = TreeRuntime::default();
+            evaluate_all(&mut rt, &spec).expect("noise should evaluate");
+            let value = match rt.outputs.get("n").and_then(|o| o.get("out")) {
+                Some(port) => match port.value {
+                    Value::F32(f) => f,
+                    ref other => panic!("expected Float, got {other:?}"),
+                },
+                None => panic!("no output for {kind:?}"),
+            };
+            assert!((-1.0..=1.0).contains(&value), "{kind:?} at {at}: {value}");
+        }
     }
 }
 
@@ -2599,7 +2780,7 @@ fn pathless_output_expands_a_keyed_batch_into_per_key_writes() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
     let writes: Vec<_> = rt.writes.iter().collect();
     assert_eq!(writes.len(), 2);
@@ -2621,7 +2802,7 @@ fn pathless_output_writes_nothing_for_an_empty_batch() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("an empty batch is not an error");
     assert_eq!(rt.writes.iter().count(), 0);
 }
@@ -2646,7 +2827,7 @@ fn pathless_output_keeps_batch_order_for_a_repeated_key() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
     let writes: Vec<_> = rt.writes.iter().collect();
     assert_eq!(writes.len(), 2);
@@ -2672,7 +2853,7 @@ fn pathless_output_errors_on_a_malformed_record() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let err = evaluate_all(&mut rt, &graph).expect_err("a malformed record is an error");
     assert!(err.contains("sink"), "error names the node: {err}");
     assert!(err.contains("missing"), "error names the gap: {err}");
@@ -2690,7 +2871,7 @@ fn pathless_output_errors_on_a_non_batch_value() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     let err = evaluate_all(&mut rt, &graph).expect_err("a scalar is not a record batch");
     assert!(err.contains("record batch"), "error names the shape: {err}");
 }
@@ -2722,10 +2903,212 @@ fn output_path_takes_precedence_over_key_fields() {
     }
     .with_cache();
 
-    let mut rt = GraphRuntime::default();
+    let mut rt = TreeRuntime::default();
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
     let writes: Vec<_> = rt.writes.iter().collect();
     assert_eq!(writes.len(), 1, "an explicit path writes the value whole");
     assert_eq!(writes[0].path.to_string(), "whole/batch");
     assert_eq!(writes[0].value, batch);
+}
+
+// --- numbers in structures of any type ---------------------------------------
+
+/// A structure no node names: three fields, declared out of id order, of
+/// their own float types.
+fn foreign_structure(a: f64, b: f64, c: f32) -> Value {
+    use vizij_api_core::value::{Structure, StructureField};
+    let field = |id: u128, value: Value| StructureField {
+        id: Uuid::from_u128(id),
+        value: Box::new(value),
+    };
+    Value::Structure(Structure {
+        id: Uuid::from_u128(0xF0),
+        fields: vec![
+            field(0xF3, Value::F64(a)),
+            field(0xF1, Value::F64(b)),
+            field(0xF2, Value::F32(c)),
+        ],
+    })
+}
+
+/// What a node of `kind` reading the constants `inputs` on its ports outputs.
+fn output_of(kind: NodeType, inputs: Vec<(&str, Value)>) -> Value {
+    let mut nodes: Vec<NodeSpec> = inputs
+        .iter()
+        .map(|(port, value)| constant_node(port, value.clone()))
+        .collect();
+    nodes.push(NodeSpec {
+        id: "n".to_string(),
+        kind,
+        params: NodeParams::default(),
+        output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
+    });
+    let edges = inputs
+        .iter()
+        .map(|(port, _)| link(port, "n", port))
+        .collect();
+    let spec = graph_spec!({ nodes, edges, });
+
+    let mut rt = TreeRuntime::default();
+    evaluate_all(&mut rt, &spec).expect("the graph should evaluate");
+    rt.outputs
+        .get("n")
+        .and_then(|outputs| outputs.get("out"))
+        .map(|port| port.value.clone())
+        .expect("the node should output")
+}
+
+fn sum_of(lhs: Value, rhs: Value) -> Value {
+    output_of(NodeType::Add, vec![("operand_1", lhs), ("operand_2", rhs)])
+}
+
+#[test]
+fn arithmetic_on_any_structure_keeps_its_form_and_field_types() {
+    // A scalar broadcasts.
+    assert_eq!(
+        sum_of(foreign_structure(1.5, 2.0, 3.0), Value::F32(0.5)),
+        foreign_structure(2.0, 2.5, 3.5)
+    );
+    assert_eq!(
+        sum_of(
+            foreign_structure(1.0, 2.0, 3.0),
+            foreign_structure(0.25, 0.5, -1.0)
+        ),
+        foreign_structure(1.25, 2.5, 2.0)
+    );
+}
+
+#[test]
+fn a_transform_adds_component_by_component() {
+    let transform = |offset: f32| {
+        vocab::transform(vocab::Transform {
+            translation: [1.0 + offset, 2.0, 3.0],
+            rotation: [0.0, 0.0, offset, 1.0],
+            scale: [1.0, 1.0, 1.0 + offset],
+        })
+    };
+    let sum = vocab::as_transform(&sum_of(transform(0.0), transform(0.5)))
+        .expect("the sum should be a transform");
+    assert_eq!(sum.translation, [2.5, 4.0, 6.0]);
+    assert_eq!(sum.rotation, [0.0, 0.0, 0.5, 2.0]);
+    assert_eq!(sum.scale, [2.0, 2.0, 2.5]);
+}
+
+#[test]
+fn structures_combine_only_with_their_own_form() {
+    // A vec4 and a quaternion each hold four numbers, and do not combine.
+    let mixed = sum_of(
+        vocab::vec4([1.0, 2.0, 3.0, 4.0]),
+        vocab::quat([0.0, 0.0, 0.0, 1.0]),
+    );
+    let mixed = vocab::as_vec4(&mixed).unwrap_or_else(|| panic!("expected vec4, got {mixed:?}"));
+    assert!(mixed.iter().all(|x| x.is_nan()), "{mixed:?}");
+
+    // Three numbers each, of two structures: the left one's form, NaN-filled.
+    let Value::Structure(mixed) = sum_of(
+        foreign_structure(1.0, 2.0, 3.0),
+        vocab::vec3([1.0, 2.0, 3.0]),
+    ) else {
+        panic!("expected a structure");
+    };
+    assert_eq!(mixed.id, Uuid::from_u128(0xF0));
+    assert!(matches!(*mixed.fields[0].value, Value::F64(x) if x.is_nan()));
+    assert!(matches!(*mixed.fields[1].value, Value::F64(x) if x.is_nan()));
+    assert!(matches!(*mixed.fields[2].value, Value::F32(x) if x.is_nan()));
+}
+
+#[test]
+fn a_structure_reads_its_fields_in_declaration_order() {
+    for (index, expected) in [(0.0, 7.0), (1.0, 8.0), (2.0, 9.0)] {
+        let read = output_of(
+            NodeType::VectorIndex,
+            vec![
+                ("v", foreign_structure(7.0, 8.0, 9.0)),
+                ("index", Value::F32(index)),
+            ],
+        );
+        assert_eq!(read, Value::F32(expected), "index {index}");
+    }
+}
+
+#[test]
+fn a_structure_holding_more_than_floats_has_no_numeric_form() {
+    use vizij_api_core::value::{Structure, StructureField};
+    // A text field, and an integer field: a node's intermediate results would
+    // round it at every step.
+    for other in [Value::String("label".to_string()), Value::I32(5)] {
+        let mixed = Value::Structure(Structure {
+            id: Uuid::from_u128(0xF4),
+            fields: vec![
+                StructureField {
+                    id: Uuid::from_u128(0xF5),
+                    value: Box::new(Value::F32(1.0)),
+                },
+                StructureField {
+                    id: Uuid::from_u128(0xF6),
+                    value: Box::new(other.clone()),
+                },
+            ],
+        });
+        let sum = sum_of(mixed, Value::F32(1.0));
+        assert!(
+            matches!(sum, Value::F32(x) if x.is_nan()),
+            "{other:?}: {sum:?}"
+        );
+    }
+}
+
+#[test]
+fn a_slew_on_a_structure_keeps_its_progress_between_steps() {
+    use vizij_api_core::value::{Structure, StructureField};
+    let at = |x: f64| {
+        Value::Structure(Structure {
+            id: Uuid::from_u128(0xF7),
+            fields: vec![StructureField {
+                id: Uuid::from_u128(0xF8),
+                value: Box::new(Value::F64(x)),
+            }],
+        })
+    };
+    let slew = NodeSpec {
+        id: "slew".to_string(),
+        kind: NodeType::Slew,
+        params: NodeParams {
+            max_rate: Some(1.0),
+            ..Default::default()
+        },
+        output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
+    };
+    let mut spec = GraphSpec {
+        nodes: vec![constant_node("target", at(0.0)), slew],
+        edges: vec![link("target", "slew", "in")],
+        ..Default::default()
+    }
+    .with_cache();
+
+    let mut rt = TreeRuntime::default();
+    evaluate_all(&mut rt, &spec).expect("initial evaluate");
+    spec.nodes[0].params.value = Some(at(1.0));
+    rt.dt = 1.0 / 60.0;
+    for _ in 0..30 {
+        rt.t += rt.dt;
+        evaluate_all(&mut rt, &spec).expect("slew step");
+    }
+
+    let out = rt
+        .outputs
+        .get("slew")
+        .and_then(|outputs| outputs.get("out"))
+        .map(|port| port.value.clone())
+        .expect("slew output");
+    let Value::Structure(out) = out else {
+        panic!("expected a structure, got {out:?}");
+    };
+    // Thirty steps of a sixtieth of a second at one unit a second.
+    assert!(
+        matches!(*out.fields[0].value, Value::F64(x) if (x - 0.5).abs() < 1e-5),
+        "{out:?}"
+    );
 }

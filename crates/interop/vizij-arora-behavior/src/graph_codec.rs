@@ -427,9 +427,9 @@ fn structural_order(graph: &Graph) -> Vec<&Node> {
 
 /// Decode an Arora shared [`Graph`] produced by [`encode`] back into a
 /// [`GraphSpec`], its nodes in the order the graph's structure gives
-/// ([`structural_order`]). That order is the evaluation's: the plan runs a
-/// node after every node it reads from, and otherwise in listed order, so of
-/// two writers of one path the later-listed wins.
+/// ([`structural_order`]). That order is the evaluation's: a node runs
+/// after every node it reads from, and of two writers of one path the
+/// later-listed wins.
 pub fn decode(graph: &Graph) -> Result<GraphSpec, String> {
     let name = |id: &Uuid| -> Result<String, String> {
         graph
