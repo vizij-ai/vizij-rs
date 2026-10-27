@@ -580,7 +580,7 @@ dependencies = [
 [[package]]
 name = "arora-graphics-types"
 version = "1.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=claude%2Fexciting-bell-zuvea5#bd325a14cb15112c1d201c440536c43767128676"
+source = "git+https://github.com/semio-ai/arora-sdk?rev=275bc7107157f79e73a1852f273cba2fda068339#275bc7107157f79e73a1852f273cba2fda068339"
 dependencies = [
  "arora-geometry",
  "arora-types",
