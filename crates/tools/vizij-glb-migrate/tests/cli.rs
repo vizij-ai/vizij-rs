@@ -120,7 +120,7 @@ fn assert_migrated(bytes: &[u8]) {
     )
     .expect("tint default is a canonical Value");
     assert_eq!(
-        vizij_api_core::value::as_color_rgba(&tint),
+        arora_graphics_types::as_color_rgba(&tint),
         Some([0.25, 0.5, 0.75, 1.0])
     );
     assert_eq!(

@@ -228,8 +228,9 @@ fn normalize_value_payload(payload: &mut Json, context: &str, report: &mut Repor
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arora_graphics_types::as_color_rgba;
     use serde_json::json;
-    use vizij_api_core::value::{as_color_rgba, as_vec3, VEC3_TYPE};
+    use vizij_api_core::value::{as_vec3, VEC3_TYPE};
     use vizij_api_core::Value;
 
     fn sample_gltf() -> Json {

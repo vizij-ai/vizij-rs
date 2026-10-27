@@ -48,3 +48,12 @@ inherits = "release"
 lto = false
 codegen-units = 16
 debug = "line-tables-only"
+
+# arora-graphics-types until its first release on crates.io; its own
+# dependencies resolve to the published crates, so each has one copy.
+[patch.crates-io]
+arora-graphics-types = { git = "https://github.com/semio-ai/arora-sdk", branch = "claude/exciting-bell-zuvea5" }
+
+[patch."https://github.com/semio-ai/arora-sdk"]
+arora-geometry = "1"
+arora-types = "3.10"

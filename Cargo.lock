@@ -578,6 +578,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "arora-graphics-types"
+version = "1.0.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=claude%2Fexciting-bell-zuvea5#bd325a14cb15112c1d201c440536c43767128676"
+dependencies = [
+ "arora-geometry",
+ "arora-types",
+ "uuid",
+]
+
+[[package]]
 name = "arora-hal"
 version = "4.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10575,6 +10585,7 @@ dependencies = [
  "arora-behavior-tree-types",
  "arora-bridge",
  "arora-bridge-ros2",
+ "arora-graphics-types",
  "arora-hal",
  "arora-module",
  "arora-msgs-ros2",
@@ -10631,9 +10642,10 @@ dependencies = [
 
 [[package]]
 name = "vizij-api-core"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "arora-geometry",
+ "arora-graphics-types",
  "arora-types",
  "hashbrown 0.17.1",
  "serde",
@@ -10657,6 +10669,7 @@ dependencies = [
 name = "vizij-arora"
 version = "0.0.0"
 dependencies = [
+ "arora-graphics-types",
  "arora-types",
  "serde_json",
  "vizij-api-core",
@@ -10761,6 +10774,7 @@ dependencies = [
 name = "vizij-glb-migrate"
 version = "0.1.1"
 dependencies = [
+ "arora-graphics-types",
  "serde_json",
  "thiserror 2.0.20",
  "vizij-api-core",
@@ -10768,12 +10782,13 @@ dependencies = [
 
 [[package]]
 name = "vizij-graph-core"
-version = "4.0.0"
+version = "4.0.1"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree",
  "arora-dataflow-nodes",
  "arora-geometry",
+ "arora-graphics-types",
  "arora-simple-data-store",
  "arora-types",
  "criterion",
