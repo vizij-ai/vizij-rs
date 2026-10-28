@@ -580,7 +580,8 @@ dependencies = [
 [[package]]
 name = "arora-graphics-types"
 version = "1.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk?rev=275bc7107157f79e73a1852f273cba2fda068339#275bc7107157f79e73a1852f273cba2fda068339"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c49e2cd425bfd10ab114a672716232c377bb599fdcc206f5c1500fa769a72f0e"
 dependencies = [
  "arora-geometry",
  "arora-types",
