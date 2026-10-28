@@ -40,6 +40,7 @@ use arora_bridge::{AccessDecision, DeviceInfo};
 use bevy::camera::visibility::RenderLayers;
 use bevy::camera::CameraOutputMode;
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
+use bevy::diagnostic::FrameCount;
 use bevy::input::keyboard::{Key, KeyboardInput};
 use bevy::prelude::*;
 use bevy::render::render_resource::BlendState;
@@ -103,7 +104,7 @@ impl Plugin for SettingsPlugin {
                 face: None,
                 app_background: None,
                 form: Form::default(),
-                press: None,
+                taps: Taps::default(),
             })
             .add_systems(Startup, spawn_camera)
             .add_systems(Update, (follow_face, back))
@@ -116,7 +117,9 @@ impl Plugin for SettingsPlugin {
 const PANE_ORDER: isize = 1_000;
 
 /// How long a press may last and how far it may move, in logical pixels,
-/// to be a tap.
+/// to be a tap. A press released by the next frame is a tap however long
+/// that frame took: frames are a press's only clock, and a slow one would
+/// otherwise turn every tap into a long press.
 const TAP_SECS: f32 = 0.4;
 const TAP_SLOP: f32 = 16.0;
 
@@ -151,7 +154,7 @@ struct Pane {
     /// The background of a face with none kept: the app's, as it launched.
     app_background: Option<Color>,
     form: Form,
-    press: Option<Press>,
+    taps: Taps,
 }
 
 /// The form a device not associated with Studio associates from.
@@ -196,12 +199,54 @@ impl Form {
     }
 }
 
-/// A press in progress: where and when it began, and whether it began on
-/// the pane.
+/// A press in progress: where, when and in which frame it began, and
+/// whether it began on the pane.
 struct Press {
     at: Vec2,
     since: f32,
+    frame: u32,
     on_pane: bool,
+}
+
+/// The press in progress, and the taps that end one.
+#[derive(Default)]
+struct Taps {
+    press: Option<Press>,
+}
+
+impl Taps {
+    /// One frame's press and release (a press with whether it began on the
+    /// pane), at time `now` in frame `frame`: whether a tap off the pane
+    /// ended in it. A press and its release can both come in one frame, as
+    /// a tap shorter than the frame does: that is a tap too.
+    fn step(
+        &mut self,
+        pressed: Option<(Vec2, bool)>,
+        released: Option<Vec2>,
+        now: f32,
+        frame: u32,
+    ) -> bool {
+        let earlier = self.press.take();
+        let begun = pressed.map(|(at, on_pane)| Press {
+            at,
+            since: now,
+            frame,
+            on_pane,
+        });
+        let (ended, pending) = match (released, earlier, begun) {
+            // A release ends the earlier press; a press begun with it waits.
+            (Some(up), Some(earlier), begun) => (Some((earlier, up)), begun),
+            // Pressed and released between two frames.
+            (Some(up), None, Some(begun)) => (Some((begun, up)), None),
+            (Some(_), None, None) => (None, None),
+            (None, earlier, begun) => (None, begun.or(earlier)),
+        };
+        self.press = pending;
+        ended.is_some_and(|(press, up)| {
+            let quick = now - press.since <= TAP_SECS || frame.wrapping_sub(press.frame) <= 1;
+            quick && up.distance(press.at) <= TAP_SLOP && !press.on_pane
+        })
+    }
 }
 
 fn spawn_camera(mut commands: Commands) {
@@ -317,6 +362,7 @@ fn draw(
     mouse: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     time: Res<Time>,
+    frames: Res<FrameCount>,
     mut open_face: MessageWriter<OpenFace>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?.clone();
@@ -331,6 +377,7 @@ fn draw(
         &mouse,
         cursor,
         time.elapsed_secs(),
+        frames.0,
     );
     if pane.open {
         draw_pane(&ctx, &mut pane, &mut options, &safe, &mut open_face);
@@ -353,6 +400,7 @@ fn tap(
     mouse: &ButtonInput<MouseButton>,
     cursor: Option<Vec2>,
     now: f32,
+    frame: u32,
 ) {
     let pressed = touches
         .iter_just_pressed()
@@ -363,15 +411,13 @@ fn tap(
                 .just_pressed(MouseButton::Left)
                 .then_some(cursor)
                 .flatten()
+        })
+        .map(|at| {
+            (
+                at,
+                ctx.is_pointer_over_egui() || ctx.egui_wants_pointer_input(),
+            )
         });
-    if let Some(at) = pressed {
-        pane.press = Some(Press {
-            at,
-            since: now,
-            on_pane: ctx.is_pointer_over_egui() || ctx.egui_wants_pointer_input(),
-        });
-        return;
-    }
     let released = touches
         .iter_just_released()
         .next()
@@ -382,11 +428,8 @@ fn tap(
                 .then_some(cursor)
                 .flatten()
         });
-    if let (Some(at), Some(press)) = (released, pane.press.take()) {
-        let tapped = now - press.since <= TAP_SECS && at.distance(press.at) <= TAP_SLOP;
-        if tapped && !press.on_pane && !pane.open {
-            pane.controls = !pane.controls;
-        }
+    if pane.taps.step(pressed, released, now, frame) && !pane.open {
+        pane.controls = !pane.controls;
     }
 }
 
@@ -769,5 +812,53 @@ mod tests {
             ..Form::default()
         };
         assert_eq!(form.owners(), ["uid-1", "uid-2"]);
+    }
+
+    const HERE: Vec2 = Vec2::new(160.0, 320.0);
+
+    /// A tap shorter than a frame, its press and release in one frame, is a
+    /// tap, and leaves no press pending.
+    #[test]
+    fn a_press_and_its_release_in_one_frame_are_a_tap() {
+        let mut taps = Taps::default();
+        assert!(taps.step(Some((HERE, false)), Some(HERE), 1.0, 10));
+        assert!(taps.press.is_none());
+        assert!(!taps.step(None, Some(HERE), 1.1, 11));
+    }
+
+    /// A press released in the next frame is a tap, however long that frame
+    /// took; one held across more frames and past `TAP_SECS` is not.
+    #[test]
+    fn a_press_released_by_the_next_frame_is_a_tap_however_slow_the_frame() {
+        let mut taps = Taps::default();
+        assert!(!taps.step(Some((HERE, false)), None, 1.0, 10));
+        assert!(taps.step(None, Some(HERE), 1.9, 11));
+
+        assert!(!taps.step(Some((HERE, false)), None, 2.0, 20));
+        assert!(taps.step(None, Some(HERE), 2.3, 25));
+
+        assert!(!taps.step(Some((HERE, false)), None, 3.0, 30));
+        assert!(!taps.step(None, Some(HERE), 3.5, 32));
+    }
+
+    /// A press that moves past `TAP_SLOP`, or that began on the pane, is no
+    /// tap.
+    #[test]
+    fn a_drag_or_a_press_on_the_pane_is_no_tap() {
+        let mut taps = Taps::default();
+        let away = HERE + Vec2::new(TAP_SLOP + 1.0, 0.0);
+        assert!(!taps.step(Some((HERE, false)), Some(away), 1.0, 10));
+        assert!(!taps.step(Some((HERE, true)), Some(HERE), 2.0, 20));
+    }
+
+    /// A release ends the press before it, and a press begun in the same
+    /// frame waits for its own release.
+    #[test]
+    fn a_release_ends_the_earlier_press_and_a_new_one_waits() {
+        let mut taps = Taps::default();
+        assert!(!taps.step(Some((HERE, false)), None, 1.0, 10));
+        assert!(taps.step(Some((HERE, false)), Some(HERE), 1.1, 11));
+        assert!(taps.press.is_some());
+        assert!(taps.step(None, Some(HERE), 1.2, 12));
     }
 }

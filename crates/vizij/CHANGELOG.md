@@ -102,6 +102,12 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   superlinear in the record's size. A form the normalizer does not recognize
   still reaches Arora as given, for Arora to report. `moduleAnimation`
   serializes its answer without such a tree either.
+- A tap on the face shows or hides the Settings button whatever the frame
+  rate. A tap whose press and release came in one frame was dropped, and
+  one whose frame took longer than 0.4 s was taken for a long press, so on
+  a slow device (and on the emulator, with Toasty) a tap could do nothing.
+  A press released by the next frame is now a tap, as is one released
+  within 0.4 s.
 
 ## [1.0.0] - 2026-10-24
 
