@@ -7,7 +7,8 @@
 //! - **Type ids** for vizij's composites, which have no Arora primitive and
 //!   map to `Value::Structure` with stable type/field ids. The geometry types
 //!   (`vec2`/`vec3`/`vec4`/`quat`/`transform`) are Arora's own, declared by
-//!   `arora-geometry` and re-exported here; `color-rgba` is declared here.
+//!   `arora-geometry`, and `color-rgba` is `arora-graphics-types`'s; both
+//!   are re-exported here.
 //!   The ids are UUIDs namespaced under the ASCII bytes of "vizij" so they
 //!   are self-identifying and collision-free. They are shared by module
 //!   codegen and Studio introspection.
@@ -27,7 +28,7 @@
 //! Arora's native `Value::Enumeration` with variant ids derived from the
 //! variant names via [`variant_id`].
 
-use arora_geometry::{float_structure, read_float_structure, Kind};
+use arora_geometry::Kind;
 use arora_types::gen_uuid_from_str;
 use arora_types::keyvalue::{KeyValue, KeyValueField};
 use uuid::Uuid;
@@ -37,6 +38,7 @@ pub use arora_geometry::{
     QUAT_FIELDS, QUAT_TYPE, TRANSFORM_ROTATION, TRANSFORM_SCALE, TRANSFORM_TRANSLATION,
     TRANSFORM_TYPE, VEC2_FIELDS, VEC2_TYPE, VEC3_FIELDS, VEC3_TYPE, VEC4_FIELDS, VEC4_TYPE,
 };
+pub use arora_graphics_types::{as_color_rgba, color_rgba, COLOR_RGBA_FIELDS, COLOR_RGBA_TYPE};
 pub use arora_types::value::{Enumeration, Structure, StructureField, StructureWithoutId, Value};
 
 // ---- declared type / field ids ------------------------------------------------
@@ -49,16 +51,6 @@ pub const VIZIJ_NS: u128 = arora_geometry::NAMESPACE;
 const fn id(offset: u128) -> Uuid {
     Uuid::from_u128(VIZIJ_NS | offset)
 }
-
-/// Type id of the `color-rgba` structure (linear by convention).
-pub const COLOR_RGBA_TYPE: Uuid = id(0x0020);
-/// Field ids of the `color-rgba` structure, in `[r, g, b, a]` order.
-pub const COLOR_RGBA_FIELDS: [Uuid; 4] = [
-    id(0x0020_0001),
-    id(0x0020_0002),
-    id(0x0020_0003),
-    id(0x0020_0004),
-];
 
 /// Enumeration type id for vizij enums whose variant set is open
 /// (variants identified by [`variant_id`] of their name).
@@ -162,11 +154,6 @@ pub fn vector(xs: Vec<f32>) -> Value {
     Value::ArrayF32(xs)
 }
 
-/// RGBA color structure (linear by convention).
-pub fn color_rgba(a: [f32; 4]) -> Value {
-    float_structure(COLOR_RGBA_TYPE, &COLOR_RGBA_FIELDS, &a)
-}
-
 /// String-keyed record. Field ids derive deterministically from the key names.
 pub fn record<'a>(entries: impl IntoIterator<Item = (&'a str, Value)>) -> Value {
     let mut kv = KeyValue::new_with_id(RECORD_TYPE);
@@ -246,11 +233,6 @@ pub fn as_vector(value: &Value) -> Option<&[f32]> {
         Value::ArrayF32(xs) => Some(xs),
         _ => None,
     }
-}
-
-/// Read a `color-rgba` structure (`[r, g, b, a]`).
-pub fn as_color_rgba(value: &Value) -> Option<[f32; 4]> {
-    read_float_structure(value, COLOR_RGBA_TYPE, &COLOR_RGBA_FIELDS)
 }
 
 /// Read a record as `(name, value)` pairs, sorted by name for determinism

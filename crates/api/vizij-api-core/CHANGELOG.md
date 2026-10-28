@@ -4,6 +4,14 @@ All notable changes to `vizij-api-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [3.0.1] - Unreleased
+
+### Changed
+
+- `color-rgba` (`COLOR_RGBA_TYPE`, `COLOR_RGBA_FIELDS`, `color_rgba`,
+  `as_color_rgba`) is `arora-graphics-types`'s, and `value` re-exports it.
+  Its ids and JSON forms do not change.
+
 ## [3.0.0] - Unreleased
 
 ### Changed

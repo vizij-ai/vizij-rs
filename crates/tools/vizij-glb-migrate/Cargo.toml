@@ -12,3 +12,6 @@ vizij-api-core = { version = "3", path = "../../api/vizij-api-core" }
 # migrated files diff cleanly against their sources.
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 thiserror = "2"
+
+[dev-dependencies]
+arora-graphics-types = "1"

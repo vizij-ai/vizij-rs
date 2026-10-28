@@ -48,6 +48,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 
+use arora_graphics_types::as_color_rgba;
 use bevy::asset::io::memory::{Dir, MemoryAssetReader};
 use bevy::asset::io::AssetSourceBuilder;
 use bevy::asset::AssetApp;
@@ -62,7 +63,7 @@ use bevy::math::Vec3A;
 use bevy::mesh::morph::MorphWeights;
 use bevy::prelude::*;
 use bevy::render::render_resource::BlendState;
-use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
+use vizij_api_core::value::{as_bool, as_float, as_vec3, as_vector};
 use vizij_api_core::Value;
 
 use hold::{HoldTarget, Holds};

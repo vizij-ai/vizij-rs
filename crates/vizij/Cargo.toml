@@ -148,6 +148,8 @@ arora-module = "2.1"
 # The target-key grammar (`set_targets`) the Studio-key profile reads targets
 # by; the HAL seam a headless test writes a face's pose through.
 arora-hal = "4.2"
+# The face colours a view reads (`as_color_rgba`).
+arora-graphics-types = "1"
 vizij-api-core = { version = "3", path = "../api/vizij-api-core" }
 vizij-graph-core = { version = "4", path = "../node-graph/vizij-graph-core" }
 vizij-arora = { path = "../interop/vizij-arora" }

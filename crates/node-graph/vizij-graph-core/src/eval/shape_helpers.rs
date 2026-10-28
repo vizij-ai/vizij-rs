@@ -168,7 +168,7 @@ pub fn null_of_shape_numeric(shape: &ShapeId) -> Value {
         ShapeId::Vec3 => vocab::vec3([f32::NAN; 3]),
         ShapeId::Vec4 => vocab::vec4([f32::NAN; 4]),
         ShapeId::Quat => vocab::quat([f32::NAN; 4]),
-        ShapeId::ColorRgba => vocab::color_rgba([f32::NAN; 4]),
+        ShapeId::ColorRgba => arora_graphics_types::color_rgba([f32::NAN; 4]),
         ShapeId::Transform => vocab::transform(vocab::Transform {
             translation: [f32::NAN; 3],
             rotation: [f32::NAN; 4],
@@ -231,7 +231,9 @@ fn build_numeric_value(shape: &ShapeId, scalars: &[f32], offset: &mut usize) -> 
         ShapeId::Vec3 => take_components::<3>(scalars, offset).map(vocab::vec3),
         ShapeId::Vec4 => take_components::<4>(scalars, offset).map(vocab::vec4),
         ShapeId::Quat => take_components::<4>(scalars, offset).map(vocab::quat),
-        ShapeId::ColorRgba => take_components::<4>(scalars, offset).map(vocab::color_rgba),
+        ShapeId::ColorRgba => {
+            take_components::<4>(scalars, offset).map(arora_graphics_types::color_rgba)
+        }
         ShapeId::Transform => {
             let translation = take_components::<3>(scalars, offset)?;
             let rotation = take_components::<4>(scalars, offset)?;

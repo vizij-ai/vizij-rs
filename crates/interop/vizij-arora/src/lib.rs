@@ -76,9 +76,9 @@ pub fn decode_shape_meta(value: &Value) -> Option<HashMap<String, String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arora_graphics_types::color_rgba;
     use vizij_api_core::value::{
-        array, bool_, color_rgba, enumeration, float, quat, record, text, transform, vec2, vec3,
-        vec4, vector,
+        array, bool_, enumeration, float, quat, record, text, transform, vec2, vec3, vec4, vector,
     };
     use vizij_api_core::{ShapeId, Transform};
 
