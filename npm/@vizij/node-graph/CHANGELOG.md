@@ -1,5 +1,11 @@
 # @vizij/node-graph
 
+## 0.13.0
+
+### Minor Changes
+
+- 61d41d6: A graph runs on arora-behavior-tree. `WasmGraph` imports its spec as a behavior tree whose nodes call the node functions, and `evalAll` still evaluates every node and reports every port, each computing what it did. A node calls its function again only when its inputs, its parameters or the clock it reads changed. `setParam` sets a parameter's value in place. An edit that changes a node's ports (a split's sizes, a record's keys), an input's or output's path, or a parameter the node did not set, loads the whole graph again, as `loadGraph` does, and every node keeps its state. Measured natively, a frame of a graph whose inputs hold costs 1.6 to 5 times less. A frame where every input moves costs up to 1.5 times more below a few thousand nodes, and 2 to 2.6 times less at 19,000. Loading a graph costs 2 to 10 times more.
+
 ## 0.12.2
 
 ### Patch Changes
