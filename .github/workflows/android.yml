@@ -64,7 +64,7 @@ jobs:
       # half the crate's default features bring.
       - name: Build libvizij.so (${{ matrix.abi }}, release)
         run: |
-          cargo ndk -t ${{ matrix.abi }} -P 24 -o crates/vizij/android/app/src/main/jniLibs \
+          cargo ndk -t ${{ matrix.abi }} -P 26 -o crates/vizij/android/app/src/main/jniLibs \
             build -p vizij --lib --release --no-default-features --features captions,studio,settings
           ls -l crates/vizij/android/app/src/main/jniLibs/${{ matrix.abi }}
       - uses: actions/upload-artifact@v4

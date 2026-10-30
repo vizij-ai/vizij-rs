@@ -24,7 +24,8 @@ android {
 
     defaultConfig {
         applicationId 'ai.vizij.app'
-        minSdk 24
+        // AAudio, which speech plays through (cpal), starts at API 26.
+        minSdk 26
         targetSdk 34
         versionCode crateVersion.code
         versionName crateVersion.name
