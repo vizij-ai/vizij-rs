@@ -22,10 +22,10 @@
 #     once the back gesture closes the pane, the app still in front, and
 #     again after the app is stopped and launched again. The buttons are
 #     found on the screenshots by their colours (scripts/frames.py find);
-#   - the pane, opened again and dragged from a swatch, scrolls to its
-#     device form, which runs past the end of a phone's screen, and stays
-#     over the face. The form is never sent: the app, which keeps no
-#     identity, registers nothing with Studio;
+#   - the pane, opened again and dragged from a swatch to its Device
+#     section at its end, stays over the face. Enroll is never pressed: the
+#     app, holding no Studio credential, contacts nobody, and its log shows
+#     no enrollment under way;
 #   - the app is alive and in front at the end;
 #   - with a second face given, opened through a VIEW intent (a content://
 #     URI of the file pushed to Downloads, as a file manager sends), it
@@ -38,7 +38,7 @@
 # (face-a.png, face-b.png), with a second face opened.png and
 # relaunched.png, logcat.txt (the app's own lines in logcat-app.txt),
 # meminfo.txt, say.txt and checks.txt; the pane's controls.png, pane.png,
-# background.png, background-relaunched.png and device-form.png.
+# background.png, background-relaunched.png and device.png.
 #
 # The emulator-runner action runs its `script` line by line, so the whole
 # smoke lives here.
@@ -206,9 +206,9 @@ if [ -n "$shown" ]; then
       measure png "$OUT/kept.raw" "$OUT/background-relaunched.png"
       { in_front && measure background "$OUT/kept.raw" "$SWATCH"; } \
         || fail "the background picked in the pane does not come back after a relaunch"
-      # The device form, at the end of the pane. The drag starts on the
+      # The Device section, at the end of the pane. The drag starts on the
       # swatch picked, a button, where no text takes it, and is slow enough
-      # not to fling. Nothing is typed and nothing is pressed in the form.
+      # not to fling. Nothing is pressed in the section.
       adb shell input tap $((width / 2)) $((height / 2))
       sleep 2
       frame controls-again
@@ -227,16 +227,13 @@ if [ -n "$shown" ]; then
           [ "$to" -ge 5 ] || to=5
           adb shell input swipe "$x" "$y" "$x" "$to" 1000
           sleep 2
-          frame device-form
-          measure png "$OUT/device-form.raw" "$OUT/device-form.png"
-          in_front || fail "the pane's device form left the app"
-          # The form runs past the screen's end: the drag scrolls the pane
-          # to it, and the pane stays over the face, which the background
-          # picked does not fill.
-          measure moved "$OUT/pane-again.raw" "$OUT/device-form.raw" \
-            || fail "the pane does not scroll to its device form"
-          if measure background "$OUT/device-form.raw" "$SWATCH"; then
-            fail "the pane does not stay open on its device form"
+          frame device
+          measure png "$OUT/device.raw" "$OUT/device.png"
+          in_front || fail "the pane's Device section left the app"
+          # The pane stays over the face, which the background picked does
+          # not fill.
+          if measure background "$OUT/device.raw" "$SWATCH"; then
+            fail "the pane does not stay open on its Device section"
           fi
           adb shell input keyevent KEYCODE_BACK
           sleep 2
@@ -266,6 +263,9 @@ if [ ! -s "$OUT/logcat-app.txt" ]; then fail "no log from the app (uid ${uid:-un
 if grep -qE "Caught" "$OUT/logcat-app.txt"; then fail "the app's log has a Caught line"; fi
 if grep -qE "panicked at|Encountered a panic" "$OUT/logcat-app.txt"; then fail "the app panicked"; fi
 if grep -qE "Fatal signal|FATAL EXCEPTION|UnsatisfiedLinkError" "$OUT/logcat-app.txt"; then fail "the app crashed"; fi
+# The device client logs an enrollment once the pane's Enroll accepts it,
+# which nothing presses here.
+if grep -qE "enrolling the device as" "$OUT/logcat-app.txt"; then fail "the app enrolled the device unasked"; fi
 
 {
   echo "face shown after: ${shown:-never} s"
@@ -277,4 +277,4 @@ if [ "${#failures[@]}" -gt 0 ]; then
   echo "smoke failed: ${failures[*]}"
   exit 1
 fi
-echo "smoke passed: the face draws, animates and speaks; the settings pane opens, closes, keeps the background and shows the device form"
+echo "smoke passed: the face draws, animates and speaks; the settings pane opens, closes, keeps the background and shows the Device section"
