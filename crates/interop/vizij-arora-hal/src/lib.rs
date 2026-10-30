@@ -22,19 +22,73 @@
 //! fresher written to the store in between — so their echo lives on
 //! [`pose_updates`](RigHal::pose_updates), the renderer-side feed, instead.
 //!
+//! A host that publishes the rendered frame offers its rate as the key
+//! [`FRAME_RATE`] ([`offer_frame_rate`](RigHal::offer_frame_rate)): an input
+//! the rig describes ([`Hal::describe_keys`]), so a remote client turns the
+//! frames on, off, or to another rate by writing it, and the renderer reads
+//! the rate the rig holds ([`frame_rate`](RigHal::frame_rate)) to know how often
+//! to publish. The rate is device configuration rather than a pose: it never
+//! reaches [`pose`](RigHal::pose), and the rig reports it on the reading feed —
+//! the rate it starts at, and the rate it holds after a write that asked for
+//! another (outside `[0, MAX_FRAME_RATE]`, or not a number) — so the store,
+//! and every client, reads the rate frames actually publish at.
+//!
 //! Modelled on `arora-hal`'s `FakeHal`: cheaply cloneable, clones share state,
 //! writes apply synchronously (so [`try_send`](arora_hal::Hal::try_send) needs
 //! no internal task), and the pose feed is an owned stream per subscriber.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use arora_hal::{
-    content_hash, ComponentModel, Hal, HalAssets, HalDescription, HalResult, UpdatesStream, DEVICE,
+    content_hash, ComponentModel, Hal, HalAssets, HalDescription, HalResult, KeyDescriptions,
+    UpdatesStream, DEVICE,
 };
-use arora_types::data::{Key, State, StateChange};
+use arora_types::data::{Key, KeyMeta, State, StateChange};
+use arora_types::value::Type;
 use async_trait::async_trait;
 use futures_channel::mpsc::UnboundedSender;
+use vizij_api_core::value::as_float;
 use vizij_api_core::{TypedPath, Value};
+
+/// The rate the face's rendered frames publish at, in frames per second: an
+/// `F64` input of a rig whose host offers it
+/// ([`offer_frame_rate`](RigHal::offer_frame_rate)). At or below zero, no
+/// frame publishes.
+pub const FRAME_RATE: &str = "display/face/frame_rate";
+
+/// The highest rate frames publish at, in frames per second: a write above it
+/// holds at it. Each frame is read back from the GPU and encoded on the
+/// thread that renders the face, so the rate is held well under the render
+/// rate.
+pub const MAX_FRAME_RATE: f64 = 30.0;
+
+/// The rate the rig holds when asked for `asked`: a number within
+/// `[0, MAX_FRAME_RATE]` as asked, a higher one at [`MAX_FRAME_RATE`], and
+/// anything else — a negative number, NaN, no value, not a number — at zero.
+fn held_rate(asked: Option<&Value>) -> f64 {
+    let rate = match asked {
+        Some(Value::F64(rate)) => *rate,
+        Some(other) => as_float(other).map_or(0.0, f64::from),
+        None => 0.0,
+    };
+    if rate > 0.0 {
+        rate.min(MAX_FRAME_RATE)
+    } else {
+        0.0
+    }
+}
+
+/// What the rig says of [`FRAME_RATE`]: an `F64` input, in Hz, over
+/// `[0, MAX_FRAME_RATE]`.
+fn frame_rate_meta() -> KeyMeta {
+    KeyMeta::new()
+        .editable()
+        .of_type(Type::F64)
+        .range(0.0, MAX_FRAME_RATE)
+        .in_unit("Hz")
+        .described("The rate the face's rendered frames publish at; 0 publishes none.")
+}
 
 #[derive(Default)]
 struct Inner {
@@ -48,6 +102,8 @@ struct Inner {
     /// The runtime's sensor-reading feed — [`Hal::updates`], fed by
     /// [`RigHal::push_reading`] (e.g. the rendered frame).
     reading_subscribers: Vec<UnboundedSender<StateChange>>,
+    /// The rate frames publish at ([`FRAME_RATE`]), when the host offers it.
+    frame_rate: Option<f64>,
 }
 
 /// Fan a change out to a subscriber list, dropping any closed receiver.
@@ -86,6 +142,23 @@ impl RigHal {
     pub fn set_model_glb(&self, glb: Vec<u8>) {
         let hash = content_hash(&glb);
         self.inner.lock().unwrap().model = Some((glb, hash));
+    }
+
+    /// Offer the rendered frame's rate as the input [`FRAME_RATE`], starting at
+    /// `rate_hz` (held within `[0, MAX_FRAME_RATE]`): what a host that
+    /// publishes the face's frames calls, before the device is built, since
+    /// the rig describes its keys and reports the rate to whoever subscribes
+    /// then. A rig whose host never offers it has no such key.
+    pub fn offer_frame_rate(&self, rate_hz: f64) {
+        self.inner.lock().unwrap().frame_rate = Some(held_rate(Some(&Value::F64(rate_hz))));
+    }
+
+    /// The rate the face's frames publish at, in frames per second: the last
+    /// one written to [`FRAME_RATE`], as the rig holds it, else the one it was
+    /// offered at; zero when not offered. What a renderer publishing frames
+    /// reads each frame.
+    pub fn frame_rate(&self) -> f64 {
+        self.inner.lock().unwrap().frame_rate.unwrap_or(0.0)
     }
 
     /// A feed of applied actuation changes, for a Vizij renderer that wants
@@ -138,14 +211,35 @@ impl RigHal {
 
     /// Apply a write synchronously: store it and echo it to subscribers.
     /// Shared by [`Hal::write`] and [`Hal::try_send`] — the rig is in-memory,
-    /// so applying never blocks.
+    /// so applying never blocks. A write to an offered [`FRAME_RATE`] sets
+    /// the rate instead, reported on the reading feed when the rate held is
+    /// not the value written.
     fn apply_write(&self, changes: &StateChange) {
         if changes.is_empty() {
             return;
         }
         let mut inner = self.inner.lock().unwrap();
-        inner.state.apply(changes.clone());
-        notify(&mut inner.subscribers, changes);
+        let rate_key = Key::from(FRAME_RATE);
+        let rate_written = changes.set.contains_key(&rate_key) || changes.unset.contains(&rate_key);
+        if inner.frame_rate.is_none() || !rate_written {
+            inner.state.apply(changes.clone());
+            notify(&mut inner.subscribers, changes);
+            return;
+        }
+        let written = changes.set.get(&rate_key).cloned().flatten();
+        let rate = held_rate(written.as_ref());
+        inner.frame_rate = Some(rate);
+        if written != Some(Value::F64(rate)) {
+            notify(
+                &mut inner.reading_subscribers,
+                &StateChange::set(FRAME_RATE, Value::F64(rate)),
+            );
+        }
+        let mut pose = changes.clone();
+        pose.set.remove(&rate_key);
+        pose.unset.remove(&rate_key);
+        inner.state.apply(pose.clone());
+        notify(&mut inner.subscribers, &pose);
     }
 
     /// Push a sensor reading into the runtime's [`Hal::updates`] feed — e.g. a
@@ -190,10 +284,28 @@ impl Hal for RigHal {
     /// call yields an independent, owned stream; a finished stream would mean the
     /// hardware is gone, so this one stays open, yielding nothing until the first
     /// reading. Actuation is echoed on [`pose_updates`](RigHal::pose_updates),
-    /// not here.
+    /// not here. When the host offers the frame rate, the stream opens on the
+    /// rate the rig holds, so the store holds it from the device's first step.
     fn updates(&self) -> UpdatesStream {
         let (tx, rx) = futures_channel::mpsc::unbounded();
-        self.inner.lock().unwrap().reading_subscribers.push(tx);
+        let mut inner = self.inner.lock().unwrap();
+        if let Some(rate) = inner.frame_rate {
+            // The receiver is held here, so the send cannot fail.
+            let _ = tx.unbounded_send(StateChange::set(FRAME_RATE, Value::F64(rate)));
+        }
+        inner.reading_subscribers.push(tx);
+        Box::pin(rx)
+    }
+
+    /// The rig's one input of its own, [`FRAME_RATE`], when the host offers
+    /// it — described once, as the rig's keys are fixed once it is offered.
+    /// The rig's pose inputs are the face's, which its host declares.
+    fn describe_keys(&self) -> KeyDescriptions {
+        let (tx, rx) = futures_channel::mpsc::unbounded();
+        if self.inner.lock().unwrap().frame_rate.is_some() {
+            // The receiver is held here, so the send cannot fail.
+            let _ = tx.unbounded_send(HashMap::from([(Key::from(FRAME_RATE), frame_rate_meta())]));
+        }
         Box::pin(rx)
     }
 
@@ -353,6 +465,83 @@ mod tests {
         );
         assert_eq!(assets.servable_glb(DEVICE).unwrap(), Some(b"glTF".to_vec()));
         assert_eq!(assets.servable_glb("robot").unwrap(), None);
+    }
+
+    /// Every description the feed holds now.
+    fn drain_keys(feed: &mut KeyDescriptions) -> Vec<HashMap<Key, KeyMeta>> {
+        let mut out = Vec::new();
+        while let Some(Some(description)) = feed.next().now_or_never() {
+            out.push(description);
+        }
+        out
+    }
+
+    fn rate(value: f64) -> StateChange {
+        StateChange::set(FRAME_RATE, Value::F64(value))
+    }
+
+    #[test]
+    fn an_offered_frame_rate_is_an_f64_input_and_the_first_reading() {
+        let hal = RigHal::new();
+        hal.offer_frame_rate(4.0);
+        let descriptions = drain_keys(&mut hal.describe_keys());
+        assert_eq!(descriptions.len(), 1, "the rig's keys are fixed");
+        let meta = &descriptions[0][&Key::from(FRAME_RATE)];
+        assert!(meta.editable, "a remote client sets the rate");
+        assert_eq!(meta.ty, Some(Type::F64));
+        assert_eq!((meta.min, meta.max), (Some(0.0), Some(MAX_FRAME_RATE)));
+        assert_eq!(drain(&mut hal.updates()), [rate(4.0)]);
+        assert_eq!(hal.frame_rate(), 4.0);
+    }
+
+    #[test]
+    fn a_rig_whose_host_offers_no_frame_rate_describes_no_key() {
+        let hal = RigHal::new();
+        assert!(drain_keys(&mut hal.describe_keys()).is_empty());
+        assert!(drain(&mut hal.updates()).is_empty());
+        assert_eq!(hal.frame_rate(), 0.0);
+    }
+
+    /// A write sets the rate and stays out of the pose; the rig reports the
+    /// rate it holds when that is not what was written, and only then.
+    #[test]
+    fn a_write_sets_the_rate_and_one_out_of_range_reads_back_as_held() {
+        let hal = RigHal::new();
+        hal.offer_frame_rate(0.0);
+        let mut readings = hal.updates();
+        let mut pose = hal.pose_updates();
+        drain(&mut readings);
+
+        hal.try_send(&rate(12.5));
+        assert_eq!(hal.frame_rate(), 12.5);
+        assert!(
+            drain(&mut readings).is_empty(),
+            "the store holds 12.5 already"
+        );
+
+        hal.try_send(&rate(1000.0));
+        assert_eq!(hal.frame_rate(), MAX_FRAME_RATE);
+        assert_eq!(drain(&mut readings), [rate(MAX_FRAME_RATE)]);
+
+        hal.try_send(&rate(-1.0));
+        assert_eq!(hal.frame_rate(), 0.0);
+        assert_eq!(drain(&mut readings), [rate(0.0)]);
+
+        hal.try_send(&StateChange::set(FRAME_RATE, float(6.0)));
+        assert_eq!(hal.frame_rate(), 6.0);
+        assert_eq!(drain(&mut readings), [rate(6.0)], "an F64, as described");
+
+        let mut both = rate(0.0);
+        both.set
+            .insert(Key::from("mouth/jaw.open"), Some(float(0.5)));
+        hal.try_send(&both);
+        assert_eq!(hal.frame_rate(), 0.0);
+        let poses = drain(&mut pose);
+        assert!(poses.iter().all(|c| !c.contains(&Key::from(FRAME_RATE))));
+        assert!(poses
+            .iter()
+            .any(|c| c.contains(&Key::from("mouth/jaw.open"))));
+        assert!(hal.value(FRAME_RATE).is_none(), "the rate is no pose");
     }
 
     #[tokio::test]
