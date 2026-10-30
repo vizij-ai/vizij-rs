@@ -4,6 +4,7 @@
     "module": "ESNext",
     "declaration": true,
     "outDir": "dist",
+    "rootDir": "..",
     "strict": true,
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,

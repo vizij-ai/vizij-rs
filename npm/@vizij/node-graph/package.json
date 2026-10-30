@@ -49,8 +49,8 @@
     "@vizij/wasm-loader": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.5.0",
-    "@types/node": "^20.12.7"
+    "typescript": "^6.0.3",
+    "@types/node": "^24.19.2"
   },
   "publishConfig": {
     "access": "public",
