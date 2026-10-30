@@ -4,12 +4,19 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [7.7.2] - Unreleased
+## [8.0.0] - 2026-10-30
 
 ### Changed
 
-- Takes the behavior `Status` ids from arora-behavior 10. No public item
-  changes.
+- **Breaking:** the skill contracts (`LookAt`, `PlayViseme`, `Say`) return
+  arora-behavior 10's `Status`, a different type from arora-behavior 9's. 7.7.2
+  carried this change as a patch and is yanked.
+
+## [7.7.2] - 2026-10-30 [YANKED]
+
+### Changed
+
+- Takes the behavior `Status` ids from arora-behavior 10.
 
 ## [7.7.1] - Unreleased
 

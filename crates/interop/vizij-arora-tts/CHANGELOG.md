@@ -19,13 +19,17 @@ All notable changes to `vizij-arora-tts`. The format follows
   (`say`, `Say`) this crate re-exports, and arora-behavior 10, whose `Status`
   a `say` call returns. Its browser tests run on arora 18.
 
-## [7.1.1] - 2026-10-25
+## [7.1.1] - 2026-10-25 [YANKED]
 
 ### Changed
 
 - Requires vizij-arora-behavior 8, whose graphs run on arora-behavior-tree.
 
-## [7.1.0] - 2026-10-24
+7.1.0 and 7.1.1 are yanked: `host_module` returns arora-engine's
+`HostModule` and `say`/`Say` are vizij-arora-behavior's, and these releases
+took arora-engine 7 and vizij-arora-behavior 8, majors of both, as minors.
+
+## [7.1.0] - 2026-10-24 [YANKED]
 
 ### Changed
 
