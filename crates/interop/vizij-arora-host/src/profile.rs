@@ -876,10 +876,12 @@ mod tests {
 
     /// The shipped mapping reads the whole `ros4hri` command surface but
     /// `gaze/frame` (the look_at skill consumes it), plus the face's speech
-    /// state and its gaze settings, and
-    /// writes the whole `vizij-face` control surface but what ROS4HRI has no
-    /// channel for, plus the ROS4HRI speech state — and nothing either profile
-    /// does not declare on that side. Which keys are declared and unmapped is
+    /// state, its gaze settings, its `asleep` weight (which inhibits the
+    /// blink) and the runtime's step duration, and writes the face's gaze,
+    /// lids and caption — the expression is the set_expression runs it
+    /// spawns, the lips the play_viseme runs — plus the ROS4HRI speech state,
+    /// and nothing either profile does not declare on that side. Which keys
+    /// are declared and unmapped is
     /// the point of declaring them apart from the mapping.
     #[test]
     fn surface_reconciles_the_ros4hri_mapping_against_the_profiles() {
@@ -887,9 +889,11 @@ mod tests {
         let ros = ros4hri_profile();
         let face = vizij_face_profile();
 
-        // What the mapping reads: the ROS4HRI inputs, the face's outputs, and
-        // the face's settings its gaze channel aims the eyes with.
+        // What the mapping reads: the ROS4HRI inputs, the face's outputs, the
+        // face's settings its gaze channel aims the eyes with, its `asleep`
+        // weight and the step's duration.
         let consumed = surface(&spec, Side::Input, "ros4hri", Scope::Device);
+        let asleep = standard::expression_path("asleep");
         let unread: Vec<&str> = ros
             .paths_of("input")
             .into_iter()
@@ -899,10 +903,13 @@ mod tests {
         for setting in [standard::GAZE_EYE_SPACING, standard::GAZE_RANGE] {
             assert!(consumed.paths().contains(&setting), "{setting} unread");
         }
+        let produced = surface(&spec, Side::Output, "vizij-face", Scope::Face);
         let readable = [
             ros.paths_of("input"),
             face.paths_of("output"),
             vec![standard::GAZE_EYE_SPACING, standard::GAZE_RANGE],
+            produced.paths(),
+            vec!["arora/dt", asleep.as_str()],
         ]
         .concat();
         let unreadable: Vec<&str> = consumed
@@ -913,7 +920,6 @@ mod tests {
         assert!(unreadable.is_empty(), "undeclared inputs: {unreadable:?}");
 
         // What the mapping writes: the face's inputs and the ROS4HRI outputs.
-        let produced = surface(&spec, Side::Output, "vizij-face", Scope::Face);
         let unwritten: Vec<&str> = face
             .paths_of("input")
             .into_iter()
@@ -922,15 +928,12 @@ mod tests {
         // Unwritten, in profile order: the caller's blink (the mapping's
         // idle blink drives the lids), the gaze target and its weight (the
         // mapping drives the eye positions from ROS4HRI's own target, a point
-        // in space), the expressions ROS4HRI does not name, the lipsync
-        // surface (the viseme players own it), the muscle tier (ROS4HRI
-        // commands no action units), the conversation state, and the face's
-        // settings (what the face is like, not a command). The caption, in
-        // no tier, is written: a closed caption relays to it.
-        let beyond_ros4hri: Vec<String> = standard::VIZIJ_EXPRESSION_NAMES
-            .iter()
-            .map(|n| standard::expression_path(n))
-            .collect();
+        // in space), the expressions (the set_expression runs the mapping
+        // spawns write them), the lipsync surface (the viseme players own
+        // it), the muscle tier (ROS4HRI commands no action units), the
+        // conversation state, and the face's settings (what the face is like,
+        // not a command). The caption, in no tier, is written: a closed
+        // caption relays to it.
         let expected: Vec<&str> =
             face.keys
                 .iter()
@@ -943,8 +946,7 @@ mod tests {
                         standard::GAZE_TARGET_WEIGHT,
                     ]
                     .contains(&k.path.as_str()),
-                    Some("expression") => beyond_ros4hri.contains(&k.path),
-                    Some("viseme" | "muscle" | "conversation") => true,
+                    Some("expression" | "viseme" | "muscle" | "conversation") => true,
                     None => ![standard::CAPTION_TEXT, standard::CAPTION_SPEAKER]
                         .contains(&k.path.as_str()),
                     Some(other) => panic!("unexpected tier {other}"),
