@@ -78,9 +78,27 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   webpki roots), its audio played through cpal's AAudio backend. The Android
   smoke invokes `say` through the open local bridge and passes when the run
   succeeds with the face reporting the utterance and showing its visemes.
+- `display/face/frame_rate`: the rate the face's rendered frames publish
+  at, in frames per second, an `F64` input of the device's rig (its HAL
+  describes it, so the local, Studio and ROS 2 bridges accept a write to it).
+  A write takes effect on the next step: frames start, stop at 0 or below,
+  or change rate. The rate is held within 0..30; the device writes the rate
+  it holds back to the key when a write asked for another, so a client reads
+  the rate frames publish at. The desktop app (with a window or
+  `--headless`) and the Android app publish frames at that rate
+  (`FaceConfig::frame_rate`); a device under `--ros2 --no-ros4hri` publishes
+  none and has no such key.
 
 ### Changed
 
+- **Breaking:** frames are off at startup. `--frame-rate N` is the rate
+  `display/face/frame_rate` starts at, default 0, at most 30; a device
+  exposed as ROS4HRI no longer publishes its face image at 15 Hz by itself.
+  `--frame-rate` takes an `f64`, `view::frames::publish_rate` returns the
+  rate a run starts at (`None` for a device that publishes no frame), and
+  `FrameConfig` carries no rate (`rate_hz` and `publishes` are gone,
+  `DEFAULT_RATE_HZ` too): the view publishes at the rate the shown face's
+  rig holds (`RigHal::frame_rate`).
 - **Breaking:** requires arora 18 (arora-web 15 in the browser), on
   arora-behavior 10 and arora-behavior-tree 10 (vizij-arora-behavior 9,
   vizij-graph-core 5, vizij-arora-tts 8). A `studio` build carries the

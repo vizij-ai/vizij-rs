@@ -141,6 +141,7 @@ async fn serve() -> (Runtime, Socket, Face) {
         ros4hri: false,
         studio: true,
         speech: None,
+        frame_rate: None,
     };
     // The other bridges are feature-gated fields; only the local one is set.
     #[allow(clippy::needless_update)]

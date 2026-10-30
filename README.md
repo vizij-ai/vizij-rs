@@ -68,9 +68,10 @@ cargo run -p vizij -- --glb path/to/face.glb --headless --frame-rate 15
 
 One frame rendered offscreen to PNG, or a windowless device streaming rendered
 frames into the store — same behavior, no display. Headless is for streaming
-the face somewhere: exposed as ROS4HRI (`--ros2`) it publishes its frames on
-the face image topic by itself, and `--frame-rate` streams them into the store
-regardless.
+the face somewhere: over every bridge, and on the face image topic when
+exposed as ROS4HRI (`--ros2`). Frames are off at startup: a client turns them on, off or to
+another rate by writing the device's `display/face/frame_rate` (frames per
+second, at most 30), and `--frame-rate` is the rate it starts at.
 
 ### Speech (TTS)
 

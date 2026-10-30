@@ -338,6 +338,7 @@ so the face's controls and its rendered frames are topics too:
 ```bash
 ros2 topic echo /quori/keys/rig/quori_latest/standard/vizij/expression/happy
 ros2 topic echo /quori/keys/rig/quori_latest/standard/vizij/viseme
+ros2 topic pub --once /quori/keys/display/face/frame_rate std_msgs/msg/Float64 "{data: 15.0}"
 ros2 topic hz /robot_face/image_raw/compressed
 ```
 
@@ -356,11 +357,15 @@ and the rest of the ROS image tooling display the face without a republisher.
 Each frame is stamped in the face's own TF frame — its id from the GLB
 (`quori_latest`), or `--frame-id`.
 
-Frames are the ROS4HRI face image, so they follow that exposure: a device on
-`--ros2` (without `--no-ros4hri`) publishes them at 15 Hz, with a window or
-headless, and a device not exposed as ROS4HRI publishes none. `--frame-rate`
-overrides either way (`--headless --frame-rate 2` for a slow stream, `0` for
-none).
+Frames are off at startup, with a window or headless. Their rate is the
+device's input `display/face/frame_rate` (`F64`, frames per second, at most
+30): `--frame-rate` is the rate it starts at (`--headless --frame-rate 2` for
+a slow stream), and a client turns the frames on, off or to another rate by
+writing it — from ROS 2, on `/<namespace>/keys/display/face/frame_rate` as a
+`std_msgs/Float64`, like any input. A write takes effect on the next step, and
+a rate out of range reads back as the rate held. A device under `--ros2
+--no-ros4hri` publishes no frame and has no such key: with no profile to type
+the frame key, a frame would ride the scalar plane as a `std_msgs/String`.
 
 Two consequences worth knowing:
 
@@ -368,7 +373,7 @@ Two consequences worth knowing:
   That is the point of a well-known name — a consumer finds the face without
   being told where it is — but it means two faces on one ROS graph publish to
   the same topic. Run them on separate domains (`--ros2 :<domain>`), or turn
-  one of them off with `--frame-rate 0`.
+  on the frames of one of them only.
 * **The frame is a ROS message, not a self-describing record.** Its fields are
   the registry's ids, so a consumer needs the `sensor_msgs` definition to read
   it — every ROS tool has it, and nothing else reads the frame keys today. A

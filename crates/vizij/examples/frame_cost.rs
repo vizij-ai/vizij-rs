@@ -128,6 +128,7 @@ fn device(glb: &[u8], args: &Args) -> Device {
         #[cfg(feature = "studio")]
         studio: false,
         speech: None,
+        frame_rate: None,
     };
     let LoadedFace { meta, spec, .. } = face::load_face(glb, &config).expect("load face");
     let rig = RigHal::new();

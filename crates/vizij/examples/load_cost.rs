@@ -132,6 +132,7 @@ fn device(glb: &[u8], report: bool) -> Device {
         #[cfg(feature = "studio")]
         studio: false,
         speech: None,
+        frame_rate: None,
     };
     let at = instructions();
     let LoadedFace { meta, spec, .. } = face::load_face(glb, &config).expect("load face");

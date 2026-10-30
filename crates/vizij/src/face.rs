@@ -57,6 +57,13 @@ pub struct FaceConfig {
     /// The speech provider, built per generation; `None` for a device that
     /// plays no speech.
     pub speech: Option<SpeechProvider>,
+    /// The rate, in frames per second, each generation publishes the face's
+    /// rendered frames at from its start, for a device whose view publishes
+    /// them: its rig offers the rate as the input
+    /// [`FRAME_RATE`](vizij_arora_hal::FRAME_RATE), which a client writes to
+    /// turn the frames on, off, or to another rate. `None` for a device that
+    /// publishes no frame, which then has no such key.
+    pub frame_rate: Option<f64>,
 }
 
 /// A face read for the device: its metadata and the one behavior graph its
@@ -1724,6 +1731,79 @@ mod tests {
         assert!(read_f32(&arora, &standard::expression_path("angry")) < 0.01);
     }
 
+    /// A device whose host publishes frames offers their rate as an input of
+    /// its rig: described as an `F64` a remote may write, holding the rate
+    /// the device started at, and moved by a remote write on the next step —
+    /// a rate above the maximum reads back as the maximum, the rate frames
+    /// then publish at.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_remote_sets_the_frame_rate_its_rig_offers() {
+        use arora_bridge::{BridgeCommand, BridgeOp, Inbound};
+        use arora_types::value::Type;
+        use vizij_arora_hal::{FRAME_RATE, MAX_FRAME_RATE};
+
+        let spec = compose_sources(&[ros4hri_source("")])
+            .expect("compose the ros4hri mapping")
+            .to_string();
+        let rig = RigHal::new();
+        rig.offer_frame_rate(0.0);
+        let (remote, inbound) = futures::channel::mpsc::unbounded();
+        let mut arora = builder_for(&spec, rig.clone(), BlackboardStore::new(), &[], None)
+            .expect("build the device over the mapping")
+            .with_bridge(Box::new(Remote(Some(inbound))))
+            .build()
+            .expect("build arora");
+        let step = |arora: &mut arora::Arora| arora.step(Duration::from_millis(16)).expect("step");
+        let held = |arora: &arora::Arora| {
+            arora
+                .store()
+                .read(&[Key::from(FRAME_RATE)])
+                .remove(0)
+                .expect("the store holds the rate")
+        };
+        // Write `rate` and step once: the write is taken, as an input's.
+        let write = |arora: &mut arora::Arora, rate: f64| {
+            let (reply, mut replied) = futures::channel::oneshot::channel();
+            remote
+                .unbounded_send(Inbound::Command(BridgeCommand::new(
+                    BridgeOp::Update(StateChange::set(FRAME_RATE, Value::F64(rate))),
+                    reply,
+                )))
+                .expect("the device listens");
+            step(arora);
+            replied
+                .try_recv()
+                .expect("answered")
+                .expect("a reply")
+                .expect("the rate is an input");
+        };
+
+        step(&mut arora);
+        let meta = arora
+            .store()
+            .meta(&[Key::from(FRAME_RATE)])
+            .remove(0)
+            .expect("the rig describes its frame rate");
+        assert!(meta.editable, "a remote sets the rate: {meta:?}");
+        assert_eq!(meta.ty, Some(Type::F64));
+        assert_eq!(held(&arora), Value::F64(0.0), "no frame from the start");
+        assert_eq!(rig.frame_rate(), 0.0);
+
+        write(&mut arora, 12.0);
+        assert_eq!(rig.frame_rate(), 12.0, "on the next step");
+        assert_eq!(held(&arora), Value::F64(12.0));
+
+        write(&mut arora, 1000.0);
+        assert_eq!(rig.frame_rate(), MAX_FRAME_RATE);
+        step(&mut arora);
+        assert_eq!(held(&arora), Value::F64(MAX_FRAME_RATE), "the rate held");
+
+        write(&mut arora, 0.0);
+        assert_eq!(rig.frame_rate(), 0.0);
+        assert_eq!(held(&arora), Value::F64(0.0));
+    }
+
     #[test]
     fn ros4hri_gaze_maps_eyes_with_vergence() {
         let mut arora = ros4hri_device();
@@ -2326,6 +2406,7 @@ mod tests {
             #[cfg(feature = "studio")]
             studio: false,
             speech: None,
+            frame_rate: None,
         };
         let LoadedFace { meta, spec, .. } =
             load_face(&adapted, &config).expect("load the adapted face");
@@ -2627,6 +2708,7 @@ mod tests {
             #[cfg(feature = "studio")]
             studio: false,
             speech: None,
+            frame_rate: None,
         };
         for (glb, face_id, controls) in faces {
             let Ok(bytes) = std::fs::read(std::path::Path::new(&fixtures).join(glb)) else {
@@ -3044,6 +3126,7 @@ mod animation_tests {
             #[cfg(feature = "studio")]
             studio: false,
             speech: None,
+            frame_rate: None,
         };
         let LoadedFace { meta, spec, .. } = load_face(&glb, &config).expect("load Quori");
         let store = BlackboardStore::new();
@@ -3088,6 +3171,7 @@ mod animation_tests {
             #[cfg(feature = "studio")]
             studio: false,
             speech: None,
+            frame_rate: None,
         };
         let face = load_face(&glb, &config).expect("load Quori");
         let store = BlackboardStore::new();
