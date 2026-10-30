@@ -78,12 +78,19 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   webpki roots), its audio played through cpal's AAudio backend. The Android
   smoke invokes `say` through the open local bridge and passes when the run
   succeeds with the face reporting the utterance and showing its visemes.
+- The face skills `set_expression`, `set_facial_action_units`, `set_viseme`
+  and `play_visemes` (see `docs/skills.md`), registered with the device's
+  interpreter, which describes them, so a client calls them by name. Under
+  `--ros2` with the ROS4HRI profile, `/skill/set_expression`,
+  `/skill/set_facial_action_units` and `/skill/set_viseme` are topics whose
+  every message runs the skill, and `/skill/play_visemes` is an action whose
+  feedback is the shape being shown.
 
 ### Changed
 
 - **Breaking:** requires arora 18 (arora-web 15 in the browser), on
-  arora-behavior 10 and arora-behavior-tree 10 (vizij-arora-behavior 9,
-  vizij-graph-core 5, vizij-arora-tts 8). A `studio` build carries the
+  arora-behavior 10 and arora-behavior-tree 10 (vizij-arora-behavior 10,
+  vizij-graph-core 6, vizij-arora-tts 9). A `studio` build carries the
   device's Studio bridge from the start of each generation
   (`native::BridgeConfig::studio`, an `arora::studio::StudioDevice`, or why
   it could not be read) and
@@ -109,6 +116,20 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   so a face at rest costs less per frame. The graphs compute what they did
   before. The device is built and ticked on the app's worker thread, as
   before.
+- The ROS4HRI mapping's expression keys run `set_expression`, so a key write
+  is one more command in the expression's domain: it takes the face over
+  from a `set_expression` or `set_facial_action_units` run, and a later call
+  of either takes it back. The face boots at neutral from a setter run.
+- `--ros2`'s ROS4HRI profile binds `/skill/set_expression` to the device's
+  `set_expression` skill, and serves the preset's `set_facial_action_units`,
+  `set_viseme` and `play_visemes` skills, which the device describes.
+- While the ROS4HRI mapping is composed, the face standard's expression,
+  muscle-tier and de-facto jaw keys are no inputs: a setter run writes them
+  every step, so the device does not declare them and refuses a remote write
+  to them. The expression is set through the setters or the ROS4HRI keys.
+- A lips command (`play_viseme`, `set_viseme`, `play_visemes`, or a viseme
+  the ROS4HRI stream plays) spawned while `say` speaks shows over it; `say`
+  keeps speaking.
 
 ### Fixed
 

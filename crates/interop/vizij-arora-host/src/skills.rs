@@ -19,14 +19,28 @@
 //! - a `task/result` output carries the run's result; an integer there is
 //!   the `std_skills` errno the ROS action plane answers verbatim.
 //!
-//! Three skills ship: **look_at**, the gaze skill behind the ROS4HRI
-//! `/skill/look_at` action (`interaction_skills/LookAt`); **play_viseme**,
-//! one viseme shape played through a lipsync envelope; and **say**, the
-//! text-to-speech action, whose run hosts the device's `say` module call and
-//! drives the face's lips from the viseme it streams. The two viseme players
-//! share one lipsync driver ([`viseme_driver`]): the selected shape's weight
-//! crossfades in and the others out, the face's current-viseme state
-//! ([`standard::VISEME`]) and the run's feedback follow.
+//! The skills that ship:
+//!
+//! - **look_at**, the gaze skill behind the ROS4HRI `/skill/look_at` action
+//!   (`interaction_skills/LookAt`);
+//! - the expression setters, **set_expression** (a named expression or a
+//!   valence/arousal point) and **set_facial_action_units** (FACS action
+//!   units on the muscle tier): each holds the whole face's expression until
+//!   a later run of either takes it over, crossfading from where the face
+//!   is ([`hold_expression`]);
+//! - the lips' players: **play_viseme**, one viseme shape played through a
+//!   lipsync envelope; **set_viseme**, a shape held until the next command;
+//!   **play_visemes**, a viseme timeline; and **say**, the text-to-speech
+//!   action, whose run hosts the device's `say` module call and drives the
+//!   face's lips from the viseme it streams. They share one lipsync driver
+//!   ([`viseme_driver`]): the selected shape's weight crossfades in and the
+//!   others out, the face's current-viseme state ([`standard::VISEME`]) and
+//!   the run's feedback follow.
+//!
+//! `set_*` skills set a state that holds until changed: their runs never end
+//! on their own. `play_*` skills play a timeline that ends. Which runs a new
+//! one takes over from — the expression's setters, the lips' players — is
+//! the device's to declare when it registers the fragments.
 
 use arora_behavior::{
     Status, STATUS_ENUMERATION_ID, STATUS_FAILURE_VARIANT_ID, STATUS_RUNNING_VARIANT_ID,
@@ -37,7 +51,7 @@ use uuid::Uuid;
 use vizij_api_core::value::{Enumeration, Structure, StructureField, Value};
 
 use crate::graph_builder::GraphBuilder;
-use crate::ros4hri::{GAZE_FRAME_KEY, GAZE_TARGET_KEY};
+use crate::ros4hri::{self, GAZE_FRAME_KEY, GAZE_TARGET_KEY};
 use crate::standard::{self, VISEME_SHAPES};
 
 /// The gaze skill: `look_at` directs the gaze at `target`, a point in
@@ -136,10 +150,117 @@ pub const SILENCE_VISEME: &str = "sil";
 /// carries them under, as Vizij extends it.
 pub const FEEDBACK_VISEME: &str = "viseme";
 pub const FEEDBACK_INTENSITY: &str = "intensity";
+/// The feedback field the code-addressed players (set_viseme, play_visemes)
+/// add: the shape's ROS4HRI code, a `u8` — the `value` of Vizij's
+/// `Viseme` message, which their ROS 2 feedback carries.
+pub const FEEDBACK_CODE: &str = "value";
 
 /// The canonical say fragment asset; regenerate with
 /// `vizij-bundle export-skill say`.
 pub const SAY_JSON: &str = include_str!("../skills/say.json");
+
+/// The expression skill: `set_expression` sets the face's expression and
+/// holds it until a run of the expression's other setter, or a new one,
+/// takes over — the named `expression` (one of the standard's
+/// [`standard::expression_names`]) at the `arousal` as its intensity when
+/// `expression` is not empty, else the `valence`/`arousal` point blended over
+/// ROS4HRI's circumplex anchors, the way the ROS4HRI mapping computes it.
+/// Its fragment ([`generate_set_expression`]) implements it; the module a
+/// device registers for it only fails, and exists so the method is
+/// described.
+#[arora_module::contract(name = "set_expression")]
+pub trait SetExpression {
+    #[export(id = "824ac8fe-111d-4730-91af-413829c31556")]
+    fn set_expression(
+        &mut self,
+        #[param(id = "b19ecf22-87e2-4510-9ce3-b50ba842d13f")] expression: String,
+        #[param(id = "c142771f-bb54-4f02-a19f-136afd0f614f")] valence: f32,
+        #[param(id = "151091f4-fc8e-4a2c-b553-798d23a94bcc")] arousal: f32,
+    ) -> Status;
+}
+
+/// The set_expression method's parameters, in declared order.
+pub const SET_EXPRESSION_PARAMS: [&str; 3] = ["expression", "valence", "arousal"];
+
+/// The canonical set_expression fragment asset; regenerate with
+/// `vizij-bundle export-skill set_expression`.
+pub const SET_EXPRESSION_JSON: &str = include_str!("../skills/set_expression.json");
+
+/// The action-unit skill: `set_facial_action_units` sets the face's
+/// expression as FACS action units and holds it until a run of the
+/// expression's other setter, or a new one, takes over. Sparse: `codes[i]`
+/// is driven at `intensities[i]`, in `[0, 1]`, and an action unit not listed
+/// rests at zero — the command describes the whole face, as a named
+/// expression does. The named expressions hold at `neutral` (its weight 1,
+/// the others 0): the action units move the face from its neutral pose, the
+/// base a face's poses are authored over. Each code drives the muscle-tier controls expressing it
+/// ([`standard::controls_for_au`]; AU 26 also the de-facto
+/// [`standard::MOUTH_JAW_OPEN`]); codes the muscle tier does not express are
+/// ignored, and mismatched lengths drive nothing. Its fragment
+/// ([`generate_set_facial_action_units`]) implements it.
+#[arora_module::contract(name = "set_facial_action_units")]
+pub trait SetFacialActionUnits {
+    #[export(id = "f4cc8ef7-bd1d-4e03-ba9b-1983c73e5fa5")]
+    fn set_facial_action_units(
+        &mut self,
+        #[param(id = "30663b7d-4f51-409c-bc39-c0048c09556c")] codes: Vec<u8>,
+        #[param(id = "1a5df11a-d6b6-4daa-8ebc-1aaf05d3d948")] intensities: Vec<f32>,
+    ) -> Status;
+}
+
+/// The set_facial_action_units method's parameters, in declared order.
+pub const SET_FACIAL_ACTION_UNITS_PARAMS: [&str; 2] = ["codes", "intensities"];
+
+/// The canonical set_facial_action_units fragment asset; regenerate with
+/// `vizij-bundle export-skill set_facial_action_units`.
+pub const SET_FACIAL_ACTION_UNITS_JSON: &str =
+    include_str!("../skills/set_facial_action_units.json");
+
+/// The live viseme skill: `set_viseme` holds the shape whose code is
+/// `viseme` — an index into [`VISEME_SHAPES`], ROS4HRI's order, `0` (`sil`)
+/// at rest — at full weight until a new lips run takes over: the shape at the
+/// playhead, for a producer that knows only that. Its fragment
+/// ([`generate_set_viseme`]) implements it.
+#[arora_module::contract(name = "set_viseme")]
+pub trait SetViseme {
+    #[export(id = "db273118-d0fe-4e0e-9fb8-884a0e24c625")]
+    fn set_viseme(
+        &mut self,
+        #[param(id = "ccc25d4b-1568-4181-bdfe-bace0d0644a8")] viseme: u8,
+    ) -> Status;
+}
+
+/// The set_viseme method's parameters, in declared order.
+pub const SET_VISEME_PARAMS: [&str; 1] = ["viseme"];
+
+/// The canonical set_viseme fragment asset; regenerate with
+/// `vizij-bundle export-skill set_viseme`.
+pub const SET_VISEME_JSON: &str = include_str!("../skills/set_viseme.json");
+
+/// The viseme timeline skill: `play_visemes` plays an alignment — the shape
+/// whose code is `visemes[i]` from `starts[i]` (seconds since the run's
+/// start) for `durations[i]` seconds, through the lipsync driver's
+/// crossfade, rest between spans — and succeeds once the last span has
+/// ended and the lips have settled. Spans are expected not to overlap; where
+/// they do, the higher code shows. Its fragment ([`generate_play_visemes`])
+/// implements it.
+#[arora_module::contract(name = "play_visemes")]
+pub trait PlayVisemes {
+    #[export(id = "e2a75984-edf3-42d4-a51c-231274dcdd95")]
+    fn play_visemes(
+        &mut self,
+        #[param(id = "e2cc7afe-0916-44f9-b030-8ef2dce0a007")] visemes: Vec<u8>,
+        #[param(id = "bb3b52da-872b-4dbd-8a3d-b7ee2cc0665c")] starts: Vec<f32>,
+        #[param(id = "81813374-aa60-4d0e-8195-a77f6179549d")] durations: Vec<f32>,
+    ) -> Status;
+}
+
+/// The play_visemes method's parameters, in declared order.
+pub const PLAY_VISEMES_PARAMS: [&str; 3] = ["visemes", "starts", "durations"];
+
+/// The canonical play_visemes fragment asset; regenerate with
+/// `vizij-bundle export-skill play_visemes`.
+pub const PLAY_VISEMES_JSON: &str = include_str!("../skills/play_visemes.json");
 
 /// A played viseme's envelope, seconds: the weight ramps in over
 /// [`VISEME_ATTACK`], holds until the viseme's duration has passed since its
@@ -162,6 +283,66 @@ const DT_KEY: &str = "arora/dt";
 /// its run only once its crossfade has settled here, because a run's writes
 /// stop with its fragment — ending mid-fade would freeze the lips there.
 const VISEME_REST: f64 = 0.02;
+
+/// An exponential smoother's per-step gain, `1 - 0.5^(dt / half_life)`, from
+/// the step's duration — nodes under `id`, and the graph's `in/dt` input, so
+/// once per graph. Returns the gain node.
+pub(crate) fn smoothing_gain(g: &mut GraphBuilder, id: &str, half_life: f64) -> String {
+    let dt_ns = g.input("in/dt", DT_KEY, json!(0.0));
+    let ns_per_s = g.constant(1e9);
+    let dt = g.div(&format!("{id}/dt"), &dt_ns, &ns_per_s);
+    let half_life = g.constant(half_life);
+    let half_lives = g.div(&format!("{id}/half_lives"), &dt, &half_life);
+    let half = g.constant(0.5);
+    let decay = g.op(
+        &format!("{id}/decay"),
+        "power",
+        json!({}),
+        &[("base", &half), ("exp", &half_lives)],
+    );
+    let one = g.constant(1.0);
+    g.sub(&format!("{id}/gain"), &one, &decay)
+}
+
+/// Move the face's control at `path` toward `target` by `gain`
+/// ([`smoothing_gain`]): `weight += (target - weight) * gain`, the smoother's
+/// state being the control's own value read back from the store. So whoever
+/// writes the control next continues from where the face is — a writer
+/// taking over never snaps it. Nodes `in/<id>` and under `id`; returns the
+/// weight node, for the caller to write to `path`.
+pub(crate) fn follow(
+    g: &mut GraphBuilder,
+    id: &str,
+    path: &str,
+    target: &str,
+    gain: &str,
+) -> String {
+    let previous = g.input(&format!("in/{id}"), path, json!(0.0));
+    let toward = g.sub(&format!("{id}/toward"), target, &previous);
+    let step = g.mul(&format!("{id}/step"), &toward, gain);
+    g.add(&format!("{id}/weight"), &previous, &step)
+}
+
+/// The viseme shape a ROS4HRI code names, as text: the code indexes
+/// [`VISEME_SHAPES`] — ROS4HRI numbers them in the order the 15-shape set
+/// lists them, so the two tables are one — and a code past the end, or no
+/// number, rests like `sil`. Returns the node holding the shape.
+pub(crate) fn viseme_shape_of(g: &mut GraphBuilder, code: &str) -> String {
+    let mut shape = g.text(SILENCE_VISEME);
+    for (index, name) in VISEME_SHAPES.iter().enumerate().skip(1) {
+        let id = |step: &str| format!("viseme/{name}/{step}");
+        let wanted = g.constant(index as f64);
+        let is = g.op(
+            &id("is"),
+            "equal",
+            json!({}),
+            &[("lhs", code), ("rhs", &wanted)],
+        );
+        let text = g.text(name);
+        shape = g.select(&id("shape"), &is, &text, &shape);
+    }
+    shape
+}
 
 /// Regenerate the look_at fragment from first principles — the export path
 /// behind the canonical asset.
@@ -422,26 +603,18 @@ pub fn generate_look_at() -> Json {
 /// otherwise. Rest is every weight at zero — the face's own neutral — so the
 /// `sil` weight is written but never driven. Returns the `settled` node:
 /// whether every weight is at rest ([`VISEME_REST`]), what a player's
-/// lifecycle waits for before ending.
-fn viseme_driver(g: &mut GraphBuilder, shape: (&str, &str), envelope: &str) -> String {
+/// lifecycle waits for before ending. With `report_code`, the feedback also
+/// carries the shape's code ([`FEEDBACK_CODE`]), for the players a client
+/// addresses by code.
+fn viseme_driver(
+    g: &mut GraphBuilder,
+    shape: (&str, &str),
+    envelope: &str,
+    report_code: bool,
+) -> String {
     let (shape_node, shape_port) = shape;
     let zero = g.constant(0.0);
-    // The crossfade's per-step gain, 1 - 0.5^(dt / half-life), from the
-    // step's duration.
-    let dt_ns = g.input("in/dt", DT_KEY, json!(0.0));
-    let ns_per_s = g.constant(1e9);
-    let dt = g.div("crossfade/dt", &dt_ns, &ns_per_s);
-    let half_life = g.constant(VISEME_CROSSFADE_HALF_LIFE);
-    let half_lives = g.div("crossfade/half_lives", &dt, &half_life);
-    let half = g.constant(0.5);
-    let decay = g.op(
-        "crossfade/decay",
-        "power",
-        json!({}),
-        &[("base", &half), ("exp", &half_lives)],
-    );
-    let one = g.constant(1.0);
-    let gain = g.sub("crossfade/gain", &one, &decay);
+    let gain = smoothing_gain(g, "crossfade", VISEME_CROSSFADE_HALF_LIFE);
     let mut loudest: Option<String> = None;
     for name in VISEME_SHAPES {
         if name == SILENCE_VISEME {
@@ -460,19 +633,16 @@ fn viseme_driver(g: &mut GraphBuilder, shape: (&str, &str), envelope: &str) -> S
         g.edge_from(shape_node, shape_port, &select, "selector");
         g.edge(envelope, &select, "operand_0");
         g.edge(&zero, &select, "default");
-        // The smoother's state is the face's own weight, read back from the
-        // store: `weight += (target - weight) * gain`. So whichever run
-        // writes a shape continues its fade from where the last one left it
-        // — a run taking over never snaps, and one ending leaves nothing
-        // mid-fade behind.
-        let previous = g.input(
-            &format!("in/viseme/{name}"),
+        // Whichever run writes a shape continues its fade from where the
+        // last one left it — a run taking over never snaps, and one ending
+        // leaves nothing mid-fade behind.
+        let weight = follow(
+            g,
+            &format!("viseme/{name}"),
             &standard::viseme_path(name),
-            json!(0.0),
+            &select,
+            &gain,
         );
-        let toward = g.sub(&format!("viseme/{name}/toward"), &select, &previous);
-        let step = g.mul(&format!("viseme/{name}/step"), &toward, &gain);
-        let weight = g.add(&format!("viseme/{name}/weight"), &previous, &step);
         g.output(
             &format!("out/viseme/{name}"),
             &weight,
@@ -518,13 +688,42 @@ fn viseme_driver(g: &mut GraphBuilder, shape: (&str, &str), envelope: &str) -> S
     g.edge(&current, &intensity, "selector");
     g.edge(&zero, &intensity, "operand_0");
     g.edge(envelope, &intensity, "default");
+    let mut keys = vec![FEEDBACK_VISEME, FEEDBACK_INTENSITY];
+    if report_code {
+        keys.push(FEEDBACK_CODE);
+    }
     let report = g.node(
         "viseme/report",
         "buildrecord",
-        json!({ "record_keys": [FEEDBACK_VISEME, FEEDBACK_INTENSITY] }),
+        json!({ "record_keys": keys }),
     );
     g.edge(&current, &report, "field_0");
     g.edge(&intensity, &report, "field_1");
+    if report_code {
+        // The shape's code, typed `u8`: a `case` on the shape's name over
+        // the standard's shapes in code order.
+        let code = g.node(
+            "viseme/code",
+            "case",
+            json!({ "case_labels": VISEME_SHAPES }),
+        );
+        g.edge(&current, &code, "selector");
+        for (index, name) in VISEME_SHAPES.iter().enumerate() {
+            let constant = g.node(
+                &format!("viseme/{name}/code"),
+                "constant",
+                json!({ "value": { "u8": index } }),
+            );
+            g.edge(&constant, &code, &format!("operand_{index}"));
+        }
+        let silence = g.node(
+            "viseme/silence/code",
+            "constant",
+            json!({ "value": { "u8": 0 } }),
+        );
+        g.edge(&silence, &code, "default");
+        g.edge(&code, &report, "field_2");
+    }
     g.output("out/feedback", &report, "task/feedback".to_string());
     settled
 }
@@ -598,7 +797,7 @@ pub fn generate_play_viseme() -> Json {
     let fall = g.clamp("envelope/fall", &falling, 0.0, 1.0);
     let gate = g.min("envelope/gate", &rise, &fall);
     let envelope = g.mul("envelope/weighted", &weight, &gate);
-    let settled = viseme_driver(g, (&shape, "out"), &envelope);
+    let settled = viseme_driver(g, (&shape, "out"), &envelope, false);
 
     // The lifecycle: running until the envelope has closed and the lips
     // have settled.
@@ -674,7 +873,7 @@ pub fn generate_say() -> Json {
     );
 
     let full = g.constant(1.0);
-    let settled = viseme_driver(g, (&run, "mutated_0"), &full);
+    let settled = viseme_driver(g, (&run, "mutated_0"), &full, false);
 
     let ended = g.node("lifecycle/ended", "and", json!({}));
     g.edge_from(&run, "done", &ended, "lhs");
@@ -686,6 +885,217 @@ pub fn generate_say() -> Json {
     g.edge(&running, &lifecycle, "else");
     g.output("out/status", &lifecycle, "task/status".to_string());
 
+    json!({ "nodes": g.nodes, "edges": g.edges })
+}
+
+/// The face's expression, as a run owning it writes it: every named
+/// expression's weight ([`standard::expression_names`]), every muscle-tier
+/// control ([`standard::FACE_CONTROLS`]) and the de-facto jaw
+/// ([`standard::MOUTH_JAW_OPEN`]), by path, unprefixed. Both expression
+/// setters write all of it.
+pub fn expression_surface() -> Vec<String> {
+    standard::expression_names()
+        .map(standard::expression_path)
+        .chain(
+            standard::FACE_CONTROLS
+                .iter()
+                .map(|control| standard::face_path(control.name)),
+        )
+        .chain(std::iter::once(standard::MOUTH_JAW_OPEN.to_string()))
+        .collect()
+}
+
+/// Hold the face's expression ([`expression_surface`]) at `targets` — each
+/// control's target node by path, zero for one it does not name — each
+/// control following its target from where the face is, at the ROS4HRI
+/// mapping's smoothing; and run until halted. Both expression setters end
+/// this way, so the run taking the face over crossfades it from whatever
+/// the one before left: the expression it set fades out as the new one
+/// fades in.
+fn hold_expression(g: &mut GraphBuilder, targets: &[(String, String)]) {
+    let zero = g.constant(0.0);
+    let gain = smoothing_gain(g, "smoothing", ros4hri::HALF_LIFE);
+    for path in expression_surface() {
+        let id = path
+            .strip_prefix(standard::VIZIJ_PREFIX)
+            .and_then(|p| p.strip_prefix('/'))
+            .unwrap_or(&path)
+            .to_string();
+        let target = targets
+            .iter()
+            .find(|(named, _)| *named == path)
+            .map_or(zero.as_str(), |(_, node)| node.as_str())
+            .to_string();
+        let weight = follow(g, &id, &path, &target, &gain);
+        g.output(&format!("out/{id}"), &weight, path);
+    }
+    let running = status_node(g, "lifecycle/running", STATUS_RUNNING_VARIANT_ID);
+    g.output("out/status", &running, "task/status".to_string());
+}
+
+/// Regenerate the set_expression fragment from first principles — the
+/// export path behind the canonical asset.
+///
+/// The run computes the expression's weights from its parameters with the
+/// ROS4HRI mapping's math ([`ros4hri::expression_targets`]) over every name
+/// the standard declares, rests the muscle tier, and holds that until
+/// halted ([`hold_expression`]).
+pub fn generate_set_expression() -> Json {
+    let g = &mut GraphBuilder::new();
+    let name = g.input("in/expression", "task/expression", json!(""));
+    let valence = g.input("in/valence", "task/valence", json!(0.0));
+    let arousal = g.input("in/arousal", "task/arousal", json!(0.0));
+    let names: Vec<&str> = standard::expression_names().collect();
+    let weights = ros4hri::expression_targets(g, &names, &name, &valence, &arousal);
+    let targets: Vec<(String, String)> = names
+        .iter()
+        .map(|expr| standard::expression_path(expr))
+        .zip(weights)
+        .collect();
+    hold_expression(g, &targets);
+    json!({ "nodes": g.nodes, "edges": g.edges })
+}
+
+/// Regenerate the set_facial_action_units fragment from first principles —
+/// the export path behind the canonical asset.
+///
+/// Per action unit the muscle tier expresses, its intensity is the sum of
+/// the intensities listed under its code — `codes` and `intensities` taken
+/// as vectors, the code matched elementwise (`max(0, 1 - |codes - au|)`, the
+/// codes being integers) and dotted with the intensities — clamped to
+/// `[0, 1]`, so an unlisted unit, or lists of mismatched lengths, read zero.
+/// AU 45 (blink) counts as AU 43 (eyes closed). Each control follows its
+/// unit's intensity, the named expressions hold at `neutral`, and the run
+/// holds that until halted ([`hold_expression`]).
+pub fn generate_set_facial_action_units() -> Json {
+    let g = &mut GraphBuilder::new();
+    let codes = g.input("in/codes", "task/codes", json!({ "u8s": [] }));
+    let intensities = g.input("in/intensities", "task/intensities", json!({ "f32s": [] }));
+    let one = g.constant(1.0);
+    // Where `codes` lists `au`: 1 at its entries, 0 elsewhere.
+    let matches = |g: &mut GraphBuilder, au: u8| -> String {
+        let id = |step: &str| format!("au/{au}/{step}");
+        let code = g.constant(f64::from(au));
+        let offset = g.sub(&id("offset"), &codes, &code);
+        let distance = g.op(&id("distance"), "abs", json!({}), &[("in", &offset)]);
+        let near = g.sub(&id("near"), &one, &distance);
+        g.clamp(&id("match"), &near, 0.0, 1.0)
+    };
+    let mut units: Vec<u8> = standard::FACE_CONTROLS
+        .iter()
+        .filter_map(|control| control.au)
+        .collect();
+    units.sort_unstable();
+    units.dedup();
+    let mut intensity_of = std::collections::BTreeMap::new();
+    for au in units {
+        let mut matched = matches(g, au);
+        if au == 43 {
+            let blink = matches(g, 45);
+            matched = g.add("au/43/or_45", &matched, &blink);
+        }
+        let sum = g.op(
+            &format!("au/{au}/sum"),
+            "vectordot",
+            json!({}),
+            &[("a", &matched), ("b", &intensities)],
+        );
+        let intensity = g.clamp(&format!("au/{au}/intensity"), &sum, 0.0, 1.0);
+        intensity_of.insert(au, intensity);
+    }
+    let mut targets: Vec<(String, String)> = standard::FACE_CONTROLS
+        .iter()
+        .filter_map(|control| {
+            let intensity = intensity_of.get(&control.au?)?;
+            Some((standard::face_path(control.name), intensity.clone()))
+        })
+        .collect();
+    targets.push((
+        standard::MOUTH_JAW_OPEN.to_string(),
+        intensity_of[&26].clone(),
+    ));
+    targets.push((standard::expression_path("neutral"), one.clone()));
+    hold_expression(g, &targets);
+    json!({ "nodes": g.nodes, "edges": g.edges })
+}
+
+/// Regenerate the set_viseme fragment from first principles — the export
+/// path behind the canonical asset.
+///
+/// The run drives the shape its code names ([`viseme_shape_of`]) at full
+/// weight through the lipsync driver — the others crossfade out — and holds
+/// it until halted; `sil` drives no shape, so the lips settle at rest.
+pub fn generate_set_viseme() -> Json {
+    let g = &mut GraphBuilder::new();
+    let code = g.input("in/viseme", "task/viseme", json!(0.0));
+    let shape = viseme_shape_of(g, &code);
+    let full = g.constant(1.0);
+    viseme_driver(g, (&shape, "out"), &full, true);
+    let running = status_node(g, "lifecycle/running", STATUS_RUNNING_VARIANT_ID);
+    g.output("out/status", &running, "task/status".to_string());
+    json!({ "nodes": g.nodes, "edges": g.edges })
+}
+
+/// Regenerate the play_visemes fragment from first principles — the export
+/// path behind the canonical asset.
+///
+/// The timeline as vectors: a span is on while `starts <= t < starts +
+/// durations` (`t` the run's elapsed time), each bound a clamped sign
+/// elementwise, and the shape shown is the highest code among the spans on
+/// (the one on, for a well-formed alignment), `sil` between them. It drives
+/// the lipsync driver at full weight; the run succeeds once `t` has passed
+/// the last span's end and the lips have settled.
+pub fn generate_play_visemes() -> Json {
+    let g = &mut GraphBuilder::new();
+    let visemes = g.input("in/visemes", "task/visemes", json!({ "u8s": [] }));
+    let starts = g.input("in/starts", "task/starts", json!({ "f32s": [] }));
+    let durations = g.input("in/durations", "task/durations", json!({ "f32s": [] }));
+    let elapsed = elapsed_since_spawn(g);
+    let zero = g.constant(0.0);
+    let one = g.constant(1.0);
+
+    let ends = g.add("timeline/ends", &starts, &durations);
+    // Started: sign(t - start) + 1 is 0 before, 1 at, 2 after.
+    let since = g.sub("timeline/since_start", &elapsed, &starts);
+    let since_sign = g.op(
+        "timeline/since_start/sign",
+        "sign",
+        json!({}),
+        &[("in", &since)],
+    );
+    let started_raw = g.add("timeline/started/raw", &since_sign, &one);
+    let started = g.clamp("timeline/started", &started_raw, 0.0, 1.0);
+    // Not ended: sign(end - t) is 1 before the end, 0 or -1 from it.
+    let left = g.sub("timeline/left", &ends, &elapsed);
+    let left_sign = g.op("timeline/left/sign", "sign", json!({}), &[("in", &left)]);
+    let ongoing = g.clamp("timeline/ongoing", &left_sign, 0.0, 1.0);
+    let on = g.mul("timeline/on", &started, &ongoing);
+    let spoken = g.mul("timeline/spoken", &on, &visemes);
+    let code = g.op("timeline/code", "vectormax", json!({}), &[("in", &spoken)]);
+    let shape = viseme_shape_of(g, &code);
+    let full = g.constant(1.0);
+    let settled = viseme_driver(g, (&shape, "out"), &full, true);
+
+    // The end: the last span's (an empty timeline ends at once — the max of
+    // nothing is no number, and `max` keeps the zero).
+    let last = g.op("timeline/last", "vectormax", json!({}), &[("in", &ends)]);
+    let end = g.max("timeline/end", &last, &zero);
+    let closed = g.op(
+        "lifecycle/closed",
+        "greaterthan",
+        json!({}),
+        &[("lhs", &elapsed), ("rhs", &end)],
+    );
+    let ended = g.op(
+        "lifecycle/ended",
+        "and",
+        json!({}),
+        &[("lhs", &closed), ("rhs", &settled)],
+    );
+    let running = status_node(g, "lifecycle/running", STATUS_RUNNING_VARIANT_ID);
+    let success = status_node(g, "lifecycle/success", STATUS_SUCCESS_VARIANT_ID);
+    let lifecycle = g.select("lifecycle/status", &ended, &success, &running);
+    g.output("out/status", &lifecycle, "task/status".to_string());
     json!({ "nodes": g.nodes, "edges": g.edges })
 }
 
@@ -703,6 +1113,27 @@ pub fn play_viseme_source() -> Json {
 /// The parsed canonical say asset.
 pub fn say_source() -> Json {
     serde_json::from_str(SAY_JSON).expect("skills/say.json parses")
+}
+
+/// The parsed canonical set_expression asset.
+pub fn set_expression_source() -> Json {
+    serde_json::from_str(SET_EXPRESSION_JSON).expect("skills/set_expression.json parses")
+}
+
+/// The parsed canonical set_facial_action_units asset.
+pub fn set_facial_action_units_source() -> Json {
+    serde_json::from_str(SET_FACIAL_ACTION_UNITS_JSON)
+        .expect("skills/set_facial_action_units.json parses")
+}
+
+/// The parsed canonical set_viseme asset.
+pub fn set_viseme_source() -> Json {
+    serde_json::from_str(SET_VISEME_JSON).expect("skills/set_viseme.json parses")
+}
+
+/// The parsed canonical play_visemes asset.
+pub fn play_visemes_source() -> Json {
+    serde_json::from_str(PLAY_VISEMES_JSON).expect("skills/play_visemes.json parses")
 }
 
 /// The bundle graph kind under which a skill fragment embeds in a GLB — the
@@ -726,7 +1157,7 @@ pub struct Skill {
 }
 
 /// Every skill Vizij ships.
-pub const SKILLS: [Skill; 3] = [
+pub const SKILLS: [Skill; 7] = [
     Skill {
         id: look_at::NAME,
         title: "Look At",
@@ -756,6 +1187,43 @@ pub const SKILLS: [Skill; 3] = [
                       is the face's speech state while its audio plays.",
         parameters: &SAY_PARAMS,
         asset_json: SAY_JSON,
+    },
+    Skill {
+        id: set_expression::NAME,
+        title: "Set Expression",
+        description: "Sets the face's expression and holds it until changed: a named expression \
+                      at the arousal as its intensity, or a valence/arousal point blended over \
+                      the circumplex; the latest of set_expression and set_facial_action_units \
+                      takes the face over, crossfading from where it is.",
+        parameters: &SET_EXPRESSION_PARAMS,
+        asset_json: SET_EXPRESSION_JSON,
+    },
+    Skill {
+        id: set_facial_action_units::NAME,
+        title: "Set Facial Action Units",
+        description: "Sets the face's expression as FACS action units (sparse: an unlisted unit \
+                      rests) on the muscle tier, over the neutral expression, and holds it \
+                      until changed; the latest of set_expression and set_facial_action_units \
+                      takes the face over.",
+        parameters: &SET_FACIAL_ACTION_UNITS_PARAMS,
+        asset_json: SET_FACIAL_ACTION_UNITS_JSON,
+    },
+    Skill {
+        id: set_viseme::NAME,
+        title: "Set Viseme",
+        description: "Holds one viseme shape, by its ROS4HRI code, at full weight until the next \
+                      lips command — the shape at the playhead, for a live producer.",
+        parameters: &SET_VISEME_PARAMS,
+        asset_json: SET_VISEME_JSON,
+    },
+    Skill {
+        id: play_visemes::NAME,
+        title: "Play Visemes",
+        description: "Plays a viseme timeline — each shape from its start for its duration, \
+                      through the lipsync crossfade — and ends after the last; reports the \
+                      current viseme.",
+        parameters: &PLAY_VISEMES_PARAMS,
+        asset_json: PLAY_VISEMES_JSON,
     },
 ];
 
@@ -834,6 +1302,34 @@ mod tests {
         assert_eq!(name, say::NAME);
         assert_eq!(parameters, ["text", "voice", "viseme", "speech"]);
         assert_eq!(parameters[..SAY_PARAMS.len()], SAY_PARAMS);
+
+        let (name, parameters) = declared(
+            set_expression::record(parent),
+            set_expression::ids::set_expression::FUNCTION,
+        );
+        assert_eq!(name, set_expression::NAME);
+        assert_eq!(parameters, SET_EXPRESSION_PARAMS);
+
+        let (name, parameters) = declared(
+            set_facial_action_units::record(parent),
+            set_facial_action_units::ids::set_facial_action_units::FUNCTION,
+        );
+        assert_eq!(name, set_facial_action_units::NAME);
+        assert_eq!(parameters, SET_FACIAL_ACTION_UNITS_PARAMS);
+
+        let (name, parameters) = declared(
+            set_viseme::record(parent),
+            set_viseme::ids::set_viseme::FUNCTION,
+        );
+        assert_eq!(name, set_viseme::NAME);
+        assert_eq!(parameters, SET_VISEME_PARAMS);
+
+        let (name, parameters) = declared(
+            play_visemes::record(parent),
+            play_visemes::ids::play_visemes::FUNCTION,
+        );
+        assert_eq!(name, play_visemes::NAME);
+        assert_eq!(parameters, PLAY_VISEMES_PARAMS);
     }
 
     /// `say` streams the viseme and the utterance through mutable
@@ -873,6 +1369,53 @@ mod tests {
             "skills/play_viseme.json is stale"
         );
         assert_eq!(say_source(), generate_say(), "skills/say.json is stale");
+        assert_eq!(
+            set_viseme_source(),
+            generate_set_viseme(),
+            "skills/set_viseme.json is stale"
+        );
+        assert_eq!(
+            play_visemes_source(),
+            generate_play_visemes(),
+            "skills/play_visemes.json is stale"
+        );
+    }
+
+    /// The expression setters' committed assets, likewise: regenerate with
+    /// `vizij-bundle export-skill set_expression` / `…
+    /// set_facial_action_units`.
+    #[test]
+    fn committed_expression_assets_match_their_generators() {
+        assert_eq!(
+            set_expression_source(),
+            generate_set_expression(),
+            "skills/set_expression.json is stale"
+        );
+        assert_eq!(
+            set_facial_action_units_source(),
+            generate_set_facial_action_units(),
+            "skills/set_facial_action_units.json is stale"
+        );
+    }
+
+    /// Both expression setters write the face's whole expression — every
+    /// named expression, the muscle tier and the de-facto jaw — so the one
+    /// that takes the face over leaves nothing of the other's behind.
+    #[test]
+    fn the_expression_setters_write_the_whole_expression() {
+        for source in [set_expression_source(), set_facial_action_units_source()] {
+            let outputs: Vec<&str> = source["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|n| n["type"] == "output")
+                .filter_map(|n| n["params"]["path"].as_str())
+                .collect();
+            for path in expression_surface() {
+                assert!(outputs.contains(&path.as_str()), "missing {path}");
+            }
+            assert!(outputs.contains(&"task/status"));
+        }
     }
 
     #[test]
@@ -884,7 +1427,18 @@ mod tests {
             .iter()
             .map(|s| s["id"].as_str().unwrap())
             .collect();
-        assert_eq!(ids, ["look_at", "play_viseme", "say"]);
+        assert_eq!(
+            ids,
+            [
+                "look_at",
+                "play_viseme",
+                "say",
+                "set_expression",
+                "set_facial_action_units",
+                "set_viseme",
+                "play_visemes"
+            ]
+        );
         assert_eq!(listed[0]["parameters"][1], "target");
         assert_eq!(
             listed[1]["parameters"],
@@ -898,11 +1452,16 @@ mod tests {
         assert_eq!(skill_source("say"), Some(say_source()));
     }
 
-    /// Both viseme players write the face standard's lipsync surface — every
+    /// The viseme players write the face standard's lipsync surface — every
     /// shape weight and the current-viseme state — and report their run.
     #[test]
     fn the_viseme_players_write_the_lipsync_surface() {
-        for source in [play_viseme_source(), say_source()] {
+        for source in [
+            play_viseme_source(),
+            say_source(),
+            set_viseme_source(),
+            play_visemes_source(),
+        ] {
             let outputs: Vec<&str> = source["nodes"]
                 .as_array()
                 .unwrap()

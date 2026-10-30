@@ -740,21 +740,20 @@ pub fn restore_terminal() {
 
 /// The ROS4HRI exposure profile as this device serves it: the typed face
 /// topics fanning onto the standard keys, the face image on its
-/// `image_transport` pair, and the standard skills — `/skill/look_at`,
-/// `/skill/say` — bound to the gaze and speech task runs the device
-/// describes.
+/// `image_transport` pair, and the standard skills bound to the task runs the
+/// device describes — `/skill/look_at`, `/skill/say` and
+/// `/skill/play_visemes` as actions, `/skill/set_expression`,
+/// `/skill/set_facial_action_units` and `/skill/set_viseme` as topics whose
+/// every message runs the skill.
 ///
 /// The preset comes from arora-bridge-ros2, which knows nothing of Vizij and
-/// binds skills by name. `/skill/set_expression` lands on the
-/// `standard/ros4hri/expression/*` keys the face's graphs read, since the
-/// device describes no `set_expression` method. A skill the preset binds to a
-/// method this device does not describe (`play_visemes`,
-/// `set_facial_action_units`, `set_viseme`) is left out: the bridge would
-/// refuse it at startup, and a ROS graph would list an action nothing serves.
+/// binds skills by name. A skill it binds to a method this device does not
+/// describe is left out: the bridge would refuse it at startup, and a ROS
+/// graph would list an endpoint nothing serves.
 #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
 fn ros4hri_profile() -> arora_bridge_ros2::ExposureProfile {
     let declared = |function: &str| vizij_arora_host::skills::skill(function).is_some();
-    let mut profile = arora_bridge_ros2::ExposureProfile::ros4hri().with_set_expression_on_keys();
+    let mut profile = arora_bridge_ros2::ExposureProfile::ros4hri();
     profile
         .actions
         .retain(|binding| declared(&binding.function));
@@ -771,7 +770,10 @@ fn ros4hri_profile() -> arora_bridge_ros2::ExposureProfile {
 mod ros4hri_profile_tests {
     use arora_types::record::module::frozen::ExportKind;
     use uuid::Uuid;
-    use vizij_arora_host::skills::{look_at, play_viseme, say};
+    use vizij_arora_host::skills::{
+        look_at, play_viseme, play_visemes, say, set_expression, set_facial_action_units,
+        set_viseme,
+    };
 
     /// The closed caption the profile takes lands on the keys the `ros4hri`
     /// profile declares for it — the ones the mapping relays to the face's
@@ -805,44 +807,59 @@ mod ros4hri_profile_tests {
             look_at::record(Uuid::nil()),
             play_viseme::record(Uuid::nil()),
             say::record(Uuid::nil()),
+            set_expression::record(Uuid::nil()),
+            set_facial_action_units::record(Uuid::nil()),
+            set_viseme::record(Uuid::nil()),
+            play_visemes::record(Uuid::nil()),
         ];
         let profile = super::ros4hri_profile();
-        for skill in [look_at::NAME, say::NAME] {
+        // The preset's skills are all bound: the gaze, speech and
+        // viseme-timeline skills as actions, the setters as topics.
+        for skill in [look_at::NAME, say::NAME, play_visemes::NAME] {
             assert!(
                 profile.actions.iter().any(|b| b.function == skill),
-                "the profile binds `{skill}`"
+                "the profile binds `{skill}` as an action"
             );
         }
-        assert!(
-            profile
-                .topic_skills
-                .iter()
-                .all(|b| b.function != "set_expression"),
-            "set_expression lands on the expression keys, not on a method"
-        );
-        for binding in &profile.actions {
+        for skill in [
+            set_expression::NAME,
+            set_facial_action_units::NAME,
+            set_viseme::NAME,
+        ] {
+            assert!(
+                profile.topic_skills.iter().any(|b| b.function == skill),
+                "the profile binds `{skill}` as a topic"
+            );
+        }
+        // (the ROS name, the bound function, the routed parameters)
+        let bindings = profile
+            .actions
+            .iter()
+            .map(|b| (&b.action, &b.function, &b.goal_routes))
+            .chain(
+                profile
+                    .topic_skills
+                    .iter()
+                    .map(|b| (&b.topic, &b.function, &b.routes)),
+            );
+        for (name, function, routes) in bindings {
             let signature = contracts
                 .iter()
                 .flat_map(|contract| contract.exports.values())
-                .find(|export| export.name == binding.function)
+                .find(|export| export.name == *function)
                 .map(|export| {
                     let ExportKind::Function(signature) = &export.kind;
                     signature
                 })
                 .unwrap_or_else(|| {
-                    panic!(
-                        "{} binds `{}`, which no skill contract declares",
-                        binding.action, binding.function
-                    )
+                    panic!("{name} binds `{function}`, which no skill contract declares")
                 });
-            for route in &binding.goal_routes {
+            for route in routes {
                 assert!(
                     signature.parameters.values().any(|p| p.name == route.key),
-                    "{} routes `{}` to `{}`, which `{}` does not take",
-                    binding.action,
+                    "{name} routes `{}` to `{}`, which `{function}` does not take",
                     route.field,
                     route.key,
-                    binding.function
                 );
             }
         }

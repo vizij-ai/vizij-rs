@@ -107,7 +107,9 @@ assert.equal(await profile("nope"), null);
 // it reads the device-scoped ROS4HRI commands and writes the face's controls,
 // the speech channel runs the other way — the face's speech state in, the
 // ROS4HRI speech state out — and the gaze aims the eyes with the face's eye
-// settings, the prefix landing on the face's side only.
+// settings, the prefix landing on the face's side only. It reads the face's
+// `asleep` weight, which inhibits its blink; the expression is the
+// set_expression runs it spawns.
 assert.deepEqual((await mappings()).map((m) => m.id), ["ros4hri"]);
 const graph = await mapping("ros4hri", "rig/quori/");
 const outputs = graph.nodes.filter((n) => n.type === "output").map((n) => n.params.path);
@@ -127,12 +129,20 @@ assert.ok(
       p === "rig/quori/standard/vizij/speech" ||
       p === "rig/quori/standard/vizij/viseme" ||
       p === "rig/quori/standard/vizij/gaze/eye_spacing" ||
-      p === "rig/quori/standard/vizij/gaze/range",
+      p === "rig/quori/standard/vizij/gaze/range" ||
+      p === "rig/quori/standard/vizij/expression/asleep",
   ),
 );
-for (const path of ["speech", "viseme", "gaze/eye_spacing", "gaze/range"]) {
+for (const path of ["speech", "viseme", "gaze/eye_spacing", "gaze/range", "expression/asleep"]) {
   assert.ok(inputs.includes(`rig/quori/standard/vizij/${path}`), `the mapping reads ${path}`);
 }
+assert.ok(!outputs.some((p) => p.includes("/standard/vizij/expression/")));
+assert.ok(
+  graph.nodes.some(
+    (n) => n.type === "spawn" && n.params.spawn_on_load === true,
+  ),
+  "the expression keys spawn set_expression, once on load too",
+);
 assert.equal(await mapping("nope"), null);
 
 // The deprecated names are the same functions.

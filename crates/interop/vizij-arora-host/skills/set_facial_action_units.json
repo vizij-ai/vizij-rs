@@ -1,0 +1,9244 @@
+{
+  "nodes": [
+    {
+      "id": "in/codes",
+      "type": "input",
+      "params": {
+        "path": "task/codes",
+        "value": {
+          "u8s": []
+        }
+      }
+    },
+    {
+      "id": "in/intensities",
+      "type": "input",
+      "params": {
+        "path": "task/intensities",
+        "value": {
+          "f32s": []
+        }
+      }
+    },
+    {
+      "id": "const/1",
+      "type": "constant",
+      "params": {
+        "value": 1.0
+      }
+    },
+    {
+      "id": "au/1/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/1/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/1/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "const/0",
+      "type": "constant",
+      "params": {
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/1/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/1/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/1/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/2",
+      "type": "constant",
+      "params": {
+        "value": 2.0
+      }
+    },
+    {
+      "id": "au/2/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/2/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/2/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/2/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/2/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/2/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/4",
+      "type": "constant",
+      "params": {
+        "value": 4.0
+      }
+    },
+    {
+      "id": "au/4/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/4/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/4/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/4/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/4/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/4/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/5",
+      "type": "constant",
+      "params": {
+        "value": 5.0
+      }
+    },
+    {
+      "id": "au/5/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/5/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/5/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/5/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/5/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/5/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/6",
+      "type": "constant",
+      "params": {
+        "value": 6.0
+      }
+    },
+    {
+      "id": "au/6/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/6/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/6/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/6/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/6/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/6/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/7",
+      "type": "constant",
+      "params": {
+        "value": 7.0
+      }
+    },
+    {
+      "id": "au/7/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/7/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/7/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/7/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/7/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/7/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/9",
+      "type": "constant",
+      "params": {
+        "value": 9.0
+      }
+    },
+    {
+      "id": "au/9/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/9/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/9/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/9/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/9/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/9/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/10",
+      "type": "constant",
+      "params": {
+        "value": 10.0
+      }
+    },
+    {
+      "id": "au/10/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/10/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/10/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/10/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/10/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/10/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/12",
+      "type": "constant",
+      "params": {
+        "value": 12.0
+      }
+    },
+    {
+      "id": "au/12/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/12/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/12/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/12/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/12/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/12/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/15",
+      "type": "constant",
+      "params": {
+        "value": 15.0
+      }
+    },
+    {
+      "id": "au/15/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/15/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/15/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/15/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/15/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/15/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/16",
+      "type": "constant",
+      "params": {
+        "value": 16.0
+      }
+    },
+    {
+      "id": "au/16/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/16/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/16/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/16/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/16/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/16/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/18",
+      "type": "constant",
+      "params": {
+        "value": 18.0
+      }
+    },
+    {
+      "id": "au/18/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/18/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/18/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/18/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/18/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/18/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/19",
+      "type": "constant",
+      "params": {
+        "value": 19.0
+      }
+    },
+    {
+      "id": "au/19/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/19/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/19/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/19/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/19/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/19/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/20",
+      "type": "constant",
+      "params": {
+        "value": 20.0
+      }
+    },
+    {
+      "id": "au/20/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/20/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/20/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/20/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/20/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/20/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/22",
+      "type": "constant",
+      "params": {
+        "value": 22.0
+      }
+    },
+    {
+      "id": "au/22/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/22/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/22/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/22/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/22/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/22/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/24",
+      "type": "constant",
+      "params": {
+        "value": 24.0
+      }
+    },
+    {
+      "id": "au/24/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/24/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/24/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/24/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/24/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/24/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/26",
+      "type": "constant",
+      "params": {
+        "value": 26.0
+      }
+    },
+    {
+      "id": "au/26/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/26/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/26/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/26/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/26/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/26/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/29",
+      "type": "constant",
+      "params": {
+        "value": 29.0
+      }
+    },
+    {
+      "id": "au/29/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/29/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/29/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/29/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/29/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/29/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/34",
+      "type": "constant",
+      "params": {
+        "value": 34.0
+      }
+    },
+    {
+      "id": "au/34/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/34/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/34/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/34/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/34/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/34/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/43",
+      "type": "constant",
+      "params": {
+        "value": 43.0
+      }
+    },
+    {
+      "id": "au/43/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/43/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/43/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/43/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "const/45",
+      "type": "constant",
+      "params": {
+        "value": 45.0
+      }
+    },
+    {
+      "id": "au/45/offset",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/45/distance",
+      "type": "abs",
+      "params": {}
+    },
+    {
+      "id": "au/45/near",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "au/45/match",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "au/43/or_45",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "au/43/sum",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "au/43/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "in/dt",
+      "type": "input",
+      "params": {
+        "path": "arora/dt",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "const/1000000000",
+      "type": "constant",
+      "params": {
+        "value": 1000000000.0
+      }
+    },
+    {
+      "id": "smoothing/dt",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "const/0.14",
+      "type": "constant",
+      "params": {
+        "value": 0.14
+      }
+    },
+    {
+      "id": "smoothing/half_lives",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "const/0.5",
+      "type": "constant",
+      "params": {
+        "value": 0.5
+      }
+    },
+    {
+      "id": "smoothing/decay",
+      "type": "power",
+      "params": {}
+    },
+    {
+      "id": "smoothing/gain",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "in/expression/neutral",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/neutral",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/neutral/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/neutral/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/neutral/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/neutral",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/neutral"
+      }
+    },
+    {
+      "id": "in/expression/angry",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/angry",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/angry/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/angry/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/angry/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/angry",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/angry"
+      }
+    },
+    {
+      "id": "in/expression/sad",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/sad",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/sad/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/sad/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/sad/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/sad",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/sad"
+      }
+    },
+    {
+      "id": "in/expression/happy",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/happy",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/happy/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/happy/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/happy/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/happy",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/happy"
+      }
+    },
+    {
+      "id": "in/expression/surprised",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/surprised",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/surprised/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/surprised/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/surprised/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/surprised",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/surprised"
+      }
+    },
+    {
+      "id": "in/expression/disgusted",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/disgusted",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/disgusted/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/disgusted/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/disgusted/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/disgusted",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/disgusted"
+      }
+    },
+    {
+      "id": "in/expression/scared",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/scared",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/scared/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/scared/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/scared/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/scared",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/scared"
+      }
+    },
+    {
+      "id": "in/expression/pleading",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/pleading",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/pleading/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/pleading/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/pleading/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/pleading",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/pleading"
+      }
+    },
+    {
+      "id": "in/expression/vulnerable",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/vulnerable",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/vulnerable/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/vulnerable/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/vulnerable/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/vulnerable",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/vulnerable"
+      }
+    },
+    {
+      "id": "in/expression/despaired",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/despaired",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/despaired/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/despaired/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/despaired/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/despaired",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/despaired"
+      }
+    },
+    {
+      "id": "in/expression/guilty",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/guilty",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/guilty/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/guilty/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/guilty/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/guilty",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/guilty"
+      }
+    },
+    {
+      "id": "in/expression/disappointed",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/disappointed",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/disappointed/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/disappointed/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/disappointed/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/disappointed",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/disappointed"
+      }
+    },
+    {
+      "id": "in/expression/embarrassed",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/embarrassed",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/embarrassed/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/embarrassed/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/embarrassed/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/embarrassed",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/embarrassed"
+      }
+    },
+    {
+      "id": "in/expression/horrified",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/horrified",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/horrified/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/horrified/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/horrified/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/horrified",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/horrified"
+      }
+    },
+    {
+      "id": "in/expression/skeptical",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/skeptical",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/skeptical/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/skeptical/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/skeptical/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/skeptical",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/skeptical"
+      }
+    },
+    {
+      "id": "in/expression/annoyed",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/annoyed",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/annoyed/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/annoyed/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/annoyed/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/annoyed",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/annoyed"
+      }
+    },
+    {
+      "id": "in/expression/furious",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/furious",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/furious/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/furious/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/furious/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/furious",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/furious"
+      }
+    },
+    {
+      "id": "in/expression/suspicious",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/suspicious",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/suspicious/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/suspicious/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/suspicious/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/suspicious",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/suspicious"
+      }
+    },
+    {
+      "id": "in/expression/rejected",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/rejected",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/rejected/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/rejected/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/rejected/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/rejected",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/rejected"
+      }
+    },
+    {
+      "id": "in/expression/bored",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/bored",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/bored/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/bored/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/bored/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/bored",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/bored"
+      }
+    },
+    {
+      "id": "in/expression/tired",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/tired",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/tired/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/tired/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/tired/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/tired",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/tired"
+      }
+    },
+    {
+      "id": "in/expression/asleep",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/asleep",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/asleep/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/asleep/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/asleep/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/asleep",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/asleep"
+      }
+    },
+    {
+      "id": "in/expression/confused",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/confused",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/confused/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/confused/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/confused/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/confused",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/confused"
+      }
+    },
+    {
+      "id": "in/expression/amazed",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/amazed",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/amazed/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/amazed/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/amazed/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/amazed",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/amazed"
+      }
+    },
+    {
+      "id": "in/expression/excited",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/excited",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/excited/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/excited/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/excited/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/excited",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/excited"
+      }
+    },
+    {
+      "id": "in/expression/concerned",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/concerned",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/concerned/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/concerned/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/concerned/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/concerned",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/concerned"
+      }
+    },
+    {
+      "id": "in/expression/sleepy",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/expression/sleepy",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/sleepy/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/sleepy/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/sleepy/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/expression/sleepy",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/sleepy"
+      }
+    },
+    {
+      "id": "in/face/brow_inner_up",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/brow_inner_up",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/brow_inner_up/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/brow_inner_up/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/brow_inner_up/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/brow_inner_up",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/brow_inner_up"
+      }
+    },
+    {
+      "id": "in/face/brow_outer_up_left",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/brow_outer_up_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/brow_outer_up_left/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/brow_outer_up_left/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/brow_outer_up_left/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/brow_outer_up_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/brow_outer_up_left"
+      }
+    },
+    {
+      "id": "in/face/brow_outer_up_right",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/brow_outer_up_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/brow_outer_up_right/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/brow_outer_up_right/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/brow_outer_up_right/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/brow_outer_up_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/brow_outer_up_right"
+      }
+    },
+    {
+      "id": "in/face/brow_down_left",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/brow_down_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/brow_down_left/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/brow_down_left/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/brow_down_left/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/brow_down_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/brow_down_left"
+      }
+    },
+    {
+      "id": "in/face/brow_down_right",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/brow_down_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/brow_down_right/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/brow_down_right/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/brow_down_right/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/brow_down_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/brow_down_right"
+      }
+    },
+    {
+      "id": "in/face/eye_wide_left",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/eye_wide_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/eye_wide_left/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/eye_wide_left/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/eye_wide_left/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/eye_wide_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/eye_wide_left"
+      }
+    },
+    {
+      "id": "in/face/eye_wide_right",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/eye_wide_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/eye_wide_right/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/eye_wide_right/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/eye_wide_right/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/eye_wide_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/eye_wide_right"
+      }
+    },
+    {
+      "id": "in/face/eye_squint_left",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/eye_squint_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/eye_squint_left/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/eye_squint_left/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/eye_squint_left/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/eye_squint_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/eye_squint_left"
+      }
+    },
+    {
+      "id": "in/face/eye_squint_right",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/eye_squint_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/eye_squint_right/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/eye_squint_right/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/eye_squint_right/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/eye_squint_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/eye_squint_right"
+      }
+    },
+    {
+      "id": "in/face/eye_closed_left",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/eye_closed_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/eye_closed_left/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/eye_closed_left/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/eye_closed_left/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/eye_closed_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/eye_closed_left"
+      }
+    },
+    {
+      "id": "in/face/eye_closed_right",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/eye_closed_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/eye_closed_right/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/eye_closed_right/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/eye_closed_right/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/eye_closed_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/eye_closed_right"
+      }
+    },
+    {
+      "id": "in/face/cheek_raise_left",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/cheek_raise_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/cheek_raise_left/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/cheek_raise_left/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/cheek_raise_left/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/cheek_raise_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/cheek_raise_left"
+      }
+    },
+    {
+      "id": "in/face/cheek_raise_right",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/cheek_raise_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/cheek_raise_right/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/cheek_raise_right/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/cheek_raise_right/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/cheek_raise_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/cheek_raise_right"
+      }
+    },
+    {
+      "id": "in/face/cheek_puff",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/cheek_puff",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/cheek_puff/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/cheek_puff/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/cheek_puff/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/cheek_puff",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/cheek_puff"
+      }
+    },
+    {
+      "id": "in/face/nose_sneer_left",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/nose_sneer_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/nose_sneer_left/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/nose_sneer_left/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/nose_sneer_left/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/nose_sneer_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/nose_sneer_left"
+      }
+    },
+    {
+      "id": "in/face/nose_sneer_right",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/nose_sneer_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/nose_sneer_right/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/nose_sneer_right/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/nose_sneer_right/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/nose_sneer_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/nose_sneer_right"
+      }
+    },
+    {
+      "id": "in/face/jaw_open",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/jaw_open",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/jaw_open/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/jaw_open/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/jaw_open/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/jaw_open",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/jaw_open"
+      }
+    },
+    {
+      "id": "in/face/jaw_left",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/jaw_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/jaw_left/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/jaw_left/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/jaw_left/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/jaw_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/jaw_left"
+      }
+    },
+    {
+      "id": "in/face/jaw_right",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/jaw_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/jaw_right/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/jaw_right/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/jaw_right/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/jaw_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/jaw_right"
+      }
+    },
+    {
+      "id": "in/face/jaw_forward",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/jaw_forward",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/jaw_forward/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/jaw_forward/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/jaw_forward/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/jaw_forward",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/jaw_forward"
+      }
+    },
+    {
+      "id": "in/face/mouth_smile_left",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/mouth_smile_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/mouth_smile_left/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_smile_left/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_smile_left/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/mouth_smile_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_smile_left"
+      }
+    },
+    {
+      "id": "in/face/mouth_smile_right",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/mouth_smile_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/mouth_smile_right/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_smile_right/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_smile_right/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/mouth_smile_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_smile_right"
+      }
+    },
+    {
+      "id": "in/face/mouth_frown_left",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/mouth_frown_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/mouth_frown_left/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_frown_left/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_frown_left/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/mouth_frown_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_frown_left"
+      }
+    },
+    {
+      "id": "in/face/mouth_frown_right",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/mouth_frown_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/mouth_frown_right/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_frown_right/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_frown_right/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/mouth_frown_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_frown_right"
+      }
+    },
+    {
+      "id": "in/face/mouth_press_left",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/mouth_press_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/mouth_press_left/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_press_left/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_press_left/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/mouth_press_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_press_left"
+      }
+    },
+    {
+      "id": "in/face/mouth_press_right",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/mouth_press_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/mouth_press_right/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_press_right/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_press_right/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/mouth_press_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_press_right"
+      }
+    },
+    {
+      "id": "in/face/mouth_pucker",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/mouth_pucker",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/mouth_pucker/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_pucker/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_pucker/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/mouth_pucker",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_pucker"
+      }
+    },
+    {
+      "id": "in/face/mouth_funnel",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/mouth_funnel",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/mouth_funnel/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_funnel/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_funnel/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/mouth_funnel",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_funnel"
+      }
+    },
+    {
+      "id": "in/face/mouth_stretch_left",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/mouth_stretch_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/mouth_stretch_left/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_stretch_left/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_stretch_left/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/mouth_stretch_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_stretch_left"
+      }
+    },
+    {
+      "id": "in/face/mouth_stretch_right",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/mouth_stretch_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/mouth_stretch_right/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_stretch_right/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_stretch_right/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/mouth_stretch_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_stretch_right"
+      }
+    },
+    {
+      "id": "in/face/mouth_upper_up_left",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/mouth_upper_up_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/mouth_upper_up_left/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_upper_up_left/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_upper_up_left/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/mouth_upper_up_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_upper_up_left"
+      }
+    },
+    {
+      "id": "in/face/mouth_upper_up_right",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/mouth_upper_up_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/mouth_upper_up_right/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_upper_up_right/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_upper_up_right/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/mouth_upper_up_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_upper_up_right"
+      }
+    },
+    {
+      "id": "in/face/mouth_lower_down_left",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/mouth_lower_down_left",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/mouth_lower_down_left/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_lower_down_left/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_lower_down_left/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/mouth_lower_down_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_lower_down_left"
+      }
+    },
+    {
+      "id": "in/face/mouth_lower_down_right",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/mouth_lower_down_right",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/mouth_lower_down_right/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_lower_down_right/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/mouth_lower_down_right/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/mouth_lower_down_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_lower_down_right"
+      }
+    },
+    {
+      "id": "in/face/tongue_out",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/face/tongue_out",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "face/tongue_out/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "face/tongue_out/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "face/tongue_out/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/face/tongue_out",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/tongue_out"
+      }
+    },
+    {
+      "id": "in/mouth/morph/jaw_open",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/mouth/morph/jaw_open",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mouth/morph/jaw_open/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "mouth/morph/jaw_open/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "mouth/morph/jaw_open/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/mouth/morph/jaw_open",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/mouth/morph/jaw_open"
+      }
+    },
+    {
+      "id": "lifecycle/running",
+      "type": "constant",
+      "params": {
+        "value": {
+          "enum": {
+            "id": "325a5767-e344-4532-860e-0749bcf2e428",
+            "variant_id": "acd79ec6-0c44-401a-82f8-5da5422d3eec",
+            "value": "unit"
+          }
+        }
+      }
+    },
+    {
+      "id": "out/status",
+      "type": "output",
+      "params": {
+        "path": "task/status"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/1/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/1/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/1/offset"
+      },
+      "to": {
+        "node_id": "au/1/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/1/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/1/distance"
+      },
+      "to": {
+        "node_id": "au/1/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/1/near"
+      },
+      "to": {
+        "node_id": "au/1/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/1/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/1/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/1/match"
+      },
+      "to": {
+        "node_id": "au/1/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/1/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/1/sum"
+      },
+      "to": {
+        "node_id": "au/1/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/1/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/1/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/2/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/2"
+      },
+      "to": {
+        "node_id": "au/2/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/2/offset"
+      },
+      "to": {
+        "node_id": "au/2/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/2/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/2/distance"
+      },
+      "to": {
+        "node_id": "au/2/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/2/near"
+      },
+      "to": {
+        "node_id": "au/2/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/2/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/2/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/2/match"
+      },
+      "to": {
+        "node_id": "au/2/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/2/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/2/sum"
+      },
+      "to": {
+        "node_id": "au/2/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/2/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/2/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/4/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/4"
+      },
+      "to": {
+        "node_id": "au/4/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/4/offset"
+      },
+      "to": {
+        "node_id": "au/4/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/4/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/4/distance"
+      },
+      "to": {
+        "node_id": "au/4/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/4/near"
+      },
+      "to": {
+        "node_id": "au/4/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/4/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/4/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/4/match"
+      },
+      "to": {
+        "node_id": "au/4/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/4/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/4/sum"
+      },
+      "to": {
+        "node_id": "au/4/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/4/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/4/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/5/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/5"
+      },
+      "to": {
+        "node_id": "au/5/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/5/offset"
+      },
+      "to": {
+        "node_id": "au/5/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/5/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/5/distance"
+      },
+      "to": {
+        "node_id": "au/5/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/5/near"
+      },
+      "to": {
+        "node_id": "au/5/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/5/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/5/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/5/match"
+      },
+      "to": {
+        "node_id": "au/5/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/5/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/5/sum"
+      },
+      "to": {
+        "node_id": "au/5/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/5/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/5/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/6/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/6"
+      },
+      "to": {
+        "node_id": "au/6/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/6/offset"
+      },
+      "to": {
+        "node_id": "au/6/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/6/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/6/distance"
+      },
+      "to": {
+        "node_id": "au/6/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/6/near"
+      },
+      "to": {
+        "node_id": "au/6/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/6/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/6/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/6/match"
+      },
+      "to": {
+        "node_id": "au/6/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/6/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/6/sum"
+      },
+      "to": {
+        "node_id": "au/6/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/6/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/6/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/7/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/7"
+      },
+      "to": {
+        "node_id": "au/7/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/7/offset"
+      },
+      "to": {
+        "node_id": "au/7/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/7/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/7/distance"
+      },
+      "to": {
+        "node_id": "au/7/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/7/near"
+      },
+      "to": {
+        "node_id": "au/7/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/7/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/7/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/7/match"
+      },
+      "to": {
+        "node_id": "au/7/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/7/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/7/sum"
+      },
+      "to": {
+        "node_id": "au/7/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/7/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/7/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/9/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/9"
+      },
+      "to": {
+        "node_id": "au/9/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/9/offset"
+      },
+      "to": {
+        "node_id": "au/9/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/9/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/9/distance"
+      },
+      "to": {
+        "node_id": "au/9/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/9/near"
+      },
+      "to": {
+        "node_id": "au/9/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/9/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/9/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/9/match"
+      },
+      "to": {
+        "node_id": "au/9/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/9/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/9/sum"
+      },
+      "to": {
+        "node_id": "au/9/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/9/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/9/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/10/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/10"
+      },
+      "to": {
+        "node_id": "au/10/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/10/offset"
+      },
+      "to": {
+        "node_id": "au/10/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/10/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/10/distance"
+      },
+      "to": {
+        "node_id": "au/10/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/10/near"
+      },
+      "to": {
+        "node_id": "au/10/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/10/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/10/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/10/match"
+      },
+      "to": {
+        "node_id": "au/10/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/10/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/10/sum"
+      },
+      "to": {
+        "node_id": "au/10/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/10/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/10/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/12/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/12"
+      },
+      "to": {
+        "node_id": "au/12/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/12/offset"
+      },
+      "to": {
+        "node_id": "au/12/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/12/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/12/distance"
+      },
+      "to": {
+        "node_id": "au/12/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/12/near"
+      },
+      "to": {
+        "node_id": "au/12/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/12/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/12/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/12/match"
+      },
+      "to": {
+        "node_id": "au/12/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/12/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/12/sum"
+      },
+      "to": {
+        "node_id": "au/12/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/12/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/12/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/15/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/15"
+      },
+      "to": {
+        "node_id": "au/15/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/15/offset"
+      },
+      "to": {
+        "node_id": "au/15/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/15/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/15/distance"
+      },
+      "to": {
+        "node_id": "au/15/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/15/near"
+      },
+      "to": {
+        "node_id": "au/15/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/15/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/15/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/15/match"
+      },
+      "to": {
+        "node_id": "au/15/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/15/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/15/sum"
+      },
+      "to": {
+        "node_id": "au/15/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/15/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/15/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/16/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/16"
+      },
+      "to": {
+        "node_id": "au/16/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/16/offset"
+      },
+      "to": {
+        "node_id": "au/16/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/16/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/16/distance"
+      },
+      "to": {
+        "node_id": "au/16/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/16/near"
+      },
+      "to": {
+        "node_id": "au/16/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/16/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/16/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/16/match"
+      },
+      "to": {
+        "node_id": "au/16/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/16/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/16/sum"
+      },
+      "to": {
+        "node_id": "au/16/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/16/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/16/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/18/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/18"
+      },
+      "to": {
+        "node_id": "au/18/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/18/offset"
+      },
+      "to": {
+        "node_id": "au/18/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/18/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/18/distance"
+      },
+      "to": {
+        "node_id": "au/18/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/18/near"
+      },
+      "to": {
+        "node_id": "au/18/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/18/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/18/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/18/match"
+      },
+      "to": {
+        "node_id": "au/18/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/18/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/18/sum"
+      },
+      "to": {
+        "node_id": "au/18/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/18/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/18/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/19/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/19"
+      },
+      "to": {
+        "node_id": "au/19/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/19/offset"
+      },
+      "to": {
+        "node_id": "au/19/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/19/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/19/distance"
+      },
+      "to": {
+        "node_id": "au/19/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/19/near"
+      },
+      "to": {
+        "node_id": "au/19/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/19/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/19/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/19/match"
+      },
+      "to": {
+        "node_id": "au/19/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/19/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/19/sum"
+      },
+      "to": {
+        "node_id": "au/19/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/19/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/19/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/20/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/20"
+      },
+      "to": {
+        "node_id": "au/20/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/20/offset"
+      },
+      "to": {
+        "node_id": "au/20/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/20/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/20/distance"
+      },
+      "to": {
+        "node_id": "au/20/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/20/near"
+      },
+      "to": {
+        "node_id": "au/20/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/20/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/20/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/20/match"
+      },
+      "to": {
+        "node_id": "au/20/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/20/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/20/sum"
+      },
+      "to": {
+        "node_id": "au/20/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/20/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/20/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/22/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/22"
+      },
+      "to": {
+        "node_id": "au/22/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/22/offset"
+      },
+      "to": {
+        "node_id": "au/22/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/22/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/22/distance"
+      },
+      "to": {
+        "node_id": "au/22/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/22/near"
+      },
+      "to": {
+        "node_id": "au/22/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/22/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/22/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/22/match"
+      },
+      "to": {
+        "node_id": "au/22/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/22/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/22/sum"
+      },
+      "to": {
+        "node_id": "au/22/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/22/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/22/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/24/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/24"
+      },
+      "to": {
+        "node_id": "au/24/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/24/offset"
+      },
+      "to": {
+        "node_id": "au/24/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/24/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/24/distance"
+      },
+      "to": {
+        "node_id": "au/24/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/24/near"
+      },
+      "to": {
+        "node_id": "au/24/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/24/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/24/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/24/match"
+      },
+      "to": {
+        "node_id": "au/24/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/24/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/24/sum"
+      },
+      "to": {
+        "node_id": "au/24/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/24/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/24/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/26/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/26"
+      },
+      "to": {
+        "node_id": "au/26/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/26/offset"
+      },
+      "to": {
+        "node_id": "au/26/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/26/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/26/distance"
+      },
+      "to": {
+        "node_id": "au/26/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/26/near"
+      },
+      "to": {
+        "node_id": "au/26/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/26/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/26/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/26/match"
+      },
+      "to": {
+        "node_id": "au/26/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/26/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/26/sum"
+      },
+      "to": {
+        "node_id": "au/26/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/26/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/26/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/29/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/29"
+      },
+      "to": {
+        "node_id": "au/29/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/29/offset"
+      },
+      "to": {
+        "node_id": "au/29/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/29/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/29/distance"
+      },
+      "to": {
+        "node_id": "au/29/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/29/near"
+      },
+      "to": {
+        "node_id": "au/29/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/29/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/29/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/29/match"
+      },
+      "to": {
+        "node_id": "au/29/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/29/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/29/sum"
+      },
+      "to": {
+        "node_id": "au/29/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/29/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/29/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/34/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/34"
+      },
+      "to": {
+        "node_id": "au/34/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/34/offset"
+      },
+      "to": {
+        "node_id": "au/34/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/34/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/34/distance"
+      },
+      "to": {
+        "node_id": "au/34/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/34/near"
+      },
+      "to": {
+        "node_id": "au/34/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/34/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/34/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/34/match"
+      },
+      "to": {
+        "node_id": "au/34/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/34/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/34/sum"
+      },
+      "to": {
+        "node_id": "au/34/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/34/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/34/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/43/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/43"
+      },
+      "to": {
+        "node_id": "au/43/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/43/offset"
+      },
+      "to": {
+        "node_id": "au/43/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/43/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/43/distance"
+      },
+      "to": {
+        "node_id": "au/43/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/43/near"
+      },
+      "to": {
+        "node_id": "au/43/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/43/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/43/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/codes"
+      },
+      "to": {
+        "node_id": "au/45/offset",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/45"
+      },
+      "to": {
+        "node_id": "au/45/offset",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/45/offset"
+      },
+      "to": {
+        "node_id": "au/45/distance",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/45/near",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/45/distance"
+      },
+      "to": {
+        "node_id": "au/45/near",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/45/near"
+      },
+      "to": {
+        "node_id": "au/45/match",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/45/match",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/45/match",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/43/match"
+      },
+      "to": {
+        "node_id": "au/43/or_45",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/45/match"
+      },
+      "to": {
+        "node_id": "au/43/or_45",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/43/or_45"
+      },
+      "to": {
+        "node_id": "au/43/sum",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/intensities"
+      },
+      "to": {
+        "node_id": "au/43/sum",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/43/sum"
+      },
+      "to": {
+        "node_id": "au/43/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "au/43/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "au/43/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/dt"
+      },
+      "to": {
+        "node_id": "smoothing/dt",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1000000000"
+      },
+      "to": {
+        "node_id": "smoothing/dt",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/dt"
+      },
+      "to": {
+        "node_id": "smoothing/half_lives",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.14"
+      },
+      "to": {
+        "node_id": "smoothing/half_lives",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.5"
+      },
+      "to": {
+        "node_id": "smoothing/decay",
+        "input": "base"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/half_lives"
+      },
+      "to": {
+        "node_id": "smoothing/decay",
+        "input": "exp"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "smoothing/gain",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/decay"
+      },
+      "to": {
+        "node_id": "smoothing/gain",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/neutral/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/neutral"
+      },
+      "to": {
+        "node_id": "expression/neutral/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/neutral/toward"
+      },
+      "to": {
+        "node_id": "expression/neutral/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/neutral/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/neutral"
+      },
+      "to": {
+        "node_id": "expression/neutral/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/neutral/step"
+      },
+      "to": {
+        "node_id": "expression/neutral/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/neutral/weight"
+      },
+      "to": {
+        "node_id": "out/expression/neutral",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/angry/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/angry"
+      },
+      "to": {
+        "node_id": "expression/angry/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/angry/toward"
+      },
+      "to": {
+        "node_id": "expression/angry/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/angry/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/angry"
+      },
+      "to": {
+        "node_id": "expression/angry/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/angry/step"
+      },
+      "to": {
+        "node_id": "expression/angry/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/angry/weight"
+      },
+      "to": {
+        "node_id": "out/expression/angry",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/sad/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/sad"
+      },
+      "to": {
+        "node_id": "expression/sad/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sad/toward"
+      },
+      "to": {
+        "node_id": "expression/sad/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/sad/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/sad"
+      },
+      "to": {
+        "node_id": "expression/sad/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sad/step"
+      },
+      "to": {
+        "node_id": "expression/sad/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sad/weight"
+      },
+      "to": {
+        "node_id": "out/expression/sad",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/happy/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/happy"
+      },
+      "to": {
+        "node_id": "expression/happy/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/happy/toward"
+      },
+      "to": {
+        "node_id": "expression/happy/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/happy/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/happy"
+      },
+      "to": {
+        "node_id": "expression/happy/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/happy/step"
+      },
+      "to": {
+        "node_id": "expression/happy/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/happy/weight"
+      },
+      "to": {
+        "node_id": "out/expression/happy",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/surprised/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/surprised"
+      },
+      "to": {
+        "node_id": "expression/surprised/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/surprised/toward"
+      },
+      "to": {
+        "node_id": "expression/surprised/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/surprised/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/surprised"
+      },
+      "to": {
+        "node_id": "expression/surprised/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/surprised/step"
+      },
+      "to": {
+        "node_id": "expression/surprised/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/surprised/weight"
+      },
+      "to": {
+        "node_id": "out/expression/surprised",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/disgusted/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/disgusted"
+      },
+      "to": {
+        "node_id": "expression/disgusted/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disgusted/toward"
+      },
+      "to": {
+        "node_id": "expression/disgusted/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/disgusted/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/disgusted"
+      },
+      "to": {
+        "node_id": "expression/disgusted/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disgusted/step"
+      },
+      "to": {
+        "node_id": "expression/disgusted/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disgusted/weight"
+      },
+      "to": {
+        "node_id": "out/expression/disgusted",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/scared/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/scared"
+      },
+      "to": {
+        "node_id": "expression/scared/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/scared/toward"
+      },
+      "to": {
+        "node_id": "expression/scared/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/scared/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/scared"
+      },
+      "to": {
+        "node_id": "expression/scared/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/scared/step"
+      },
+      "to": {
+        "node_id": "expression/scared/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/scared/weight"
+      },
+      "to": {
+        "node_id": "out/expression/scared",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/pleading/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/pleading"
+      },
+      "to": {
+        "node_id": "expression/pleading/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/pleading/toward"
+      },
+      "to": {
+        "node_id": "expression/pleading/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/pleading/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/pleading"
+      },
+      "to": {
+        "node_id": "expression/pleading/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/pleading/step"
+      },
+      "to": {
+        "node_id": "expression/pleading/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/pleading/weight"
+      },
+      "to": {
+        "node_id": "out/expression/pleading",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/vulnerable"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/vulnerable/toward"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/vulnerable"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/vulnerable/step"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/vulnerable/weight"
+      },
+      "to": {
+        "node_id": "out/expression/vulnerable",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/despaired/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/despaired"
+      },
+      "to": {
+        "node_id": "expression/despaired/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/despaired/toward"
+      },
+      "to": {
+        "node_id": "expression/despaired/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/despaired/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/despaired"
+      },
+      "to": {
+        "node_id": "expression/despaired/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/despaired/step"
+      },
+      "to": {
+        "node_id": "expression/despaired/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/despaired/weight"
+      },
+      "to": {
+        "node_id": "out/expression/despaired",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/guilty/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/guilty"
+      },
+      "to": {
+        "node_id": "expression/guilty/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/guilty/toward"
+      },
+      "to": {
+        "node_id": "expression/guilty/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/guilty/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/guilty"
+      },
+      "to": {
+        "node_id": "expression/guilty/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/guilty/step"
+      },
+      "to": {
+        "node_id": "expression/guilty/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/guilty/weight"
+      },
+      "to": {
+        "node_id": "out/expression/guilty",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/disappointed/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/disappointed"
+      },
+      "to": {
+        "node_id": "expression/disappointed/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disappointed/toward"
+      },
+      "to": {
+        "node_id": "expression/disappointed/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/disappointed/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/disappointed"
+      },
+      "to": {
+        "node_id": "expression/disappointed/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disappointed/step"
+      },
+      "to": {
+        "node_id": "expression/disappointed/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disappointed/weight"
+      },
+      "to": {
+        "node_id": "out/expression/disappointed",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/embarrassed"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/embarrassed/toward"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/embarrassed"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/embarrassed/step"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/embarrassed/weight"
+      },
+      "to": {
+        "node_id": "out/expression/embarrassed",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/horrified/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/horrified"
+      },
+      "to": {
+        "node_id": "expression/horrified/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/horrified/toward"
+      },
+      "to": {
+        "node_id": "expression/horrified/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/horrified/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/horrified"
+      },
+      "to": {
+        "node_id": "expression/horrified/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/horrified/step"
+      },
+      "to": {
+        "node_id": "expression/horrified/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/horrified/weight"
+      },
+      "to": {
+        "node_id": "out/expression/horrified",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/skeptical/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/skeptical"
+      },
+      "to": {
+        "node_id": "expression/skeptical/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/skeptical/toward"
+      },
+      "to": {
+        "node_id": "expression/skeptical/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/skeptical/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/skeptical"
+      },
+      "to": {
+        "node_id": "expression/skeptical/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/skeptical/step"
+      },
+      "to": {
+        "node_id": "expression/skeptical/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/skeptical/weight"
+      },
+      "to": {
+        "node_id": "out/expression/skeptical",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/annoyed/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/annoyed"
+      },
+      "to": {
+        "node_id": "expression/annoyed/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/annoyed/toward"
+      },
+      "to": {
+        "node_id": "expression/annoyed/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/annoyed/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/annoyed"
+      },
+      "to": {
+        "node_id": "expression/annoyed/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/annoyed/step"
+      },
+      "to": {
+        "node_id": "expression/annoyed/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/annoyed/weight"
+      },
+      "to": {
+        "node_id": "out/expression/annoyed",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/furious/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/furious"
+      },
+      "to": {
+        "node_id": "expression/furious/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/furious/toward"
+      },
+      "to": {
+        "node_id": "expression/furious/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/furious/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/furious"
+      },
+      "to": {
+        "node_id": "expression/furious/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/furious/step"
+      },
+      "to": {
+        "node_id": "expression/furious/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/furious/weight"
+      },
+      "to": {
+        "node_id": "out/expression/furious",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/suspicious/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/suspicious"
+      },
+      "to": {
+        "node_id": "expression/suspicious/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/suspicious/toward"
+      },
+      "to": {
+        "node_id": "expression/suspicious/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/suspicious/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/suspicious"
+      },
+      "to": {
+        "node_id": "expression/suspicious/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/suspicious/step"
+      },
+      "to": {
+        "node_id": "expression/suspicious/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/suspicious/weight"
+      },
+      "to": {
+        "node_id": "out/expression/suspicious",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/rejected/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/rejected"
+      },
+      "to": {
+        "node_id": "expression/rejected/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/rejected/toward"
+      },
+      "to": {
+        "node_id": "expression/rejected/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/rejected/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/rejected"
+      },
+      "to": {
+        "node_id": "expression/rejected/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/rejected/step"
+      },
+      "to": {
+        "node_id": "expression/rejected/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/rejected/weight"
+      },
+      "to": {
+        "node_id": "out/expression/rejected",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/bored/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/bored"
+      },
+      "to": {
+        "node_id": "expression/bored/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/bored/toward"
+      },
+      "to": {
+        "node_id": "expression/bored/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/bored/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/bored"
+      },
+      "to": {
+        "node_id": "expression/bored/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/bored/step"
+      },
+      "to": {
+        "node_id": "expression/bored/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/bored/weight"
+      },
+      "to": {
+        "node_id": "out/expression/bored",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/tired/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/tired"
+      },
+      "to": {
+        "node_id": "expression/tired/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/tired/toward"
+      },
+      "to": {
+        "node_id": "expression/tired/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/tired/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/tired"
+      },
+      "to": {
+        "node_id": "expression/tired/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/tired/step"
+      },
+      "to": {
+        "node_id": "expression/tired/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/tired/weight"
+      },
+      "to": {
+        "node_id": "out/expression/tired",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/asleep/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/asleep"
+      },
+      "to": {
+        "node_id": "expression/asleep/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/asleep/toward"
+      },
+      "to": {
+        "node_id": "expression/asleep/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/asleep/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/asleep"
+      },
+      "to": {
+        "node_id": "expression/asleep/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/asleep/step"
+      },
+      "to": {
+        "node_id": "expression/asleep/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/asleep/weight"
+      },
+      "to": {
+        "node_id": "out/expression/asleep",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/confused/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/confused"
+      },
+      "to": {
+        "node_id": "expression/confused/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/confused/toward"
+      },
+      "to": {
+        "node_id": "expression/confused/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/confused/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/confused"
+      },
+      "to": {
+        "node_id": "expression/confused/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/confused/step"
+      },
+      "to": {
+        "node_id": "expression/confused/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/confused/weight"
+      },
+      "to": {
+        "node_id": "out/expression/confused",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/amazed/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/amazed"
+      },
+      "to": {
+        "node_id": "expression/amazed/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/amazed/toward"
+      },
+      "to": {
+        "node_id": "expression/amazed/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/amazed/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/amazed"
+      },
+      "to": {
+        "node_id": "expression/amazed/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/amazed/step"
+      },
+      "to": {
+        "node_id": "expression/amazed/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/amazed/weight"
+      },
+      "to": {
+        "node_id": "out/expression/amazed",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/excited/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/excited"
+      },
+      "to": {
+        "node_id": "expression/excited/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/excited/toward"
+      },
+      "to": {
+        "node_id": "expression/excited/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/excited/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/excited"
+      },
+      "to": {
+        "node_id": "expression/excited/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/excited/step"
+      },
+      "to": {
+        "node_id": "expression/excited/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/excited/weight"
+      },
+      "to": {
+        "node_id": "out/expression/excited",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/concerned/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/concerned"
+      },
+      "to": {
+        "node_id": "expression/concerned/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/concerned/toward"
+      },
+      "to": {
+        "node_id": "expression/concerned/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/concerned/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/concerned"
+      },
+      "to": {
+        "node_id": "expression/concerned/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/concerned/step"
+      },
+      "to": {
+        "node_id": "expression/concerned/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/concerned/weight"
+      },
+      "to": {
+        "node_id": "out/expression/concerned",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/sleepy/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/sleepy"
+      },
+      "to": {
+        "node_id": "expression/sleepy/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sleepy/toward"
+      },
+      "to": {
+        "node_id": "expression/sleepy/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "expression/sleepy/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/sleepy"
+      },
+      "to": {
+        "node_id": "expression/sleepy/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sleepy/step"
+      },
+      "to": {
+        "node_id": "expression/sleepy/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sleepy/weight"
+      },
+      "to": {
+        "node_id": "out/expression/sleepy",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/1/intensity"
+      },
+      "to": {
+        "node_id": "face/brow_inner_up/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/brow_inner_up"
+      },
+      "to": {
+        "node_id": "face/brow_inner_up/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_inner_up/toward"
+      },
+      "to": {
+        "node_id": "face/brow_inner_up/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/brow_inner_up/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/brow_inner_up"
+      },
+      "to": {
+        "node_id": "face/brow_inner_up/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_inner_up/step"
+      },
+      "to": {
+        "node_id": "face/brow_inner_up/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_inner_up/weight"
+      },
+      "to": {
+        "node_id": "out/face/brow_inner_up",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/2/intensity"
+      },
+      "to": {
+        "node_id": "face/brow_outer_up_left/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/brow_outer_up_left"
+      },
+      "to": {
+        "node_id": "face/brow_outer_up_left/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_outer_up_left/toward"
+      },
+      "to": {
+        "node_id": "face/brow_outer_up_left/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/brow_outer_up_left/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/brow_outer_up_left"
+      },
+      "to": {
+        "node_id": "face/brow_outer_up_left/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_outer_up_left/step"
+      },
+      "to": {
+        "node_id": "face/brow_outer_up_left/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_outer_up_left/weight"
+      },
+      "to": {
+        "node_id": "out/face/brow_outer_up_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/2/intensity"
+      },
+      "to": {
+        "node_id": "face/brow_outer_up_right/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/brow_outer_up_right"
+      },
+      "to": {
+        "node_id": "face/brow_outer_up_right/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_outer_up_right/toward"
+      },
+      "to": {
+        "node_id": "face/brow_outer_up_right/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/brow_outer_up_right/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/brow_outer_up_right"
+      },
+      "to": {
+        "node_id": "face/brow_outer_up_right/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_outer_up_right/step"
+      },
+      "to": {
+        "node_id": "face/brow_outer_up_right/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_outer_up_right/weight"
+      },
+      "to": {
+        "node_id": "out/face/brow_outer_up_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/4/intensity"
+      },
+      "to": {
+        "node_id": "face/brow_down_left/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/brow_down_left"
+      },
+      "to": {
+        "node_id": "face/brow_down_left/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_down_left/toward"
+      },
+      "to": {
+        "node_id": "face/brow_down_left/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/brow_down_left/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/brow_down_left"
+      },
+      "to": {
+        "node_id": "face/brow_down_left/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_down_left/step"
+      },
+      "to": {
+        "node_id": "face/brow_down_left/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_down_left/weight"
+      },
+      "to": {
+        "node_id": "out/face/brow_down_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/4/intensity"
+      },
+      "to": {
+        "node_id": "face/brow_down_right/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/brow_down_right"
+      },
+      "to": {
+        "node_id": "face/brow_down_right/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_down_right/toward"
+      },
+      "to": {
+        "node_id": "face/brow_down_right/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/brow_down_right/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/brow_down_right"
+      },
+      "to": {
+        "node_id": "face/brow_down_right/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_down_right/step"
+      },
+      "to": {
+        "node_id": "face/brow_down_right/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/brow_down_right/weight"
+      },
+      "to": {
+        "node_id": "out/face/brow_down_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/5/intensity"
+      },
+      "to": {
+        "node_id": "face/eye_wide_left/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/eye_wide_left"
+      },
+      "to": {
+        "node_id": "face/eye_wide_left/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_wide_left/toward"
+      },
+      "to": {
+        "node_id": "face/eye_wide_left/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/eye_wide_left/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/eye_wide_left"
+      },
+      "to": {
+        "node_id": "face/eye_wide_left/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_wide_left/step"
+      },
+      "to": {
+        "node_id": "face/eye_wide_left/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_wide_left/weight"
+      },
+      "to": {
+        "node_id": "out/face/eye_wide_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/5/intensity"
+      },
+      "to": {
+        "node_id": "face/eye_wide_right/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/eye_wide_right"
+      },
+      "to": {
+        "node_id": "face/eye_wide_right/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_wide_right/toward"
+      },
+      "to": {
+        "node_id": "face/eye_wide_right/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/eye_wide_right/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/eye_wide_right"
+      },
+      "to": {
+        "node_id": "face/eye_wide_right/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_wide_right/step"
+      },
+      "to": {
+        "node_id": "face/eye_wide_right/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_wide_right/weight"
+      },
+      "to": {
+        "node_id": "out/face/eye_wide_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/7/intensity"
+      },
+      "to": {
+        "node_id": "face/eye_squint_left/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/eye_squint_left"
+      },
+      "to": {
+        "node_id": "face/eye_squint_left/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_squint_left/toward"
+      },
+      "to": {
+        "node_id": "face/eye_squint_left/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/eye_squint_left/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/eye_squint_left"
+      },
+      "to": {
+        "node_id": "face/eye_squint_left/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_squint_left/step"
+      },
+      "to": {
+        "node_id": "face/eye_squint_left/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_squint_left/weight"
+      },
+      "to": {
+        "node_id": "out/face/eye_squint_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/7/intensity"
+      },
+      "to": {
+        "node_id": "face/eye_squint_right/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/eye_squint_right"
+      },
+      "to": {
+        "node_id": "face/eye_squint_right/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_squint_right/toward"
+      },
+      "to": {
+        "node_id": "face/eye_squint_right/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/eye_squint_right/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/eye_squint_right"
+      },
+      "to": {
+        "node_id": "face/eye_squint_right/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_squint_right/step"
+      },
+      "to": {
+        "node_id": "face/eye_squint_right/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_squint_right/weight"
+      },
+      "to": {
+        "node_id": "out/face/eye_squint_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/43/intensity"
+      },
+      "to": {
+        "node_id": "face/eye_closed_left/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/eye_closed_left"
+      },
+      "to": {
+        "node_id": "face/eye_closed_left/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_closed_left/toward"
+      },
+      "to": {
+        "node_id": "face/eye_closed_left/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/eye_closed_left/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/eye_closed_left"
+      },
+      "to": {
+        "node_id": "face/eye_closed_left/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_closed_left/step"
+      },
+      "to": {
+        "node_id": "face/eye_closed_left/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_closed_left/weight"
+      },
+      "to": {
+        "node_id": "out/face/eye_closed_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/43/intensity"
+      },
+      "to": {
+        "node_id": "face/eye_closed_right/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/eye_closed_right"
+      },
+      "to": {
+        "node_id": "face/eye_closed_right/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_closed_right/toward"
+      },
+      "to": {
+        "node_id": "face/eye_closed_right/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/eye_closed_right/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/eye_closed_right"
+      },
+      "to": {
+        "node_id": "face/eye_closed_right/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_closed_right/step"
+      },
+      "to": {
+        "node_id": "face/eye_closed_right/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/eye_closed_right/weight"
+      },
+      "to": {
+        "node_id": "out/face/eye_closed_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/6/intensity"
+      },
+      "to": {
+        "node_id": "face/cheek_raise_left/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/cheek_raise_left"
+      },
+      "to": {
+        "node_id": "face/cheek_raise_left/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/cheek_raise_left/toward"
+      },
+      "to": {
+        "node_id": "face/cheek_raise_left/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/cheek_raise_left/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/cheek_raise_left"
+      },
+      "to": {
+        "node_id": "face/cheek_raise_left/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/cheek_raise_left/step"
+      },
+      "to": {
+        "node_id": "face/cheek_raise_left/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/cheek_raise_left/weight"
+      },
+      "to": {
+        "node_id": "out/face/cheek_raise_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/6/intensity"
+      },
+      "to": {
+        "node_id": "face/cheek_raise_right/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/cheek_raise_right"
+      },
+      "to": {
+        "node_id": "face/cheek_raise_right/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/cheek_raise_right/toward"
+      },
+      "to": {
+        "node_id": "face/cheek_raise_right/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/cheek_raise_right/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/cheek_raise_right"
+      },
+      "to": {
+        "node_id": "face/cheek_raise_right/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/cheek_raise_right/step"
+      },
+      "to": {
+        "node_id": "face/cheek_raise_right/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/cheek_raise_right/weight"
+      },
+      "to": {
+        "node_id": "out/face/cheek_raise_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/34/intensity"
+      },
+      "to": {
+        "node_id": "face/cheek_puff/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/cheek_puff"
+      },
+      "to": {
+        "node_id": "face/cheek_puff/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/cheek_puff/toward"
+      },
+      "to": {
+        "node_id": "face/cheek_puff/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/cheek_puff/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/cheek_puff"
+      },
+      "to": {
+        "node_id": "face/cheek_puff/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/cheek_puff/step"
+      },
+      "to": {
+        "node_id": "face/cheek_puff/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/cheek_puff/weight"
+      },
+      "to": {
+        "node_id": "out/face/cheek_puff",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/9/intensity"
+      },
+      "to": {
+        "node_id": "face/nose_sneer_left/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/nose_sneer_left"
+      },
+      "to": {
+        "node_id": "face/nose_sneer_left/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/nose_sneer_left/toward"
+      },
+      "to": {
+        "node_id": "face/nose_sneer_left/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/nose_sneer_left/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/nose_sneer_left"
+      },
+      "to": {
+        "node_id": "face/nose_sneer_left/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/nose_sneer_left/step"
+      },
+      "to": {
+        "node_id": "face/nose_sneer_left/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/nose_sneer_left/weight"
+      },
+      "to": {
+        "node_id": "out/face/nose_sneer_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/9/intensity"
+      },
+      "to": {
+        "node_id": "face/nose_sneer_right/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/nose_sneer_right"
+      },
+      "to": {
+        "node_id": "face/nose_sneer_right/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/nose_sneer_right/toward"
+      },
+      "to": {
+        "node_id": "face/nose_sneer_right/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/nose_sneer_right/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/nose_sneer_right"
+      },
+      "to": {
+        "node_id": "face/nose_sneer_right/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/nose_sneer_right/step"
+      },
+      "to": {
+        "node_id": "face/nose_sneer_right/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/nose_sneer_right/weight"
+      },
+      "to": {
+        "node_id": "out/face/nose_sneer_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/26/intensity"
+      },
+      "to": {
+        "node_id": "face/jaw_open/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/jaw_open"
+      },
+      "to": {
+        "node_id": "face/jaw_open/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/jaw_open/toward"
+      },
+      "to": {
+        "node_id": "face/jaw_open/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/jaw_open/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/jaw_open"
+      },
+      "to": {
+        "node_id": "face/jaw_open/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/jaw_open/step"
+      },
+      "to": {
+        "node_id": "face/jaw_open/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/jaw_open/weight"
+      },
+      "to": {
+        "node_id": "out/face/jaw_open",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "face/jaw_left/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/jaw_left"
+      },
+      "to": {
+        "node_id": "face/jaw_left/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/jaw_left/toward"
+      },
+      "to": {
+        "node_id": "face/jaw_left/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/jaw_left/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/jaw_left"
+      },
+      "to": {
+        "node_id": "face/jaw_left/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/jaw_left/step"
+      },
+      "to": {
+        "node_id": "face/jaw_left/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/jaw_left/weight"
+      },
+      "to": {
+        "node_id": "out/face/jaw_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "face/jaw_right/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/jaw_right"
+      },
+      "to": {
+        "node_id": "face/jaw_right/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/jaw_right/toward"
+      },
+      "to": {
+        "node_id": "face/jaw_right/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/jaw_right/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/jaw_right"
+      },
+      "to": {
+        "node_id": "face/jaw_right/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/jaw_right/step"
+      },
+      "to": {
+        "node_id": "face/jaw_right/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/jaw_right/weight"
+      },
+      "to": {
+        "node_id": "out/face/jaw_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/29/intensity"
+      },
+      "to": {
+        "node_id": "face/jaw_forward/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/jaw_forward"
+      },
+      "to": {
+        "node_id": "face/jaw_forward/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/jaw_forward/toward"
+      },
+      "to": {
+        "node_id": "face/jaw_forward/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/jaw_forward/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/jaw_forward"
+      },
+      "to": {
+        "node_id": "face/jaw_forward/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/jaw_forward/step"
+      },
+      "to": {
+        "node_id": "face/jaw_forward/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/jaw_forward/weight"
+      },
+      "to": {
+        "node_id": "out/face/jaw_forward",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/12/intensity"
+      },
+      "to": {
+        "node_id": "face/mouth_smile_left/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_smile_left"
+      },
+      "to": {
+        "node_id": "face/mouth_smile_left/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_smile_left/toward"
+      },
+      "to": {
+        "node_id": "face/mouth_smile_left/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/mouth_smile_left/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_smile_left"
+      },
+      "to": {
+        "node_id": "face/mouth_smile_left/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_smile_left/step"
+      },
+      "to": {
+        "node_id": "face/mouth_smile_left/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_smile_left/weight"
+      },
+      "to": {
+        "node_id": "out/face/mouth_smile_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/12/intensity"
+      },
+      "to": {
+        "node_id": "face/mouth_smile_right/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_smile_right"
+      },
+      "to": {
+        "node_id": "face/mouth_smile_right/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_smile_right/toward"
+      },
+      "to": {
+        "node_id": "face/mouth_smile_right/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/mouth_smile_right/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_smile_right"
+      },
+      "to": {
+        "node_id": "face/mouth_smile_right/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_smile_right/step"
+      },
+      "to": {
+        "node_id": "face/mouth_smile_right/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_smile_right/weight"
+      },
+      "to": {
+        "node_id": "out/face/mouth_smile_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/15/intensity"
+      },
+      "to": {
+        "node_id": "face/mouth_frown_left/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_frown_left"
+      },
+      "to": {
+        "node_id": "face/mouth_frown_left/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_frown_left/toward"
+      },
+      "to": {
+        "node_id": "face/mouth_frown_left/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/mouth_frown_left/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_frown_left"
+      },
+      "to": {
+        "node_id": "face/mouth_frown_left/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_frown_left/step"
+      },
+      "to": {
+        "node_id": "face/mouth_frown_left/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_frown_left/weight"
+      },
+      "to": {
+        "node_id": "out/face/mouth_frown_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/15/intensity"
+      },
+      "to": {
+        "node_id": "face/mouth_frown_right/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_frown_right"
+      },
+      "to": {
+        "node_id": "face/mouth_frown_right/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_frown_right/toward"
+      },
+      "to": {
+        "node_id": "face/mouth_frown_right/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/mouth_frown_right/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_frown_right"
+      },
+      "to": {
+        "node_id": "face/mouth_frown_right/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_frown_right/step"
+      },
+      "to": {
+        "node_id": "face/mouth_frown_right/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_frown_right/weight"
+      },
+      "to": {
+        "node_id": "out/face/mouth_frown_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/24/intensity"
+      },
+      "to": {
+        "node_id": "face/mouth_press_left/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_press_left"
+      },
+      "to": {
+        "node_id": "face/mouth_press_left/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_press_left/toward"
+      },
+      "to": {
+        "node_id": "face/mouth_press_left/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/mouth_press_left/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_press_left"
+      },
+      "to": {
+        "node_id": "face/mouth_press_left/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_press_left/step"
+      },
+      "to": {
+        "node_id": "face/mouth_press_left/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_press_left/weight"
+      },
+      "to": {
+        "node_id": "out/face/mouth_press_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/24/intensity"
+      },
+      "to": {
+        "node_id": "face/mouth_press_right/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_press_right"
+      },
+      "to": {
+        "node_id": "face/mouth_press_right/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_press_right/toward"
+      },
+      "to": {
+        "node_id": "face/mouth_press_right/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/mouth_press_right/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_press_right"
+      },
+      "to": {
+        "node_id": "face/mouth_press_right/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_press_right/step"
+      },
+      "to": {
+        "node_id": "face/mouth_press_right/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_press_right/weight"
+      },
+      "to": {
+        "node_id": "out/face/mouth_press_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/18/intensity"
+      },
+      "to": {
+        "node_id": "face/mouth_pucker/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_pucker"
+      },
+      "to": {
+        "node_id": "face/mouth_pucker/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_pucker/toward"
+      },
+      "to": {
+        "node_id": "face/mouth_pucker/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/mouth_pucker/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_pucker"
+      },
+      "to": {
+        "node_id": "face/mouth_pucker/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_pucker/step"
+      },
+      "to": {
+        "node_id": "face/mouth_pucker/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_pucker/weight"
+      },
+      "to": {
+        "node_id": "out/face/mouth_pucker",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/22/intensity"
+      },
+      "to": {
+        "node_id": "face/mouth_funnel/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_funnel"
+      },
+      "to": {
+        "node_id": "face/mouth_funnel/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_funnel/toward"
+      },
+      "to": {
+        "node_id": "face/mouth_funnel/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/mouth_funnel/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_funnel"
+      },
+      "to": {
+        "node_id": "face/mouth_funnel/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_funnel/step"
+      },
+      "to": {
+        "node_id": "face/mouth_funnel/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_funnel/weight"
+      },
+      "to": {
+        "node_id": "out/face/mouth_funnel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/20/intensity"
+      },
+      "to": {
+        "node_id": "face/mouth_stretch_left/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_stretch_left"
+      },
+      "to": {
+        "node_id": "face/mouth_stretch_left/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_stretch_left/toward"
+      },
+      "to": {
+        "node_id": "face/mouth_stretch_left/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/mouth_stretch_left/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_stretch_left"
+      },
+      "to": {
+        "node_id": "face/mouth_stretch_left/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_stretch_left/step"
+      },
+      "to": {
+        "node_id": "face/mouth_stretch_left/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_stretch_left/weight"
+      },
+      "to": {
+        "node_id": "out/face/mouth_stretch_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/20/intensity"
+      },
+      "to": {
+        "node_id": "face/mouth_stretch_right/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_stretch_right"
+      },
+      "to": {
+        "node_id": "face/mouth_stretch_right/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_stretch_right/toward"
+      },
+      "to": {
+        "node_id": "face/mouth_stretch_right/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/mouth_stretch_right/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_stretch_right"
+      },
+      "to": {
+        "node_id": "face/mouth_stretch_right/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_stretch_right/step"
+      },
+      "to": {
+        "node_id": "face/mouth_stretch_right/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_stretch_right/weight"
+      },
+      "to": {
+        "node_id": "out/face/mouth_stretch_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/10/intensity"
+      },
+      "to": {
+        "node_id": "face/mouth_upper_up_left/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_upper_up_left"
+      },
+      "to": {
+        "node_id": "face/mouth_upper_up_left/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_upper_up_left/toward"
+      },
+      "to": {
+        "node_id": "face/mouth_upper_up_left/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/mouth_upper_up_left/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_upper_up_left"
+      },
+      "to": {
+        "node_id": "face/mouth_upper_up_left/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_upper_up_left/step"
+      },
+      "to": {
+        "node_id": "face/mouth_upper_up_left/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_upper_up_left/weight"
+      },
+      "to": {
+        "node_id": "out/face/mouth_upper_up_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/10/intensity"
+      },
+      "to": {
+        "node_id": "face/mouth_upper_up_right/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_upper_up_right"
+      },
+      "to": {
+        "node_id": "face/mouth_upper_up_right/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_upper_up_right/toward"
+      },
+      "to": {
+        "node_id": "face/mouth_upper_up_right/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/mouth_upper_up_right/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_upper_up_right"
+      },
+      "to": {
+        "node_id": "face/mouth_upper_up_right/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_upper_up_right/step"
+      },
+      "to": {
+        "node_id": "face/mouth_upper_up_right/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_upper_up_right/weight"
+      },
+      "to": {
+        "node_id": "out/face/mouth_upper_up_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/16/intensity"
+      },
+      "to": {
+        "node_id": "face/mouth_lower_down_left/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_lower_down_left"
+      },
+      "to": {
+        "node_id": "face/mouth_lower_down_left/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_lower_down_left/toward"
+      },
+      "to": {
+        "node_id": "face/mouth_lower_down_left/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/mouth_lower_down_left/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_lower_down_left"
+      },
+      "to": {
+        "node_id": "face/mouth_lower_down_left/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_lower_down_left/step"
+      },
+      "to": {
+        "node_id": "face/mouth_lower_down_left/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_lower_down_left/weight"
+      },
+      "to": {
+        "node_id": "out/face/mouth_lower_down_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/16/intensity"
+      },
+      "to": {
+        "node_id": "face/mouth_lower_down_right/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_lower_down_right"
+      },
+      "to": {
+        "node_id": "face/mouth_lower_down_right/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_lower_down_right/toward"
+      },
+      "to": {
+        "node_id": "face/mouth_lower_down_right/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/mouth_lower_down_right/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/mouth_lower_down_right"
+      },
+      "to": {
+        "node_id": "face/mouth_lower_down_right/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_lower_down_right/step"
+      },
+      "to": {
+        "node_id": "face/mouth_lower_down_right/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/mouth_lower_down_right/weight"
+      },
+      "to": {
+        "node_id": "out/face/mouth_lower_down_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/19/intensity"
+      },
+      "to": {
+        "node_id": "face/tongue_out/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/tongue_out"
+      },
+      "to": {
+        "node_id": "face/tongue_out/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/tongue_out/toward"
+      },
+      "to": {
+        "node_id": "face/tongue_out/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "face/tongue_out/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/face/tongue_out"
+      },
+      "to": {
+        "node_id": "face/tongue_out/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/tongue_out/step"
+      },
+      "to": {
+        "node_id": "face/tongue_out/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face/tongue_out/weight"
+      },
+      "to": {
+        "node_id": "out/face/tongue_out",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/26/intensity"
+      },
+      "to": {
+        "node_id": "mouth/morph/jaw_open/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/mouth/morph/jaw_open"
+      },
+      "to": {
+        "node_id": "mouth/morph/jaw_open/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "mouth/morph/jaw_open/toward"
+      },
+      "to": {
+        "node_id": "mouth/morph/jaw_open/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "smoothing/gain"
+      },
+      "to": {
+        "node_id": "mouth/morph/jaw_open/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/mouth/morph/jaw_open"
+      },
+      "to": {
+        "node_id": "mouth/morph/jaw_open/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "mouth/morph/jaw_open/step"
+      },
+      "to": {
+        "node_id": "mouth/morph/jaw_open/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "mouth/morph/jaw_open/weight"
+      },
+      "to": {
+        "node_id": "out/mouth/morph/jaw_open",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "lifecycle/running"
+      },
+      "to": {
+        "node_id": "out/status",
+        "input": "in"
+      }
+    }
+  ]
+}

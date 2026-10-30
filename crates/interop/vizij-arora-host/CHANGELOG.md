@@ -4,6 +4,42 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [9.0.0] - Unreleased
+
+### Added
+
+- The face skills `set_expression(expression, valence, arousal)`,
+  `set_facial_action_units(codes, intensities)`, `set_viseme(viseme)` and
+  `play_visemes(visemes, starts, durations)`: their contracts
+  (`skills::{set_expression, set_facial_action_units, set_viseme,
+  play_visemes}`, returning arora-behavior 10's `Status`), generated
+  fragments (`generate_*`) and shipped assets (`skills/*.json`,
+  `SET_EXPRESSION_JSON`, …, with their `*_PARAMS`). Both expression setters
+  hold the face's whole expression, `expression_surface()` — every named
+  expression, the muscle tier and the de-facto jaw — each control following
+  its target from where the face is at the ROS4HRI mapping's smoothing, so
+  the setter taking the face over crossfades it. `set_expression` computes
+  the weights with the mapping's math and rests the muscle tier;
+  `set_facial_action_units` drives each listed unit's controls at its
+  intensity (sparse: an unlisted unit rests; AU 26 also drives the jaw, AU 45
+  counts as AU 43) over the `neutral` expression. `set_viseme` holds one
+  shape by its ROS4HRI code; `play_visemes` plays a timeline and ends once
+  the lips settle. The code-addressed players' feedback adds the code as
+  `value` (`FEEDBACK_CODE`). Their fragments compute on `codes` and
+  `visemes` as vectors, which the node math reads integer arrays as
+  (arora-dataflow-nodes 3).
+
+### Changed
+
+- **Breaking:** `SKILLS` lists seven skills, so its type is `[Skill; 7]`.
+- **Breaking:** the ROS4HRI mapping's expression channel commands
+  `set_expression` instead of writing the expression weights: a spawn node
+  with the three `standard/ros4hri/expression/*` keys as its arguments
+  spawns a run on every change, and once when the mapping is loaded
+  (`spawn_on_load`), so the face boots at neutral. A host composing the
+  mapping registers the set_expression fragment for the expression to move.
+  The mapping's blink reads the face's own `asleep` weight.
+
 ## [8.0.0] - 2026-10-30
 
 ### Changed

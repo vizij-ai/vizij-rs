@@ -519,9 +519,9 @@ dependencies = [
 
 [[package]]
 name = "arora-dataflow-nodes"
-version = "2.0.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24a78b205de239274b1d4be945511298d72300e5dba46a35cc05570f4a1ce265"
+checksum = "9988d6e16b613240f6d4d089105fd2405038ad2e45462e08c0c527585527194c"
 dependencies = [
  "arora-behavior",
  "arora-geometry",
@@ -11189,7 +11189,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-behavior"
-version = "9.0.1"
+version = "10.0.0"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
@@ -11223,7 +11223,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-host"
-version = "8.0.0"
+version = "9.0.0"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -11247,7 +11247,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-tts"
-version = "8.0.1"
+version = "9.0.0"
 dependencies = [
  "arora",
  "arora-behavior",
@@ -11294,7 +11294,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-graph-core"
-version = "5.0.0"
+version = "6.0.0"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree",
