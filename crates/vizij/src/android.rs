@@ -206,7 +206,7 @@ fn face_config() -> FaceConfig {
         #[cfg(feature = "studio")]
         studio: true,
         // The cloud provider at its default deployment; its audio plays
-        // through cpal's oboe backend.
+        // through cpal's AAudio backend.
         speech: Some(std::sync::Arc::new(|| {
             vizij_arora_tts::host_module(vizij_arora_tts::Config::cloud())
         })),
@@ -291,18 +291,21 @@ fn long_press(touches: Res<Touches>, time: Res<Time>, mut held: Local<Option<(u6
 
 /// Call `VizijActivity.openPicker()` on the activity.
 fn open_picker() -> Result<()> {
-    call_activity("openPicker")
+    call_activity(jni::jni_str!("openPicker"))
 }
 
 /// Call the activity's `method`, which takes nothing and returns nothing.
-fn call_activity(method: &str) -> Result<()> {
+fn call_activity(method: &jni::strings::JNIStr) -> Result<()> {
     let android = android_app()?;
     // SAFETY: both pointers are the activity's, valid while the app runs:
     // the process' JavaVM and a global reference to the activity object.
-    let vm = unsafe { jni::JavaVM::from_raw(android.vm_as_ptr().cast()) }?;
-    let mut env = vm.attach_current_thread()?;
-    let activity = unsafe { jni::objects::JObject::from_raw(android.activity_as_ptr().cast()) };
-    env.call_method(&activity, method, "()V", &[])?;
+    let vm = unsafe { jni::JavaVM::from_raw(android.vm_as_ptr().cast()) };
+    vm.attach_current_thread(|env| -> jni::errors::Result<()> {
+        let activity =
+            unsafe { jni::objects::JObject::from_raw(env, android.activity_as_ptr().cast()) };
+        env.call_method(&activity, method, jni::jni_sig!("()V"), &[])?;
+        Ok(())
+    })?;
     Ok(())
 }
 
@@ -330,7 +333,7 @@ fn open_picker_on_ask(mut asked: MessageReader<crate::settings::OpenFace>) {
 #[cfg(feature = "settings")]
 fn leave_on_back(mut back: MessageReader<crate::settings::LeaveApp>) {
     if back.read().count() > 0 {
-        if let Err(e) = call_activity("leaveApp") {
+        if let Err(e) = call_activity(jni::jni_str!("leaveApp")) {
             log::error!("vizij: cannot leave the app: {e:#}");
         }
     }

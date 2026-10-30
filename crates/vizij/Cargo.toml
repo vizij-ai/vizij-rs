@@ -190,7 +190,7 @@ futures = "0.3"
 # `vizij-piper` is the local speech provider (feature `tts-piper`) — its
 # build self-provisions libpiper and a patched default voice, and `rodio`
 # plays its audio; note it links GPLv3 code into the binary.
-rodio = { version = "0.20", optional = true }
+rodio = { version = "0.23", optional = true }
 vizij-piper = { path = "../interop/vizij-piper", optional = true }
 # The settings pane (`settings`), drawn with egui over the view: 0.42 is the
 # line for Bevy 0.19. Its rendering, its embedded fonts and its picking
@@ -211,15 +211,10 @@ bevy = { version = "0.19", default-features = false, features = ["android-native
 # feature — into logcat, where `env_logger` would write to a stderr nobody
 # reads.
 android_logger = { version = "0.15", default-features = false }
-# The speech provider's audio output (rodio 0.20 → cpal 0.15 → oboe) is C++.
-# Statically, oboe links `c++_static` without the `c++abi` it needs, and the
-# library fails to load; on the shared C++ runtime, `libc++_shared.so` ships
-# beside it in the APK (`cargo ndk --link-libcxx-shared`).
-cpal = { version = "0.15", features = ["oboe-shared-stdcxx"] }
 # Calls into the app's activity (`VizijActivity.openPicker`) over the JavaVM
 # and activity the AndroidApp holds; the version android-activity's own
 # tree builds.
-jni = "0.21"
+jni = "0.22"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # The browser module (`web`): the shared JS surface of a device — `step`,

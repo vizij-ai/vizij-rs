@@ -16,7 +16,7 @@
 #   - a `say` invoked through the open local bridge (`adb forward`,
 #     scripts/say.py) succeeds, the face reporting the utterance and showing
 #     visemes while it plays: the cloud provider reached over TLS, its audio
-#     played through oboe;
+#     played through AAudio;
 #   - a tap on the face shows the settings pane's Settings button, which
 #     opens the pane; a background picked there (a swatch) fills the screen
 #     once the back gesture closes the pane, the app still in front, and

@@ -203,28 +203,27 @@ fn spawn_say(text: String, pulse: Pulse) -> Run {
 }
 
 /// Play the synthesized PCM whole, holding `playing` up for its duration and
-/// advancing the shared shape cell at the sink's own playhead; a quiet pulse
-/// stops the sink.
+/// advancing the shared shape cell at the player's own playhead; a quiet pulse
+/// stops the player.
 fn play(
     synthesis: vizij_piper::Synthesis,
     viseme: Arc<Mutex<&'static str>>,
     playing: Arc<AtomicBool>,
     pulse: Pulse,
 ) -> Status {
-    let (_stream, handle) = match rodio::OutputStream::try_default() {
-        Ok(pair) => pair,
+    let Some(sample_rate) = std::num::NonZero::new(synthesis.sample_rate) else {
+        log::error!("tts-piper: the synthesis has no sample rate");
+        return Status::Failure;
+    };
+    let mut output = match rodio::DeviceSinkBuilder::open_default_sink() {
+        Ok(output) => output,
         Err(e) => {
             log::error!("tts-piper: audio output init failed: {e}");
             return Status::Failure;
         }
     };
-    let sink = match rodio::Sink::try_new(&handle) {
-        Ok(sink) => sink,
-        Err(e) => {
-            log::error!("tts-piper: audio sink failed: {e}");
-            return Status::Failure;
-        }
-    };
+    output.log_on_drop(false);
+    let player = rodio::Player::connect_new(output.mixer());
     let rate = synthesis.sample_rate;
     let cues: Vec<Cue> = synthesis
         .events
@@ -234,17 +233,17 @@ fn play(
             shape: phoneme_shape(&event.phoneme),
         })
         .collect();
-    let source = rodio::buffer::SamplesBuffer::new(1, rate, synthesis.samples);
-    sink.append(source);
+    let source = rodio::buffer::SamplesBuffer::new(rodio::nz!(1), sample_rate, synthesis.samples);
+    player.append(source);
     playing.store(true, Ordering::Relaxed);
     let outcome = follow(&cues, &viseme, &pulse, || {
-        (!sink.empty()).then(|| sink.get_pos())
+        (!player.empty()).then(|| player.get_pos())
     });
     playing.store(false, Ordering::Relaxed);
     match outcome {
         Playback::Ended => Status::Success,
         Playback::Halted => {
-            sink.stop();
+            player.stop();
             Status::Failure
         }
     }

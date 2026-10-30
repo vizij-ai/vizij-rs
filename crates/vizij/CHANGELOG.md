@@ -80,12 +80,16 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   directory) rather than the identity file's path.
 - The Android app speaks: `say` goes to the cloud provider at its default
   deployment (vizij-arora-tts 7.1, whose HTTPS client trusts the bundled
-  webpki roots), its audio played through cpal's oboe backend. The Android
+  webpki roots), its audio played through cpal's AAudio backend. The Android
   smoke invokes `say` through the open local bridge and passes when the run
   succeeds with the face reporting the utterance and showing its visemes.
 
 ### Changed
 
+- Speech plays through rodio 0.23 on cpal 0.18, the cloud provider's
+  (vizij-arora-tts 7.1.2) and the local Piper one's alike. On Android cpal
+  plays through AAudio, which links no C++ runtime, so the library is built
+  without `libc++_shared.so` beside it.
 - A face's graphs run on arora-behavior-tree (vizij-arora-behavior 8): each
   frame evaluates the nodes the graphs' outputs read whose inputs changed,
   so a face at rest costs less per frame. The graphs compute what they did
