@@ -59,7 +59,7 @@ uuid = { version = "1", features = ["serde"] }
 # and hdr/png decoders, none of which a face uses, and `default_app` adds
 # reflection auto-registration; a browser page pays every one of them in
 # download. What stays is the 3D render path (glTF, PBR, morph targets —
-# 0.19 batches morph-target rendering, the faces' main workload), scene
+# Bevy batches morph-target rendering, the faces' main workload), scene
 # spawning, winit windowing, picking (the pointer events, and the mesh ray
 # cast a pick runs over morphed positions), line gizmos (the selection glow:
 # wireframes are unavailable on WebGL2) and WebGL2 as the browser backend.
@@ -92,37 +92,21 @@ bevy = { version = "0.19", default-features = false, features = [
 ] }
 # The device: an arora over the Vizij interop seams, run through the standard
 # operator flow (terminal UI on an interactive terminal, the open local bridge
-# auto-attached). 9.5 gave the TUI application commands and drop-cancellation
-# (the g/b controls, the GLB reload's rebuild); 9.6 makes `local_ws_bridge()`
-# public so the app composes the local bridge alongside the --ros2/--studio ones.
-# 9.7 adds `with_host_module`, which registers the animation module natively (a
-# `HostModule` of in-process functions) — no wasm guest, no bindep, so the
-# workspace stays on stable. No default features here: the executor-free
-# slice builds on every target; the native target table below adds `native`
-# (wasmtime, the local WS bridge, the operator flow) and the desktop feature
-# adds `tui`.
+# auto-attached). No default features: the executor-free slice builds on every
+# target; the native target table below adds `native` (wasmtime, the local WS
+# bridge, the operator flow) and the desktop feature adds `tui`.
 arora = { version = "15", default-features = false }
-# The ROS 2 bridge, attached under `--ros2` (feature `ros2`). Heavy (ros2-client
-# + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
-# `studio-bridge` feature instead (`--studio`). It carries the skill plane the
-# ros4hri exposure profile binds `/skill/look_at` and `/skill/say` through:
-# bound actions announce their REP-2016 hashes (reachable from native rmw_zenoh
-# clients) and run feedback may be a record (the say skill's viseme/intensity).
-# 6.3 is where that profile publishes the face image, so the view declares
-# nothing itself. 10.3 is where a key path escapes into valid ROS 2 name
-# tokens, which a Studio-exported face's UUID keys need; 10.4 is where the
-# profile takes /closed_captions and publishes /diagnostics. 11 serves
-# `/skill/set_expression` as a topic skill unless asked to land it on the
-# expression keys, which the face reads (see native::run). 11.1 speaks
-# ros2-client 0.14 (RustDDS 0.14): a reliable writer's send window is
-# `ResourceLimits::max_samples` (8192) rather than its history depth.
+# The ROS 2 bridge, attached under `--ros2` (feature `ros2`): heavy (ros2-client
+# and a DDS or Zenoh backend), so opt-in. 11.1 speaks ros2-client 0.14, the
+# line of the live tests' peer (the `ros2-client` dev dependency).
 arora-bridge-ros2 = { version = "11.1", optional = true, default-features = false }
 # The Status enumeration ids the gaze and tts contracts mark their action shapes with.
 arora-behavior-tree-types = "2"
 # The built-in key prefix the ROS 2 input declaration leaves out.
 arora-behavior = "9"
 # Restores the terminal on the window-close exit path, where the device's
-# terminal UI (worker thread) never gets to unwind.
+# terminal UI (worker thread) never gets to unwind. The version arora's terminal
+# UI enters raw mode with: only that crossterm knows the mode to restore.
 crossterm = { version = "0.28", optional = true }
 # The desktop app's data directory (the remembered face, the Studio identity).
 dirs = { version = "7", optional = true }
@@ -176,8 +160,7 @@ vizij-arora-tts = { version = "7.1", path = "../interop/vizij-arora-tts" }
 bevy = { version = "0.19", default-features = false, features = ["bevy_log", "multi_threaded"] }
 # The native driver (`native`): the stand-alone device on a worker thread under
 # arora's operator flow — `native` is the run loop, the local WS bridge and
-# the module executors — with the bridges the build adds. 11.0.1 is where its
-# `studio-bridge` feature builds.
+# the module executors — with the bridges the build adds.
 arora = { version = "15", default-features = false, features = ["native"] }
 # The bridge seam the Studio identity is read and registered through; the major
 # this arora's bridges implement.
@@ -205,7 +188,7 @@ bevy = { version = "0.19", default-features = false, features = ["x11", "wayland
 
 [target.'cfg(target_os = "android")'.dependencies]
 # The framework's `android.app.NativeActivity` (no games-activity AAR): Bevy
-# 0.19 selects no Android activity backend by default.
+# without its default features selects no Android activity backend.
 bevy = { version = "0.19", default-features = false, features = ["android-native-activity"] }
 # The `log` records — the crate's, arora's and Bevy's through tracing's `log`
 # feature — into logcat, where `env_logger` would write to a stderr nobody
@@ -219,9 +202,7 @@ jni = "0.22"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # The browser module (`web`): the shared JS surface of a device — `step`,
 # the self-pacing `run`, the Value<->JSON store accessors — wraps each face's
-# device; wasm-bindgen carries the module's own surface. 10.3: `complete`,
-# through which `loadGraph` and `applyGraphEdits` settle as `call` does, and
-# `request_step`, through which `releaseKeys` does.
+# device; wasm-bindgen carries the module's own surface.
 arora-web = "12"
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4"
@@ -300,8 +281,7 @@ ros2 = ["ros2-dds"]
 ros2-dds = ["dep:arora-bridge-ros2", "arora-bridge-ros2/dds"]
 ros2-zenoh = ["dep:arora-bridge-ros2", "arora-bridge-ros2/zenoh"]
 # `--studio`: attach the Semio Studio bridge (arora's Zenoh + Firebase
-# connector), configured from the environment (DEVICE_OWNERS, …). Needs
-# arora-studio-bridge-client 6.1.0+ (firestore 0.50 / gcloud-sdk 0.30.2).
+# connector), configured from the environment (DEVICE_OWNERS, …).
 studio = ["arora/studio-bridge"]
 # Swap the TTS provider: the local Piper module (`tts_piper.rs`) instead of the
 # cloud module (`tts.rs`). Same `say` contract; fully offline at run time; the
