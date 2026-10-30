@@ -4,6 +4,13 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [7.7.2] - Unreleased
+
+### Changed
+
+- Takes the behavior `Status` ids from arora-behavior 10. No public item
+  changes.
+
 ## [7.7.1] - Unreleased
 
 ### Changed

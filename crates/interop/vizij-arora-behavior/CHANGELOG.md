@@ -4,6 +4,20 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [9.0.0] - Unreleased
+
+### Changed
+
+- **Breaking:** `ProcessingGraph` is an arora-behavior 10 `BehaviorInterpreter`
+  (arora 17 and later): `load` takes and `graph` holds the lean graph model,
+  a node holding its own bindings, and `apply` takes its `GraphDiff`
+  (`remove`, `set`, `unbind`, `bind`, `root`). `graph_codec` encodes a Vizij
+  edge as a binding of the target's input slot, a parameter or an inline
+  default as a value bound on its slot, and carries the names a decode needs
+  (node id, kind, each slot's name) as value bindings on the node using them,
+  so `spec_diff_to_graph_diff` needs no view of the running graph.
+- Requires vizij-graph-core 5 and arora-behavior-tree-types 3.
+
 ## [8.0.0] - 2026-10-22
 
 ### Changed

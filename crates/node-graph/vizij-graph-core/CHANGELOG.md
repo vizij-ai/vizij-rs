@@ -4,6 +4,15 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [5.0.0] - Unreleased
+
+### Changed
+
+- **Breaking:** depends on arora-behavior 10, arora-behavior-tree 10 and
+  arora-dataflow-nodes 2, whose `FunctionIndex` `TreeRuntime::load_with_functions`
+  takes and whose node functions `functions` re-exports. A graph imports and
+  evaluates as before: the spec format and the node registry are unchanged.
+
 ## [4.0.1] - Unreleased
 
 ### Changed
