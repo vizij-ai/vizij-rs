@@ -309,9 +309,13 @@ enrolls it — with the token `STUDIO_ENROLLMENT_TOKEN` holds, else by a code
 once a person accepts. In a window, the settings pane presents it (its
 Enroll action, the device's name, the code); with `--headless`, arora's
 terminal UI does, or with no terminal nobody does and the code goes to the
-log. Studio refusing an enrollment leaves the run going, the device offered
-enrollment again 30 s later. `semio device enroll NAME` enrolls a device
-ahead of its run.
+log. Studio refusing an enrollment leaves the run going: the pane offers
+Enroll again at once, nothing enrolling until a person presses it, while
+under the terminal UI or with nobody asked the device stays offline for the
+rest of the run. A Studio side that cannot be read (the device store, a
+device directory given without a name) leaves the run without its Studio
+bridge, the reason logged and shown in the pane. `semio device enroll NAME`
+enrolls a device ahead of its run.
 
 With the Studio bridge the face serves **Studio's keys** (`vizij::studio`, the
 Studio-key profile), so a Studio user who claims the device drives the
@@ -676,14 +680,17 @@ Close, the Android back gesture and Escape close. It holds:
     enrollment. The pane then asks the device's name (blank for a
     generated one) and shows the code a person enters in Semio Studio,
     choosing the device's owner there, with the page approving it when the
-    client knows Studio's address. A refused enrollment shows why, and the
-    device is offered enrollment again 30 s later.
+    client knows Studio's address. A refused enrollment shows why beside
+    Enroll, which is offered again at once: nothing enrolls until a person
+    presses it.
   - Connecting, connected or failing for a reason that may pass: the
     device's Studio record, read only — its name and model family, edited
     in Semio Studio — and its id once connected. A failing connection tries
     again by itself.
   - Stopped for good (`StudioStatus::Halted`): why, and what to change,
     such as a credential of another Firebase project.
+  - No Studio bridge, the device's Studio side unreadable: "Semio Studio is
+    unavailable" and why (`RuntimeHandle::studio_unavailable`).
 
 The pane is the device's operator and its enroller
 (`settings::PaneOperator`, an `arora::operator::Operator` given as

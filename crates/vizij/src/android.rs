@@ -183,15 +183,21 @@ fn start_device(android: &AndroidApp, mode: Mode) -> Result<Runtime> {
 fn bridges(android: &AndroidApp) -> BridgeConfig {
     BridgeConfig {
         #[cfg(feature = "studio")]
-        studio: android.internal_data_path().and_then(|files| {
-            arora::studio::in_device_dir(
-                &files,
-                arora::device_dir::DEFAULT_NAME,
-                Some(files.join(DEVICE_STORE).as_path()),
-            )
-            .inspect_err(|e| log::error!("vizij: no Studio bridge: {e:#}"))
-            .ok()
-        }),
+        // A Studio side that cannot be read leaves the run without its
+        // bridge, the reason logged and shown in the pane.
+        studio: Some(
+            android
+                .internal_data_path()
+                .ok_or_else(|| "the app has no files directory".to_string())
+                .and_then(|files| {
+                    arora::studio::in_device_dir(
+                        &files,
+                        arora::device_dir::DEFAULT_NAME,
+                        Some(files.join(DEVICE_STORE).as_path()),
+                    )
+                    .map_err(|e| format!("{e:#}"))
+                }),
+        ),
         ..BridgeConfig::default()
     }
 }

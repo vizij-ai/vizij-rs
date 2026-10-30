@@ -75,11 +75,20 @@ impl RuntimeHandle {
         self.studio_side().handle.clone()
     }
 
-    /// Why Studio refused the device's last enrollment, until the device is
-    /// offered enrollment again ([`ENROLL_AGAIN_AFTER`] later).
+    /// Why Studio refused the device's last enrollment in this generation,
+    /// if it did. The app's operator ([`Mode::OperatedBy`]) is offered
+    /// enrollment again at once, its offer waiting for a person; with the
+    /// front end's, the device stays offline for the rest of the run.
     #[cfg(feature = "studio")]
     pub fn studio_refusal(&self) -> Option<String> {
         self.studio_side().refused.clone()
+    }
+
+    /// Why the run has no Studio bridge although it asked for one: the
+    /// device's Studio side could not be read ([`BridgeConfig::studio`]).
+    #[cfg(feature = "studio")]
+    pub fn studio_unavailable(&self) -> Option<String> {
+        self.studio_side().unavailable.clone()
     }
 
     #[cfg(feature = "studio")]
@@ -109,18 +118,13 @@ struct StudioSide {
     /// The handle of the generation's Studio bridge.
     #[cfg(feature = "studio")]
     handle: Option<arora::studio::StudioHandle>,
-    /// Why Studio refused the last enrollment, while the device waits to be
-    /// offered enrollment again.
+    /// Why Studio refused the generation's last enrollment.
     #[cfg(feature = "studio")]
     refused: Option<String>,
+    /// Why the run has no Studio bridge although it asked for one.
+    #[cfg(feature = "studio")]
+    unavailable: Option<String>,
 }
-
-/// How long a device whose enrollment Studio refused — a person refusing
-/// its code, Studio refusing its enrollment token — waits before it is
-/// offered enrollment again. An enroller that accepts without asking anyone
-/// would otherwise enroll again at once, and with a refused token, forever.
-#[cfg(feature = "studio")]
-pub const ENROLL_AGAIN_AFTER: Duration = Duration::from_secs(30);
 
 enum Command {
     Reload(Vec<u8>),
@@ -137,7 +141,9 @@ pub enum Mode {
     Operator,
     /// [`Mode::Operator`], the app's operator answering the device's
     /// questions in place of the front end's: the settings pane, while the
-    /// terminal UI keeps its log pane and its commands.
+    /// terminal UI keeps its log pane and its commands. Its enroller offers
+    /// the device's enrollment only when a person asks for it, so a refused
+    /// enrollment is offered again at once (see [`RuntimeHandle::studio_refusal`]).
     OperatedBy(Arc<dyn arora::operator::Operator>),
     /// Build and step quietly: no bridge, no front end, no commands served —
     /// the snapshot harness, where the process' own logger stays in charge
@@ -159,9 +165,12 @@ pub struct BridgeConfig {
     /// its start: offline, contacting nobody, while the device holds no
     /// credential, and connecting by itself once it holds one. A front end
     /// enrolls the device through the operator's enroller
-    /// (`Operator::enroller`). `None`: no Studio bridge.
+    /// (`Operator::enroller`). `None`: no Studio bridge. `Some(Err(why))`:
+    /// the run asked for one and the device's Studio side could not be read;
+    /// the run goes on without it, logging `why` and showing it to the front
+    /// ends ([`RuntimeHandle::studio_unavailable`]).
     #[cfg(feature = "studio")]
-    pub studio: Option<arora::studio::StudioDevice>,
+    pub studio: Option<Result<arora::studio::StudioDevice, String>>,
 }
 
 impl Default for BridgeConfig {
@@ -214,13 +223,13 @@ async fn attach_bridges(
     // Studio first: the bridge whose identity the device carries.
     #[cfg(feature = "studio")]
     let studio = match &bridges.studio {
-        Some(device) => {
+        Some(Ok(device)) => {
             let (bridge, handle) = device.bridge(arora::studio::reported_model(description));
             access_requests = arora_bridge::Bridge::access_requests(&bridge).await;
             builder = builder.with_bridge(Box::new(bridge));
             Some(handle)
         }
-        None => None,
+        Some(Err(_)) | None => None,
     };
     match arora::local_ws_bridge_with(bridges.local.clone()).await {
         Ok(bridge) => builder = builder.with_bridge(bridge),
@@ -459,7 +468,18 @@ fn supervise(
                     Some(frontend) => frontend.operator.clone().enroller(),
                     None => Arc::new(arora::studio::UnattendedEnroller),
                 };
-                enroll(attached.studio.clone(), enroller, &studio)
+                let unavailable = match &bridges.studio {
+                    Some(Err(why)) => Some(why.clone()),
+                    _ => None,
+                };
+                let offers_on_request = operator.is_some();
+                enroll(
+                    attached.studio.clone(),
+                    unavailable,
+                    enroller,
+                    offers_on_request,
+                    &studio,
+                )
             };
             #[cfg(not(feature = "studio"))]
             let enrollment = futures::future::pending::<std::convert::Infallible>();
@@ -489,43 +509,48 @@ fn supervise(
 /// long as the generation runs, as the device client's
 /// `StudioHandle::enroll_when_needed` does: whenever the device's Studio
 /// bridge finds it not enrolled, once `enroller` accepts. The generation's
-/// handle is the front ends' meanwhile ([`RuntimeHandle::studio`]).
+/// handle is the front ends' meanwhile ([`RuntimeHandle::studio`]), or why
+/// the run has none (`unavailable`, logged).
 ///
-/// The run outlives its enrollment: Studio refusing an enrollment is logged
-/// and shown ([`RuntimeHandle::studio_refusal`]), the device offered
-/// enrollment again [`ENROLL_AGAIN_AFTER`] later; a bridge that halts stays
-/// offline, its status saying why. Never resolves.
+/// The run outlives its enrollment. Studio refusing an enrollment is logged
+/// and shown ([`RuntimeHandle::studio_refusal`]); an enroller that
+/// `offers_on_request` — the app's operator, whose offer waits for a person
+/// — is offered enrollment again at once, and any other stops enrolling for
+/// the rest of the run, the device staying offline. A bridge that halts
+/// stays offline, its status saying why. Never resolves.
 #[cfg(feature = "studio")]
 async fn enroll(
     handle: Option<arora::studio::StudioHandle>,
+    unavailable: Option<String>,
     enroller: Arc<dyn arora::studio::Enroller>,
+    offers_on_request: bool,
     studio: &Mutex<StudioSide>,
 ) -> std::convert::Infallible {
-    let share = |side: StudioSide| {
+    let share = |refused: Option<String>| {
         *studio
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = side;
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = StudioSide {
+            handle: handle.clone(),
+            refused,
+            unavailable: unavailable.clone(),
+        };
     };
-    share(StudioSide {
-        handle: handle.clone(),
-        refused: None,
-    });
-    let Some(handle) = handle else {
+    share(None);
+    if let Some(why) = &unavailable {
+        log::error!("no Semio Studio bridge: {why}");
+    }
+    let Some(studio_handle) = handle.clone() else {
         return futures::future::pending().await;
     };
     loop {
-        match handle.enroll_when_needed(&*enroller).await {
+        match studio_handle.enroll_when_needed(&*enroller).await {
             arora::studio::EnrollmentEnded::Refused(e) => {
                 log::error!("Studio refused the device's enrollment: {e}");
-                share(StudioSide {
-                    handle: Some(handle.clone()),
-                    refused: Some(e.to_string()),
-                });
-                tokio::time::sleep(ENROLL_AGAIN_AFTER).await;
-                share(StudioSide {
-                    handle: Some(handle.clone()),
-                    refused: None,
-                });
+                share(Some(e.to_string()));
+                if !offers_on_request {
+                    log::error!("the device stays offline with Studio for the rest of this run");
+                    return futures::future::pending().await;
+                }
             }
             ended => {
                 log::error!("{ended}");
@@ -949,7 +974,7 @@ mod studio_tests {
         let side = Mutex::new(StudioSide::default());
         let enrolling = tokio::time::timeout(
             Duration::from_millis(300),
-            enroll(Some(handle.clone()), Arc::new(Undecided), &side),
+            enroll(Some(handle.clone()), None, Arc::new(Undecided), true, &side),
         )
         .await;
         assert!(enrolling.is_err(), "the enrollment runs as long as the run");
@@ -959,5 +984,27 @@ mod studio_tests {
         assert_eq!(shared.refused, None);
         drop(bridge);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A run whose Studio side could not be read goes on without its
+    /// bridge, and tells the front ends why.
+    #[tokio::test]
+    async fn a_run_without_its_studio_side_says_why() {
+        let side = Mutex::new(StudioSide::default());
+        let enrolling = tokio::time::timeout(
+            Duration::from_millis(100),
+            enroll(
+                None,
+                Some("no device store".into()),
+                Arc::new(arora::studio::UnattendedEnroller),
+                false,
+                &side,
+            ),
+        )
+        .await;
+        assert!(enrolling.is_err(), "the run goes on");
+        let shared = side.lock().unwrap();
+        assert!(shared.handle.is_none());
+        assert_eq!(shared.unavailable.as_deref(), Some("no device store"));
     }
 }

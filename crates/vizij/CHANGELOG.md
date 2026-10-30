@@ -45,9 +45,11 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   client knows Studio's address; then the device's Studio record, read only
   (its name and model family, edited in Semio Studio), and its id once
   connected; a connection halted for good shows why
-  (`StudioStatus::Halted`). `RuntimeHandle::studio_refusal` says why Studio
-  refused the last enrollment, until the device is offered enrollment
-  again, `native::ENROLL_AGAIN_AFTER` (30 s) later.
+  (`StudioStatus::Halted`). A refused enrollment shows why
+  (`RuntimeHandle::studio_refusal`) beside Enroll, offered again at once and
+  waiting for a press. A Studio side that cannot be read leaves the run
+  without its bridge, the section saying why
+  (`RuntimeHandle::studio_unavailable`).
 
 - The Android app: an APK around the library (`android/`, a Gradle project
   over the framework's `NativeActivity`), whose entry point runs the face it
@@ -83,7 +85,8 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   arora-behavior 10 and arora-behavior-tree 10 (vizij-arora-behavior 9,
   vizij-graph-core 5, vizij-arora-tts 8). A `studio` build carries the
   device's Studio bridge from the start of each generation
-  (`native::BridgeConfig::studio`, an `arora::studio::StudioDevice`) and
+  (`native::BridgeConfig::studio`, an `arora::studio::StudioDevice`, or why
+  it could not be read) and
   enrolls the device beside the run through the operator's enroller, in
   place of the identity file it registered from: the run starts at once,
   enrolled or not, its Studio bridge offline until the device holds a

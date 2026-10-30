@@ -600,13 +600,19 @@ fn dim(text: impl Into<String>) -> egui::RichText {
 
 /// Where the device stands with Semio Studio, as its Studio bridge says:
 /// not enrolled, with the Enroll action while the device is offered
-/// enrollment; the code a person enters while it enrolls; then its Studio
-/// record, read only, and its id; and why a connection stopped for good.
+/// enrollment and why Studio refused the last one; the code a person enters
+/// while it enrolls; then its Studio record, read only, and its id; why a
+/// connection stopped for good; and why the run has no Studio bridge when
+/// the device's Studio side could not be read.
 #[cfg(feature = "studio")]
 fn device_section(ui: &mut egui::Ui, pane: &mut Pane) {
     use arora::studio::StudioStatus;
 
     let Some(studio) = pane.handle.studio() else {
+        if let Some(why) = pane.handle.studio_unavailable() {
+            title(ui, "Device");
+            ui.label(format!("Semio Studio is unavailable: {why}"));
+        }
         return;
     };
     let status = studio.status().borrow().clone();
@@ -615,15 +621,16 @@ fn device_section(ui: &mut egui::Ui, pane: &mut Pane) {
     match &status {
         StudioStatus::NotEnrolled => {
             ui.label("Not enrolled with Semio Studio.");
-            if let Some(reason) = pane.handle.studio_refusal() {
-                ui.label(dim(format!("The last enrollment was refused: {reason}")).small());
-            }
             if pane.operator.offered() {
+                // A refusal shows until the person enrolls again.
+                if let Some(reason) = pane.handle.studio_refusal() {
+                    ui.label(dim(format!("The last enrollment was refused: {reason}")).small());
+                }
                 if ui.add(primary("Enroll with Semio Studio")).clicked() {
                     pane.operator.enroll();
                 }
-            } else {
-                ui.label(dim("Enrolling is offered again shortly.").small());
+            } else if !pane.operator.asks().texts.is_empty() {
+                ui.label(dim("Answer Semio Studio's question above to enroll.").small());
             }
         }
         StudioStatus::Enrolling { code, approval_url } => {
