@@ -514,23 +514,21 @@ impl ProcessingGraph {
         let prefix = format!("arora/tasks/{module}/{}/{}", call.id, task.0);
         let status_key = Key::from(format!("{prefix}/status"));
 
+        // The live runs of an exclusive function's domain yield to the new
+        // one once it is grafted: halted on the next tick, which prunes them
+        // with their terminal status written — the run that takes over is
+        // then the only writer. A run that fails to graft halts none.
+        let superseded: Vec<TaskId> = match self.domain_of(call.id) {
+            Some(domain) => self
+                .runs
+                .iter()
+                .filter(|(_, run)| self.domain_of(run.function).as_ref() == Some(&domain))
+                .map(|(id, _)| *id)
+                .collect(),
+            None => Vec::new(),
+        };
         let (diff, update) = match self.fragments.get(&call.id) {
-            Some(fragment) => {
-                // The live runs of an exclusive function's domain yield to
-                // the new one: halted on the next tick, which prunes them
-                // with their terminal status written — the run that takes
-                // over is then the only writer.
-                if let Some(domain) = self.domain_of(call.id) {
-                    let live: Vec<TaskId> = self
-                        .runs
-                        .iter()
-                        .filter(|(_, run)| self.domain_of(run.function).as_ref() == Some(&domain))
-                        .map(|(id, _)| *id)
-                        .collect();
-                    self.pending_halts.extend(live);
-                }
-                fragment_graft(fragment, task, &prefix, &call)?
-            }
+            Some(fragment) => fragment_graft(fragment, task, &prefix, &call)?,
             // A call no fragment implements is dispatched to a module: its
             // own, or the one its function is routed to. With neither it
             // could never run — its node would fail every evaluation, and the
@@ -548,6 +546,7 @@ impl ProcessingGraph {
             Vec::new()
         };
         self.graft(task, call.id, status_key.clone(), diff, owned_keys)?;
+        self.pending_halts.extend(superseded);
 
         Ok(TaskHandle {
             id: task,

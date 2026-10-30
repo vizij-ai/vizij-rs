@@ -27,10 +27,12 @@ All notable changes to `vizij-arora-behavior`. The format follows
 - **Breaking:** requires vizij-arora-host 9 and vizij-graph-core 6. The
   skill contracts re-exported here are vizij-arora-host 9's types, so they
   do not unify with those of a crate built on vizij-arora-host 8.
-- `say` is exclusive among its own runs and outside `viseme::LIPS`: a lips
-  command spawned while it speaks writes after it and shows over it, and
-  `say` keeps speaking, its lips back from where the face is once that
-  command ends.
+- **Breaking:** `say` is exclusive among its own runs (`say_fragment` and
+  `say_fragment_from` are `exclusive()`): a new `say` run halts the one
+  speaking, which ends preempted, as a failure. It is outside
+  `viseme::LIPS`: a lips command spawned while it speaks writes after it and
+  shows over it, and `say` keeps speaking, its lips back from where the face
+  is once that command ends.
 
 ## [9.0.1] - 2026-10-30
 

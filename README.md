@@ -93,7 +93,7 @@ your own AWS-backed deployment, and where text enters — is in
 |---|---|
 | The face-standard control vocabulary (gaze & lids, expressions, visemes, FACS muscle tier) | [face standard](docs/face-standard.md) |
 | ROS4HRI: typed face topics **and** the `/skill/look_at` gaze action | [ROS4HRI support](docs/ros4hri.md) |
-| Skills: goal-driven behaviors shipped as editable graph fragments, overridable per face — gaze, and the two viseme players | [Skills](docs/skills.md) |
+| Skills: goal-driven behaviors shipped as editable graph fragments, overridable per face — gaze, the expression setters and the viseme players | [Skills](docs/skills.md) |
 | Speech: the `say` skill, lips driven live — local Piper or the AWS-backed cloud provider | [Speech (TTS)](crates/vizij/README.md#speech-tts) |
 | Animation clips + node-graph programs from the face's `VIZIJ_bundle` | [the app README](crates/vizij/README.md) |
 | Bridges: local WebSocket (always on), ROS 2 (`--ros2`), Semio Studio (the `studio` build, unless `--no-studio`) | [the app README](crates/vizij/README.md) |

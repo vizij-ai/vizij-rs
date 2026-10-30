@@ -143,10 +143,13 @@ The weights are raw: a face maps each onto its own poses, scaled by its
 lipsync gain, with no transition of its own. Rest is the face's neutral — every viseme weight at
 zero, `sil` included (a viseme player writes the `sil` weight, never drives
 it). The timing is the player's: the attack, hold and release of a played
-viseme and the crossfade to the next shape come from the two viseme players
-Vizij ships as [skills](skills.md) — `play_viseme(shape, weight)`, one shape
-through a lipsync envelope, and `say(text, voice)`, whose run streams the
-visemes of the speech it synthesizes through the same driver.
+viseme and the crossfade to the next shape come from the viseme players
+Vizij ships as [skills](skills.md), which share one lipsync driver:
+`play_viseme(shape, weight)`, one shape through a lipsync envelope;
+`set_viseme(viseme)`, one shape held until the next lips command;
+`play_visemes(visemes, starts, durations)`, a viseme timeline; and
+`say(text, voice)`, whose run streams the visemes of the speech it
+synthesizes.
 
 The **lipsync gain**, at `standard/vizij/lipsync/gain`, is a
 [setting](#settings) of the face rather than a control: how strongly it shows
@@ -321,7 +324,7 @@ than hand-format strings.
 - [ROS4HRI](ros4hri.md) — the built-in mapping that fills this vocabulary from
   ROS4HRI's topics.
 - [Skills](skills.md) — the goal-driven behaviors that write it: the gaze
-  skill and the two viseme players.
+  skill, the expression setters and the viseme players.
 - [`vizij-bundle`](../crates/tools/vizij-bundle/README.md) — the tool that
   reports which tiers a face covers (`validate`), declares a profile on a face
   GLB (`add-profile`), and embeds a standard mapping into it
