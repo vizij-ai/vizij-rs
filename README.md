@@ -166,7 +166,7 @@ Install the shared git hooks (formatting, clippy, tests):
 bash scripts/install-git-hooks.sh
 ```
 
-Hooks can be bypassed with `SKIP_GIT_HOOKS=1` or extended using the `HOOK_RUN_*` environment variables documented in `scripts/hook-tasks.sh`.
+Hooks can be extended using the `HOOK_RUN_*` environment variables documented in `scripts/hook-tasks.sh`. Don't bypass them: a hook failing on code you did not touch points at a dirty checkout or stale generated files, and that is what to fix.
 
 ---
 
