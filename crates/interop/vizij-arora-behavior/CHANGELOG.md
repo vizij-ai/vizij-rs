@@ -4,7 +4,14 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [9.0.0] - Unreleased
+## [9.0.1] - 2026-10-30
+
+### Changed
+
+- Requires vizij-arora-host 8, the major of the skill contracts on
+  arora-behavior 10's `Status` that 9.0.0 already built against.
+
+## [9.0.0] - 2026-10-30
 
 ### Changed
 

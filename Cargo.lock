@@ -11189,7 +11189,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-behavior"
-version = "9.0.0"
+version = "9.0.1"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
@@ -11223,7 +11223,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-host"
-version = "7.7.2"
+version = "8.0.0"
 dependencies = [
  "anyhow",
  "arora-behavior",
