@@ -51,7 +51,7 @@ pub struct FaceConfig {
     /// Serve Semio Studio's keys: compose the Studio-key profile
     /// ([`crate::studio`]), so Studio's targets — `<id>/target.position` or
     /// `<id>.target_position` — drive the face's animatables and their
-    /// `<id>.position` reports back. The binary sets it with `--studio`.
+    /// `<id>.position` reports back. The binary sets it unless `--no-studio`.
     #[cfg(feature = "studio")]
     pub studio: bool,
     /// The speech provider, built per generation; `None` for a device that

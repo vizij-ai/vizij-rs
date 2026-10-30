@@ -58,7 +58,7 @@ piece of it, not a second device.
 | `native` | the stand-alone device: the face's Arora on a worker thread under arora's operator flow, the bridges the build adds, the `RuntimeHandle` front ends speak through | every target but the browser |
 | `web` | the browser module behind [`@vizij/runtime`](../../npm/@vizij/runtime/README.md): one App per page (`mount`), a JS-paced Arora per Vizij (`loadVizij`, a `VizijRuntime`), Vizijs as rectangles of the canvas (`placeVizij`), picks, `describe` | `wasm32` |
 | `main.rs`, `open.rs` | the CLI, the window, the terminal operator UI, opening a face by drop or dialog | feature `desktop` (default) |
-| `settings` | the settings pane over the face (egui): the background kept per face, the device info, the Studio association; the pane is the device's operator (`settings::PaneOperator`); see [The settings pane](#the-settings-pane) | feature `settings` (in `desktop`), every target but the browser |
+| `settings` | the settings pane over the face (egui): the background kept per face, and with `studio` the device's Studio enrollment and record; the pane is the device's operator and enroller (`settings::PaneOperator`); see [The settings pane](#the-settings-pane) | feature `settings` (in `desktop`), every target but the browser |
 | `android` (private) | the Android app's entry point (`android_main`): the device on the face last opened or the one the APK ships, the view full screen, faces received from the activity, logging into logcat; see [Android](#android) | Android |
 
 Features: `desktop` (default) is the CLI, the terminal UI and the settings
@@ -114,19 +114,16 @@ did. The pane keeps clear of the system bars and the display's cutout, which
 the activity reports (`insetsChanged`), and keeps its settings in the app's
 files directory.
 
-The app is built with the `studio` feature. Studio keeps the device's
-credentials in the app's files directory
-(`arora::studio::connect_with_device_dir`), and the device's identity
-there in `studio-identity.json` (`name`, `owners`, `model_family`). A launch
-with none kept contacts nobody, so an install nobody associated, a CI
-emulator's among them, registers no device; the settings pane's association
-form (the owner UIDs and a name) keeps one and connects. The registration's
-questions do not reach the pane on Android:
-arora 15 asks nobody in a given device directory
-(`connect_with_device_dir`), and handing it the app's directory as
-`DEVICE_DIR` for `connect_with_operator` is not sound there, as the JVM's
-threads may read the environment while `set_var` writes it. The pane rules
-on access requests on both platforms. `say` speaks through the cloud provider at its
+The app is built with the `studio` feature. The device carries its Studio
+bridge from launch, as the device `default` whose directory is the app's
+files directory (`arora::studio::in_device_dir`), its credential in the
+device store `semio/devices/` there; a credential the files directory's
+`studio/` holds moves into the store once. While the device holds no
+credential, its bridge contacts nobody, so an install nobody enrolled, a CI
+emulator's among them, talks to no one; once it holds one, the bridge
+connects by itself at every launch. The device enrolls from the settings
+pane ([below](#the-settings-pane)). The pane rules on access requests on
+both platforms. `say` speaks through the cloud provider at its
 default deployment, its audio played through cpal's oboe backend; the
 provider's HTTPS client trusts the Mozilla CA set webpki-roots bundles, as on
 every native target, so nothing of the platform verifier's Kotlin side is
@@ -296,9 +293,26 @@ local bridge:
 | Flag | Feature | Effect |
 |---|---|---|
 | `--ros2 [namespace][:domain]` | `ros2-dds` (alias `ros2`) or `ros2-zenoh` | join the ROS graph as a ROS4HRI face (see below) |
-| `--studio` | `studio` | attach the Semio Studio bridge: the device connects under the identity kept in the app's data directory (`studio-identity.json`), registering it only while Studio holds no record of the device, else as the operator answers — the settings pane in a window, the terminal without one — (Studio's record then kept), else from the environment (`DEVICE_OWNERS`, …); without the flag, the pane's Associate (a device not associated) or Connect (one associated) attaches it for the rest of the run |
+| `--no-studio` | `studio` | serve no Semio Studio bridge; without it, a `studio` build carries the device's Studio bridge (below) |
 
-Under `--studio` the face serves **Studio's keys** (`vizij::studio`, the
+A `studio` build carries the device's Studio bridge unless the run passes
+`--no-studio`, as arora's runners do. The device is the one the environment
+configures (`arora::Device::from_env`): `ARORA_DEVICE`, else `default`, its
+directory `ARORA_DEVICE_DIR`, else arora's per-user one; its Studio
+credential is its name's in Semio's device store
+(`<data_local_dir>/semio/devices/<name>/`, or `SEMIO_DEVICE_STORE`). The
+bridge contacts nobody while the device holds no credential, and connects by
+itself once it holds one. The run starts at once either way: the device
+enrolls beside it, as the device client's `StudioHandle::enroll_when_needed`
+enrolls it — with the token `STUDIO_ENROLLMENT_TOKEN` holds, else by a code
+once a person accepts. In a window, the settings pane presents it (its
+Enroll action, the device's name, the code); with `--headless`, arora's
+terminal UI does, or with no terminal nobody does and the code goes to the
+log. Studio refusing an enrollment leaves the run going, the device offered
+enrollment again 30 s later. `semio device enroll NAME` enrolls a device
+ahead of its run.
+
+With the Studio bridge the face serves **Studio's keys** (`vizij::studio`, the
 Studio-key profile), so a Studio user who claims the device drives the
 animatables its view draws. Studio's update for an entity carries, for each
 animatable, its target and, while Studio's timeline plays, its target
@@ -345,12 +359,11 @@ The device's model is what its HAL describes (`RigHal`'s `describe`): the
 family `vizij`, the face's hardware version — its bundle's
 `metadata.hardwareVersion`, else its `faceId` — and its software version,
 `metadata.softwareVersion`, when the face states one. Each device generation
-describes its face, so loading another face connects the Studio bridge anew
-with that face's model. arora registers the model, each field unless
-`MODEL_FAMILY`, `HARDWARE_VERSION` or `SOFTWARE_VERSION` is set; arora 15
-does so when it registers the device — from the environment, or from the
-registration an interactive run saved — and takes no model in a given device
-directory, so the Android app reports none.
+describes its face, so loading another face gives the device a Studio bridge
+reporting that face's model. The bridge reports it to the device's Studio
+record each time it connects, and the device enrolls with it, each field
+unless `MODEL_FAMILY`, `HARDWARE_VERSION` or `SOFTWARE_VERSION` is set
+(`arora::studio::reported_model`), on desktop and Android alike.
 
 `--ros2` attaches [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2)
 with its ROS4HRI exposure preset:
@@ -643,8 +656,8 @@ Zenoh backend does not. Run it with `--ignored` to re-measure.
 The Vizij standalone's Settings page, over the face in the desktop window
 and on Android (`vizij::settings`, drawn with egui through a camera of its
 own above the faces'). A tap or click on the face shows the Settings button
-at the bottom of the screen, and the device's name at the top once Studio
-registered it; another tap hides them. The button opens the pane, which
+at the bottom of the screen, and the device's name at the top once its
+Studio record gives one; another tap hides them. The button opens the pane, which
 Close, the Android back gesture and Escape close. It holds:
 
 - **Current face**, by its id, and **Open a face…**: the file dialog on
@@ -655,36 +668,31 @@ Close, the Android back gesture and Escape close. It holds:
   desktop's data directory above, Android's files directory), so a face
   opened again shows the background chosen for it; a face with none kept
   shows the app's (`--background` on desktop, black on Android);
-- **Device**, in a build with `studio`: where the device stands with Semio
-  Studio (`RuntimeHandle::studio`), on desktop and Android alike.
-  - An associated device — registered, or keeping an identity
-    (`studio-identity.json`), or on desktop the registration arora's
-    operator saved (`studio/device.json` in arora's device directory) —
-    shows what Studio holds of it, read only: its name, owners, model family
-    and software. Its name and owners are Studio's, edited in Semio Studio:
-    the device registers its identity only while Studio holds no record of
-    it, and otherwise keeps Studio's record as its identity. A desktop run
-    that did not ask for Studio connects with **Connect to Semio Studio**.
-  - A device not associated shows the form its first association takes:
-    its owners, one Studio user id (Firebase UID) per row with Remove and
-    Add owner, and a device name, generated when left blank. **Associate
-    with Semio Studio** keeps them as the device's identity and restarts it
-    on its face with the Studio bridge, which registers them. Each owner is
-    registered as an owner: arora 15's device info carries one owner list
-    (`arora_bridge::DeviceInfo::owners`), so the editor and viewer roles of
-    Studio's device record are not set from the device.
+- **Device**, in a build with `studio`: where the device's Studio bridge
+  stands (`RuntimeHandle::studio`, the running generation's
+  `arora::studio::StudioHandle`), on desktop and Android alike.
+  - Not enrolled: **Enroll with Semio Studio**, while the device is offered
+    enrollment. The pane then asks the device's name (blank for a
+    generated one) and shows the code a person enters in Semio Studio,
+    choosing the device's owner there, with the page approving it when the
+    client knows Studio's address. A refused enrollment shows why, and the
+    device is offered enrollment again 30 s later.
+  - Connecting, connected or failing for a reason that may pass: the
+    device's Studio record, read only — its name and model family, edited
+    in Semio Studio — and its id once connected. A failing connection tries
+    again by itself.
+  - Stopped for good (`StudioStatus::Halted`): why, and what to change,
+    such as a credential of another Firebase project.
 
-  On desktop, arora 15 itself registers the registration its operator saved
-  as the client connects (arora's `studio` docs), so a device associated
-  through arora's operator has the name and owners saved there written to
-  Studio at each connection.
-
-The pane is the device's operator (`settings::PaneOperator`, an
-`arora::operator::Operator`, given as `native::Mode::OperatedBy`): a
-question the registration asks (`ask_text`) opens the pane on it, and waits
-for the answer, skippable unless it is required; a client's access request
-(`decide_access`) opens it with Allow, Reject, Always allow and Always
-reject, and is allowed after `arora::operator::DEFAULT_ACCESS_GRACE`
-unanswered, as the unattended operator rules. On desktop the pane answers
-in place of the terminal UI, which keeps its log pane and commands; a run
-with no window (`--headless`) answers on the terminal.
+The pane is the device's operator and its enroller
+(`settings::PaneOperator`, an `arora::operator::Operator` given as
+`native::Mode::OperatedBy`, whose `enroller` is itself): the offer to enroll
+waits for Enroll, without opening the pane, so a device nobody enrolls shows
+its face; a question its enrollment asks (`ask_text`) opens the pane on it,
+and waits for the answer, skippable unless it is required; a code opens the
+pane too. A client's access request (`decide_access`) opens it with Allow,
+Reject, Always allow and Always reject, and is allowed after
+`arora::operator::DEFAULT_ACCESS_GRACE` unanswered, as the unattended
+operator rules. On desktop the pane answers in place of the terminal UI,
+which keeps its log pane and commands; a run with no window (`--headless`)
+answers and enrolls on the terminal.

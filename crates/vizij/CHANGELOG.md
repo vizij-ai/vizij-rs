@@ -10,54 +10,44 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Added
 
-- The device describes itself as its face's model, which arora registers
-  with Semio Studio: the family `vizij`, the face's hardware version — its
-  bundle's `metadata.hardwareVersion`, else its `faceId` — and its software
-  version, `metadata.softwareVersion`, when the face states one. The rig of
-  each device generation describes its face, so a reload connects the Studio
-  bridge with the new face's model, and the Studio bridge is built with the
-  description (`connect_with_description`,
-  `connect_with_operator_and_description`) where it was built with none.
-  arora 15 builds it with none in a given device directory, so the Android
-  app reports no model. The browser device describes its face the same way.
+- The device describes itself as its face's model, which its Studio bridge
+  reports to the device's Studio record (`arora::studio::reported_model`):
+  the family `vizij`, the face's hardware version — its bundle's
+  `metadata.hardwareVersion`, else its `faceId` — and its software version,
+  `metadata.softwareVersion`, when the face states one. The rig of each
+  device generation describes its face, so a reload gives the device a
+  Studio bridge reporting the new face's model, on desktop and Android
+  alike. The browser device describes its face the same way.
 - The settings pane (`vizij::settings`, feature `settings`, which `desktop`
   enables and the Android app is built with): the Vizij standalone's
   Settings page over the face, drawn with egui (bevy_egui 0.42). A tap or
   click on the face shows its Settings button; the pane holds the face shown
   and Open a face… (the file dialog on desktop, the document picker on
   Android), the background (swatches and a colour picker), kept per face in
-  `settings.json` in the app's data directory, and the device's standing
-  with Semio Studio, what it is registered as and its association. Close,
+  `settings.json` in the app's data directory, and in a `studio` build the
+  device's enrollment with Semio Studio and its Studio record. Close,
   the Android back gesture and Escape close it; on Android the back gesture
   with the pane closed moves the app to the back, and the pane keeps clear
   of the system bars and the display's cutout.
 - The pane is the device's operator (`settings::PaneOperator`, through
-  `native::Mode::OperatedBy`): the registration's questions (`ask_text`) and
-  the access requests (`decide_access`, allowed after
-  `DEFAULT_ACCESS_GRACE` unanswered) open it. In the desktop window it
-  answers in place of the terminal UI; `--headless` keeps the terminal. The
-  device serves its Studio bridge's access requests through its operator.
-- The pane's Device section, on desktop and Android alike: a device not
-  associated shows the form its first association takes — its owners, one
-  Studio user id per row with Remove and Add owner, and a name, generated
-  when left blank — which Associate with Semio Studio registers; an
-  associated one shows what Studio holds of it, read only, its name and
-  owners being edited in Semio Studio. Each owner is registered as an
-  owner: arora 15's device info carries no other role.
-- A device registers the identity it keeps (`studio-identity.json`) only
-  while Studio holds no record of it; otherwise it keeps Studio's record as
-  its identity. A desktop that keeps no identity but has the registration
-  arora's operator saved (`native::StudioConfig::saved_registration`) is
-  associated as that.
-- `RuntimeHandle::studio` says where the device stands with Studio
-  (`native::StudioStatus`, whose `Idle` carries what a device not connected
-  is associated as); `RuntimeHandle::associate` connects a run that did not
-  ask for Studio for the rest of the run, the device restarting on its face
-  with the Studio bridge. `native::StudioConfig::connect` (`native::Connect`)
-  says when a device connects: at launch (`--studio`), at launch when it
-  keeps an identity (Android), or once asked (the desktop without
-  `--studio`). On Android, a fresh install registers with Studio through
-  the pane's association form; one nobody associated still contacts nobody.
+  `native::Mode::OperatedBy`) and, in a `studio` build, its enroller
+  (`Operator::enroller`): the access requests (`decide_access`, allowed
+  after `DEFAULT_ACCESS_GRACE` unanswered) and the enrollment's questions
+  (`ask_text`) open it. In the desktop window it answers in place of the
+  terminal UI; `--headless` keeps the terminal. The device serves its
+  Studio bridge's access requests through its operator.
+- The pane's Device section, on desktop and Android alike, follows the
+  running generation's Studio bridge (`RuntimeHandle::studio`, an
+  `arora::studio::StudioHandle`): a device not enrolled shows **Enroll with
+  Semio Studio** while it is offered enrollment, the offer waiting for it
+  without opening the pane; enrolling asks the device's name and shows the
+  code a person enters in Semio Studio, with its approval page when the
+  client knows Studio's address; then the device's Studio record, read only
+  (its name and model family, edited in Semio Studio), and its id once
+  connected; a connection halted for good shows why
+  (`StudioStatus::Halted`). `RuntimeHandle::studio_refusal` says why Studio
+  refused the last enrollment, until the device is offered enrollment
+  again, `native::ENROLL_AGAIN_AFTER` (30 s) later.
 
 - The Android app: an APK around the library (`android/`, a Gradle project
   over the framework's `NativeActivity`), whose entry point runs the face it
@@ -73,11 +63,14 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   last opened, the shipped one when there is none. Full screen in immersive
   sticky mode, the screen kept on. A lost GPU device recreates the renderer
   rather than ending the app.
-- The Android app is built with the Studio bridge: its credentials live in
-  the app's files directory, and the device registers under the identity
-  kept there (`studio-identity.json`). `native::BridgeConfig::studio` is a
-  `native::StudioConfig` (the identity file and an optional device
-  directory) rather than the identity file's path.
+- The Android app is built with the Studio bridge, which it carries from
+  launch: the device `default` whose directory is the app's files
+  directory, its credential in the device store `semio/devices/` there,
+  into which a credential the files directory's `studio/` holds moves once.
+  While the device holds no credential its bridge contacts nobody, so an
+  install nobody enrolled talks to no one; it enrolls from the settings
+  pane, and its bridge connects by itself at each launch once it holds a
+  credential.
 - The Android app speaks: `say` goes to the cloud provider at its default
   deployment (vizij-arora-tts 7.1, whose HTTPS client trusts the bundled
   webpki roots), its audio played through cpal's oboe backend. The Android
@@ -86,6 +79,20 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- **Breaking:** requires arora 18 (arora-web 15 in the browser), on
+  arora-behavior 10 and arora-behavior-tree 10 (vizij-arora-behavior 9,
+  vizij-graph-core 5, vizij-arora-tts 8). A `studio` build carries the
+  device's Studio bridge from the start of each generation
+  (`native::BridgeConfig::studio`, an `arora::studio::StudioDevice`) and
+  enrolls the device beside the run through the operator's enroller, in
+  place of the identity file it registered from: the run starts at once,
+  enrolled or not, its Studio bridge offline until the device holds a
+  credential, and a refused enrollment leaves it running. A device's name
+  and owner are Studio's, chosen as it enrolls; the device writes neither.
+- **Breaking:** the desktop binary's `--studio` is gone. A `studio` build
+  carries the Studio bridge unless the run passes `--no-studio`
+  (`arora::studio::StudioArgs`), as the device the environment configures
+  (`ARORA_DEVICE`, `ARORA_DEVICE_DIR`), and serves Studio's keys with it.
 - A face's graphs run on arora-behavior-tree (vizij-arora-behavior 8): each
   frame evaluates the nodes the graphs' outputs read whose inputs changed,
   so a face at rest costs less per frame. The graphs compute what they did

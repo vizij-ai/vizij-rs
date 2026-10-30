@@ -6,8 +6,9 @@
 //! Front ends are interchangeable: the terminal UI, a panel or a file dialog
 //! all speak to the running device through a [`RuntimeHandle`], and the view
 //! learns of the outcome through [`ViewEvent`]s. Who answers the device's
-//! questions — the registration Studio needs, a client's access request — is
-//! the front end's operator, or the app's own ([`Mode::OperatedBy`]).
+//! questions — a client's access request, and in a build with Studio the
+//! device's enrollment — is the front end's operator, or the app's own
+//! ([`Mode::OperatedBy`]).
 
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -56,41 +57,36 @@ pub struct Runtime {
 #[derive(Clone)]
 pub struct RuntimeHandle {
     commands: UnboundedSender<Command>,
-    studio: Arc<Mutex<StudioStatus>>,
+    #[cfg_attr(not(feature = "studio"), allow(dead_code))]
+    studio: Arc<Mutex<StudioSide>>,
 }
 
 impl RuntimeHandle {
-    /// Where the device stands with Semio Studio.
-    pub fn studio(&self) -> StudioStatus {
+    /// The handle of the running generation's Studio bridge: where the
+    /// device stands with Semio Studio ([`StudioHandle::status`]) and its
+    /// Studio record ([`StudioHandle::record`]). `None` in a run with no
+    /// Studio bridge ([`BridgeConfig::studio`]). Each generation has a bridge
+    /// of its own, so a front end asks for it again rather than keeping it.
+    ///
+    /// [`StudioHandle::status`]: arora::studio::StudioHandle::status
+    /// [`StudioHandle::record`]: arora::studio::StudioHandle::record
+    #[cfg(feature = "studio")]
+    pub fn studio(&self) -> Option<arora::studio::StudioHandle> {
+        self.studio_side().handle.clone()
+    }
+
+    /// Why Studio refused the device's last enrollment, until the device is
+    /// offered enrollment again ([`ENROLL_AGAIN_AFTER`] later).
+    #[cfg(feature = "studio")]
+    pub fn studio_refusal(&self) -> Option<String> {
+        self.studio_side().refused.clone()
+    }
+
+    #[cfg(feature = "studio")]
+    fn studio_side(&self) -> std::sync::MutexGuard<'_, StudioSide> {
         self.studio
             .lock()
-            .map(|status| status.clone())
-            .unwrap_or_default()
-    }
-
-    /// Connect to Studio for the rest of the run: the device restarts on its
-    /// face with the Studio bridge, registered under the identity it keeps,
-    /// else as the operator answers. Nothing happens in a run with no Studio
-    /// ([`StudioStatus::Off`]).
-    pub fn associate(&self) {
-        let _ = self.commands.unbounded_send(Command::Associate(None));
-    }
-
-    /// [`associate`](Self::associate) a device that keeps no identity yet
-    /// under `name` and `owners` (Studio user ids), the identity it then
-    /// keeps: the first association, from the settings pane's form. A device
-    /// that keeps one already connects under it, the name and owners being
-    /// Studio's once it is associated.
-    #[cfg_attr(not(feature = "settings"), allow(dead_code))]
-    pub(crate) fn associate_as(&self, name: String, owners: Vec<String>) {
-        let identity = Identity {
-            name,
-            owners,
-            model_family: None,
-        };
-        let _ = self
-            .commands
-            .unbounded_send(Command::Associate(Some(identity)));
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// Load another face from its GLB bytes: the device restarts on its
@@ -106,37 +102,29 @@ impl RuntimeHandle {
     }
 }
 
+/// The running generation's Studio side, as the driver shares it with the
+/// front ends; nothing in a build without Studio.
+#[derive(Default)]
+struct StudioSide {
+    /// The handle of the generation's Studio bridge.
+    #[cfg(feature = "studio")]
+    handle: Option<arora::studio::StudioHandle>,
+    /// Why Studio refused the last enrollment, while the device waits to be
+    /// offered enrollment again.
+    #[cfg(feature = "studio")]
+    refused: Option<String>,
+}
+
+/// How long a device whose enrollment Studio refused — a person refusing
+/// its code, Studio refusing its enrollment token — waits before it is
+/// offered enrollment again. An enroller that accepts without asking anyone
+/// would otherwise enroll again at once, and with a refused token, forever.
+#[cfg(feature = "studio")]
+pub const ENROLL_AGAIN_AFTER: Duration = Duration::from_secs(30);
+
 enum Command {
     Reload(Vec<u8>),
     Background([u8; 3]),
-    /// Connect to Studio, keeping this identity first when one is given and
-    /// none is kept.
-    Associate(Option<Identity>),
-}
-
-/// Where the device stands with Semio Studio, as a front end shows it.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub enum StudioStatus {
-    /// The run has no Studio: the build leaves it out, or the app configures
-    /// none.
-    #[default]
-    Off,
-    /// Not connected, as the run's [`Connect`] says: the run did not ask for
-    /// Studio, or (Android) the device keeps no identity. Carries what the
-    /// device is associated as, if it is: the identity it keeps, else on
-    /// desktop the registration arora saved for it
-    /// ([`StudioConfig::saved_registration`]); [`RuntimeHandle::associate`]
-    /// connects it under that. A device associated as nothing associates
-    /// under the identity a front end's form gives.
-    Idle(Option<arora_bridge::DeviceInfo>),
-    /// Connecting; the operator may be asked for the registration.
-    Connecting,
-    /// Registered with Studio as this.
-    Connected(arora_bridge::DeviceInfo),
-    /// The operator declined Studio, leaving the owner empty.
-    Declined,
-    /// The connection failed, for this reason.
-    Failed(String),
 }
 
 /// How the device fronts the operator.
@@ -167,51 +155,13 @@ pub struct BridgeConfig {
     /// `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics.
     #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
     pub ros2: Option<(String, u16)>,
-    /// `--studio`: attach the Semio Studio bridge.
+    /// The device's Studio side, whose bridge each generation carries from
+    /// its start: offline, contacting nobody, while the device holds no
+    /// credential, and connecting by itself once it holds one. A front end
+    /// enrolls the device through the operator's enroller
+    /// (`Operator::enroller`). `None`: no Studio bridge.
     #[cfg(feature = "studio")]
-    pub studio: Option<StudioConfig>,
-}
-
-/// Where a device's Studio connection keeps what it registers as and what it
-/// signs in with.
-#[cfg(feature = "studio")]
-#[derive(Clone)]
-pub struct StudioConfig {
-    /// The identity the device is associated as (name, owners, model
-    /// family), kept across launches: the association form's, then Studio's
-    /// record. Without it, the device registers from the operator's answers,
-    /// Studio's record persisted here afterwards, else from the environment
-    /// alone.
-    pub identity: std::path::PathBuf,
-    /// The device directory Studio's credentials live in (its `studio/`
-    /// subdirectory), for a platform that gives the app its data directory,
-    /// as Android does; `None` for the one arora finds from the environment.
-    /// Inside a given directory nobody is asked: without a kept identity the
-    /// device does not connect, since arora 15 has no operator flow there.
-    pub device_dir: Option<std::path::PathBuf>,
-    /// The registration arora saves when its operator answers
-    /// (`studio/device.json` in arora's device directory, the fields of the
-    /// kept identity), for a device directory arora finds from the
-    /// environment: a device that keeps no identity but has it is associated
-    /// already, and connects under it, nobody asked. `None` where arora's
-    /// operator never answers, as in a given device directory.
-    pub saved_registration: Option<std::path::PathBuf>,
-    /// When the device connects; [`RuntimeHandle::associate`] connects it for
-    /// the rest of the run whatever this says.
-    pub connect: Connect,
-}
-
-/// When a device configured for Studio connects to it.
-#[cfg(feature = "studio")]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Connect {
-    /// At launch: the run asks for Studio (`--studio`).
-    AtLaunch,
-    /// At launch when the device keeps an identity: a device associated once
-    /// comes back associated, and one never associated contacts nobody.
-    IfKept,
-    /// Only once a front end asks ([`RuntimeHandle::associate`]).
-    WhenAsked,
+    pub studio: Option<arora::studio::StudioDevice>,
 }
 
 impl Default for BridgeConfig {
@@ -228,208 +178,16 @@ impl Default for BridgeConfig {
     }
 }
 
-/// What a device is associated with Studio as — its name, owners and model
-/// family — kept across launches (`StudioConfig::identity`): what the
-/// settings pane's form gave on its first association, or what Studio held
-/// once the operator's answers registered it, then what Studio holds each
-/// time it connects. The device registers it only while Studio holds no
-/// record of it: once associated, the name and owners are Studio's.
-#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(not(feature = "studio"), allow(dead_code))]
-struct Identity {
-    name: String,
-    /// The owners' Semio Studio user ids (Firebase UIDs).
-    owners: Vec<String>,
-    #[serde(default)]
-    model_family: Option<String>,
-}
-
-#[cfg_attr(not(feature = "studio"), allow(dead_code))]
-impl Identity {
-    /// What the device registers as under this identity.
-    fn device_info(&self) -> arora_bridge::DeviceInfo {
-        arora_bridge::DeviceInfo {
-            name: Some(self.name.clone()),
-            model_family: self.model_family.clone(),
-            owners: self.owners.clone(),
-            ..arora_bridge::DeviceInfo::default()
-        }
-    }
-
-    /// The identity a record gives: a name and an owner at least, as arora
-    /// requires of its saved registration.
-    fn of(info: &arora_bridge::DeviceInfo) -> Option<Self> {
-        let name = info.name.clone().filter(|name| !name.trim().is_empty())?;
-        (!info.owners.is_empty()).then(|| Self {
-            name,
-            owners: info.owners.clone(),
-            model_family: info.model_family.clone(),
-        })
-    }
-}
-
-/// The identity kept at `path`, if one reads.
-#[cfg(feature = "studio")]
-fn kept_identity(path: &std::path::Path) -> Option<Identity> {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|json| serde_json::from_str(&json).ok())
-}
-
-/// Keep `identity` at `path`, for this launch and the next ones.
-#[cfg(feature = "studio")]
-fn keep_identity(path: &std::path::Path, identity: &Identity) {
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    match serde_json::to_string_pretty(identity)
-        .map_err(|e| e.to_string())
-        .and_then(|json| std::fs::write(path, json).map_err(|e| e.to_string()))
-    {
-        Ok(()) => log::info!("Studio identity kept in {}", path.display()),
-        Err(e) => log::warn!("cannot keep the Studio identity: {e}"),
-    }
-}
-
-/// The registration arora saved at `path`, when it gives a name and an
-/// owner: arora ignores one that does not.
-#[cfg(feature = "studio")]
-fn saved_registration(path: &std::path::Path) -> Option<Identity> {
-    kept_identity(path).filter(|saved| !saved.name.trim().is_empty() && !saved.owners.is_empty())
-}
-
-/// The Studio bridge for one generation, the device connected under the
-/// persisted identity when there is one, else as the operator answers (the
-/// terminal UI's prompt or the settings pane; an unattended run declines),
-/// and Studio's record then persisted; in a given device directory, only
-/// under a persisted identity ([`StudioConfig::device_dir`]). `None` when
-/// the run does not connect ([`StudioConfig::connect`]) or Studio is
-/// declined or fails; `status` says which.
-///
-/// `description` is what the device's HAL says it is, which arora registers
-/// as the device's model, each field unless its environment variable is set
-/// (`MODEL_FAMILY`, `HARDWARE_VERSION`, `SOFTWARE_VERSION`). arora 15 takes
-/// none in a given device directory, so there the model is not reported.
-#[cfg(feature = "studio")]
-async fn studio_bridge(
-    studio: &StudioConfig,
-    operator: Option<&dyn arora::operator::Operator>,
-    description: &arora_hal::HalDescription,
-    status: &Mutex<StudioStatus>,
-) -> Option<Box<dyn arora_bridge::Bridge>> {
-    let report = |now: StudioStatus| {
-        if let Ok(mut status) = status.lock() {
-            *status = now;
-        }
-    };
-    let identity = studio.identity.as_path();
-    let persisted = kept_identity(identity);
-    let connects = match studio.connect {
-        Connect::AtLaunch => true,
-        Connect::IfKept => persisted.is_some(),
-        Connect::WhenAsked => false,
-    };
-    if !connects {
-        let associated = persisted.or_else(|| {
-            studio
-                .saved_registration
-                .as_deref()
-                .and_then(saved_registration)
-        });
-        report(StudioStatus::Idle(
-            associated.as_ref().map(Identity::device_info),
-        ));
-        return None;
-    }
-    report(StudioStatus::Connecting);
-    if let Some(known) = persisted {
-        let connected = match &studio.device_dir {
-            Some(dir) => arora::studio::connect_with_device_dir(dir).await,
-            None => arora::studio::connect_with_description(description).await,
-        };
-        let bridge = match connected {
-            Ok(bridge) => bridge,
-            Err(e) => {
-                log::error!("studio bridge: {e:?}");
-                report(StudioStatus::Failed(format!("{e:#}")));
-                return None;
-            }
-        };
-        // Studio's record is Studio's: the identity is registered only while
-        // Studio holds none, on the device's first association; afterwards
-        // the device keeps what Studio holds.
-        let held = match bridge.get_device_info().await {
-            Ok(Some(held)) if Identity::of(&held).is_some() => Ok(held),
-            Ok(_) => {
-                let info = known.device_info();
-                log::info!(
-                    "registering with Studio as {:?} (owners {:?}, from {})",
-                    known.name,
-                    known.owners,
-                    identity.display()
-                );
-                bridge
-                    .update_device_info(Some(info.clone()))
-                    .await
-                    .map(|held| held.unwrap_or(info))
-            }
-            Err(e) => Err(e),
-        };
-        match held {
-            Ok(held) => {
-                log::info!(
-                    "Studio holds the device as {:?} (owners {:?})",
-                    held.name,
-                    held.owners
-                );
-                if let Some(record) = Identity::of(&held).filter(|record| *record != known) {
-                    keep_identity(identity, &record);
-                }
-                report(StudioStatus::Connected(held));
-            }
-            Err(e) => {
-                log::error!("studio registration: {e:?}");
-                report(StudioStatus::Failed(format!("registration: {e}")));
-            }
-        }
-        return Some(bridge);
-    }
-    if studio.device_dir.is_some() {
-        log::info!(
-            "Studio: no identity kept in {}, not connecting",
-            identity.display()
-        );
-        report(StudioStatus::Idle(None));
-        return None;
-    }
-    let connected = match operator {
-        Some(operator) => {
-            arora::studio::connect_with_operator_and_description(operator, description).await
-        }
-        None => arora::studio::connect_with_description(description)
-            .await
-            .map(Some),
-    };
-    match connected {
-        Ok(Some(bridge)) => {
-            let info = bridge.get_device_info().await.ok().flatten();
-            if let Some(known) = info.as_ref().and_then(Identity::of) {
-                keep_identity(identity, &known);
-            }
-            report(StudioStatus::Connected(info.unwrap_or_default()));
-            Some(bridge)
-        }
-        Ok(None) => {
-            log::info!("Studio declined (no owner)");
-            report(StudioStatus::Declined);
-            None
-        }
-        Err(e) => {
-            log::error!("studio bridge: {e:?}");
-            report(StudioStatus::Failed(format!("{e:#}")));
-            None
-        }
-    }
+/// A generation's builder with its bridges attached, and what the driver
+/// keeps of them.
+struct Attached {
+    builder: arora::AroraBuilder,
+    /// The access requests the Studio bridge yields, for the operator to rule
+    /// on.
+    access_requests: arora_bridge::AccessRequestStream,
+    /// The handle of the generation's Studio bridge, when it has one.
+    #[cfg(feature = "studio")]
+    studio: Option<arora::studio::StudioHandle>,
 }
 
 /// Attach the device's bridges to `builder`: always the open local bridge
@@ -437,33 +195,33 @@ async fn studio_bridge(
 /// Each relays the device as its store and modules describe it — keys, what
 /// they are, which a remote may write, and functions — so nothing is declared
 /// to a bridge. A bridge that fails to build is logged and skipped, not fatal.
-/// Returned beside the builder: the access requests the Studio bridge yields,
-/// for the operator to rule on; `studio` says where the device stands with
-/// Studio. `description` is the device's HAL's, the model the Studio bridge
-/// reports ([`studio_bridge`]).
+/// `description` is the device's HAL's: the Studio bridge reports it as the
+/// device's model (`arora::studio::reported_model`). Called within a Tokio
+/// runtime, on which the Studio bridge's connection runs.
 #[cfg_attr(
     not(all(any(feature = "ros2-dds", feature = "ros2-zenoh"), feature = "studio")),
     allow(unused_variables)
 )]
-pub async fn attach_bridges(
+async fn attach_bridges(
     mut builder: arora::AroraBuilder,
     bridges: &BridgeConfig,
     ros4hri: bool,
-    operator: Option<&dyn arora::operator::Operator>,
     description: &arora_hal::HalDescription,
-    studio: &Mutex<StudioStatus>,
-) -> (arora::AroraBuilder, arora_bridge::AccessRequestStream) {
+) -> Attached {
     #[cfg_attr(not(feature = "studio"), allow(unused_mut))]
     let mut access_requests: arora_bridge::AccessRequestStream =
         Box::pin(futures::stream::pending());
     // Studio first: the bridge whose identity the device carries.
     #[cfg(feature = "studio")]
-    if let Some(config) = &bridges.studio {
-        if let Some(bridge) = studio_bridge(config, operator, description, studio).await {
-            access_requests = bridge.access_requests().await;
-            builder = builder.with_bridge(bridge);
+    let studio = match &bridges.studio {
+        Some(device) => {
+            let (bridge, handle) = device.bridge(arora::studio::reported_model(description));
+            access_requests = arora_bridge::Bridge::access_requests(&bridge).await;
+            builder = builder.with_bridge(Box::new(bridge));
+            Some(handle)
         }
-    }
+        None => None,
+    };
     match arora::local_ws_bridge_with(bridges.local.clone()).await {
         Ok(bridge) => builder = builder.with_bridge(bridge),
         Err(e) => log::error!("local bridge: {e:?}"),
@@ -488,7 +246,12 @@ pub async fn attach_bridges(
             }
         );
     }
-    (builder, access_requests)
+    Attached {
+        builder,
+        access_requests,
+        #[cfg(feature = "studio")]
+        studio,
+    }
 }
 
 /// Load the face from its GLB bytes (its graph kinds filtered by `config`)
@@ -508,7 +271,7 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
     let store = BlackboardStore::new();
     let (events_tx, events_rx) = std::sync::mpsc::channel();
     let (commands_tx, commands_rx) = futures::channel::mpsc::unbounded();
-    let studio = Arc::new(Mutex::new(StudioStatus::Off));
+    let studio = Arc::new(Mutex::new(StudioSide::default()));
     let _ = events_tx.send(ViewEvent::LoadFace {
         face_id: FACE.to_string(),
         meta: Box::new(meta.clone()),
@@ -611,30 +374,24 @@ struct Generation {
     contended: Vec<vizij_arora_host::Contention>,
 }
 
-/// Why a generation ends: another face to run, or the Studio connection asked
-/// for.
-enum Rebuild {
-    Face(Box<Generation>),
-    Associate(Option<Identity>),
-}
-
 /// The operator flow, generation by generation: each reload stops the
 /// running device and rebuilds it — graphs, rig, store, bridges — on the new
-/// face, its Studio bridge connecting anew with the new face's model, and
-/// the view follows through [`ViewEvent::LoadFace`]; an association
-/// rebuilds it on the same face with the Studio bridge. `operator`, when
-/// given, answers in place of the front end's. Runs until a generation ends
-/// on its own (a device error; the terminal UI's quit exits the process).
+/// face, its Studio bridge a new one reporting the new face's model, and the
+/// view follows through [`ViewEvent::LoadFace`]. `operator`, when given,
+/// answers in place of the front end's, and presents the device's enrollment
+/// with Studio ([`enroll`]). Runs until a generation ends on its own (a device
+/// error; the terminal UI's quit exits the process).
 #[allow(clippy::too_many_arguments)]
+#[cfg_attr(not(feature = "studio"), allow(unused_variables))]
 fn supervise(
     mut face: Generation,
     config: FaceConfig,
-    mut bridges: BridgeConfig,
+    bridges: BridgeConfig,
     operator: Option<Arc<dyn arora::operator::Operator>>,
     handles: (RigHal, BlackboardStore),
     events: Sender<ViewEvent>,
     mut commands: UnboundedReceiver<Command>,
-    studio: Arc<Mutex<StudioStatus>>,
+    studio: Arc<Mutex<StudioSide>>,
 ) {
     let tokio_rt = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -651,7 +408,6 @@ fn supervise(
         let (mut frontend, tui) = operator_frontend();
         if let (Some(frontend), Some(operator)) = (frontend.as_mut(), &operator) {
             frontend.operator = operator.clone();
-            frontend.interactive = true;
         }
         let (rig, store) = match fresh.take() {
             Some(handles) => handles,
@@ -695,72 +451,88 @@ fn supervise(
         ) else {
             return;
         };
-        let associable = studio_configured(&bridges);
-        let rebuild = tokio_rt.block_on(async {
-            let operator = frontend.as_ref().map(|frontend| frontend.operator.clone());
-            let (builder, access_requests) = attach_bridges(
-                builder,
-                &bridges,
-                config.ros4hri,
-                operator.as_deref(),
-                &description,
-                &studio,
-            )
-            .await;
+        let next = tokio_rt.block_on(async {
+            let attached = attach_bridges(builder, &bridges, config.ros4hri, &description).await;
+            #[cfg(feature = "studio")]
+            let enrollment = {
+                let enroller = match &frontend {
+                    Some(frontend) => frontend.operator.clone().enroller(),
+                    None => Arc::new(arora::studio::UnattendedEnroller),
+                };
+                enroll(attached.studio.clone(), enroller, &studio)
+            };
+            #[cfg(not(feature = "studio"))]
+            let enrollment = futures::future::pending::<std::convert::Infallible>();
             // A rebuild drops the run future — arora's stop story: the
             // teardown is complete and synchronous (front end released, local
             // bridge's port freed) before the next generation starts.
             tokio::select! {
-                result = run_generation(builder, frontend, access_requests, &face.meta, &config.program) => {
+                result = run_generation(attached.builder, frontend, attached.access_requests, &face.meta, &config.program) => {
                     if let Err(e) = result {
                         log::error!("arora device stopped: {e:?}");
                     }
                     None
                 }
-                rebuild = pump(tui, &mut commands, &config, &events, associable) => Some(rebuild),
+                next = pump(tui, &mut commands, &config, &events) => Some(next),
+                never = enrollment => match never {},
             }
         });
-        match rebuild {
+        match next {
             None => break,
-            Some(Rebuild::Face(next)) => face = *next,
-            Some(Rebuild::Associate(identity)) => associate(&mut bridges, identity),
+            Some(next) => face = *next,
         }
     }
 }
 
-/// Whether the run is configured for Studio, so that associating it means
-/// something.
-fn studio_configured(bridges: &BridgeConfig) -> bool {
-    #[cfg(feature = "studio")]
-    return bridges.studio.is_some();
-    #[cfg(not(feature = "studio"))]
-    {
-        let _ = bridges;
-        false
-    }
-}
-
-/// Connect the run to Studio from its next generation on, keeping `identity`
-/// first when one is given and the device keeps none: a device associated
-/// already connects under what it keeps, its name and owners being Studio's.
-fn associate(bridges: &mut BridgeConfig, identity: Option<Identity>) {
-    #[cfg(feature = "studio")]
-    if let Some(studio) = bridges.studio.as_mut() {
-        if let Some(identity) = &identity {
-            if kept_identity(&studio.identity).is_none() {
-                keep_identity(&studio.identity, identity);
-            } else {
-                log::warn!(
-                    "the device keeps an identity in {}: its name and owners are edited in \
-                     Semio Studio",
-                    studio.identity.display()
-                );
+/// Enroll the device with Semio Studio beside its generation, presented by
+/// `enroller` — the settings pane's, the terminal UI's, or nobody's — for as
+/// long as the generation runs, as the device client's
+/// `StudioHandle::enroll_when_needed` does: whenever the device's Studio
+/// bridge finds it not enrolled, once `enroller` accepts. The generation's
+/// handle is the front ends' meanwhile ([`RuntimeHandle::studio`]).
+///
+/// The run outlives its enrollment: Studio refusing an enrollment is logged
+/// and shown ([`RuntimeHandle::studio_refusal`]), the device offered
+/// enrollment again [`ENROLL_AGAIN_AFTER`] later; a bridge that halts stays
+/// offline, its status saying why. Never resolves.
+#[cfg(feature = "studio")]
+async fn enroll(
+    handle: Option<arora::studio::StudioHandle>,
+    enroller: Arc<dyn arora::studio::Enroller>,
+    studio: &Mutex<StudioSide>,
+) -> std::convert::Infallible {
+    let share = |side: StudioSide| {
+        *studio
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = side;
+    };
+    share(StudioSide {
+        handle: handle.clone(),
+        refused: None,
+    });
+    let Some(handle) = handle else {
+        return futures::future::pending().await;
+    };
+    loop {
+        match handle.enroll_when_needed(&*enroller).await {
+            arora::studio::EnrollmentEnded::Refused(e) => {
+                log::error!("Studio refused the device's enrollment: {e}");
+                share(StudioSide {
+                    handle: Some(handle.clone()),
+                    refused: Some(e.to_string()),
+                });
+                tokio::time::sleep(ENROLL_AGAIN_AFTER).await;
+                share(StudioSide {
+                    handle: Some(handle.clone()),
+                    refused: None,
+                });
+            }
+            ended => {
+                log::error!("{ended}");
+                return futures::future::pending().await;
             }
         }
-        studio.connect = Connect::AtLaunch;
     }
-    #[cfg(not(feature = "studio"))]
-    let _ = (bridges, identity);
 }
 
 /// Run one device generation: build it — the face's animations loaded, its
@@ -799,37 +571,33 @@ async fn run_generation(
 /// events (`g` reads the GLB at the given path, `b` parses a background) and
 /// the [`RuntimeHandle`] commands, each validated here — a bad path, a GLB
 /// that does not compose or a malformed colour is an error in the log, not
-/// a dead device. Returns when the device is to be rebuilt: on a face
-/// validated for a reload, or on an association in a run `associable` to
-/// Studio. A generation whose front ends have all gone quiet (a headless run,
-/// every handle dropped) never returns, so that the pump merely ending
-/// cannot stop a healthy run.
+/// a dead device. Returns the face to rebuild the device on, once one is
+/// validated for a reload. A generation whose front ends have all gone quiet
+/// (a headless run, every handle dropped) never returns, so that the pump
+/// merely ending cannot stop a healthy run.
 async fn pump(
     tui: BoxStream<'static, Command>,
     commands: &mut UnboundedReceiver<Command>,
     config: &FaceConfig,
     events: &Sender<ViewEvent>,
-    associable: bool,
-) -> Rebuild {
+) -> Box<Generation> {
     let mut front_ends = futures::stream::select(tui, commands.by_ref());
     while let Some(command) = front_ends.next().await {
         match command {
             Command::Reload(glb) => match load_face(&glb, config) {
                 Ok(loaded) => {
-                    return Rebuild::Face(Box::new(Generation {
+                    return Box::new(Generation {
                         spec: loaded.spec,
                         meta: loaded.meta,
                         glb,
                         contended: loaded.contended,
-                    }))
+                    })
                 }
                 Err(e) => log::error!("cannot load the face: {e:#}"),
             },
             Command::Background(rgb) => {
                 let _ = events.send(ViewEvent::Background(rgb));
             }
-            Command::Associate(identity) if associable => return Rebuild::Associate(identity),
-            Command::Associate(_) => log::warn!("this run has no Studio to associate with"),
         }
     }
     futures::future::pending().await
@@ -1133,16 +901,12 @@ mod model_tests {
         commands_tx
             .unbounded_send(Command::Reload(emy))
             .expect("send the reload");
-        let rebuild = futures::executor::block_on(pump(
+        let next = futures::executor::block_on(pump(
             futures::stream::pending().boxed(),
             &mut commands,
             &config(),
             &events,
-            false,
         ));
-        let Rebuild::Face(next) = rebuild else {
-            panic!("a reload rebuilds the device on the new face");
-        };
         let rig = face_rig(&next.glb, &next.meta);
         assert_eq!(
             futures::executor::block_on(rig.describe()),
@@ -1152,192 +916,48 @@ mod model_tests {
     }
 }
 
-/// When a device configured for Studio contacts it: never before it is
-/// asked to or keeps an identity, and what it says of itself then.
+/// A device's Studio side before it is enrolled.
 #[cfg(all(test, feature = "studio"))]
 mod studio_tests {
     use super::*;
+    use arora::studio::{Enroller, StudioStatus};
 
-    fn scratch(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("vizij-studio-{name}-{}", std::process::id()));
+    /// An enroller whose person never answers the offer to enroll.
+    struct Undecided;
+
+    #[async_trait::async_trait]
+    impl Enroller for Undecided {
+        async fn offer_enrollment(&self) -> bool {
+            futures::future::pending().await
+        }
+    }
+
+    /// A device holding no credential is not enrolled: its bridge stays
+    /// offline, and nothing enrolls it until its enroller accepts, the
+    /// generation's handle shared with the front ends meanwhile.
+    #[tokio::test]
+    async fn a_device_holding_no_credential_waits_offline_for_its_enrollment() {
+        let dir = std::env::temp_dir().join(format!("vizij-studio-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        dir
-    }
-
-    async fn status_of(config: &StudioConfig) -> StudioStatus {
-        let status = Mutex::new(StudioStatus::Off);
-        assert!(
-            studio_bridge(config, None, &Default::default(), &status)
-                .await
-                .is_none(),
-            "nothing is contacted"
-        );
-        status.into_inner().unwrap()
-    }
-
-    #[tokio::test]
-    async fn a_device_never_associated_contacts_nobody_until_asked() {
-        let dir = scratch("never");
-        // Android's: a device directory, connecting when an identity is kept.
-        let in_dir = StudioConfig {
-            identity: dir.join("studio-identity.json"),
-            device_dir: Some(dir.clone()),
-            saved_registration: None,
-            connect: Connect::IfKept,
-        };
-        assert_eq!(
-            status_of(&in_dir).await,
-            StudioStatus::Idle(None),
-            "the identity comes from the front end's form"
-        );
-        // The desktop's without `--studio`, arora having saved nothing.
-        let desktop = StudioConfig {
-            device_dir: None,
-            saved_registration: Some(dir.join("studio").join("device.json")),
-            connect: Connect::WhenAsked,
-            ..in_dir.clone()
-        };
-        assert_eq!(status_of(&desktop).await, StudioStatus::Idle(None));
-    }
-
-    /// A desktop run that did not ask for Studio keeps its identity to
-    /// itself, and says what it is associated as.
-    #[tokio::test]
-    async fn an_idle_device_says_the_identity_it_keeps() {
-        let dir = scratch("idle-kept");
-        let config = StudioConfig {
-            identity: dir.join("studio-identity.json"),
-            device_dir: None,
-            saved_registration: None,
-            connect: Connect::WhenAsked,
-        };
-        let identity = Identity {
-            name: "vizij-bench".into(),
-            owners: vec!["uid-1".into(), "uid-2".into()],
-            model_family: Some("vizij".into()),
-        };
-        keep_identity(&config.identity, &identity);
-        let StudioStatus::Idle(Some(info)) = status_of(&config).await else {
-            panic!("an idle device with its identity");
-        };
-        assert_eq!(info.name.as_deref(), Some("vizij-bench"));
-        assert_eq!(info.owners, ["uid-1", "uid-2"]);
-        assert_eq!(info.model_family.as_deref(), Some("vizij"));
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    /// A desktop whose operator registered it through arora, keeping no
-    /// identity of its own, is associated as arora's saved registration; one
-    /// that names no owner is no association.
-    #[tokio::test]
-    async fn a_desktop_arora_registered_is_associated_as_arora_saved_it() {
-        let dir = scratch("arora-saved");
-        let saved = dir.join("studio").join("device.json");
-        let config = StudioConfig {
-            identity: dir.join("studio-identity.json"),
-            device_dir: None,
-            saved_registration: Some(saved.clone()),
-            connect: Connect::WhenAsked,
-        };
-        std::fs::create_dir_all(saved.parent().unwrap()).unwrap();
-        std::fs::write(
-            &saved,
-            r#"{ "owners": ["uid-1"], "name": "pepper-lab", "model_family": "pepper" }"#,
+        let device = arora::studio::in_device_dir(
+            &dir,
+            arora::device_dir::DEFAULT_NAME,
+            Some(&dir.join("devices")),
         )
-        .unwrap();
-        let StudioStatus::Idle(Some(info)) = status_of(&config).await else {
-            panic!("associated as arora's saved registration");
-        };
-        assert_eq!(info.name.as_deref(), Some("pepper-lab"));
-        assert_eq!(info.owners, ["uid-1"]);
-
-        std::fs::write(&saved, r#"{ "owners": [], "name": "pepper-lab" }"#).unwrap();
-        assert_eq!(status_of(&config).await, StudioStatus::Idle(None));
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn associating_keeps_the_first_identity_given_and_connects_from_then_on() {
-        let dir = scratch("associate");
-        let identity = dir.join("studio-identity.json");
-        let mut bridges = BridgeConfig {
-            studio: Some(StudioConfig {
-                identity: identity.clone(),
-                device_dir: Some(dir.clone()),
-                saved_registration: None,
-                connect: Connect::IfKept,
-            }),
-            ..BridgeConfig::default()
-        };
-        let first = || Identity {
-            name: "vizij-test".into(),
-            owners: vec!["uid-1".into()],
-            model_family: None,
-        };
-        associate(&mut bridges, Some(first()));
-        assert_eq!(kept_identity(&identity), Some(first()));
-        assert_eq!(bridges.studio.as_ref().unwrap().connect, Connect::AtLaunch);
-
-        // Associated, the device's name and owners are Studio's: another
-        // identity given is not kept.
-        associate(
-            &mut bridges,
-            Some(Identity {
-                name: "vizij-renamed".into(),
-                owners: vec!["uid-2".into()],
-                model_family: None,
-            }),
-        );
-        assert_eq!(kept_identity(&identity), Some(first()));
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    /// What a device registers as under an identity: its name, owners and
-    /// model family, and nothing it does not keep.
-    #[test]
-    fn an_identity_registers_its_fields() {
-        let identity = Identity {
-            name: "vizij-bench".into(),
-            owners: vec!["uid-1".into()],
-            model_family: None,
-        };
-        assert_eq!(
-            identity.device_info(),
-            arora_bridge::DeviceInfo {
-                name: Some("vizij-bench".into()),
-                owners: vec!["uid-1".into()],
-                ..arora_bridge::DeviceInfo::default()
-            }
-        );
-    }
-
-    /// A record of Studio's gives an identity with a name and an owner: one
-    /// without is a device Studio holds no record of.
-    #[test]
-    fn a_record_with_a_name_and_an_owner_gives_an_identity() {
-        let record = arora_bridge::DeviceInfo {
-            name: Some("vizij-bench".into()),
-            owners: vec!["uid-1".into()],
-            software_version: Some("1.0".into()),
-            ..arora_bridge::DeviceInfo::default()
-        };
-        assert_eq!(
-            Identity::of(&record),
-            Some(Identity {
-                name: "vizij-bench".into(),
-                owners: vec!["uid-1".into()],
-                model_family: None,
-            })
-        );
-        let ownerless = arora_bridge::DeviceInfo {
-            owners: Vec::new(),
-            ..record.clone()
-        };
-        assert_eq!(Identity::of(&ownerless), None);
-        let unnamed = arora_bridge::DeviceInfo {
-            name: Some("  ".into()),
-            ..record
-        };
-        assert_eq!(Identity::of(&unnamed), None);
+        .expect("the device's Studio side");
+        let (bridge, handle) = device.bridge(None);
+        let side = Mutex::new(StudioSide::default());
+        let enrolling = tokio::time::timeout(
+            Duration::from_millis(300),
+            enroll(Some(handle.clone()), Arc::new(Undecided), &side),
+        )
+        .await;
+        assert!(enrolling.is_err(), "the enrollment runs as long as the run");
+        assert_eq!(*handle.status().borrow(), StudioStatus::NotEnrolled);
+        let shared = side.lock().unwrap();
+        assert!(shared.handle.is_some(), "the front ends hold the handle");
+        assert_eq!(shared.refused, None);
+        drop(bridge);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

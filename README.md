@@ -96,7 +96,7 @@ your own AWS-backed deployment, and where text enters — is in
 | Skills: goal-driven behaviors shipped as editable graph fragments, overridable per face — gaze, and the two viseme players | [Skills](docs/skills.md) |
 | Speech: the `say` skill, lips driven live — local Piper or the AWS-backed cloud provider | [Speech (TTS)](crates/vizij/README.md#speech-tts) |
 | Animation clips + node-graph programs from the face's `VIZIJ_bundle` | [the app README](crates/vizij/README.md) |
-| Bridges: local WebSocket (always on), ROS 2 (`--ros2`), Semio Studio (`--studio`) | [the app README](crates/vizij/README.md) |
+| Bridges: local WebSocket (always on), ROS 2 (`--ros2`), Semio Studio (the `studio` build, unless `--no-studio`) | [the app README](crates/vizij/README.md) |
 | Headless rendering: one-shot snapshots or frames-to-store | [the app README](crates/vizij/README.md) |
 | Face assets as GLB bundles: inspect, pack, validate coverage (L0–L3) | [`vizij-bundle`](crates/tools/vizij-bundle/README.md) |
 
@@ -109,7 +109,7 @@ your own AWS-backed deployment, and where text enters — is in
 | Show a face on a desktop or kiosk | the [`vizij` app](crates/vizij/README.md), released with installers per OS ([installing a release](crates/vizij/README.md#installing-a-release)) |
 | Show a face on an Android tablet | **[vizij-standalone](https://github.com/vizij-ai/vizij-web/tree/main/apps/vizij-standalone)** (vizij-web) |
 | Embed a live face in my own web app | [`@vizij/runtime`](npm/@vizij/runtime/README.md) (the browser device) + the React packages in [vizij-web](https://github.com/vizij-ai/vizij-web) |
-| Pilot faces from [Semio Studio](https://studio.semio.ai) | the `--studio` flag ([app README](crates/vizij/README.md)) or the standalone's studio-bridge build |
+| Pilot faces from [Semio Studio](https://studio.semio.ai) | the `studio` build of the app, enrolled from its settings pane ([app README](crates/vizij/README.md)), or the standalone's studio-bridge build |
 | Pack, validate, or embed profiles and mappings into face assets | [`vizij-bundle`](crates/tools/vizij-bundle/README.md) — the model: [profiles and mappings](docs/profiles-and-mappings.md) |
 | Use the node-graph engine on its own | [vizij-graph-core](crates/node-graph/vizij-graph-core/README.md), or its [npm wrapper](#domain-stacks) |
 | Play keyframe animations on their own | Arora's [`arora-animation`](https://crates.io/crates/arora-animation) (the engine) and [`arora-animation-module`](https://crates.io/crates/arora-animation-module) (`@arora/animation`, the module a Vizij device links) |
