@@ -1,6 +1,6 @@
 [package]
 name = "vizij-arora-host"
-version = "7.7.1"
+version = "7.7.2"
 edition.workspace = true
 license = "Apache-2.0"
 description = "Portable Vizij host glue: compose the device behavior from graph sources, read the face bundle, pick the program to autoplay, and stage the neutral pose. Shared by the native app and the browser module (both in the vizij crate)."
@@ -17,7 +17,7 @@ serde_json = { workspace = true }
 log = "0.4"
 # The behavior `Status` ids the skill fragments' status constants carry —
 # from the crate declaring the enumeration, so the encoding cannot drift.
-arora-behavior = "9"
+arora-behavior = "10"
 # The skill contracts: each skill's function id, name and signature, declared
 # once on a trait its implementations share.
 arora-module = "2.1"

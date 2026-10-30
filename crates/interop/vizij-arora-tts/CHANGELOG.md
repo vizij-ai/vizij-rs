@@ -4,6 +4,14 @@ All notable changes to `vizij-arora-tts`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [8.0.0] - Unreleased
+
+### Changed
+
+- **Breaking:** requires vizij-arora-behavior 9, whose speech contract
+  (`say`, `Say`) this crate re-exports, and arora-behavior 10, whose `Status`
+  a `say` call returns. Its browser tests run on arora 18.
+
 ## [7.1.1] - 2026-10-25
 
 ### Changed

@@ -38,7 +38,7 @@ pub mod viseme;
 
 use std::collections::{HashMap, HashSet};
 
-use arora_behavior::graph::{GraphDiff, LinkSource};
+use arora_behavior::graph::{GraphDiff, Node, Source};
 use arora_behavior::{
     built_in, interpreter_module, BehaviorContext, BehaviorError, BehaviorInterpreter,
     BehaviorStatus, FunctionIndex, Graph, RunPolicy, TaskHandle, TaskId,
@@ -630,14 +630,11 @@ impl ProcessingGraph {
         let prefix = run_node_prefix(task);
         self.graph
             .nodes
-            .keys()
-            .filter(|id| {
-                self.graph
-                    .variables
-                    .get(id)
-                    .is_some_and(|name| name.starts_with(&prefix))
+            .iter()
+            .filter(|node| {
+                graph_codec::node_name(node).is_some_and(|name| name.starts_with(&prefix))
             })
-            .copied()
+            .map(|node| node.id)
             .collect()
     }
 
@@ -646,7 +643,7 @@ impl ProcessingGraph {
     /// removes structure, not state.
     fn prune_run(&mut self, task: TaskId) -> Result<(), BehaviorError> {
         let diff = GraphDiff {
-            remove_nodes: self.run_nodes(task),
+            remove: self.run_nodes(task),
             ..GraphDiff::default()
         };
         self.graph.apply(diff).map_err(|e| BehaviorError {
@@ -667,21 +664,15 @@ impl ProcessingGraph {
         let held: HashSet<Uuid> = self
             .graph
             .nodes
-            .values()
+            .iter()
             .filter(|node| graph_codec::is_composite(node))
             .flat_map(|node| node.children.iter().flatten().copied())
             .collect();
         for id in added {
-            if held.contains(id)
-                || self
-                    .graph
-                    .nodes
-                    .get(id)
-                    .is_none_or(graph_codec::is_composite)
-            {
+            if held.contains(id) || self.graph.node(id).is_none_or(graph_codec::is_composite) {
                 continue;
             }
-            let name = self.graph.variables.get(id);
+            let name = self.graph.node(id).and_then(graph_codec::node_name);
             let parent = self
                 .run_order
                 .iter()
@@ -690,7 +681,7 @@ impl ProcessingGraph {
                 .map(|prefix| graph_codec::composite_id(&prefix))
                 .or(self.main);
             if let Some(parent) = parent
-                .and_then(|parent| self.graph.nodes.get_mut(&parent))
+                .and_then(|parent| graph_codec::node_mut(&mut self.graph, &parent))
                 .filter(|parent| graph_codec::is_composite(parent))
             {
                 parent.children.get_or_insert_with(Vec::new).push(*id);
@@ -1383,68 +1374,51 @@ impl BehaviorInterpreter for ProcessingGraph {
             .runs
             .keys()
             .flat_map(|task| self.run_nodes(*task))
-            .filter(|id| !graph.nodes.contains_key(id))
+            .filter(|id| graph.node(id).is_none())
             .collect();
-        let within = |source: &LinkSource| {
+        // A carried node keeps its values — among them the names that decode
+        // it — and what it reads of the carried nodes.
+        let within = |source: &Source| {
             let mut source = source;
             loop {
                 match source {
-                    LinkSource::Literal(_) => return true,
-                    LinkSource::Port(port) => return carried.contains(&port.node),
-                    LinkSource::Select { source: inner, .. } => source = inner,
-                    // A Vizij graph has no variable links (`graph_codec` decodes
+                    Source::Value(_) => return true,
+                    Source::Port(port) => return carried.contains(&port.node),
+                    Source::Select { source: inner, .. } => source = inner,
+                    // A Vizij graph binds no store key (`graph_codec` decodes
                     // none), so none is carried.
-                    LinkSource::Variable(_) => return false,
+                    Source::Key(_) => return false,
                 }
             }
         };
-        let links: Vec<_> = self
+        for node in self
             .graph
-            .links
+            .nodes
             .iter()
-            .filter(|link| carried.contains(&link.target.node) && within(&link.source))
-            .cloned()
-            .collect();
-        // The names the carried nodes and links decode by: node ids, kinds,
-        // slots.
-        let mut named: HashSet<Uuid> = HashSet::new();
-        for id in &carried {
-            let node = &self.graph.nodes[id];
-            named.insert(node.id);
-            named.insert(node.function);
-            named.extend(node.inputs.iter().chain(&node.outputs).map(|io| io.id));
+            .filter(|node| carried.contains(&node.id))
+        {
+            let mut node = node.clone();
+            node.bind.retain(|_, source| within(source));
+            graph.nodes.push(node);
         }
-        for link in &links {
-            named.insert(link.target.port);
-        }
-        for id in named {
-            if let Some(name) = self.graph.variables.get(&id) {
-                graph.variables.entry(id).or_insert_with(|| name.clone());
-            }
-        }
-        for id in &carried {
-            graph.nodes.insert(*id, self.graph.nodes[id].clone());
-        }
-        graph.links.extend(links);
         let runner = graph_codec::composite_id(RUNNER);
         let main = match graph.root {
             // A graph read back from this interpreter: its main behavior is
             // its runner's first child.
             Some(root) if root == runner => graph
-                .nodes
-                .get(&root)
+                .node(&root)
                 .and_then(|node| node.children.as_ref()?.first().copied()),
             Some(root) => Some(root),
             // A graph with no structure: its nodes, by id, are the main
             // behavior.
             None => {
-                let mut children: Vec<Uuid> = graph
+                let mut children: Vec<&Node> = graph
                     .nodes
-                    .keys()
-                    .filter(|id| !carried.contains(id))
-                    .copied()
+                    .iter()
+                    .filter(|node| !carried.contains(&node.id))
                     .collect();
-                children.sort_by_key(|id| graph.variables.get(id).cloned());
+                children.sort_by_key(|node| graph_codec::node_name(node));
+                let children = children.into_iter().map(|node| node.id).collect();
                 Some(graph_codec::insert_composite(
                     &mut graph,
                     graph_codec::flow_function(),
@@ -1469,8 +1443,8 @@ impl BehaviorInterpreter for ProcessingGraph {
     /// composite holds is [`place`](Self::place)d. A new root is the main
     /// behavior's: the runner stays the root, with the runs after it.
     fn apply(&mut self, diff: GraphDiff) -> Result<(), BehaviorError> {
-        let added: Vec<Uuid> = diff.add_nodes.iter().map(|node| node.id).collect();
-        let root = diff.set_root;
+        let added: Vec<Uuid> = diff.set.iter().map(|node| node.id).collect();
+        let root = diff.root;
         let mut graph = self.graph.clone();
         graph.apply(diff).map_err(|e| BehaviorError {
             message: format!("graph diff: {e}"),
@@ -1576,7 +1550,7 @@ mod tests {
         graph
             .graph()
             .nodes
-            .values()
+            .iter()
             .filter(|node| !graph_codec::is_composite(node))
             .count()
     }
@@ -2261,7 +2235,7 @@ mod tests {
 
         let mut bare = graph_codec::encode(&later_listed_writer()).expect("encode");
         let root = bare.root.take().expect("a root");
-        bare.nodes.remove(&root);
+        bare.nodes.retain(|node| node.id != root);
         graph.load(bare).expect("load");
         graph.tick_store(&store, &mut bridge, 0.016).unwrap();
         assert_eq!(read(&store, "shared/x"), Some(float(2.0)));

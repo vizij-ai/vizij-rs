@@ -13,6 +13,8 @@ All notable changes to `vizij-graph-wasm`. The format follows
 
 ### Changed
 
+- Built on vizij-graph-core 5 (arora-behavior 10, arora-behavior-tree 10,
+  arora-dataflow-nodes 2). The JS surface and its results are unchanged.
 - **Breaking:** built on vizij-graph-core 3. An `eval_all` with no `step`
   before it evaluates at a `dt` of zero, which moves no Spring, Damp or Slew;
   they used to jump to their target. An IK node answers an unchanged request

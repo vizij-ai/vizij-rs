@@ -1,6 +1,6 @@
 [package]
 name        = "vizij-graph-core"
-version     = "4.0.1"
+version     = "5.0.0"
 edition     = "2021"
 license     = "Apache-2.0"
 description = "Vizij's node graph: its format, its editor registry, and its evaluation on Arora's behavior tree as calls of arora-dataflow-nodes' functions."
@@ -12,9 +12,9 @@ keywords    = ["vizij", "node", "graph", "behavior-tree"]
 categories  = ["science::robotics", "game-engines"]
 
 [dependencies]
-arora-behavior = "9.6"
-arora-behavior-tree = "9.5"
-arora-dataflow-nodes = { version = "1", default-features = false }
+arora-behavior = "10"
+arora-behavior-tree = "10"
+arora-dataflow-nodes = { version = "2", default-features = false }
 arora-geometry = "1"
 arora-graphics-types = "1"
 arora-simple-data-store = "3.2"
