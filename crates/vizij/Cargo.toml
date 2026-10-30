@@ -135,7 +135,7 @@ arora-hal = "4.2"
 # The face colours a view reads (`as_color_rgba`).
 arora-graphics-types = "1"
 vizij-api-core = { version = "3", path = "../api/vizij-api-core" }
-vizij-graph-core = { version = "5", path = "../node-graph/vizij-graph-core" }
+vizij-graph-core = { version = "6", path = "../node-graph/vizij-graph-core" }
 vizij-arora = { path = "../interop/vizij-arora" }
 # `frames`: the rendered face as its `sensor_msgs` image value, the shape the
 # browser runtime would build too if it published frames; `diagnostics`: the
@@ -152,7 +152,7 @@ arora-animation-module = "2"
 
 # The speech provider — the say skill's `say` — over the Vizij TTS cloud
 # function: rodio plays it natively, the page's hook in the browser.
-vizij-arora-tts = { version = "8", path = "../interop/vizij-arora-tts" }
+vizij-arora-tts = { version = "9", path = "../interop/vizij-arora-tts" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The native engine's own: the multi-threaded schedule executor and task

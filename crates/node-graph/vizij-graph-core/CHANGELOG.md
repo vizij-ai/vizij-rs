@@ -4,6 +4,28 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [6.0.0] - Unreleased
+
+### Added
+
+- `Spawn`'s `spawn_initial` param (`NodeParams::spawn_initial`): when true,
+  the node's first evaluation spawns with the args it records, and later
+  ones spawn on changes as before — for a graph whose inputs command a state
+  that holds, which is then set from the inputs as loaded. Absent or false,
+  the first evaluation only records them. The importer starts such a node
+  from a recorded call no arguments match.
+- An integer or `f64` array coerces to a declared numeric shape as the
+  numbers it holds (`shape_helpers::coerce_numeric_to_shape`), as an integer
+  scalar coerces as a number: an `input` node declaring a vector shape reads
+  a call's `Vec<u8>` argument as the vector of its values, which the vector
+  nodes compute on.
+
+### Changed
+
+- **Breaking:** `NodeParams` has the `spawn_initial` field. A `NodeParams`
+  built with a struct literal that names every field must name it, or end
+  in `..Default::default()`.
+
 ## [5.0.0] - Unreleased
 
 ### Changed
