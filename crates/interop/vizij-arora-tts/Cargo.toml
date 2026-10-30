@@ -31,7 +31,7 @@ vizij-arora-behavior = { version = "9", path = "../vizij-arora-behavior" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The native producer: a tokio task fetches, a blocking-pool task plays
-# through rodio (cpal + symphonia, pure Rust: nothing to install).
+# through rodio (cpal + symphonia).
 rodio = "0.23"
 tokio = { version = "1", features = ["rt-multi-thread", "time"] }
 # The native client's TLS: rustls on ring, rooted in the Mozilla CA set
