@@ -236,14 +236,15 @@ fn main() -> Result<()> {
         #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
         ros2: cli.ros2.as_deref().map(parse_ros2).transpose()?,
         // The device's Studio side, whether or not it is enrolled: the
-        // settings pane, else the terminal UI, enrolls it.
+        // settings pane, else the terminal UI, enrolls it. A Studio side
+        // that cannot be read leaves the run without its bridge, the reason
+        // logged and shown in the pane.
         #[cfg(feature = "studio")]
-        studio: if cli.studio.connects() {
-            let device = arora::Device::from_env()?;
-            Some(arora::studio::of(&device).context("the device's Semio Studio side")?)
-        } else {
-            None
-        },
+        studio: cli.studio.connects().then(|| {
+            arora::Device::from_env()
+                .and_then(|device| arora::studio::of(&device))
+                .map_err(|e| format!("{e:#}"))
+        }),
     };
     // Frames are the ROS4HRI face image, so they follow that exposure unless
     // a rate is given (see `frames::publish_rate`).
