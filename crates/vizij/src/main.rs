@@ -71,9 +71,11 @@ struct Cli {
     #[arg(long)]
     snapshot: Option<std::path::PathBuf>,
 
-    /// Run windowless: render offscreen and stream frames (`--frame-rate`) into
-    /// the store instead of opening a window. The device still runs with its
-    /// bridges — the ROS4HRI route (face frames as a topic, no browser).
+    /// Run windowless: render offscreen and stream frames into the store
+    /// instead of opening a window, at the rate the device's
+    /// `display/face/frame_rate` holds (`--frame-rate`). The device still runs
+    /// with its bridges — the ROS4HRI route (face frames as a topic, no
+    /// browser).
     #[arg(long)]
     headless: bool,
 
@@ -114,16 +116,17 @@ struct Cli {
     #[arg(long, default_value = "rig,pose-driver,pose,standard-adaptation")]
     graphs: String,
 
-    /// Publish rendered frames into the store as HAL readings, at this rate in
-    /// Hz (decoupled from the step rate); 0 disables. Frames are the face image
-    /// a ROS4HRI consumer reads, so by default they publish at 15 Hz when the
-    /// device is exposed as ROS4HRI (`--ros2` without `--no-ros4hri`) and not
-    /// at all otherwise. A rate given here applies regardless, except under
-    /// `--ros2 --no-ros4hri`, which is refused: with no ROS4HRI profile to type
-    /// the frame key, a frame would ride the bridge's JSON scalar plane. Works
-    /// with a window or headless.
+    /// The rate, in frames per second, rendered frames publish into the store
+    /// at from the start, as HAL readings (decoupled from the step rate): the
+    /// value the device's `display/face/frame_rate` starts at, an input a
+    /// client writes to turn the frames on, off, or to another rate. Default
+    /// 0: no frame until a client asks. At most 30; 0 or below publishes none.
+    /// Under `--ros2 --no-ros4hri` the device publishes no frame and has no
+    /// such key, and a rate is refused: with no ROS4HRI profile to type the
+    /// frame key, a frame would ride the bridge's JSON scalar plane. Works with
+    /// a window or headless.
     #[arg(long)]
-    frame_rate: Option<f32>,
+    frame_rate: Option<f64>,
 
     /// How published frames are encoded, which decides the key they are
     /// written under: `png` writes `display/face/compressed` (a
@@ -220,6 +223,13 @@ fn main() -> Result<()> {
     } else {
         face::ProgramSelect::Auto
     };
+    // Frames start at the rate given, and none on a ROS 2 bridge without the
+    // ROS4HRI profile to type them (see `frames::publish_rate`).
+    #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
+    let ros2 = cli.ros2.is_some();
+    #[cfg(not(any(feature = "ros2-dds", feature = "ros2-zenoh")))]
+    let ros2 = false;
+    let frame_rate = frames::publish_rate(cli.frame_rate, ros2, !cli.no_ros4hri)?;
     let config = FaceConfig {
         wanted,
         program,
@@ -228,6 +238,7 @@ fn main() -> Result<()> {
         #[cfg(feature = "studio")]
         studio: cli.studio.connects(),
         speech: Some(speech_provider()),
+        frame_rate,
     };
     let bridges = BridgeConfig {
         local: arora::bridge_ws::ServerConfig::with_port(cli.port)
@@ -246,13 +257,6 @@ fn main() -> Result<()> {
                 .map_err(|e| format!("{e:#}"))
         }),
     };
-    // Frames are the ROS4HRI face image, so they follow that exposure unless
-    // a rate is given (see `frames::publish_rate`).
-    #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
-    let ros2 = cli.ros2.is_some();
-    #[cfg(not(any(feature = "ros2-dds", feature = "ros2-zenoh")))]
-    let ros2 = false;
-    let rate_hz = frames::publish_rate(cli.frame_rate, ros2, !cli.no_ros4hri)?;
     // The health report is the ROS4HRI profile's `/diagnostics`, so it
     // follows that exposure: without the profile to type it, it would ride
     // the bridge's JSON scalar plane.
@@ -272,12 +276,12 @@ fn main() -> Result<()> {
         dev.meta.animatables.len(),
         dev.meta.bundle.graphs.len(),
     );
-    let frame_config = frames::FrameConfig {
+    // The view publishes frames when the device offers their rate.
+    let frame_config = frame_rate.map(|_| frames::FrameConfig {
         format: cli.frame_format,
-        rate_hz,
         fixed_frame_id: cli.frame_id.clone(),
         face_frame_id: frames::default_frame_id(&dev.meta),
-    };
+    });
 
     let [r, g, b] = face::parse_rgb(&cli.background)?;
     let options = view::ViewOptions {
@@ -430,7 +434,7 @@ fn run_window(
     events: std::sync::mpsc::Receiver<view::ViewEvent>,
     (handle, pane): (native::RuntimeHandle, PaneOperator),
     options: view::ViewOptions,
-    frame_config: frames::FrameConfig,
+    frame_config: Option<frames::FrameConfig>,
     diagnostics: bool,
 ) -> Result<()> {
     use bevy::window::{MonitorSelection, WindowLevel, WindowMode, WindowPosition};
@@ -482,7 +486,7 @@ fn run_window(
     .add_plugins(open::OpenPlugin(handle));
     // Frame publishing works with a window too (not only headless): capture the
     // window and push the frame onto the device's reading feed.
-    if frame_config.publishes() {
+    if let Some(frame_config) = frame_config {
         app.insert_resource(frame_config)
             .add_plugins(frames::FramesPlugin);
     }
@@ -502,7 +506,7 @@ fn run_headless(
     size: &str,
     events: std::sync::mpsc::Receiver<view::ViewEvent>,
     options: view::ViewOptions,
-    frame_config: frames::FrameConfig,
+    frame_config: Option<frames::FrameConfig>,
     diagnostics: bool,
 ) -> Result<()> {
     use bevy::app::ScheduleRunnerPlugin;
@@ -541,13 +545,13 @@ fn run_headless(
     let handle = app.world_mut().resource_mut::<Assets<Image>>().add(target);
     app.insert_resource(view::OffscreenTarget(handle));
 
-    if frame_config.publishes() {
+    if let Some(frame_config) = frame_config {
         app.insert_resource(frame_config)
             .add_plugins(frames::FramesPlugin);
     } else {
         log::warn!(
-            "--headless renders but publishes no frames: expose the device as ROS4HRI (--ros2) or \
-             give a --frame-rate"
+            "--headless renders but publishes no frames: under --ros2 --no-ros4hri the device \
+             offers no frame rate"
         );
     }
     if diagnostics {

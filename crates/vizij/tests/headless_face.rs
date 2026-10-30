@@ -48,6 +48,7 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
         #[cfg(feature = "studio")]
         studio: false,
         speech: None,
+        frame_rate: None,
     };
     let device = start(&glb, config, BridgeConfig::default(), Mode::Quiet).expect("start");
     let rig = device.rig.clone();
@@ -413,6 +414,7 @@ fn two_faces_share_one_target_each_in_its_own_viewport() {
         #[cfg(feature = "studio")]
         studio: false,
         speech: None,
+        frame_rate: None,
     };
     let quori = std::fs::read(fixtures.join("Quori_Current_Extended.glb")).expect("read Quori");
     let toasty = std::fs::read(fixtures.join("Toasty_Current.glb")).expect("read Toasty");
@@ -525,6 +527,7 @@ fn load_unload_cycles_leave_nothing_behind() {
         #[cfg(feature = "studio")]
         studio: false,
         speech: None,
+        frame_rate: None,
     };
     let device = start(&glb, config, BridgeConfig::default(), Mode::Quiet).expect("start");
     let (events_tx, events_rx) = std::sync::mpsc::channel();
@@ -650,6 +653,7 @@ fn a_face_draws_on_its_target_only_once_ready() {
         #[cfg(feature = "studio")]
         studio: false,
         speech: None,
+        frame_rate: None,
     };
     let device = start(&glb, config, BridgeConfig::default(), Mode::Quiet).expect("start");
     let (events_tx, events_rx) = std::sync::mpsc::channel();

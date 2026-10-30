@@ -17,6 +17,8 @@
 //! the face the APK ships otherwise; then it runs the view over it. A face
 //! received while the app runs reaches the device through
 //! [`RuntimeHandle::reload`]. A long press on the face opens the picker.
+//! The view publishes the face's frames, PNG-encoded, at the rate a client
+//! writes to the device's `display/face/frame_rate`: none from launch.
 //!
 //! With the `settings` feature, a tap on the face shows the settings pane's
 //! Settings button ([`crate::settings`]): the pane keeps its settings in the
@@ -53,7 +55,7 @@ use bevy::render::settings::RenderCreation;
 
 use crate::face::{FaceConfig, ProgramSelect};
 use crate::native::{self, BridgeConfig, Mode, Runtime, RuntimeHandle};
-use crate::view::{self, FaceAssets, Fit, ViewOptions};
+use crate::view::{self, frames, FaceAssets, Fit, ViewOptions};
 
 /// The face the APK ships, under its `assets/`.
 const SHIPPED_FACE: &std::ffi::CStr = c"face.glb";
@@ -141,6 +143,13 @@ fn run() -> Result<()> {
             unlit: false,
         })
         .add_plugins(view::ViewPlugin)
+        // The window's frames, PNG-encoded, at the rate a client sets.
+        .insert_resource(frames::FrameConfig {
+            format: frames::FrameFormat::Png,
+            fixed_frame_id: None,
+            face_frame_id: frames::default_frame_id(&meta),
+        })
+        .add_plugins(frames::FramesPlugin)
         .add_systems(Update, long_press);
     #[cfg(feature = "settings")]
     app.add_plugins(crate::settings::SettingsPlugin {
@@ -217,6 +226,8 @@ fn face_config() -> FaceConfig {
         speech: Some(std::sync::Arc::new(|| {
             vizij_arora_tts::host_module(vizij_arora_tts::Config::cloud())
         })),
+        // No frame until a client sets the rig's frame rate.
+        frame_rate: Some(0.0),
     }
 }
 

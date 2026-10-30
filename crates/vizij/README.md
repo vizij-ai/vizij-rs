@@ -100,7 +100,9 @@ composes, so the face last opened comes back on every launch, after a
 reboot too, and on the face the APK ships (`assets/face.glb`) otherwise; a
 face received while the app runs reloads the device. The device runs under
 arora's headless front end, with the open local bridge on `127.0.0.1:9000`
-(`adb forward tcp:9000 tcp:9000` reaches it). A lost GPU device recreates
+(`adb forward tcp:9000 tcp:9000` reaches it), and publishes the face's
+frames at the rate a client writes to `display/face/frame_rate`
+([the face image](#the-face-image)), none from launch. A lost GPU device recreates
 the renderer (`RenderErrorPolicy::Recover`) rather than ending the app.
 Logging goes to logcat under the `vizij` tag through `android_logger`;
 Bevy's `LogPlugin` stays disabled, as on desktop. minSdk 26 (Android
@@ -229,9 +231,9 @@ limit, and no GLES build draws.
 | `--no-autoplay` | off | run no program from launch: hold the rig's authored/neutral pose |
 | `--no-stage-neutral` | off | don't stage the bundle's `neutralInputs` at boot |
 | `--snapshot <png>` | — | render one frame offscreen and exit (no window) |
-| `--headless` | off | run windowless; streams frames when exposed as ROS4HRI or given `--frame-rate` |
+| `--headless` | off | run windowless; streams frames at the rate `display/face/frame_rate` holds |
 | `--size WxH` | `763x486` | offscreen render size (`--snapshot` / `--headless`) |
-| `--frame-rate <hz>` | `15` when exposed as ROS4HRI, else off | publish rendered frames as HAL readings under the key of their transport; 0 disables |
+| `--frame-rate <hz>` | `0` | the rate `display/face/frame_rate` starts at: rendered frames publish as HAL readings under the key of their transport at that many per second, at most 30; 0 or below publishes none. Refused under `--ros2 --no-ros4hri`, where the device publishes no frame |
 | `--frame-format <fmt>` | `png` | encoding of published frames: `png` writes `display/face/compressed`, a `sensor_msgs/CompressedImage`; `raw` writes `display/face`, a `sensor_msgs/Image` |
 | `--frame-id <name>` | the face's id from its GLB | the TF frame published frames are stamped with (`header.frame_id`) |
 | `--background <rrggbb>` | `000000` | clear color; in a window, that of a face the settings pane keeps no background for |
@@ -283,6 +285,34 @@ display, or take the whole feed, the clock included, by not subscribing. The
 server lives with the device generation: a reload frees the port before the
 next generation binds it. `tests/local_bridge.rs` is a client on it
 (`cargo test -p vizij --test local_bridge` with `VIZIJ_FIXTURES` set).
+
+### The face image
+
+The view publishes the face it renders — the window, or the offscreen target
+under `--headless` — into the store as HAL readings, PNG-encoded under
+`display/face/compressed` (a `sensor_msgs/CompressedImage`) or raw under
+`display/face` (a `sensor_msgs/Image`, `--frame-format raw`), stamped in the
+face's TF frame (`--frame-id`, else its id from the GLB). Every bridge relays
+them: the ROS4HRI profile on its image topics, Semio Studio to a client that
+watches the face.
+
+How often is a key of the device, which a client writes to opt in:
+
+| Key | `display/face/frame_rate` |
+|---|---|
+| Type | `F64`, frames per second |
+| Meta | an input (`editable`), the rig's HAL describes it: range `[0, 30]`, unit `Hz` |
+| At startup | `0` — no frame — or the `--frame-rate` given |
+| A write | takes effect on the next step: frames start, stop (0 or below), or change rate |
+| Read back | the rate frames publish at: a write above 30 holds at 30, below 0 or not a number at 0, and the device writes that rate back to the key |
+
+The rate is the device's: each frame is read back from the GPU and encoded on
+the render thread, so 30 is its ceiling. A reload starts the next generation
+at the startup rate, as it starts its bridges anew. The desktop app (window or
+headless) and the Android app publish frames; a device under `--ros2
+--no-ros4hri` publishes none and has no such key, since without the ROS4HRI
+profile to type the frame key every frame would ride the ROS 2 bridge as a
+JSON string.
 
 ### The other bridges
 
@@ -385,7 +415,9 @@ with its ROS4HRI exposure preset:
 - the **face image** on the `image_transport` pair PAL OS documents:
   `display/face/compressed` as a `sensor_msgs/CompressedImage` on
   `/robot_face/image_raw/compressed` (`--frame-format png`, the default), or
-  `display/face` as a `sensor_msgs/Image` on `/robot_face/image_raw` (`raw`);
+  `display/face` as a `sensor_msgs/Image` on `/robot_face/image_raw` (`raw`),
+  at the rate `display/face/frame_rate` holds — none until a client writes
+  it or `--frame-rate` starts it ([the face image](#the-face-image));
 - **closed captions** on `/closed_captions` (`hri_actions_msgs/ClosedCaption`),
   shown over the face — and so in its published image — in eight-word
   chunks, blue for the robot's own speech and white for anyone else's;

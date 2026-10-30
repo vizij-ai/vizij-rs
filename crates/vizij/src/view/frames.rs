@@ -1,12 +1,15 @@
 //! Publish rendered frames into the device's store as HAL sensor readings.
 //!
-//! A throttled system captures what the view renders — the offscreen target when
-//! one is set (headless), otherwise the window — via Bevy's screenshot API, so
-//! the pixel-calibrated view camera is never touched. The captured frame is
-//! encoded (`--frame-format`) and pushed onto the rig HAL's reading feed under
-//! the key of its transport ([`host::FrameFormat::key`]); the runtime lands it
-//! in the store and fans it to every bridge (the ROS4HRI route — face frames
-//! as a topic, no browser).
+//! A system captures what the view renders — the offscreen target when one is
+//! set (headless), otherwise the window — via Bevy's screenshot API, so the
+//! pixel-calibrated view camera is never touched, at the rate the face's rig
+//! holds ([`RigHal::frame_rate`]): the input
+//! [`FRAME_RATE`](vizij_arora_hal::FRAME_RATE), which a client writes to turn
+//! the frames on, off, or to another rate. The captured frame is encoded
+//! (`--frame-format`) and pushed onto the rig HAL's reading feed under the key
+//! of its transport ([`host::FrameFormat::key`]); the runtime lands it in the
+//! store and fans it to every bridge (the ROS4HRI route — face frames as a
+//! topic, no browser — and Semio Studio's).
 //!
 //! The value is the ROS image message itself — `sensor_msgs/Image` for raw
 //! pixels, `sensor_msgs/CompressedImage` for an encoded frame — built by
@@ -14,9 +17,10 @@
 //! exposure profile publishes each key as that message on its
 //! `image_transport` topic with no conversion and no schema lookup, which is
 //! what keeps a frame off the JSON fallback: a 300 KB PNG would otherwise ride
-//! as a `std_msgs/String`. Frames are that profile's face image, so by default
-//! the view publishes them exactly when the device is exposed as ROS4HRI, and
-//! it refuses to publish them on a ROS 2 bridge without that profile.
+//! as a `std_msgs/String`. So a device on a ROS 2 bridge without that profile
+//! publishes no frame, and offers no rate to set ([`publish_rate`]).
+//!
+//! [`RigHal::frame_rate`]: vizij_arora_hal::RigHal::frame_rate
 
 use bevy::image::Image;
 use bevy::prelude::*;
@@ -31,9 +35,6 @@ use vizij_arora_host::frames as host;
 
 use super::meta::FaceMeta;
 use super::{Face, OffscreenTarget};
-
-/// The rate frames publish at when nothing says otherwise.
-pub const DEFAULT_RATE_HZ: f32 = 15.0;
 
 /// How a published frame's pixels are encoded — and, with it, which ROS image
 /// message the frame is and which store key it is written under.
@@ -59,14 +60,11 @@ impl From<FrameFormat> for host::FrameFormat {
     }
 }
 
-/// How the view publishes frames (`--frame-format`, `--frame-rate`,
-/// `--frame-id`).
+/// How the view publishes frames (`--frame-format`, `--frame-id`); the rate
+/// is the rig's ([`RigHal::frame_rate`](vizij_arora_hal::RigHal::frame_rate)).
 #[derive(Resource, Clone)]
 pub struct FrameConfig {
     pub format: FrameFormat,
-    /// Publish rate in Hz, decoupled from the render/step rate. At or below
-    /// zero the view captures nothing and no frame key is written.
-    pub rate_hz: f32,
     /// `--frame-id`, when given: the TF frame every face is stamped in.
     pub fixed_frame_id: Option<String>,
     /// The loaded face's own TF frame ([`default_frame_id`]); the view moves
@@ -75,12 +73,6 @@ pub struct FrameConfig {
 }
 
 impl FrameConfig {
-    /// Whether the view will write a frame key at all — what decides whether
-    /// the capture system runs.
-    pub fn publishes(&self) -> bool {
-        self.rate_hz > 0.0
-    }
-
     /// The TF frame frames are stamped with (`header.frame_id`): the one
     /// `--frame-id` fixed, else the loaded face's own.
     pub fn frame_id(&self) -> &str {
@@ -90,21 +82,22 @@ impl FrameConfig {
     }
 }
 
-/// The rate frames publish at for a run. A rate given on the command line is
-/// taken as given; otherwise frames follow the ROS4HRI exposure —
-/// [`DEFAULT_RATE_HZ`] when the device is exposed as ROS4HRI, none when it is
-/// not. A rate under `--ros2 --no-ros4hri` is refused: with no ROS4HRI profile
-/// to type the frame key, every frame would ride the bridge's JSON scalar plane
-/// as a `std_msgs/String` the size of the image.
-pub fn publish_rate(given: Option<f32>, ros2: bool, ros4hri: bool) -> anyhow::Result<f32> {
+/// The rate a run's frames publish at from its start
+/// ([`FaceConfig::frame_rate`](crate::face::FaceConfig::frame_rate)): the one
+/// given on the command line, else none until a client writes the rig's
+/// [`FRAME_RATE`](vizij_arora_hal::FRAME_RATE). `None` under `--ros2
+/// --no-ros4hri`, a device that publishes no frame and offers no rate to set:
+/// with no ROS4HRI profile to type the frame key, every frame would ride the
+/// ROS 2 bridge's JSON scalar plane as a `std_msgs/String` the size of the
+/// image. A rate given there is refused.
+pub fn publish_rate(given: Option<f64>, ros2: bool, ros4hri: bool) -> anyhow::Result<Option<f64>> {
     match given {
         Some(rate) if rate > 0.0 && ros2 && !ros4hri => anyhow::bail!(
             "--frame-rate {rate} with --ros2 --no-ros4hri: without the ROS4HRI profile a frame \
              would publish as JSON on the scalar plane; drop --no-ros4hri or the rate"
         ),
-        Some(rate) => Ok(rate),
-        None if ros2 && ros4hri => Ok(DEFAULT_RATE_HZ),
-        None => Ok(0.0),
+        _ if ros2 && !ros4hri => Ok(None),
+        given => Ok(Some(given.unwrap_or(0.0))),
     }
 }
 
@@ -129,21 +122,39 @@ impl Plugin for FramesPlugin {
     }
 }
 
-/// Throttled at `rate_hz`: request a capture of the offscreen target (headless)
-/// or the primary window, with [`publish_frame`] as its observer. Skips while a
-/// capture is still in flight, so a slow readback throttles the rate rather than
-/// piling up requests.
+/// At the rate the shown face's rig holds: request a capture of the offscreen
+/// target (headless) or the primary window, with [`publish_frame`] as its
+/// observer. Skips while a capture is still in flight, so a slow readback
+/// throttles the rate rather than piling up requests. The first frame after
+/// the rate turns on is captured at once; at a rate of zero nothing is
+/// captured.
 fn request_capture(
     mut commands: Commands,
-    config: Res<FrameConfig>,
+    faces: Query<&Face>,
     offscreen: Option<Res<OffscreenTarget>>,
     time: Res<Time>,
     mut since_last: Local<f32>,
+    mut publishing: Local<f64>,
     in_flight: Query<(), With<Screenshot>>,
 ) {
+    let rate = faces
+        .iter()
+        .min_by_key(|face| face.slot)
+        .map_or(0.0, |face| face.rig.frame_rate());
+    if rate != *publishing {
+        if rate > 0.0 {
+            log::info!("publishing the face's frames at {rate} Hz");
+        } else {
+            log::info!("the face's frames stopped");
+        }
+        *publishing = rate;
+    }
+    if rate <= 0.0 {
+        *since_last = f32::INFINITY;
+        return;
+    }
     *since_last += time.delta_secs();
-    let period = 1.0 / config.rate_hz.max(0.1);
-    if *since_last < period || !in_flight.is_empty() {
+    if *since_last < 1.0 / rate as f32 || !in_flight.is_empty() {
         return;
     }
     *since_last = 0.0;
@@ -158,7 +169,8 @@ fn request_capture(
 /// face the target shows — the one in the lowest slot, which is the only
 /// one where a frame is published from (the desktop and headless runs show
 /// one face). RGBA is taken as-is; BGRA is swizzled (window swapchains are
-/// commonly BGRA, offscreen targets RGBA); an unreadable format is skipped.
+/// commonly BGRA, offscreen targets RGBA); an unreadable format is skipped,
+/// and so is a frame captured before the rate turned to zero.
 fn publish_frame(
     event: On<ScreenshotCaptured>,
     faces: Query<&Face>,
@@ -168,6 +180,9 @@ fn publish_frame(
     let Some(face) = faces.iter().min_by_key(|face| face.slot) else {
         return;
     };
+    if face.rig.frame_rate() <= 0.0 {
+        return;
+    }
     let image = &event.image;
     let (width, height) = (image.width(), image.height());
     let Some(rgba) = to_rgba8(image) else {
@@ -295,7 +310,6 @@ mod tests {
     fn config(format: FrameFormat) -> FrameConfig {
         FrameConfig {
             format,
-            rate_hz: 1.0,
             fixed_frame_id: None,
             face_frame_id: "quori_latest".into(),
         }
@@ -351,23 +365,99 @@ mod tests {
         assert_eq!(fixed.frame_id(), "head_display");
     }
 
-    /// Frames follow the ROS4HRI exposure unless a rate is given, and a rate
-    /// on a ROS 2 bridge without the profile is refused rather than let the
-    /// frame ride the JSON scalar plane.
+    /// Frames start off unless a rate is given, and a device on a ROS 2 bridge
+    /// without the profile publishes none: a rate given there is refused
+    /// rather than let the frame ride the JSON scalar plane.
     #[test]
-    fn frames_follow_the_ros4hri_exposure_unless_a_rate_is_given() {
-        assert_eq!(publish_rate(None, true, true).unwrap(), DEFAULT_RATE_HZ);
-        assert_eq!(publish_rate(None, true, false).unwrap(), 0.0);
-        assert_eq!(publish_rate(None, false, true).unwrap(), 0.0);
-        assert_eq!(publish_rate(None, false, false).unwrap(), 0.0);
-        assert_eq!(publish_rate(Some(2.0), false, false).unwrap(), 2.0);
-        assert_eq!(publish_rate(Some(2.0), true, true).unwrap(), 2.0);
-        assert_eq!(publish_rate(Some(0.0), true, true).unwrap(), 0.0);
-        assert_eq!(publish_rate(Some(0.0), true, false).unwrap(), 0.0);
+    fn frames_start_off_unless_a_rate_is_given() {
+        assert_eq!(publish_rate(None, true, true).unwrap(), Some(0.0));
+        assert_eq!(publish_rate(None, false, true).unwrap(), Some(0.0));
+        assert_eq!(publish_rate(None, false, false).unwrap(), Some(0.0));
+        assert_eq!(publish_rate(Some(2.0), false, false).unwrap(), Some(2.0));
+        assert_eq!(publish_rate(Some(2.0), true, true).unwrap(), Some(2.0));
+        assert_eq!(publish_rate(Some(0.0), true, true).unwrap(), Some(0.0));
+        assert_eq!(publish_rate(None, true, false).unwrap(), None);
+        assert_eq!(publish_rate(Some(0.0), true, false).unwrap(), None);
         let refused = publish_rate(Some(2.0), true, false)
             .unwrap_err()
             .to_string();
         assert!(refused.contains("--no-ros4hri"), "{refused}");
+    }
+
+    /// The captures the view requested.
+    #[derive(Resource, Default)]
+    struct Captured(u32);
+
+    /// Complete every capture requested this frame — despawn its
+    /// `Screenshot` — and count it.
+    fn complete(
+        mut commands: Commands,
+        shots: Query<Entity, With<Screenshot>>,
+        mut captured: ResMut<Captured>,
+    ) {
+        for shot in &shots {
+            commands.entity(shot).despawn();
+            captured.0 += 1;
+        }
+    }
+
+    /// The captures requested over `seconds` of 60 Hz frames.
+    fn captures(app: &mut App, seconds: u32) -> u32 {
+        app.world_mut().resource_mut::<Captured>().0 = 0;
+        for _ in 0..seconds * 60 {
+            app.update();
+        }
+        app.world().resource::<Captured>().0
+    }
+
+    /// The view publishes at the rate the shown face's rig holds: none from a
+    /// start at zero — the default — then, once a client writes the rate,
+    /// frames at about that rate, and none again once it writes zero.
+    #[test]
+    fn frames_publish_at_the_rate_the_rig_holds() {
+        use std::time::Duration;
+
+        use arora_hal::Hal;
+        use bevy::time::{TimePlugin, TimeUpdateStrategy};
+        use vizij_arora_hal::{RigHal, FRAME_RATE};
+
+        let rig = RigHal::new();
+        rig.offer_frame_rate(publish_rate(None, false, true).unwrap().unwrap());
+        let mut app = App::new();
+        app.add_plugins((TimePlugin, FramesPlugin))
+            .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+                1.0 / 60.0,
+            )))
+            .insert_resource(config(FrameFormat::Png))
+            .init_resource::<Captured>()
+            .add_systems(Last, complete);
+        app.world_mut().spawn(Face {
+            id: "face".into(),
+            meta: FaceMeta::default(),
+            asset_path: String::new(),
+            rig: rig.clone(),
+            slot: 0,
+            bindings: Default::default(),
+            camera: Entity::PLACEHOLDER,
+            ready: true,
+        });
+        let write = |rate: f64| rig.try_send(&StateChange::set(FRAME_RATE, Value::F64(rate)));
+
+        assert_eq!(captures(&mut app, 2), 0, "no frame at startup");
+        write(10.0);
+        let at_ten = captures(&mut app, 2);
+        assert!(
+            (16..=21).contains(&at_ten),
+            "{at_ten} frames in 2 s at 10 Hz"
+        );
+        write(4.0);
+        let at_four = captures(&mut app, 2);
+        assert!(
+            (6..=9).contains(&at_four),
+            "{at_four} frames in 2 s at 4 Hz"
+        );
+        write(0.0);
+        assert_eq!(captures(&mut app, 2), 0, "no frame once the rate is 0");
     }
 
     /// The face is named by its GLB; only a GLB without a face id falls back

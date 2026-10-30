@@ -276,7 +276,7 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
         spec,
         contended,
     } = load_face(glb, &config)?;
-    let rig = face_rig(glb, &meta);
+    let rig = face_rig(glb, &meta, config.frame_rate);
     let store = BlackboardStore::new();
     let (events_tx, events_rx) = std::sync::mpsc::channel();
     let (commands_tx, commands_rx) = futures::channel::mpsc::unbounded();
@@ -341,10 +341,16 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
 /// The rig of a device showing `meta`'s face from `glb`: it describes the
 /// device as the face's model ([`description`]) and holds the GLB, the model
 /// the device states and serves (Semio Studio's `retrieveModels` /
-/// `retrieveModelGlb`). Each generation's is its face's.
-fn face_rig(glb: &[u8], meta: &FaceMeta) -> RigHal {
+/// `retrieveModelGlb`). Each generation's is its face's, and offers the frame
+/// rate at `frame_rate` ([`FaceConfig::frame_rate`]) when it is given: a
+/// generation starts at the device's startup rate, whatever the one before it
+/// was set to.
+fn face_rig(glb: &[u8], meta: &FaceMeta, frame_rate: Option<f64>) -> RigHal {
     let rig = RigHal::with_description(description(&meta.bundle));
     rig.set_model_glb(glb.to_vec());
+    if let Some(rate) = frame_rate {
+        rig.offer_frame_rate(rate);
+    }
     rig
 }
 
@@ -421,7 +427,10 @@ fn supervise(
         let (rig, store) = match fresh.take() {
             Some(handles) => handles,
             None => {
-                let (rig, store) = (face_rig(&face.glb, &face.meta), BlackboardStore::new());
+                let (rig, store) = (
+                    face_rig(&face.glb, &face.meta, config.frame_rate),
+                    BlackboardStore::new(),
+                );
                 let _ = events.send(ViewEvent::LoadFace {
                     face_id: FACE.to_string(),
                     meta: Box::new(face.meta.clone()),
@@ -892,6 +901,7 @@ mod model_tests {
             #[cfg(feature = "studio")]
             studio: false,
             speech: None,
+            frame_rate: None,
         }
     }
 
@@ -932,7 +942,7 @@ mod model_tests {
             &config(),
             &events,
         ));
-        let rig = face_rig(&next.glb, &next.meta);
+        let rig = face_rig(&next.glb, &next.meta, None);
         assert_eq!(
             futures::executor::block_on(rig.describe()),
             vizij("emy", None),

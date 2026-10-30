@@ -78,6 +78,7 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
         #[cfg(feature = "studio")]
         studio: false,
         speech: None,
+        frame_rate: None,
     };
     // The other bridges are feature-gated fields; only the local one is set.
     #[allow(clippy::needless_update)]

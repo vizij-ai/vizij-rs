@@ -61,6 +61,7 @@ fn serve(ros2: Option<(String, u16)>) -> (Runtime, u16) {
         ros4hri: false,
         studio: true,
         speech: None,
+        frame_rate: None,
     };
     let bridges = BridgeConfig {
         local: arora::bridge_ws::ServerConfig::with_port(port),

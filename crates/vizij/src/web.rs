@@ -1244,6 +1244,7 @@ fn parse_face_config(json: Option<&str>) -> Result<(FaceConfig, bool), JsValue> 
             stage_neutral: flag("stageNeutral", true),
             ros4hri: flag("ros4hri", false),
             speech: None,
+            frame_rate: None,
         },
         flag("stageNeutral", true),
     ))
