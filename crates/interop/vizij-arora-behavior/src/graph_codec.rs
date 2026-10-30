@@ -654,10 +654,16 @@ pub fn spec_diff_to_graph_diff(diff: &GraphSpecDiff) -> Result<GraphDiff, String
         .map(|id| node_id_uuid(id))
         .chain(diff.upsert_nodes.iter().map(|node| node_id_uuid(&node.id)))
         .collect();
+    // `Graph::apply` unbinds after it sets, so an unbinding on a node the
+    // diff sets would strip what the diff sets there: an upserted node's
+    // inline default or an upserted edge into it. Setting the node whole
+    // already unwires its inputs, so those unbindings are left out.
+    let set: HashSet<Uuid> = scratch.nodes.iter().map(|node| node.id).collect();
     let unbind: Vec<Port> = diff
         .remove_edges
         .iter()
         .map(|target| Port::new(node_id_uuid(&target.node_id), in_slot(&target.input)))
+        .filter(|port| !set.contains(&port.node))
         .collect();
 
     Ok(GraphDiff {
@@ -1037,6 +1043,85 @@ mod tests {
             count += 1;
         }
         assert!(count >= 15, "expected the real fixtures, found {count}");
+    }
+
+    /// A diff upserting a node with an inline default on an input, and
+    /// unwiring the edge that fed that input, leaves the default.
+    #[test]
+    fn unwiring_an_input_the_diff_gives_a_default_keeps_the_default() {
+        let base: GraphSpec = serde_json::from_value(json!({
+            "nodes": [
+                { "id": "src", "type": "constant", "params": { "value": { "f32": 3.0 } } },
+                { "id": "add", "type": "add" }
+            ],
+            "edges": [
+                { "from": { "node_id": "src", "output": "out" }, "to": { "node_id": "add", "input": "operand_1" } }
+            ]
+        }))
+        .expect("valid spec");
+        let mut graph = encode(&base).expect("encode");
+        let diff = GraphSpecDiff {
+            upsert_nodes: serde_json::from_value(json!([
+                { "id": "add", "type": "add", "input_defaults": { "operand_1": { "value": { "f32": 9.0 } } } }
+            ]))
+            .expect("valid nodes"),
+            remove_edges: vec![EdgeInputEndpoint {
+                node_id: "add".into(),
+                input: "operand_1".into(),
+            }],
+            ..GraphSpecDiff::default()
+        };
+        graph
+            .apply(spec_diff_to_graph_diff(&diff).expect("translate"))
+            .expect("apply");
+        let decoded = decode(&graph).expect("decode");
+        let add = decoded.nodes.iter().find(|n| n.id == "add").expect("add");
+        assert!(decoded.edges.is_empty(), "{:?}", decoded.edges);
+        assert_eq!(
+            add.input_defaults.keys().collect::<Vec<_>>(),
+            ["operand_1"],
+            "the default the diff sets is kept"
+        );
+    }
+
+    /// A diff upserting a node, wiring one of its inputs to a new source and
+    /// unwiring the edge that fed it, leaves the new edge.
+    #[test]
+    fn rewiring_an_input_of_an_upserted_node_keeps_the_new_edge() {
+        let base: GraphSpec = serde_json::from_value(json!({
+            "nodes": [
+                { "id": "a", "type": "constant", "params": { "value": { "f32": 1.0 } } },
+                { "id": "b", "type": "constant", "params": { "value": { "f32": 2.0 } } },
+                { "id": "out", "type": "output", "params": { "path": "x/y" } }
+            ],
+            "edges": [
+                { "from": { "node_id": "a", "output": "out" }, "to": { "node_id": "out", "input": "in" } }
+            ]
+        }))
+        .expect("valid spec");
+        let mut graph = encode(&base).expect("encode");
+        let diff = GraphSpecDiff {
+            upsert_nodes: serde_json::from_value(json!([
+                { "id": "out", "type": "output", "params": { "path": "x/z" } }
+            ]))
+            .expect("valid nodes"),
+            upsert_edges: serde_json::from_value(json!([
+                { "from": { "node_id": "b", "output": "out" }, "to": { "node_id": "out", "input": "in" } }
+            ]))
+            .expect("valid edges"),
+            remove_edges: vec![EdgeInputEndpoint {
+                node_id: "out".into(),
+                input: "in".into(),
+            }],
+            ..GraphSpecDiff::default()
+        };
+        graph
+            .apply(spec_diff_to_graph_diff(&diff).expect("translate"))
+            .expect("apply");
+        let decoded = decode(&graph).expect("decode");
+        assert_eq!(decoded.edges.len(), 1, "{:?}", decoded.edges);
+        assert_eq!(decoded.edges[0].from.node_id, "b");
+        assert_eq!(decoded.edges[0].to.node_id, "out");
     }
 
     /// Compare two specs as order-independent node/edge sets via canonical JSON.
