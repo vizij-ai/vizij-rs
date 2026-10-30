@@ -4,10 +4,14 @@ All notable changes to `vizij-arora-tts`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [7.1.2] - 2026-10-30
+## [8.0.0] - 2026-10-30
 
 ### Changed
 
+- The major for the engine and speech contract this crate's API exposes:
+  `host_module` returns arora-engine 7's `HostModule`, and `say`/`Say` are
+  vizij-arora-behavior 8's. 7.1.0 and 7.1.1 required them in a minor release
+  and are yanked.
 - Native playback runs on rodio 0.23, over cpal 0.18; on Android, cpal's
   AAudio backend, which links no C++ runtime.
 
