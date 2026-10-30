@@ -162,7 +162,9 @@ pub enum NodeType {
     /// the parameter whose id is `record_keys[i]`) over the
     /// [`value`](NodeParams::value) bundle's fields. The first evaluation
     /// sets the baseline and spawns nothing, so a graph spawns on a change it
-    /// observes, never on being loaded.
+    /// observes, never on being loaded — unless
+    /// [`spawn_initial`](NodeParams::spawn_initial) is set, and the first
+    /// evaluation spawns with the baseline.
     ///
     /// Where a [`TaskRun`](Self::TaskRun) node *is* one run's call, this node
     /// starts runs: the request is queued on the runtime's
@@ -504,6 +506,12 @@ pub struct NodeParams {
     /// like an [`NodeType::ExternalFunction`] call.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub module: Option<Uuid>,
+    /// Whether a [`NodeType::Spawn`] node's first evaluation spawns too, with
+    /// the args it records: for a graph whose inputs command a state that
+    /// holds — the state is then set from the inputs as loaded, as well as
+    /// on every change. `None` or `false` spawns on changes only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spawn_initial: Option<bool>,
 }
 
 pub use crate::params::RoundMode;
