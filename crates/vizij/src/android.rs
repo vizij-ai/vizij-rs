@@ -26,16 +26,15 @@
 //! clear of the system bars and the display's cutout, which the activity
 //! reports (`insetsChanged`).
 //!
-//! Studio keeps its credentials in the app's files directory (the device
-//! directory) and the device's identity there, `studio-identity.json`
-//! (name, owners, model family). A launch connects only with an identity
-//! kept, so that an install nobody associated — a CI emulator's — registers
-//! nothing; the pane's association form keeps one and connects. Once
-//! associated, the device's name and owners are Studio's, edited in Semio
-//! Studio. The pane is not asked the registration's questions: arora 15
-//! asks nobody in a given device directory, and the one way to give it the
-//! app's — `DEVICE_DIR` in the environment — is not sound here, since the
-//! process' JVM threads may read the environment while `set_var` writes it.
+//! With the `studio` feature the device carries its Studio bridge from
+//! launch, as the device `default` whose directory is the app's files
+//! directory, its credential in the device store under `semio/devices/`
+//! there; a credential the files directory's `studio/` holds moves in once.
+//! The bridge decides whether to contact Studio: while the device holds no
+//! credential it contacts nobody, so an install nobody enrolled — a CI
+//! emulator's — talks to no one; once the device holds one, it connects by
+//! itself. The device enrolls from the settings pane, which the app is built
+//! with: its Enroll action, then the code a person enters in Semio Studio.
 //!
 //! Logging goes to logcat through [`android_logger`], installed before the
 //! device's front end looks for a logger; Bevy's `LogPlugin` stays disabled,
@@ -63,10 +62,11 @@ const SHIPPED_FACE: &std::ffi::CStr = c"face.glb";
 /// copies a face it receives.
 const OPENED_FACE: &str = "model.glb";
 
-/// The identity the device registers with Studio under, in the app's files
-/// directory.
+/// The device store holding the device's Studio credential, in the app's
+/// files directory: where arora's default store sits under the platform's
+/// data directory elsewhere.
 #[cfg(feature = "studio")]
-const STUDIO_IDENTITY: &str = "studio-identity.json";
+const DEVICE_STORE: &str = "semio/devices";
 
 /// The settings pane's settings, in the app's files directory.
 #[cfg(feature = "settings")]
@@ -177,20 +177,21 @@ fn start_device(android: &AndroidApp, mode: Mode) -> Result<Runtime> {
     native::start(&glb, face_config(), bridges(android), mode)
 }
 
-/// The open local bridge, and with the `studio` feature the Studio bridge in
-/// the app's files directory.
+/// The open local bridge, and with the `studio` feature the Studio bridge of
+/// the device whose directory is the app's files directory.
 #[cfg_attr(not(feature = "studio"), allow(unused_variables))]
 fn bridges(android: &AndroidApp) -> BridgeConfig {
     BridgeConfig {
         #[cfg(feature = "studio")]
-        studio: android
-            .internal_data_path()
-            .map(|files| native::StudioConfig {
-                identity: files.join(STUDIO_IDENTITY),
-                device_dir: Some(files),
-                saved_registration: None,
-                connect: native::Connect::IfKept,
-            }),
+        studio: android.internal_data_path().and_then(|files| {
+            arora::studio::in_device_dir(
+                &files,
+                arora::device_dir::DEFAULT_NAME,
+                Some(files.join(DEVICE_STORE).as_path()),
+            )
+            .inspect_err(|e| log::error!("vizij: no Studio bridge: {e:#}"))
+            .ok()
+        }),
         ..BridgeConfig::default()
     }
 }
@@ -306,8 +307,8 @@ fn call_activity(method: &str) -> Result<()> {
     Ok(())
 }
 
-/// The app's files directory: the face last opened, the Studio identity and
-/// credentials, the settings.
+/// The app's files directory: the face last opened, the device's Studio
+/// credential, the settings.
 #[cfg(feature = "settings")]
 fn files_dir(android: &AndroidApp) -> PathBuf {
     android

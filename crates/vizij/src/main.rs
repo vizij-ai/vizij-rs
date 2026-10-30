@@ -167,13 +167,13 @@ struct Cli {
     #[arg(long, num_args = 0..=1, default_missing_value = "")]
     ros2: Option<String>,
 
-    /// Attach the Semio Studio bridge: the device registers under the
-    /// identity kept in the app's data directory, else as the operator
-    /// answers on the terminal (kept for next time), else from the
-    /// environment (`DEVICE_OWNERS`, …). Composes with the local bridge.
+    // `--no-studio`: serve no Semio Studio bridge. Without it, the device
+    // carries its Studio bridge beside the local bridge, connecting once the
+    // device is enrolled. The device is the one the environment configures
+    // (`ARORA_DEVICE`, else `default`; `ARORA_DEVICE_DIR`).
     #[cfg(feature = "studio")]
-    #[arg(long)]
-    studio: bool,
+    #[command(flatten)]
+    studio: arora::studio::StudioArgs,
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -226,7 +226,7 @@ fn main() -> Result<()> {
         stage_neutral: !cli.no_stage_neutral,
         ros4hri: !cli.no_ros4hri,
         #[cfg(feature = "studio")]
-        studio: cli.studio,
+        studio: cli.studio.connects(),
         speech: Some(speech_provider()),
     };
     let bridges = BridgeConfig {
@@ -235,21 +235,15 @@ fn main() -> Result<()> {
             .serve_control_panel(!cli.no_web_control),
         #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
         ros2: cli.ros2.as_deref().map(parse_ros2).transpose()?,
-        // Kept whether or not `--studio` asks: the settings pane associates a
-        // run that did not.
+        // The device's Studio side, whether or not it is enrolled: the
+        // settings pane, else the terminal UI, enrolls it.
         #[cfg(feature = "studio")]
-        studio: Some(native::StudioConfig {
-            identity: data_dir().join("studio-identity.json"),
-            device_dir: None,
-            saved_registration: arora::device_dir::from_env()
-                .ok()
-                .map(|dir| dir.join("studio").join("device.json")),
-            connect: if cli.studio {
-                native::Connect::AtLaunch
-            } else {
-                native::Connect::WhenAsked
-            },
-        }),
+        studio: if cli.studio.connects() {
+            let device = arora::Device::from_env()?;
+            Some(arora::studio::of(&device).context("the device's Semio Studio side")?)
+        } else {
+            None
+        },
     };
     // Frames are the ROS4HRI face image, so they follow that exposure unless
     // a rate is given (see `frames::publish_rate`).
@@ -314,8 +308,8 @@ fn main() -> Result<()> {
     }
 }
 
-/// The app's data directory: the remembered face, the Studio identity and the
-/// settings pane's `settings.json`.
+/// The app's data directory: the remembered face and the settings pane's
+/// `settings.json`.
 fn data_dir() -> std::path::PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(std::env::temp_dir)
