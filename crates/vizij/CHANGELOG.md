@@ -86,6 +86,8 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- The desktop app's file dialog runs on rfd 0.17 and its data directory is
+  found with dirs 7, in the same place.
 - Speech plays through rodio 0.23 on cpal 0.18, the cloud provider's
   (vizij-arora-tts 7.1.2) and the local Piper one's alike. On Android cpal
   plays through AAudio, which links no C++ runtime, so the library is built

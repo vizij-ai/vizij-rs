@@ -125,10 +125,10 @@ arora-behavior = "9"
 # terminal UI (worker thread) never gets to unwind.
 crossterm = { version = "0.28", optional = true }
 # The desktop app's data directory (the remembered face, the Studio identity).
-dirs = { version = "6", optional = true }
+dirs = { version = "7", optional = true }
 # The system's file dialog for opening a face (`O`); the XDG portal on Linux
 # so no GTK is linked.
-rfd = { version = "0.16", default-features = false, features = ["xdg-portal", "tokio"], optional = true }
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"], optional = true }
 # `--glb <url>`: the face fetched whole (reqwest is already in the tree).
 reqwest = { version = "0.13", optional = true }
 # `list-displays`: the monitors straight from the event loop, no window (the
@@ -252,10 +252,10 @@ vizij-bundle = { path = "../tools/vizij-bundle" }
 # (0.14, the one arora-bridge-ros2 11.1 requires): two versions in one build
 # are two crates, and the peer's topics stop typing against the bridge's.
 ros2-client = { package = "ros2-client-multi-rmw", version = "0.14", default-features = false, features = ["jazzy", "dds"] }
-rand = "0.9"
+rand = "0.10"
 # The wire test's client, on the local bridge's WebSocket, and its GET of
 # the control panel.
-tokio-tungstenite = "0.24"
+tokio-tungstenite = "0.30"
 reqwest = "0.13"
 # A test's own bridge endpoint: arora's `Bridge` is an async trait.
 async-trait = "0.1"
