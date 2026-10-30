@@ -13,7 +13,7 @@ All notable changes to `vizij-arora-tts`. The format follows
   vizij-arora-behavior 8's. 7.1.0 and 7.1.1 required them in a minor release
   and are yanked.
 - Native playback runs on rodio 0.23, over cpal 0.18; on Android, cpal's
-  AAudio backend, which links no C++ runtime.
+  AAudio backend, which links no C++ runtime and requires API 26.
 
 ## [7.1.1] - 2026-10-25
 

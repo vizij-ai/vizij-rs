@@ -89,9 +89,11 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 - The desktop app's file dialog runs on rfd 0.17 and its data directory is
   found with dirs 7, in the same place.
 - Speech plays through rodio 0.23 on cpal 0.18, the cloud provider's
-  (vizij-arora-tts 7.1.2) and the local Piper one's alike. On Android cpal
+  (vizij-arora-tts 8) and the local Piper one's alike. On Android cpal
   plays through AAudio, which links no C++ runtime, so the library is built
   without `libc++_shared.so` beside it.
+- The Android app requires Android 8.0 (API 26), the first release with
+  AAudio; Android 7.x devices can no longer install it.
 - A face's graphs run on arora-behavior-tree (vizij-arora-behavior 8): each
   frame evaluates the nodes the graphs' outputs read whose inputs changed,
   so a face at rest costs less per frame. The graphs compute what they did

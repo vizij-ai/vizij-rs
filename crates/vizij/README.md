@@ -103,8 +103,8 @@ arora's headless front end, with the open local bridge on `127.0.0.1:9000`
 (`adb forward tcp:9000 tcp:9000` reaches it). A lost GPU device recreates
 the renderer (`RenderErrorPolicy::Recover`) rather than ending the app.
 Logging goes to logcat under the `vizij` tag through `android_logger`;
-Bevy's `LogPlugin` stays disabled, as on desktop. minSdk 24 (the build
-takes no Bevy `audio`, whose AAudio backend would raise it to 26), targetSdk
+Bevy's `LogPlugin` stays disabled, as on desktop. minSdk 26 (Android
+8.0), the first API level with AAudio, which speech plays through; targetSdk
 34; arm64-v8a for devices, x86_64 for the emulator.
 
 The app is built with the settings pane ([below](#the-settings-pane)): a
@@ -139,7 +139,7 @@ Building it takes the NDK `android/app/build.gradle` names (`ndkVersion`),
 export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370
 # The library, release-profile: a debug build's naga debug info crashes the
 # emulator's SPIR-V validator. -t x86_64 for the emulator on an x86_64 host.
-cargo ndk -t arm64-v8a -P 24 -o crates/vizij/android/app/src/main/jniLibs \
+cargo ndk -t arm64-v8a -P 26 -o crates/vizij/android/app/src/main/jniLibs \
   build -p vizij --lib --release --no-default-features --features captions,studio,settings
 # The face the APK ships.
 mkdir -p crates/vizij/android/app/src/main/assets
