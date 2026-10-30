@@ -89,7 +89,7 @@ async fn list_keys(port: u16, ready: impl Fn(&[Json]) -> bool) -> Vec<Json> {
     let mut keys = Vec::new();
     for _ in 0..100 {
         socket
-            .send(Message::Text(json!({"type": "list_keys"}).to_string()))
+            .send(Message::text(json!({"type": "list_keys"}).to_string()))
             .await
             .expect("send");
         keys = loop {
@@ -243,7 +243,7 @@ async fn a_feedback_holds_its_target_s_type_from_the_rest_on() {
 )]
 async fn a_float_published_on_each_form_s_topic_moves_the_face_and_its_feedback() {
     use arora_bridge_ros2::msg_types::{Float64, MessageType};
-    use rand::Rng;
+    use rand::RngExt;
     use ros2_client::{
         Context, ContextOptions, Name, NodeName, NodeOptions, DEFAULT_PUBLISHER_QOS,
         DEFAULT_SUBSCRIPTION_QOS,

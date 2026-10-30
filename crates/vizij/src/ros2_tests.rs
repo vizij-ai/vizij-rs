@@ -20,7 +20,7 @@ use arora_types::gen_uuid_from_str;
 use arora_types::record::module::frozen::{Function, Parameter};
 use arora_types::record::ty::{FrozenTy, PrimitiveKind};
 use arora_types::value::Value;
-use rand::Rng;
+use rand::RngExt;
 use ros2_client::action_msgs::GoalStatusEnum;
 use ros2_client::{Context, ContextOptions, Message, Name, NodeName, NodeOptions, ServiceMapping};
 use serde::{Deserialize, Serialize};

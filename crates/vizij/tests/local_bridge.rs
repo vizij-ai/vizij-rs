@@ -36,7 +36,7 @@ async fn request(
     response_type: &str,
 ) -> Json {
     socket
-        .send(Message::Text(message.to_string()))
+        .send(Message::text(message.to_string()))
         .await
         .expect("send");
     // The live feed interleaves `values_changed` pushes with the answers.
