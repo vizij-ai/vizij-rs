@@ -64,18 +64,16 @@ jobs:
       # half the crate's default features bring.
       - name: Build libvizij.so (${{ matrix.abi }}, release)
         run: |
-          cargo ndk -t ${{ matrix.abi }} -P 24 --link-libcxx-shared -o crates/vizij/android/app/src/main/jniLibs \
+          cargo ndk -t ${{ matrix.abi }} -P 24 -o crates/vizij/android/app/src/main/jniLibs \
             build -p vizij --lib --release --no-default-features --features captions,studio,settings
           ls -l crates/vizij/android/app/src/main/jniLibs/${{ matrix.abi }}
       - uses: actions/upload-artifact@v4
         with:
           name: libvizij-${{ matrix.abi }}
-          # The vizij library and the C++ runtime it loads; not the cdylib a
-          # dependency declares (arora-animation-module's), which cargo-ndk
-          # copies too and libvizij.so links statically.
-          path: |
-            crates/vizij/android/app/src/main/jniLibs/${{ matrix.abi }}/libvizij.so
-            crates/vizij/android/app/src/main/jniLibs/${{ matrix.abi }}/libc++_shared.so
+          # The vizij library alone; not the cdylib a dependency declares
+          # (arora-animation-module's), which cargo-ndk copies too and
+          # libvizij.so links statically.
+          path: crates/vizij/android/app/src/main/jniLibs/${{ matrix.abi }}/libvizij.so
           if-no-files-found: error
           retention-days: 3
 

@@ -124,7 +124,7 @@ emulator's among them, talks to no one; once it holds one, the bridge
 connects by itself at every launch. The device enrolls from the settings
 pane ([below](#the-settings-pane)). The pane rules on access requests on
 both platforms. `say` speaks through the cloud provider at its
-default deployment, its audio played through cpal's oboe backend; the
+default deployment, its audio played through cpal's AAudio backend; the
 provider's HTTPS client trusts the Mozilla CA set webpki-roots bundles, as on
 every native target, so nothing of the platform verifier's Kotlin side is
 packaged.
@@ -136,9 +136,7 @@ Building it takes the NDK `android/app/build.gradle` names (`ndkVersion`),
 export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370
 # The library, release-profile: a debug build's naga debug info crashes the
 # emulator's SPIR-V validator. -t x86_64 for the emulator on an x86_64 host.
-# libc++_shared.so goes beside it: the speech provider's audio output (oboe)
-# is C++ on the shared runtime.
-cargo ndk -t arm64-v8a -P 24 --link-libcxx-shared -o crates/vizij/android/app/src/main/jniLibs \
+cargo ndk -t arm64-v8a -P 24 -o crates/vizij/android/app/src/main/jniLibs \
   build -p vizij --lib --release --no-default-features --features captions,studio,settings
 # The face the APK ships.
 mkdir -p crates/vizij/android/app/src/main/assets
