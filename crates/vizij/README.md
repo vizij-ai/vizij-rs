@@ -156,9 +156,10 @@ succeeds with the face reporting the utterance and showing its visemes, a
 tap shows the settings pane's Settings button, which opens the pane, a
 background picked there fills the screen once the back gesture closes it
 and again after a relaunch (the buttons found on the screenshots by their
-colours, `android/scripts/frames.py find`), the
-app is alive and in front, and logcat has no `Caught` line,
-panic or fatal signal. `dumpsys gfxinfo` counts
+colours, `android/scripts/frames.py find`), the pane stays open on its
+Device section with Enroll never pressed, the app is alive and in front,
+and logcat has no `Caught` line, panic, fatal signal or enrollment under
+way. `dumpsys gfxinfo` counts
 no Bevy frame, so the screenshots are the evidence. CI's `android`
 workflow builds both ABIs, packages the APK and runs the smoke on the
 x86_64 API 35 `google_apis` image under KVM with `-gpu lavapipe`
