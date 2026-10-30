@@ -617,8 +617,8 @@ pub mod platform {
         }
 
         /// Play the mp3 whole, holding `playing` up for its duration and
-        /// advancing the shared viseme cell at the sink's own playhead; a quiet
-        /// pulse stops the sink.
+        /// advancing the shared viseme cell at the player's own playhead; a quiet
+        /// pulse stops the player.
         fn play(
             audio: Vec<u8>,
             marks: Vec<SpeechMark>,
@@ -626,20 +626,15 @@ pub mod platform {
             playing: Arc<AtomicBool>,
             pulse: Pulse,
         ) -> Status {
-            let (_stream, handle) = match rodio::OutputStream::try_default() {
-                Ok(pair) => pair,
+            let mut output = match rodio::DeviceSinkBuilder::open_default_sink() {
+                Ok(output) => output,
                 Err(e) => {
                     log::error!("tts: audio output init failed: {e}");
                     return Status::Failure;
                 }
             };
-            let sink = match rodio::Sink::try_new(&handle) {
-                Ok(sink) => sink,
-                Err(e) => {
-                    log::error!("tts: audio sink failed: {e}");
-                    return Status::Failure;
-                }
-            };
+            output.log_on_drop(false);
+            let player = rodio::Player::connect_new(output.mixer());
             let source = match rodio::Decoder::new(std::io::Cursor::new(audio)) {
                 Ok(source) => source,
                 Err(e) => {
@@ -647,17 +642,17 @@ pub mod platform {
                     return Status::Failure;
                 }
             };
-            sink.append(source);
+            player.append(source);
             let cues = cues(&marks);
             playing.store(true, Ordering::Relaxed);
             let outcome = follow(&cues, &viseme, &pulse, || {
-                (!sink.empty()).then(|| sink.get_pos())
+                (!player.empty()).then(|| player.get_pos())
             });
             playing.store(false, Ordering::Relaxed);
             match outcome {
                 Playback::Ended => Status::Success,
                 Playback::Halted => {
-                    sink.stop();
+                    player.stop();
                     Status::Failure
                 }
             }

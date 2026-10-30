@@ -4,7 +4,14 @@ All notable changes to `vizij-arora-tts`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [8.0.0] - Unreleased
+## [8.0.1] - 2026-10-30
+
+### Changed
+
+- Native playback runs on rodio 0.23, over cpal 0.18; on Android, cpal's
+  AAudio backend, which links no C++ runtime.
+
+## [8.0.0] - 2026-10-30
 
 ### Changed
 
