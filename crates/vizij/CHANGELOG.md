@@ -102,6 +102,8 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   (vizij-arora-tts 8) and the local Piper one's alike. On Android cpal
   plays through AAudio, which links no C++ runtime, so the library is built
   without `libc++_shared.so` beside it.
+- The Android app requires Android 8.0 (API 26), the first release with
+  AAudio; Android 7.x devices can no longer install it.
 - A face's graphs run on arora-behavior-tree (vizij-arora-behavior 8): each
   frame evaluates the nodes the graphs' outputs read whose inputs changed,
   so a face at rest costs less per frame. The graphs compute what they did
