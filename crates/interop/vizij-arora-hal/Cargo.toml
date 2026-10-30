@@ -7,9 +7,11 @@ license = "Apache-2.0"
 description = "Vizij rig presented as an Arora HAL (arora-hal)."
 
 [dependencies]
-# 4.1: `Hal::assets`, how the device serves the rig's model.
-arora-hal = "4.1"
-arora-types = "3"
+# 4.1: `Hal::assets`, how the device serves the rig's model; 4.3:
+# `Hal::describe_keys`, how the rig opens its frame rate to remote writers.
+arora-hal = "4.3"
+# 3.2: `KeyMeta::in_unit`.
+arora-types = "3.2"
 async-trait = "0.1"
 futures-channel = "0.3"
 futures-core = "0.3"
