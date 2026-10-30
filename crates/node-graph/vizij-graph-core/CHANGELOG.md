@@ -8,21 +8,22 @@ All notable changes to `vizij-graph-core`. The format follows
 
 ### Added
 
-- `Spawn`'s `spawn_initial` param (`NodeParams::spawn_initial`): when true,
-  the node's first evaluation spawns with the args it records, and later
-  ones spawn on changes as before — for a graph whose inputs command a state
-  that holds, which is then set from the inputs as loaded. Absent or false,
-  the first evaluation only records them. The importer starts such a node
-  from a recorded call no arguments match.
-- An integer or `f64` array coerces to a declared numeric shape as the
-  numbers it holds (`shape_helpers::coerce_numeric_to_shape`), as an integer
-  scalar coerces as a number: an `input` node declaring a vector shape reads
-  a call's `Vec<u8>` argument as the vector of its values, which the vector
-  nodes compute on.
+- `Spawn`'s `spawn_on_load` param (`NodeParams::spawn_on_load`), passed to
+  arora-dataflow-nodes' parameter of that name: when true, the node's first
+  evaluation spawns with the args it records, and later ones spawn on
+  changes as before — for a graph whose inputs command a state that holds,
+  which is then set from the inputs as loaded. Absent or false, the first
+  evaluation only records them.
+- The numeric nodes compute on an integer or `f64` array as the vector of
+  its values (arora-dataflow-nodes 3), so a call's `Vec<u8>` argument reaches
+  the vector nodes as numbers.
 
 ### Changed
 
-- **Breaking:** `NodeParams` has the `spawn_initial` field. A `NodeParams`
+- **Breaking:** depends on arora-dataflow-nodes 3, whose `params`,
+  `functions` and node vocabulary this crate re-exports: its `Params` has
+  the `spawn_on_load` field.
+- **Breaking:** `NodeParams` has the `spawn_on_load` field. A `NodeParams`
   built with a struct literal that names every field must name it, or end
   in `..Default::default()`.
 

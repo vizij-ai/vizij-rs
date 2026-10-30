@@ -48,7 +48,7 @@
           "c142771f-bb54-4f02-a19f-136afd0f614f",
           "151091f4-fc8e-4a2c-b553-798d23a94bcc"
         ],
-        "spawn_initial": true
+        "spawn_on_load": true
       }
     },
     {

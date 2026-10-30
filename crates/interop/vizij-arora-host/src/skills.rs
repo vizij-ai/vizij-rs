@@ -969,7 +969,7 @@ pub fn generate_set_expression() -> Json {
 /// holds that until halted ([`hold_expression`]).
 pub fn generate_set_facial_action_units() -> Json {
     let g = &mut GraphBuilder::new();
-    let codes = g.vector_input("in/codes", "task/codes", json!({ "u8s": [] }));
+    let codes = g.input("in/codes", "task/codes", json!({ "u8s": [] }));
     let intensities = g.input("in/intensities", "task/intensities", json!({ "f32s": [] }));
     let one = g.constant(1.0);
     // Where `codes` lists `au`: 1 at its entries, 0 elsewhere.
@@ -1047,7 +1047,7 @@ pub fn generate_set_viseme() -> Json {
 /// the last span's end and the lips have settled.
 pub fn generate_play_visemes() -> Json {
     let g = &mut GraphBuilder::new();
-    let visemes = g.vector_input("in/visemes", "task/visemes", json!({ "u8s": [] }));
+    let visemes = g.input("in/visemes", "task/visemes", json!({ "u8s": [] }));
     let starts = g.input("in/starts", "task/starts", json!({ "f32s": [] }));
     let durations = g.input("in/durations", "task/durations", json!({ "f32s": [] }));
     let elapsed = elapsed_since_spawn(g);

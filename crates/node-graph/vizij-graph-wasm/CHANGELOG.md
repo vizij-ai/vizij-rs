@@ -13,9 +13,9 @@ All notable changes to `vizij-graph-wasm`. The format follows
 
 ### Changed
 
-- Built on vizij-graph-core 6: a `spawn` node takes `spawn_initial`, and an
-  `input` node declaring a vector shape reads an integer or `f64` array as
-  the vector of its values.
+- Built on vizij-graph-core 6 (arora-dataflow-nodes 3): a `spawn` node
+  takes `spawn_on_load`, and the numeric nodes compute on an integer or
+  `f64` array as the vector of its values.
 - Built on vizij-graph-core 5 (arora-behavior 10, arora-behavior-tree 10,
   arora-dataflow-nodes 2). The JS surface and its results are unchanged.
 - **Breaking:** built on vizij-graph-core 3. An `eval_all` with no `step`

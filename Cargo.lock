@@ -519,9 +519,9 @@ dependencies = [
 
 [[package]]
 name = "arora-dataflow-nodes"
-version = "2.0.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24a78b205de239274b1d4be945511298d72300e5dba46a35cc05570f4a1ce265"
+checksum = "9988d6e16b613240f6d4d089105fd2405038ad2e45462e08c0c527585527194c"
 dependencies = [
  "arora-behavior",
  "arora-geometry",

@@ -14,7 +14,7 @@ categories  = ["science::robotics", "game-engines"]
 [dependencies]
 arora-behavior = "10"
 arora-behavior-tree = "10"
-arora-dataflow-nodes = { version = "2", default-features = false }
+arora-dataflow-nodes = { version = "3", default-features = false }
 arora-geometry = "1"
 arora-graphics-types = "1"
 arora-simple-data-store = "3.2"

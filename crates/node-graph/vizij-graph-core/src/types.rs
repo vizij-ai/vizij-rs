@@ -163,7 +163,7 @@ pub enum NodeType {
     /// [`value`](NodeParams::value) bundle's fields. The first evaluation
     /// sets the baseline and spawns nothing, so a graph spawns on a change it
     /// observes, never on being loaded — unless
-    /// [`spawn_initial`](NodeParams::spawn_initial) is set, and the first
+    /// [`spawn_on_load`](NodeParams::spawn_on_load) is set, and the first
     /// evaluation spawns with the baseline.
     ///
     /// Where a [`TaskRun`](Self::TaskRun) node *is* one run's call, this node
@@ -511,7 +511,7 @@ pub struct NodeParams {
     /// holds — the state is then set from the inputs as loaded, as well as
     /// on every change. `None` or `false` spawns on changes only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub spawn_initial: Option<bool>,
+    pub spawn_on_load: Option<bool>,
 }
 
 pub use crate::params::RoundMode;
@@ -570,6 +570,7 @@ impl NodeParams {
             function: self.function,
             param_ids: self.param_ids.clone(),
             module: self.module,
+            spawn_on_load: self.spawn_on_load,
         }
     }
 }

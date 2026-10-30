@@ -184,20 +184,6 @@ impl GraphBuilder {
         self.node(id, "input", json!({ "path": path, "value": value }))
     }
 
-    /// An input node reading `path` as a numeric vector, defaulting to
-    /// `value` until staged: it declares a vector shape, so an integer array
-    /// there (a call's `Vec<u8>` argument) reads as the vector of its values,
-    /// which the vector nodes compute on.
-    pub(crate) fn vector_input(&mut self, id: &str, path: &str, value: Json) -> String {
-        let id = self.input(id, path, value);
-        let node = self
-            .nodes
-            .last_mut()
-            .expect("the input node was just pushed");
-        node["output_shapes"] = json!({ "out": { "id": { "id": "Vector", "data": {} } } });
-        id
-    }
-
     /// An output node writing `path`.
     pub(crate) fn output(&mut self, id: &str, from: &str, path: String) {
         self.node(id, "output", json!({ "path": path }));

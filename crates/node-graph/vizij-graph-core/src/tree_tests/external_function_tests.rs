@@ -420,17 +420,17 @@ fn an_evaluation_of_a_kept_tree_requests_only_its_own_runs() {
     assert_eq!(rt.loads(), 1, "the tree is built once");
 }
 
-/// With `spawn_initial`, the first evaluation spawns with the args it
+/// With `spawn_on_load`, the first evaluation spawns with the args it
 /// records, and later ones spawn on changes as before.
 #[test]
-fn spawn_initial_spawns_on_the_first_evaluation_too() {
+fn spawn_on_load_spawns_on_the_first_evaluation_too() {
     let (function, shape, weight) = (
         Uuid::from_u128(0x7771),
         Uuid::from_u128(0x7772),
         Uuid::from_u128(0x7773),
     );
     let mut graph = spawn_graph(function, shape, weight);
-    graph.nodes[1].params.spawn_initial = Some(true);
+    graph.nodes[1].params.spawn_on_load = Some(true);
     let graph = graph.with_cache();
     let mut rt = TreeRuntime::default();
 

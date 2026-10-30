@@ -445,7 +445,7 @@ fn held_by_setters(nodes: &[serde_json::Value], rig_prefix: &str) -> Vec<String>
                 .pointer("/params/function")
                 .and_then(serde_json::Value::as_str)
                 == Some(set_expression.as_str())
-            && node.pointer("/params/spawn_initial") == Some(&serde_json::Value::Bool(true))
+            && node.pointer("/params/spawn_on_load") == Some(&serde_json::Value::Bool(true))
     });
     if !spawned_at_load {
         return Vec::new();

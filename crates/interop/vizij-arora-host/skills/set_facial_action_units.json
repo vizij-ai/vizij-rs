@@ -8,14 +8,6 @@
         "value": {
           "u8s": []
         }
-      },
-      "output_shapes": {
-        "out": {
-          "id": {
-            "id": "Vector",
-            "data": {}
-          }
-        }
       }
     },
     {

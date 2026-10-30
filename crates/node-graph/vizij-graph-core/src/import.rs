@@ -48,8 +48,8 @@ use vizij_api_core::Value;
 use crate::eval::plan::output_layout;
 use crate::functions::{
     declares_input, dt_param, encode, encode_selector, external_function, function_id, input_param,
-    is_stateful, node_param, output_field, outputs_structure, placement, ports_param, reads_dt,
-    reads_time, select_function, selector_param, state_param, time_param, VARIADIC_PORTS,
+    is_stateful, node_param, output_field, placement, ports_param, reads_dt, reads_time,
+    select_function, selector_param, state_param, time_param, VARIADIC_PORTS,
 };
 use crate::kind::Kind;
 use crate::params::Params;
@@ -396,7 +396,7 @@ pub fn import_with(
                 arguments.insert(dt_param(), variable(&options.dt));
             }
             if is_stateful(kind) {
-                arguments.insert(state_param(), Expression::Value(initial_state(node)));
+                arguments.insert(state_param(), Expression::Value(Value::Unit));
             }
         }
         if node.kind == NodeType::Input {
@@ -661,29 +661,4 @@ fn is_variadic_past_the_last(kind: &Kind, port: &str) -> bool {
         .variadic_inputs
         .map(|variadic| variadic.id);
     declared_group == Some(group) && index.is_some_and(|index| index >= VARIADIC_PORTS)
-}
-
-/// The `state` a stateful node's call starts from: none (`Unit`), so its
-/// first call starts afresh — but for a `spawn` node with
-/// [`spawn_initial`](crate::types::NodeParams::spawn_initial), a recorded
-/// call no evaluation's arguments match (one argument, of the nil parameter
-/// id, which no parameter has), so its first evaluation sees its arguments
-/// change and spawns with them.
-fn initial_state(node: &NodeSpec) -> Value {
-    use vizij_api_core::value::{Structure, StructureField};
-    if node.kind != NodeType::Spawn || node.params.spawn_initial != Some(true) {
-        return Value::Unit;
-    }
-    // A spawn's state: its last arguments, a structure of them, and its last
-    // `when`, an option.
-    Value::ArrayValue(vec![
-        Value::Structure(Structure {
-            id: outputs_structure(),
-            fields: vec![StructureField {
-                id: Uuid::nil(),
-                value: Box::new(Value::Unit),
-            }],
-        }),
-        Value::Option(None),
-    ])
 }

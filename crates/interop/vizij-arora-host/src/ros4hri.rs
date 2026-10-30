@@ -363,7 +363,7 @@ fn build(rig_prefix: &str) -> (String, Json) {
                 set_expression::ids::set_expression::VALENCE.to_string(),
                 set_expression::ids::set_expression::AROUSAL.to_string(),
             ],
-            "spawn_initial": true,
+            "spawn_on_load": true,
         }),
     );
     g.edge(&name, &set, "args_0");
@@ -771,7 +771,7 @@ mod tests {
                 ids::AROUSAL.to_string(),
             ])
         );
-        assert_eq!(spawn["params"]["spawn_initial"], true);
+        assert_eq!(spawn["params"]["spawn_on_load"], true);
         for (port, key) in [
             ("args_0", EXPRESSION_NAME_KEY),
             ("args_1", EXPRESSION_VALENCE_KEY),

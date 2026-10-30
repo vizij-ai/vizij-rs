@@ -206,23 +206,16 @@ pub fn null_of_shape_numeric(shape: &ShapeId) -> Value {
 }
 
 /// Attempt to coerce a numeric value into a declared numeric-like shape.
-///
-/// An integer or `f64` array — a call's `Vec<u8>` argument, as the store
-/// holds it — coerces as the numbers it holds, as an integer scalar coerces
-/// as a number.
 pub fn coerce_numeric_to_shape(target: &ShapeId, value: &Value) -> Option<Value> {
-    let data = match flatten_numeric(value) {
-        Some(flat) => flat.data,
-        None => numeric_array(value)?,
-    };
+    let flat = flatten_numeric(value)?;
 
     match target {
-        ShapeId::Vector { len: None } => Some(vocab::vector(data)),
+        ShapeId::Vector { len: None } => Some(vocab::vector(flat.data)),
         ShapeId::List(_) | ShapeId::Enum(_) => None,
         _ => {
             let mut offset = 0usize;
-            let rebuilt = build_numeric_value(target, &data, &mut offset)?;
-            if offset == data.len() {
+            let rebuilt = build_numeric_value(target, &flat.data, &mut offset)?;
+            if offset == flat.data.len() {
                 Some(rebuilt)
             } else {
                 None
@@ -298,50 +291,4 @@ fn take_components<const N: usize>(scalars: &[f32], offset: &mut usize) -> Optio
         *offset += 1;
     }
     Some(arr)
-}
-
-/// The numbers an integer or `f64` array holds, which
-/// [`flatten_numeric`] does not read; `None` for any other value.
-fn numeric_array(value: &Value) -> Option<Vec<f32>> {
-    fn floats<T: Copy>(xs: &[T], f: impl Fn(T) -> f32) -> Option<Vec<f32>> {
-        Some(xs.iter().map(|x| f(*x)).collect())
-    }
-    match value {
-        Value::ArrayF64(xs) => floats(xs, |x| x as f32),
-        Value::ArrayU8(xs) => floats(xs, f32::from),
-        Value::ArrayU16(xs) => floats(xs, f32::from),
-        Value::ArrayU32(xs) => floats(xs, |x| x as f32),
-        Value::ArrayU64(xs) => floats(xs, |x| x as f32),
-        Value::ArrayI8(xs) => floats(xs, f32::from),
-        Value::ArrayI16(xs) => floats(xs, f32::from),
-        Value::ArrayI32(xs) => floats(xs, |x| x as f32),
-        Value::ArrayI64(xs) => floats(xs, |x| x as f32),
-        _ => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn an_integer_array_coerces_to_a_declared_vector() {
-        let vector = ShapeId::Vector { len: None };
-        assert_eq!(
-            coerce_numeric_to_shape(&vector, &Value::ArrayU8(vec![4, 26])),
-            Some(vocab::vector(vec![4.0, 26.0]))
-        );
-        assert_eq!(
-            coerce_numeric_to_shape(&vector, &Value::ArrayU8(Vec::new())),
-            Some(vocab::vector(Vec::new()))
-        );
-        assert_eq!(
-            coerce_numeric_to_shape(&ShapeId::Vec2, &Value::ArrayF64(vec![1.0, 2.0])),
-            Some(vocab::vec2([1.0, 2.0]))
-        );
-        assert_eq!(
-            coerce_numeric_to_shape(&vector, &Value::ArrayString(vec!["a".into()])),
-            None
-        );
-    }
 }

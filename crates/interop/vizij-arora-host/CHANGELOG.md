@@ -25,9 +25,9 @@ All notable changes to `vizij-arora-host`. The format follows
   counts as AU 43) over the `neutral` expression. `set_viseme` holds one
   shape by its ROS4HRI code; `play_visemes` plays a timeline and ends once
   the lips settle. The code-addressed players' feedback adds the code as
-  `value` (`FEEDBACK_CODE`). Their fragments read `codes` and `visemes` as
-  vectors, through `input` nodes declaring a vector shape (vizij-graph-core
-  6).
+  `value` (`FEEDBACK_CODE`). Their fragments compute on `codes` and
+  `visemes` as vectors, which the node math reads integer arrays as
+  (arora-dataflow-nodes 3).
 
 ### Changed
 
@@ -36,7 +36,7 @@ All notable changes to `vizij-arora-host`. The format follows
   `set_expression` instead of writing the expression weights: a spawn node
   with the three `standard/ros4hri/expression/*` keys as its arguments
   spawns a run on every change, and once when the mapping is loaded
-  (`spawn_initial`), so the face boots at neutral. A host composing the
+  (`spawn_on_load`), so the face boots at neutral. A host composing the
   mapping registers the set_expression fragment for the expression to move.
   The mapping's blink reads the face's own `asleep` weight.
 

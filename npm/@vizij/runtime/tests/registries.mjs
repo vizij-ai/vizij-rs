@@ -139,7 +139,7 @@ for (const path of ["speech", "viseme", "gaze/eye_spacing", "gaze/range", "expre
 assert.ok(!outputs.some((p) => p.includes("/standard/vizij/expression/")));
 assert.ok(
   graph.nodes.some(
-    (n) => n.type === "spawn" && n.params.spawn_initial === true,
+    (n) => n.type === "spawn" && n.params.spawn_on_load === true,
   ),
   "the expression keys spawn set_expression, once on load too",
 );
