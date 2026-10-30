@@ -14,4 +14,4 @@ license = "GPL-3.0-or-later"
 links = "piper"
 
 [build-dependencies]
-bindgen = "0.69"
+bindgen = "0.73"

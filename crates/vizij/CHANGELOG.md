@@ -96,6 +96,8 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   carries the Studio bridge unless the run passes `--no-studio`
   (`arora::studio::StudioArgs`), as the device the environment configures
   (`ARORA_DEVICE`, `ARORA_DEVICE_DIR`), and serves Studio's keys with it.
+- The desktop app's file dialog runs on rfd 0.17 and its data directory is
+  found with dirs 7, in the same place.
 - Speech plays through rodio 0.23 on cpal 0.18, the cloud provider's
   (vizij-arora-tts 8) and the local Piper one's alike. On Android cpal
   plays through AAudio, which links no C++ runtime, so the library is built
