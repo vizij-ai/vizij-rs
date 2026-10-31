@@ -57,11 +57,12 @@ pub struct FaceConfig {
     /// The speech provider, built per generation; `None` for a device that
     /// plays no speech.
     pub speech: Option<SpeechProvider>,
-    /// The rate, in frames per second, each generation publishes the face's
+    /// The rate, in frames per second, the device publishes the face's
     /// rendered frames at from its start, for a device whose view publishes
     /// them: its rig offers the rate as the input
     /// [`FRAME_RATE`](vizij_arora_hal::FRAME_RATE), which a client writes to
-    /// turn the frames on, off, or to another rate. `None` for a device that
+    /// turn the frames on, off, or to another rate, and a reload's generation
+    /// starts at the rate the one before it held. `None` for a device that
     /// publishes no frame, which then has no such key.
     pub frame_rate: Option<f64>,
 }
