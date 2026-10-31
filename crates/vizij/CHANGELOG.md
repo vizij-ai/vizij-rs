@@ -81,10 +81,12 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 - `display/face/frame_rate`: the rate the face's rendered frames publish
   at, in frames per second, an `F64` input of the device's rig (its HAL
   describes it, so the local, Studio and ROS 2 bridges accept a write to it).
-  A write takes effect on the next step: frames start, stop at 0 or below,
-  or change rate. The rate is held within 0..30; the device writes the rate
-  it holds back to the key when a write asked for another, so a client reads
-  the rate frames publish at. A reload keeps the rate: the next generation
+  A write takes effect on the next step: frames start, stop below 0.01 (0
+  included), or change rate. The rate is held within 0.01..30, a lower one at
+  0; the device writes the rate it holds back to the key after every write,
+  so a client reads the rate frames publish at. The view converts and
+  encodes each frame on the async compute pool, one at a time, off the
+  render thread. A reload keeps the rate: the next generation
   starts at the rate the one before it held. The desktop app (with a window or
   `--headless`) and the Android app publish frames at that rate
   (`FaceConfig::frame_rate`); a device under `--ros2 --no-ros4hri` publishes

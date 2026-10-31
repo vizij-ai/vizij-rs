@@ -233,7 +233,7 @@ limit, and no GLES build draws.
 | `--snapshot <png>` | — | render one frame offscreen and exit (no window) |
 | `--headless` | off | run windowless; streams frames at the rate `display/face/frame_rate` holds |
 | `--size WxH` | `763x486` | offscreen render size (`--snapshot` / `--headless`) |
-| `--frame-rate <hz>` | `0` | the rate `display/face/frame_rate` starts at: rendered frames publish as HAL readings under the key of their transport at that many per second, at most 30; 0 or below publishes none. Refused under `--ros2 --no-ros4hri`, where the device publishes no frame |
+| `--frame-rate <hz>` | `0` | the rate `display/face/frame_rate` starts at: rendered frames publish as HAL readings under the key of their transport at that many per second, at most 30; below 0.01 publishes none. Refused under `--ros2 --no-ros4hri`, where the device publishes no frame |
 | `--frame-format <fmt>` | `png` | encoding of published frames: `png` writes `display/face/compressed`, a `sensor_msgs/CompressedImage`; `raw` writes `display/face`, a `sensor_msgs/Image` |
 | `--frame-id <name>` | the face's id from its GLB | the TF frame published frames are stamped with (`header.frame_id`) |
 | `--background <rrggbb>` | `000000` | clear color; in a window, that of a face the settings pane keeps no background for |
@@ -303,8 +303,8 @@ How often is a key of the device, which a client writes to opt in:
 | Type | `F64`, frames per second |
 | Meta | an input (`editable`), the rig's HAL describes it: range `[0, 30]`, unit `Hz` |
 | At startup | `0` — no frame — or the `--frame-rate` given |
-| A write | takes effect on the next step: frames start, stop (0 or below), or change rate |
-| Read back | the rate frames publish at: a write above 30 holds at 30, below 0 or not a number at 0, and the device writes that rate back to the key |
+| A write | takes effect on the next step: frames start, stop (below 0.01, 0 included), or change rate |
+| Read back | the rate frames publish at: a write above 30 holds at 30, below 0.01 or not a number at 0, and the device writes the rate it holds back to the key after every write, so the last write's rate is the one read |
 
 The rate is the device's: each frame is read back from the GPU and encoded on
 the render thread, so 30 is its ceiling. A reload keeps it: the next

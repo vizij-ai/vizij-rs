@@ -338,8 +338,7 @@ so the face's controls and its rendered frames are topics too:
 ```bash
 ros2 topic echo /quori/keys/rig/quori_latest/standard/vizij/expression/happy
 ros2 topic echo /quori/keys/rig/quori_latest/standard/vizij/viseme
-ros2 topic pub --once /quori/keys/display/face/frame_rate std_msgs/msg/Float64 "{data: 15.0}"
-ros2 topic hz /robot_face/image_raw/compressed
+ros2 topic hz /robot_face/image_raw/compressed   # once its frames are on, below
 ```
 
 Scalar keys publish as the `std_msgs` type of their value (the face's
@@ -361,8 +360,11 @@ Frames are off at startup, with a window or headless. Their rate is the
 device's input `display/face/frame_rate` (`F64`, frames per second, at most
 30): `--frame-rate` is the rate it starts at (`--headless --frame-rate 2` for
 a slow stream), and a client turns the frames on, off or to another rate by
-writing it — from ROS 2, on `/<namespace>/keys/display/face/frame_rate` as a
-`std_msgs/Float64`, like any input. A write takes effect on the next step, and
+writing it. It is an input like the face's, so the ROS 2 bridge subscribes it
+as the `std_msgs` type of its declared type: a ROS client sets it by
+publishing a `std_msgs/Float64` on `/<namespace>/keys/display/face/frame_rate`
+(`/quori/keys/display/face/frame_rate` above) before it reads the image
+topics. A write takes effect on the next step, and
 a rate out of range reads back as the rate held. A device under `--ros2
 --no-ros4hri` publishes no frame and has no such key: with no profile to type
 the frame key, a frame would ride the scalar plane as a `std_msgs/String`.
