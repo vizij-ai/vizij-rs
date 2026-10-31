@@ -120,7 +120,7 @@ struct Cli {
     /// at from the start, as HAL readings (decoupled from the step rate): the
     /// value the device's `display/face/frame_rate` starts at, an input a
     /// client writes to turn the frames on, off, or to another rate. Default
-    /// 0: no frame until a client asks. At most 30; 0 or below publishes none.
+    /// 0: no frame until a client asks. At most 30; below 0.01 publishes none.
     /// Under `--ros2 --no-ros4hri` the device publishes no frame and has no
     /// such key, and a rate is refused: with no ROS4HRI profile to type the
     /// frame key, a frame would ride the bridge's JSON scalar plane. Works with
