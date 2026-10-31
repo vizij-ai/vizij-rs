@@ -6,7 +6,8 @@
 //! holds ([`RigHal::frame_rate`]): the input
 //! [`FRAME_RATE`](vizij_arora_hal::FRAME_RATE), which a client writes to turn
 //! the frames on, off, or to another rate. The captured frame is encoded
-//! (`--frame-format`) and pushed onto the rig HAL's reading feed under the key
+//! (`--frame-format`) off the render thread, on the async compute pool, and
+//! pushed onto the rig HAL's reading feed under the key
 //! of its transport ([`host::FrameFormat::key`]); the runtime lands it in the
 //! store and fans it to every bridge (the ROS4HRI route — face frames as a
 //! topic, no browser — and Semio Studio's).
@@ -22,10 +23,10 @@
 //!
 //! [`RigHal::frame_rate`]: vizij_arora_hal::RigHal::frame_rate
 
-use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured};
+use bevy::tasks::{AsyncComputeTaskPool, Task};
 
 use std::time::SystemTime;
 
@@ -118,46 +119,103 @@ pub struct FramesPlugin;
 
 impl Plugin for FramesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, request_capture);
+        app.init_resource::<Encoding>()
+            .add_systems(Update, request_capture);
     }
 }
 
-/// At the rate the shown face's rig holds: request a capture of the offscreen
-/// target (headless) or the primary window, with [`publish_frame`] as its
-/// observer. Skips while a capture is still in flight, so a slow readback
-/// throttles the rate rather than piling up requests. The first frame after
-/// the rate turns on is captured at once; at a rate of zero nothing is
-/// captured.
+/// The captured frame being encoded off the render thread, if any: at most one
+/// at a time, so encoding slower than the rate lowers the rate rather than
+/// queueing frames.
+#[derive(Resource, Default)]
+struct Encoding(Option<Task<()>>);
+
+impl Encoding {
+    fn busy(&self) -> bool {
+        self.0.as_ref().is_some_and(|task| !task.is_finished())
+    }
+}
+
+/// When the next capture is due, at a rate that may change from one frame to
+/// the next. The time past a due capture carries over to the next one, so the
+/// rate holds on average whatever the render rate; a capture held back while
+/// one is still in flight is due as soon as it is not, and the one after it a
+/// period later at most. Off — rate zero — the first capture after the rate
+/// turns on is due at once.
+#[derive(Debug)]
+struct Cadence {
+    /// Seconds since the last capture was due; infinite while off.
+    since_last: f64,
+}
+
+impl Default for Cadence {
+    fn default() -> Self {
+        Self {
+            since_last: f64::INFINITY,
+        }
+    }
+}
+
+impl Cadence {
+    /// Advance by `dt` seconds at `rate` frames per second, and say whether a
+    /// capture is due now; `busy` holds a due capture back.
+    fn tick(&mut self, rate: f64, dt: f64, busy: bool) -> bool {
+        if rate <= 0.0 {
+            self.since_last = f64::INFINITY;
+            return false;
+        }
+        self.since_last += dt;
+        let period = 1.0 / rate;
+        if self.since_last < period || busy {
+            return false;
+        }
+        self.since_last = if self.since_last.is_finite() {
+            (self.since_last - period).min(period)
+        } else {
+            0.0
+        };
+        true
+    }
+}
+
+/// How [`request_capture`] paces captures: its cadence, and the rate it last
+/// ran at, which it logs each change of.
+#[derive(Default)]
+struct Pacing {
+    cadence: Cadence,
+    rate: f64,
+}
+
+/// At the rate the shown face's rig holds ([`Cadence`]): request a capture of
+/// the offscreen target (headless) or the primary window, with
+/// [`publish_frame`] as its observer. Skips while a capture is still in flight
+/// or a captured frame is still being encoded, so a slow readback or encode
+/// throttles the rate rather than piling up work.
 fn request_capture(
     mut commands: Commands,
     faces: Query<&Face>,
     offscreen: Option<Res<OffscreenTarget>>,
     time: Res<Time>,
-    mut since_last: Local<f32>,
-    mut publishing: Local<f64>,
+    encoding: Res<Encoding>,
+    mut pacing: Local<Pacing>,
     in_flight: Query<(), With<Screenshot>>,
 ) {
     let rate = faces
         .iter()
         .min_by_key(|face| face.slot)
         .map_or(0.0, |face| face.rig.frame_rate());
-    if rate != *publishing {
+    if rate != pacing.rate {
         if rate > 0.0 {
             log::info!("publishing the face's frames at {rate} Hz");
         } else {
             log::info!("the face's frames stopped");
         }
-        *publishing = rate;
+        pacing.rate = rate;
     }
-    if rate <= 0.0 {
-        *since_last = f32::INFINITY;
+    let busy = !in_flight.is_empty() || encoding.busy();
+    if !pacing.cadence.tick(rate, time.delta_secs_f64(), busy) {
         return;
     }
-    *since_last += time.delta_secs();
-    if *since_last < 1.0 / rate as f32 || !in_flight.is_empty() {
-        return;
-    }
-    *since_last = 0.0;
     let screenshot = match offscreen.as_ref() {
         Some(target) => Screenshot::image(target.0.clone()),
         None => Screenshot::primary_window(),
@@ -165,16 +223,18 @@ fn request_capture(
     commands.spawn(screenshot).observe(publish_frame);
 }
 
-/// Encode the captured frame and push it onto the rig's reading feed of the
-/// face the target shows — the one in the lowest slot, which is the only
-/// one where a frame is published from (the desktop and headless runs show
-/// one face). RGBA is taken as-is; BGRA is swizzled (window swapchains are
-/// commonly BGRA, offscreen targets RGBA); an unreadable format is skipped,
-/// and so is a frame captured before the rate turned to zero.
+/// Hand the captured frame of the face the target shows — the one in the
+/// lowest slot, which is the only one where a frame is published from (the
+/// desktop and headless runs show one face) — to a task on the
+/// [`AsyncComputeTaskPool`], which converts and encodes it off the render
+/// thread and pushes it onto that face rig's reading feed when done. The
+/// pixels move to the task uncopied. A frame captured before the rate turned
+/// to zero is dropped, here or when its encode completes.
 fn publish_frame(
-    event: On<ScreenshotCaptured>,
+    mut event: On<ScreenshotCaptured>,
     faces: Query<&Face>,
     config: Res<FrameConfig>,
+    mut encoding: ResMut<Encoding>,
     mut announced: Local<bool>,
 ) {
     let Some(face) = faces.iter().min_by_key(|face| face.slot) else {
@@ -183,9 +243,10 @@ fn publish_frame(
     if face.rig.frame_rate() <= 0.0 {
         return;
     }
-    let image = &event.image;
+    let image = &mut event.event_mut().image;
     let (width, height) = (image.width(), image.height());
-    let Some(rgba) = to_rgba8(image) else {
+    let pixel_format = image.texture_descriptor.format;
+    let Some(pixels) = image.data.take() else {
         return;
     };
     if !std::mem::replace(&mut *announced, true) {
@@ -196,8 +257,17 @@ fn publish_frame(
             config.frame_id()
         );
     }
-    face.rig
-        .push_reading(frame_reading(&rgba, width, height, &config));
+    let rig = face.rig.clone();
+    let config = config.clone();
+    encoding.0 = Some(AsyncComputeTaskPool::get().spawn(async move {
+        let Some(rgba) = to_rgba8(pixel_format, pixels) else {
+            return;
+        };
+        let reading = frame_reading(&rgba, width, height, &config);
+        if rig.frame_rate() > 0.0 {
+            rig.push_reading(reading);
+        }
+    }));
 }
 
 /// The reading a captured frame becomes: the key of the configured format,
@@ -216,17 +286,17 @@ pub(crate) fn frame_reading(
     )
 }
 
-/// The image's pixels as row-major RGBA8, or `None` for an unsupported format.
-fn to_rgba8(image: &Image) -> Option<Vec<u8>> {
-    let data = image.data.as_ref()?;
-    match image.texture_descriptor.format {
-        TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => Some(data.clone()),
+/// Pixels read back in `format` as row-major RGBA8: RGBA as-is, BGRA swizzled
+/// in place (window swapchains are commonly BGRA, offscreen targets RGBA);
+/// `None` for a format it cannot read.
+fn to_rgba8(format: TextureFormat, mut pixels: Vec<u8>) -> Option<Vec<u8>> {
+    match format {
+        TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => Some(pixels),
         TextureFormat::Bgra8Unorm | TextureFormat::Bgra8UnormSrgb => {
-            let mut out = data.clone();
-            for px in out.as_chunks_mut::<4>().0 {
+            for px in pixels.as_chunks_mut::<4>().0 {
                 px.swap(0, 2);
             }
-            Some(out)
+            Some(pixels)
         }
         _ => None,
     }
@@ -444,20 +514,64 @@ mod tests {
         let write = |rate: f64| rig.try_send(&StateChange::set(FRAME_RATE, Value::F64(rate)));
 
         assert_eq!(captures(&mut app, 2), 0, "no frame at startup");
-        write(10.0);
-        let at_ten = captures(&mut app, 2);
-        assert!(
-            (16..=21).contains(&at_ten),
-            "{at_ten} frames in 2 s at 10 Hz"
-        );
+        // 25 Hz is no divisor of the 60 Hz frames: a cadence that dropped
+        // the time past each capture would capture every third frame, 20 Hz.
+        write(25.0);
+        let at_25 = captures(&mut app, 2);
+        assert!((49..=51).contains(&at_25), "{at_25} frames in 2 s at 25 Hz");
         write(4.0);
         let at_four = captures(&mut app, 2);
         assert!(
-            (6..=9).contains(&at_four),
+            (7..=9).contains(&at_four),
             "{at_four} frames in 2 s at 4 Hz"
         );
         write(0.0);
         assert_eq!(captures(&mut app, 2), 0, "no frame once the rate is 0");
+    }
+
+    /// Captures `cadence` makes due over `seconds` of `fps` frames at `rate`.
+    fn due(cadence: &mut Cadence, rate: f64, fps: u32, seconds: u32) -> u32 {
+        (0..fps * seconds)
+            .filter(|_| cadence.tick(rate, 1.0 / f64::from(fps), false))
+            .count() as u32
+    }
+
+    /// The rate holds on average whatever the render rate, including rates
+    /// that divide no frame count: each capture is due a period after the
+    /// last one was, not a period after the frame that took it.
+    #[test]
+    fn the_cadence_holds_the_rate_over_frames_that_do_not_divide_it() {
+        for (rate, fps) in [(25.0, 60), (15.0, 60), (30.0, 60), (7.0, 30), (12.5, 144)] {
+            let captured = due(&mut Cadence::default(), rate, fps, 60);
+            let expected = (rate * 60.0) as u32;
+            assert!(
+                captured.abs_diff(expected) <= 1,
+                "{captured} captures in 60 s at {rate} Hz and {fps} fps"
+            );
+        }
+    }
+
+    /// The slowest rate the rig holds captures at once, then a hundred
+    /// seconds later: the period is a division in `f64`.
+    #[test]
+    fn the_slowest_rate_captures_at_once_then_a_period_later() {
+        use vizij_arora_hal::MIN_FRAME_RATE;
+
+        let mut cadence = Cadence::default();
+        assert_eq!(due(&mut cadence, MIN_FRAME_RATE, 60, 99), 1);
+        assert_eq!(due(&mut cadence, MIN_FRAME_RATE, 60, 2), 1);
+    }
+
+    /// A capture held back while one is in flight is due once it is not;
+    /// zero turns the cadence off, and turning it on again captures at once.
+    #[test]
+    fn the_cadence_waits_while_busy_and_restarts_at_once() {
+        let mut cadence = Cadence::default();
+        assert!(cadence.tick(10.0, 0.0, false), "on: at once");
+        assert!(!cadence.tick(10.0, 0.2, true), "busy");
+        assert!(cadence.tick(10.0, 0.0, false), "due once free");
+        assert!(!cadence.tick(0.0, 10.0, false), "off");
+        assert!(cadence.tick(10.0, 0.0, false), "on again: at once");
     }
 
     /// The face is named by its GLB; only a GLB without a face id falls back
