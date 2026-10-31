@@ -29,9 +29,9 @@
 //! the rate the rig holds ([`frame_rate`](RigHal::frame_rate)) to know how often
 //! to publish. The rate is device configuration rather than a pose: it never
 //! reaches [`pose`](RigHal::pose), and the rig reports it on the reading feed —
-//! the rate it starts at, and the rate it holds after a write that asked for
-//! another (outside `[0, MAX_FRAME_RATE]`, or not a number) — so the store,
-//! and every client, reads the rate frames actually publish at.
+//! the rate it starts at, and the rate it holds after every write, which
+//! differs from the one written when that was out of range or not a number —
+//! so the store, and every client, reads the rate frames actually publish at.
 //!
 //! Modelled on `arora-hal`'s `FakeHal`: cheaply cloneable, clones share state,
 //! writes apply synchronously (so [`try_send`](arora_hal::Hal::try_send) needs
@@ -53,8 +53,8 @@ use vizij_api_core::{TypedPath, Value};
 
 /// The rate the face's rendered frames publish at, in frames per second: an
 /// `F64` input of a rig whose host offers it
-/// ([`offer_frame_rate`](RigHal::offer_frame_rate)). At or below zero, no
-/// frame publishes.
+/// ([`offer_frame_rate`](RigHal::offer_frame_rate)). Below
+/// [`MIN_FRAME_RATE`], zero included, no frame publishes.
 pub const FRAME_RATE: &str = "display/face/frame_rate";
 
 /// The highest rate frames publish at, in frames per second: a write above it
@@ -63,16 +63,22 @@ pub const FRAME_RATE: &str = "display/face/frame_rate";
 /// rate.
 pub const MAX_FRAME_RATE: f64 = 30.0;
 
+/// The lowest rate frames publish at, in frames per second: one frame every
+/// hundred seconds. A write below it holds at zero, no frame, so the rate read
+/// back is one frames do publish at.
+pub const MIN_FRAME_RATE: f64 = 0.01;
+
 /// The rate the rig holds when asked for `asked`: a number within
-/// `[0, MAX_FRAME_RATE]` as asked, a higher one at [`MAX_FRAME_RATE`], and
-/// anything else — a negative number, NaN, no value, not a number — at zero.
+/// `[MIN_FRAME_RATE, MAX_FRAME_RATE]` as asked, a higher one at
+/// [`MAX_FRAME_RATE`], and anything else — a lower number, NaN, no value, not
+/// a number — at zero.
 fn held_rate(asked: Option<&Value>) -> f64 {
     let rate = match asked {
         Some(Value::F64(rate)) => *rate,
         Some(other) => as_float(other).map_or(0.0, f64::from),
         None => 0.0,
     };
-    if rate > 0.0 {
+    if rate >= MIN_FRAME_RATE {
         rate.min(MAX_FRAME_RATE)
     } else {
         0.0
@@ -87,7 +93,7 @@ fn frame_rate_meta() -> KeyMeta {
         .of_type(Type::F64)
         .range(0.0, MAX_FRAME_RATE)
         .in_unit("Hz")
-        .described("The rate the face's rendered frames publish at; 0 publishes none.")
+        .described("The rate the face's rendered frames publish at; below 0.01, none.")
 }
 
 #[derive(Default)]
@@ -145,7 +151,7 @@ impl RigHal {
     }
 
     /// Offer the rendered frame's rate as the input [`FRAME_RATE`], starting at
-    /// `rate_hz` (held within `[0, MAX_FRAME_RATE]`): what a host that
+    /// `rate_hz`, held as a write would hold it: what a host that
     /// publishes the face's frames calls, before the device is built, since
     /// the rig describes its keys and reports the rate to whoever subscribes
     /// then. A rig whose host never offers it has no such key.
@@ -212,8 +218,9 @@ impl RigHal {
     /// Apply a write synchronously: store it and echo it to subscribers.
     /// Shared by [`Hal::write`] and [`Hal::try_send`] — the rig is in-memory,
     /// so applying never blocks. A write to an offered [`FRAME_RATE`] sets
-    /// the rate instead, reported on the reading feed when the rate held is
-    /// not the value written.
+    /// the rate instead, and the rate held is reported on the reading feed
+    /// after every such write: readings land in order, so the last write's is
+    /// the one the store keeps, whichever writes were held at another rate.
     fn apply_write(&self, changes: &StateChange) {
         if changes.is_empty() {
             return;
@@ -229,12 +236,10 @@ impl RigHal {
         let written = changes.set.get(&rate_key).cloned().flatten();
         let rate = held_rate(written.as_ref());
         inner.frame_rate = Some(rate);
-        if written != Some(Value::F64(rate)) {
-            notify(
-                &mut inner.reading_subscribers,
-                &StateChange::set(FRAME_RATE, Value::F64(rate)),
-            );
-        }
+        notify(
+            &mut inner.reading_subscribers,
+            &StateChange::set(FRAME_RATE, Value::F64(rate)),
+        );
         let mut pose = changes.clone();
         pose.set.remove(&rate_key);
         pose.unset.remove(&rate_key);
@@ -503,7 +508,7 @@ mod tests {
     }
 
     /// A write sets the rate and stays out of the pose; the rig reports the
-    /// rate it holds when that is not what was written, and only then.
+    /// rate it holds after each write.
     #[test]
     fn a_write_sets_the_rate_and_one_out_of_range_reads_back_as_held() {
         let hal = RigHal::new();
@@ -514,10 +519,7 @@ mod tests {
 
         hal.try_send(&rate(12.5));
         assert_eq!(hal.frame_rate(), 12.5);
-        assert!(
-            drain(&mut readings).is_empty(),
-            "the store holds 12.5 already"
-        );
+        assert_eq!(drain(&mut readings), [rate(12.5)]);
 
         hal.try_send(&rate(1000.0));
         assert_eq!(hal.frame_rate(), MAX_FRAME_RATE);
@@ -526,6 +528,13 @@ mod tests {
         hal.try_send(&rate(-1.0));
         assert_eq!(hal.frame_rate(), 0.0);
         assert_eq!(drain(&mut readings), [rate(0.0)]);
+
+        hal.try_send(&rate(0.001));
+        assert_eq!(hal.frame_rate(), 0.0, "below the floor, no frame");
+        assert_eq!(drain(&mut readings), [rate(0.0)]);
+        hal.try_send(&rate(MIN_FRAME_RATE));
+        assert_eq!(hal.frame_rate(), MIN_FRAME_RATE);
+        assert_eq!(drain(&mut readings), [rate(MIN_FRAME_RATE)]);
 
         hal.try_send(&StateChange::set(FRAME_RATE, float(6.0)));
         assert_eq!(hal.frame_rate(), 6.0);
@@ -542,6 +551,23 @@ mod tests {
             .iter()
             .any(|c| c.contains(&Key::from("mouth/jaw.open"))));
         assert!(hal.value(FRAME_RATE).is_none(), "the rate is no pose");
+    }
+
+    /// Two writes before the runtime drains the feed: the store lands each
+    /// reading in order, so the last write's rate is the one it keeps — an
+    /// in-range write after a held one is not overtaken by the held reading.
+    #[test]
+    fn the_last_of_two_writes_is_the_rate_read_back() {
+        let hal = RigHal::new();
+        hal.offer_frame_rate(0.0);
+        let mut readings = hal.updates();
+        drain(&mut readings);
+
+        hal.try_send(&rate(1000.0));
+        hal.try_send(&rate(12.0));
+        let landed = drain(&mut readings);
+        assert_eq!(landed, [rate(MAX_FRAME_RATE), rate(12.0)]);
+        assert_eq!(landed.last(), Some(&rate(hal.frame_rate())));
     }
 
     #[tokio::test]
