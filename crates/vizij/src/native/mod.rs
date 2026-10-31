@@ -342,9 +342,9 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
 /// device as the face's model ([`description`]) and holds the GLB, the model
 /// the device states and serves (Semio Studio's `retrieveModels` /
 /// `retrieveModelGlb`). Each generation's is its face's, and offers the frame
-/// rate at `frame_rate` ([`FaceConfig::frame_rate`]) when it is given: a
-/// generation starts at the device's startup rate, whatever the one before it
-/// was set to.
+/// rate at `frame_rate` when it is given: the device's startup rate
+/// ([`FaceConfig::frame_rate`]) for the first generation, the rate the one
+/// before it held for a reload ([`next_frame_rate`]).
 fn face_rig(glb: &[u8], meta: &FaceMeta, frame_rate: Option<f64>) -> RigHal {
     let rig = RigHal::with_description(description(&meta.bundle));
     rig.set_model_glb(glb.to_vec());
@@ -380,6 +380,15 @@ fn run_quiet(
     }
 }
 
+/// The frame rate a reload's generation starts at: the rate the generation
+/// before it held — a client's last write to its
+/// [`FRAME_RATE`](vizij_arora_hal::FRAME_RATE) — so a viewer that turned the
+/// frames on keeps them across the operator loading another face. `None` for a
+/// device that publishes no frame ([`FaceConfig::frame_rate`]).
+fn next_frame_rate(config: &FaceConfig, previous: &RigHal) -> Option<f64> {
+    config.frame_rate.map(|_| previous.frame_rate())
+}
+
 /// The face a generation runs: its composed spec and meta, its GLB, and what
 /// its composition contends.
 struct Generation {
@@ -392,7 +401,8 @@ struct Generation {
 /// The operator flow, generation by generation: each reload stops the
 /// running device and rebuilds it — graphs, rig, store, bridges — on the new
 /// face, its Studio bridge a new one reporting the new face's model, and the
-/// view follows through [`ViewEvent::LoadFace`]. `operator`, when given,
+/// view follows through [`ViewEvent::LoadFace`]; the frame rate carries over
+/// ([`next_frame_rate`]). `operator`, when given,
 /// answers in place of the front end's, and presents the device's enrollment
 /// with Studio ([`enroll`]). Runs until a generation ends on its own (a device
 /// error; the terminal UI's quit exits the process).
@@ -419,6 +429,8 @@ fn supervise(
     // later one's face is announced only after its front end is up, so the
     // view's swap (and everything it logs) lands in the live pane.
     let mut fresh = Some(handles);
+    // The rate the next generation's rig starts at.
+    let mut frame_rate = config.frame_rate;
     loop {
         let (mut frontend, tui) = operator_frontend();
         if let (Some(frontend), Some(operator)) = (frontend.as_mut(), &operator) {
@@ -428,7 +440,7 @@ fn supervise(
             Some(handles) => handles,
             None => {
                 let (rig, store) = (
-                    face_rig(&face.glb, &face.meta, config.frame_rate),
+                    face_rig(&face.glb, &face.meta, frame_rate),
                     BlackboardStore::new(),
                 );
                 let _ = events.send(ViewEvent::LoadFace {
@@ -459,6 +471,7 @@ fn supervise(
         // What the device says it is, the generation's face: the model its
         // Studio bridge reports, as arora's own run passes its HAL's.
         let description = tokio_rt.block_on(arora_hal::Hal::describe(&rig));
+        let held = rig.clone();
         let speech = config.speech.as_ref().map(|build| build());
         let Some(builder) = builder_for(
             &face.spec,
@@ -508,7 +521,10 @@ fn supervise(
         });
         match next {
             None => break,
-            Some(next) => face = *next,
+            Some(next) => {
+                face = *next;
+                frame_rate = next_frame_rate(&config, &held);
+            }
         }
     }
 }
@@ -947,6 +963,64 @@ mod model_tests {
             futures::executor::block_on(rig.describe()),
             vizij("emy", None),
             "a face stating no version is described by its id"
+        );
+    }
+
+    /// A reload keeps the frame rate: the operator loading another face
+    /// rebuilds the device, and the next generation's rig starts at the rate
+    /// the one before it held — the store holding it from its first step —
+    /// so frames a client turned on stay on.
+    #[test]
+    fn a_reload_keeps_the_frame_rate() {
+        use std::time::Duration;
+
+        use arora_types::data::StateChange;
+        use futures::FutureExt;
+        use vizij_api_core::Value;
+        use vizij_arora_hal::FRAME_RATE;
+
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .and_then(|listener| listener.local_addr())
+            .expect("a free port")
+            .port();
+        let config = FaceConfig {
+            frame_rate: Some(0.0),
+            ..config()
+        };
+        // The other bridges are feature-gated fields; only the local one is set.
+        #[allow(clippy::needless_update)]
+        let bridges = BridgeConfig {
+            local: arora::bridge_ws::ServerConfig::with_port(port),
+            ..BridgeConfig::default()
+        };
+        let quori = face_glb(serde_json::json!({ "faceId": "quori" }));
+        let device = start(&quori, config, bridges, Mode::Operator).expect("start the device");
+        let loaded = |face_id: &str| loop {
+            match device.events.recv_timeout(Duration::from_secs(30)) {
+                Ok(ViewEvent::LoadFace { meta, rig, .. })
+                    if meta.bundle.face_id.as_deref() == Some(face_id) =>
+                {
+                    break rig;
+                }
+                Ok(_) => continue,
+                Err(e) => panic!("no {face_id} loaded: {e}"),
+            }
+        };
+        assert_eq!(loaded("quori").frame_rate(), 0.0, "no frame from the start");
+
+        device
+            .rig
+            .try_send(&StateChange::set(FRAME_RATE, Value::F64(15.0)));
+        device
+            .handle
+            .reload(face_glb(serde_json::json!({ "faceId": "emy" })));
+        let next = loaded("emy");
+        assert_eq!(next.frame_rate(), 15.0, "the reload keeps the rate");
+        let opening = next.updates().next().now_or_never().flatten();
+        assert_eq!(
+            opening,
+            Some(StateChange::set(FRAME_RATE, Value::F64(15.0))),
+            "the store holds the kept rate from the generation's first step"
         );
     }
 }

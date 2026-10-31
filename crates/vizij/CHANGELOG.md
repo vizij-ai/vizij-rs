@@ -84,7 +84,8 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   A write takes effect on the next step: frames start, stop at 0 or below,
   or change rate. The rate is held within 0..30; the device writes the rate
   it holds back to the key when a write asked for another, so a client reads
-  the rate frames publish at. The desktop app (with a window or
+  the rate frames publish at. A reload keeps the rate: the next generation
+  starts at the rate the one before it held. The desktop app (with a window or
   `--headless`) and the Android app publish frames at that rate
   (`FaceConfig::frame_rate`); a device under `--ros2 --no-ros4hri` publishes
   none and has no such key.

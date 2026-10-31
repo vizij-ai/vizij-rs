@@ -307,8 +307,9 @@ How often is a key of the device, which a client writes to opt in:
 | Read back | the rate frames publish at: a write above 30 holds at 30, below 0 or not a number at 0, and the device writes that rate back to the key |
 
 The rate is the device's: each frame is read back from the GPU and encoded on
-the render thread, so 30 is its ceiling. A reload starts the next generation
-at the startup rate, as it starts its bridges anew. The desktop app (window or
+the render thread, so 30 is its ceiling. A reload keeps it: the next
+generation starts at the rate the one before it held, so a viewer that turned
+the frames on keeps them when the operator loads another face. The desktop app (window or
 headless) and the Android app publish frames; a device under `--ros2
 --no-ros4hri` publishes none and has no such key, since without the ROS4HRI
 profile to type the frame key every frame would ride the ROS 2 bridge as a
