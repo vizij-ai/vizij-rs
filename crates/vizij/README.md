@@ -286,6 +286,13 @@ server lives with the device generation: a reload frees the port before the
 next generation binds it. `tests/local_bridge.rs` is a client on it
 (`cargo test -p vizij --test local_bridge` with `VIZIJ_FIXTURES` set).
 
+The listing is not the skills alone: it carries every function the device's
+modules describe, the animation module's transport among them. So a client
+plays a face's authored animations over this socket —
+`{"type": "invoke", "method": "play", "args": {"player": {"u32": 3}}}`, on the
+player ids `vizij/animations/players` holds. See [playing a face's
+animations](../../docs/animations.md).
+
 ### The face image
 
 The view publishes the face it renders — the window, or the offscreen target
