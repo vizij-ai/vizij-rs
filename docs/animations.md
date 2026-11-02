@@ -9,6 +9,83 @@ plays them through that module's declared functions. There is no second,
 Vizij-side transport: a function the module already declares needs no wrapper
 here.
 
+## Play one
+
+Run the face, then play an animation by the name it was authored under:
+
+```bash
+cargo run -p vizij -- --glb face.glb      # the bridge listens on 127.0.0.1:9000
+python play.py wave
+```
+
+`play.py`, over the local bridge (`pip install websockets`):
+
+```python
+"""Play one of a face's animations: python play.py <animation> [port]"""
+
+import asyncio
+import json
+import sys
+
+import websockets
+
+PLAYERS = "vizij/animations/players"
+# PlayerState's player, name and instances; InstanceState's instance.
+PLAYER = "76697a69-6a00-0000-0111-000000000001"
+NAME = "76697a69-6a00-0000-0111-000000000006"
+INSTANCES = "76697a69-6a00-0000-0111-000000000007"
+INSTANCE = "76697a69-6a00-0000-0112-000000000001"
+
+
+async def request(socket, frame):
+    """Send a frame, skip the live pushes, return the answer."""
+    await socket.send(json.dumps(frame))
+    while True:
+        answer = json.loads(await socket.recv())
+        if answer["type"].endswith("_resp"):
+            return answer
+
+
+def by_id(structure):
+    return {field["id"]: field["value"] for field in structure["fields"]}
+
+
+async def play(animation, port=9000):
+    async with websockets.connect(f"ws://127.0.0.1:{port}") as socket:
+        answer = await request(socket, {"type": "read_values", "keys": [PLAYERS]})
+        players = [by_id(p) for p in answer["values"][PLAYERS]["structs"]["elements"]]
+        state = next((p for p in players if p[NAME]["str"] == animation), None)
+        if state is None:
+            names = [p[NAME]["str"] for p in players]
+            sys.exit(f"no animation named {animation}; this face has {names}")
+        player = state[PLAYER]
+        instance = by_id(state[INSTANCES]["structs"]["elements"][0])[INSTANCE]
+        # Weigh its instance in, then start its player.
+        await request(
+            socket,
+            {
+                "type": "invoke",
+                "method": "set_weight",
+                "args": {"player": player, "instance": instance, "weight": {"f32": 1.0}},
+            },
+        )
+        await request(
+            socket, {"type": "invoke", "method": "play", "args": {"player": player}}
+        )
+        print(f"playing {animation}")
+
+
+asyncio.run(play(*sys.argv[1:]))
+```
+
+Asked for a name the face does not carry, it prints the names it does — the
+ids the animations were authored under, which is what `name` holds. To stop
+one, `invoke` `stop` with the same `player`; to make it let go of the keys it
+writes, `set_weight` the instance back to `0`.
+
+The rest of this page is why those two calls are the ones, and what else is
+there.
+
 ## What loading leaves you
 
 [`load_animations`](../crates/vizij/src/face.rs) runs when the device is
