@@ -53,7 +53,7 @@ piece of it, not a second device.
 | Module | What it is | Where it builds |
 |---|---|---|
 | `view` | the Bevy rendering of a face from its GLB bytes, applying a device's pose each frame; `view::meta` (the bindings and the bundle read from the GLB), `view::snapshot` (offscreen rendering and readback), `view::frames` (rendered frames into the store), `view::diagnostics` (the device's health report into the store), `view::captions` (the face standard's caption over each face; feature `captions`) | everywhere |
-| `face` | the composition: the GLB's bindings and bundle into one graph spec, folded with `RigHal` + `BlackboardStore` and the modules into an `AroraBuilder` a host may extend (`builder_for`); the bundle's animations loaded into the built device through the animation module's declared functions (`load_animations`); the program that runs from load, spawned beside the graph as a run of the interpreter's `run_behavior` (`spawn_program`); the free inputs and what the store says of them (`declare_keys`), the neutral pose, the skills' fragments | everywhere |
+| `face` | the composition: the GLB's bindings and bundle into one graph spec, folded with `RigHal` + `BlackboardStore` and the modules into an `AroraBuilder` a host may extend (`builder_for`); the bundle's animations loaded into the built device through the animation module's declared functions (`load_animations`, see [playing a face's animations](../../docs/animations.md)); the program that runs from load, spawned beside the graph as a run of the interpreter's `run_behavior` (`spawn_program`); the free inputs and what the store says of them (`declare_keys`), the neutral pose, the skills' fragments | everywhere |
 | `modules` | the host modules any Arora loads: `animation` (Arora's `@arora/animation`, from `arora-animation-module`), `rest` (`reset`, `reset_keys`), `tts_piper` (feature) | everywhere (Piper native) |
 | `native` | the stand-alone device: the face's Arora on a worker thread under arora's operator flow, the bridges the build adds, the `RuntimeHandle` front ends speak through | every target but the browser |
 | `web` | the browser module behind [`@vizij/runtime`](../../npm/@vizij/runtime/README.md): one App per page (`mount`), a JS-paced Arora per Vizij (`loadVizij`, a `VizijRuntime`), Vizijs as rectangles of the canvas (`placeVizij`), picks, `describe` | `wasm32` |
@@ -285,6 +285,13 @@ display, or take the whole feed, the clock included, by not subscribing. The
 server lives with the device generation: a reload frees the port before the
 next generation binds it. `tests/local_bridge.rs` is a client on it
 (`cargo test -p vizij --test local_bridge` with `VIZIJ_FIXTURES` set).
+
+The listing is not the skills alone: it carries every function the device's
+modules describe, the animation module's transport among them. So a client
+plays a face's authored animations over this socket —
+`{"type": "invoke", "method": "play", "args": {"player": {"u32": 3}}}`, on the
+player ids `vizij/animations/players` holds. See [playing a face's
+animations](../../docs/animations.md).
 
 ### The face image
 
