@@ -271,3 +271,29 @@ pub fn reversed_fraction(points: &[[f32; 3]], triangles: &[[u32; 3]]) -> f64 {
     let reversed: f64 = triangles.iter().map(|t| (-signed(t)).max(0.0)).sum();
     reversed / total.abs()
 }
+
+/// `bytes` with its JSON chunk replaced by `edit` applied to the document;
+/// the binary chunk is kept as it is.
+pub fn with_json(bytes: &[u8], edit: impl FnOnce(&mut Value)) -> Vec<u8> {
+    let mut glb = Glb::parse(bytes).expect("valid GLB");
+    let mut document: Value = serde_json::from_slice(&glb.json).unwrap();
+    edit(&mut document);
+    glb.json = serde_json::to_vec(&document).unwrap();
+    glb.to_bytes()
+}
+
+/// A unit square split along its 0–2 diagonal, as a fan from vertex 0.
+pub fn square(name: &'static str) -> MeshSpec {
+    let points = vec![
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+    ];
+    MeshSpec::new(name, points, fan(4))
+}
+
+/// `[x, y]` pairs as positions on the z = 0 plane.
+pub fn flat(points: &[[f32; 2]]) -> Vec<[f32; 3]> {
+    points.iter().map(|p| [p[0], p[1], 0.0]).collect()
+}

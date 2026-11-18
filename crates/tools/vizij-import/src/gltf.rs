@@ -6,6 +6,8 @@
 //! binary chunk. Anything else is reported as [`Unsupported`] so a pass can
 //! leave that mesh alone instead of failing the whole file.
 
+use std::ops::Range;
+
 use serde_json::Value;
 
 const FLOAT: u64 = 5126;
@@ -65,7 +67,10 @@ impl<'a> Document<'a> {
             .and_then(Value::as_u64)
             .ok_or_else(|| malformed(format!("bufferViews[{index}] has no byteLength")))?
             as usize;
-        if offset + length > self.bin.len() {
+        if offset
+            .checked_add(length)
+            .is_none_or(|end| end > self.bin.len())
+        {
             return Err(malformed(format!(
                 "bufferViews[{index}] runs past the binary chunk"
             )));
@@ -93,7 +98,17 @@ impl<'a> Document<'a> {
     /// Reads a float `VEC3` accessor, applying its sparse substitution when
     /// it has one. An accessor without a bufferView starts from zeros, as
     /// glTF specifies; exporters use that for sparse morph deltas.
-    pub fn read_vec3(&self, accessor: u64) -> Result<Vec<[f32; 3]>, Unsupported> {
+    ///
+    /// `expected` is the element count the caller requires (a morph
+    /// target's count is its mesh's vertex count). The count is checked
+    /// against it, or against the bytes the accessor's bufferView holds,
+    /// before anything is allocated, so a corrupt count is reported rather
+    /// than exhausting memory.
+    pub fn read_vec3(
+        &self,
+        accessor: u64,
+        expected: Option<usize>,
+    ) -> Result<Vec<[f32; 3]>, Unsupported> {
         let acc = self.get("accessors", accessor)?;
         if acc.get("componentType").and_then(Value::as_u64) != Some(FLOAT) {
             return Err(Unsupported::NotFloat);
@@ -102,12 +117,38 @@ impl<'a> Document<'a> {
             return Err(malformed(format!("accessors[{accessor}] is not VEC3")));
         }
         let count = self.count(accessor)?;
+        if expected.is_some_and(|e| e != count) {
+            return Err(malformed(format!(
+                "accessors[{accessor}] has {count} elements, not the mesh's {}",
+                expected.unwrap_or_default()
+            )));
+        }
+        let dense = match acc.get("bufferView").and_then(Value::as_u64) {
+            Some(view) => {
+                let view = self.view(view)?;
+                let base = byte_offset(acc, &view)?;
+                let stride = view.stride.unwrap_or(12);
+                if stride < 12 {
+                    return Err(malformed(format!(
+                        "accessors[{accessor}] has a byteStride shorter than its elements"
+                    )));
+                }
+                fits(base, count, stride, 12, &view)
+                    .then_some((view, base, stride))
+                    .ok_or_else(|| {
+                        malformed(format!("accessors[{accessor}] runs past its bufferView"))
+                    })
+                    .map(Some)?
+            }
+            None if expected.is_some() => None,
+            None => {
+                return Err(malformed(format!(
+                    "accessors[{accessor}] has no bufferView to bound its count"
+                )))
+            }
+        };
         let mut out = vec![[0.0f32; 3]; count];
-        if let Some(view) = acc.get("bufferView").and_then(Value::as_u64) {
-            let view = self.view(view)?;
-            let base =
-                view.offset + acc.get("byteOffset").and_then(Value::as_u64).unwrap_or(0) as usize;
-            let stride = view.stride.unwrap_or(12);
+        if let Some((view, base, stride)) = dense {
             for (i, slot) in out.iter_mut().enumerate() {
                 *slot = self.vec3_at(base + i * stride, &view, accessor)?;
             }
@@ -130,11 +171,12 @@ impl<'a> Document<'a> {
                     .and_then(Value::as_u64)
                     .ok_or_else(|| malformed("sparse values have no bufferView"))?,
             )?;
-            let base = view.offset
-                + values
-                    .get("byteOffset")
-                    .and_then(Value::as_u64)
-                    .unwrap_or(0) as usize;
+            let base = byte_offset(values, &view)?;
+            if !fits(base, targets.len(), 12, 12, &view) {
+                return Err(malformed(format!(
+                    "accessors[{accessor}] sparse values run past their bufferView"
+                )));
+            }
             for (i, target) in targets.into_iter().enumerate() {
                 let slot = out.get_mut(target as usize).ok_or_else(|| {
                     malformed(format!("accessors[{accessor}] sparse index out of range"))
@@ -170,9 +212,8 @@ impl<'a> Document<'a> {
                 .and_then(Value::as_u64)
                 .ok_or_else(|| malformed("indices have no bufferView"))?,
         )?;
-        let base =
-            view.offset + spec.get("byteOffset").and_then(Value::as_u64).unwrap_or(0) as usize;
-        if base + count * size > view.offset + view.length {
+        let base = byte_offset(spec, &view)?;
+        if !fits(base, count, size, size, &view) {
             return Err(malformed("indices run past their bufferView"));
         }
         Ok((0..count)
@@ -194,9 +235,8 @@ impl<'a> Document<'a> {
             .and_then(Value::as_u64)
             .ok_or_else(|| malformed(format!("accessors[{accessor}] has no bufferView")))?;
         let view = self.view(view)?;
-        let offset =
-            view.offset + acc.get("byteOffset").and_then(Value::as_u64).unwrap_or(0) as usize;
-        if offset + count * size > view.offset + view.length {
+        let offset = byte_offset(acc, &view)?;
+        if !fits(offset, count, size, size, &view) {
             return Err(malformed(format!(
                 "accessors[{accessor}] runs past its bufferView"
             )));
@@ -213,6 +253,109 @@ impl<'a> Document<'a> {
 pub(crate) struct IndexSlots {
     offset: usize,
     size: usize,
+}
+
+impl IndexSlots {
+    /// The bytes `count` indices occupy.
+    pub fn range(&self, count: usize) -> Range<usize> {
+        self.offset..self.offset + count * self.size
+    }
+}
+
+impl Document<'_> {
+    /// The binary-chunk byte range every accessor reads, its sparse indices
+    /// and values included, tagged with the accessor's index. An accessor
+    /// whose exact range cannot be worked out is given its whole bufferView,
+    /// so a byte it might read is never taken for unused.
+    pub fn accessor_ranges(&self) -> Vec<(u64, Range<usize>)> {
+        let mut ranges = Vec::new();
+        let accessors = self.json.get("accessors").and_then(Value::as_array);
+        for (a, acc) in accessors.into_iter().flatten().enumerate() {
+            let a = a as u64;
+            let count = acc.get("count").and_then(Value::as_u64).unwrap_or(0) as usize;
+            let element = element_size(acc);
+            let mut push = |spec: &Value, count: usize, element: Option<usize>| {
+                let Some(view) = spec
+                    .get("bufferView")
+                    .and_then(Value::as_u64)
+                    .and_then(|v| self.view(v).ok())
+                else {
+                    return;
+                };
+                let whole = view.offset..view.offset + view.length;
+                let exact = (|| {
+                    let element = element?;
+                    let start = byte_offset(spec, &view).ok()?;
+                    let stride = view.stride.unwrap_or(element);
+                    if count == 0 {
+                        return Some(start..start);
+                    }
+                    let end = (count - 1)
+                        .checked_mul(stride)?
+                        .checked_add(element)?
+                        .checked_add(start)?;
+                    Some(start..end)
+                })();
+                ranges.push((a, exact.unwrap_or(whole)));
+            };
+            push(acc, count, element);
+            if let Some(sparse) = acc.get("sparse") {
+                let n = sparse.get("count").and_then(Value::as_u64).unwrap_or(0) as usize;
+                if let Some(indices) = sparse.get("indices") {
+                    let size = uint_size(indices.get("componentType").and_then(Value::as_u64));
+                    push(indices, n, size.ok());
+                }
+                if let Some(values) = sparse.get("values") {
+                    push(values, n, element);
+                }
+            }
+        }
+        ranges
+    }
+}
+
+/// An accessor's (or sparse part's) `byteOffset` added to its bufferView's
+/// start, within the view.
+fn byte_offset(spec: &Value, view: &View) -> Result<usize, Unsupported> {
+    let offset = spec.get("byteOffset").and_then(Value::as_u64).unwrap_or(0) as usize;
+    view.offset
+        .checked_add(offset)
+        .filter(|&at| at <= view.offset + view.length)
+        .ok_or_else(|| malformed("a byteOffset lies past its bufferView"))
+}
+
+/// Whether `count` elements of `element` bytes, `stride` apart from
+/// `start`, end within `view`. Overflowing arithmetic means they do not.
+fn fits(start: usize, count: usize, stride: usize, element: usize, view: &View) -> bool {
+    if count == 0 {
+        return true;
+    }
+    (count - 1)
+        .checked_mul(stride)
+        .and_then(|span| span.checked_add(element))
+        .and_then(|span| span.checked_add(start))
+        .is_some_and(|end| end <= view.offset + view.length)
+}
+
+/// The byte size of one element of an accessor, from its component type
+/// and element type; `None` for a combination glTF does not define.
+fn element_size(acc: &Value) -> Option<usize> {
+    let component = match acc.get("componentType").and_then(Value::as_u64)? {
+        5120 | 5121 => 1,
+        5122 | 5123 => 2,
+        5125 | 5126 => 4,
+        _ => return None,
+    };
+    let width = match acc.get("type").and_then(Value::as_str)? {
+        "SCALAR" => 1,
+        "VEC2" => 2,
+        "VEC3" => 3,
+        "VEC4" | "MAT2" => 4,
+        "MAT3" => 9,
+        "MAT4" => 16,
+        _ => return None,
+    };
+    Some(component * width)
 }
 
 /// Writes index `value` into slot `i` of `slots`. The value must fit the

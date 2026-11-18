@@ -14,7 +14,7 @@ await init();
 const bytes = new Uint8Array(await file.arrayBuffer());
 const { bytes: optimized, report } = optimizeMorphTriangles(bytes);
 const glb = optimized ?? bytes; // null when the pass changed nothing
-for (const { part, folds } of stillFolding(report)) {
+for (const { part, folds } of stillFolding(report, 0.05)) {
   console.warn(part.meshName, folds.map((f) => f.shape));
 }
 ```
@@ -37,13 +37,15 @@ same outline that folds least across the rest shape and every morph target.
 Vertices and triangle counts are unchanged. It returns the rewritten file
 (`null` when nothing changed) and a report: for each part, whether it was
 `retriangulated`, `kept` (already least folded) or `skipped` (with the
-reason), and for each shape the share of its area drawn with reversed
-winding before and after.
+reason), and for each shape (the rest shape, each target, and each target
+halfway) the area drawn with reversed winding before and after, relative to
+the shape's own area.
 
 Some shapes still fold afterwards — an outline that crosses itself, or bends
 further than any triangulation of its vertices can follow.
-`stillFolding(report, threshold = 0.01)` lists them; those parts need
-remodelling. The crate README explains which parts the pass considers.
+`stillFolding(report, threshold)` lists the shapes still drawn with more
+reversed area than `threshold` (relative to the shape's own area); those
+parts need remodelling. The crate README explains which parts the pass considers.
 
 ## Development
 

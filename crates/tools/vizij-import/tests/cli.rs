@@ -76,3 +76,19 @@ fn a_pass_must_be_named() {
     assert_eq!(result.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&result.stderr).contains("no pass selected"));
 }
+
+#[test]
+fn output_is_written_even_when_nothing_changes() {
+    let path = scratch("unchanged-output");
+    let original = build(&[mouth(10)]).bytes;
+    std::fs::write(&path, &original).unwrap();
+    let p = path.to_str().unwrap();
+    assert_eq!(run(&["--morph-triangles", p]).status.code(), Some(0));
+    let optimized = std::fs::read(&path).unwrap();
+
+    let out = path.with_file_name("out.glb");
+    std::fs::write(&out, b"stale").unwrap();
+    let result = run(&["--morph-triangles", p, "-o", out.to_str().unwrap()]);
+    assert_eq!(result.status.code(), Some(0));
+    assert_eq!(std::fs::read(&out).unwrap(), optimized);
+}

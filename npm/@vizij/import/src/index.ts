@@ -88,9 +88,11 @@ function bindings(): WasmBindings {
 export type MorphTrianglesOutcome = "retriangulated" | "kept" | "skipped";
 
 /**
- * The share of one shape's area drawn with reversed winding, before and
- * after the pass; `null` for a shape with no area. `shape` is `rest` or the
- * morph target's name.
+ * The area one shape's triangles draw with reversed winding, before and
+ * after the pass, as a multiple of the shape's own area (above 1 when the
+ * wrongly drawn area exceeds the shape, as with a pupil squashed to a thin
+ * arc); `null` for a shape with no area. `shape` is `rest`, a morph
+ * target's name at full weight, or that name followed by ` (halfway)`.
  */
 export interface ShapeFold {
   shape: string;
@@ -143,13 +145,15 @@ export function optimizeMorphTriangles(glb: Uint8Array): MorphTrianglesResult {
 }
 
 /**
- * The shapes, per part, that still fold by more than `threshold` (a share
- * of the shape's area) after the pass: shapes no triangulation of the
- * part's vertices can follow, which need remodelling.
+ * The shapes, per part, still drawn with more reversed area than
+ * `threshold` (relative to the shape's own area) after the pass: shapes no
+ * triangulation of the part's vertices follows, which need remodelling.
+ * The caller chooses the threshold for its audience: what counts as worth
+ * reporting differs between a CI check and a notice for a face author.
  */
 export function stillFolding(
   report: MorphTrianglesReport,
-  threshold = 0.01,
+  threshold: number,
 ): Array<{ part: MorphTrianglesPart; folds: ShapeFold[] }> {
   return report.parts
     .map((part) => ({

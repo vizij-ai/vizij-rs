@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use vizij_import::morph_triangles::{Outcome as PartOutcome, Part};
+use vizij_import::morph_triangles::{Outcome as PartOutcome, Part, STILL_FOLDS};
 use vizij_import::optimize_morph_triangles;
 
 const USAGE: &str = "\
@@ -34,11 +34,6 @@ Exit status: 0 success, 1 --check found files that would change, 2 error.
 /// A shape is listed when its reversed area, before or after, exceeds this
 /// fraction of its area; below it the difference is not visible.
 const LISTED: f64 = 0.001;
-
-/// A shape that still has more than this fraction reversed after the pass
-/// is flagged: no triangulation of its vertices follows its outline, so the
-/// part needs remodelling.
-const STILL_FOLDS: f64 = 0.01;
 
 struct Options {
     inputs: Vec<PathBuf>,
@@ -177,7 +172,16 @@ fn process_file(path: &Path, options: &Options) -> Result<Outcome, String> {
         print_part(path, part);
     }
     let Some(out_bytes) = optimized.bytes else {
-        println!("{}: unchanged", path.display());
+        // --output names where the result goes, so it is written even when
+        // the result is the input: a stale file left there would read as
+        // this run's output.
+        if let (Some(output), false) = (&options.output, options.dry_run || options.check) {
+            std::fs::write(output, &bytes)
+                .map_err(|e| format!("write {}: {e}", output.display()))?;
+            println!("{}: unchanged -> {}", path.display(), output.display());
+        } else {
+            println!("{}: unchanged", path.display());
+        }
         return Ok(Outcome::Unchanged);
     };
     if options.dry_run || options.check {

@@ -123,7 +123,8 @@ mod tests {
                 },
                 {
                     "mesh": 3, "meshName": null, "primitive": 1, "vertices": 64,
-                    "outcome": "skipped", "skipReason": "has vertices inside its outline",
+                    "outcome": "skipped",
+                    "skipReason": "is not a single polygon (vertices inside its outline, a hole, or several outlines)",
                     "folds": []
                 }
             ]})

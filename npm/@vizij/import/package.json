@@ -1,6 +1,7 @@
 {
   "name": "@vizij/import",
   "version": "0.1.0",
+  "private": false,
   "description": "Optional import-time passes over a face's GLB, compiled to WebAssembly.",
   "license": "Apache-2.0",
   "repository": {
@@ -43,5 +44,9 @@
   "devDependencies": {
     "typescript": "^6.0.3",
     "@types/node": "^24.19.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

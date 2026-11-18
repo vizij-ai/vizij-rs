@@ -51,7 +51,7 @@ test("stillFolding keeps only shapes above the threshold", () => {
       { shape: "rest", before: null, after: null },
     ],
   };
-  assert.deepEqual(stillFolding({ parts: [part] }), [
+  assert.deepEqual(stillFolding({ parts: [part] }, 0.01), [
     { part, folds: [part.folds[0]] },
   ]);
 });

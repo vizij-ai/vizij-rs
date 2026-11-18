@@ -13,7 +13,9 @@
 //! whose vertices all lie on one boundary loop) and replaces its triangles
 //! with the triangulation of the same loop that folds least, summed over
 //! the rest shape, each morph target at full weight, and each target at
-//! half weight (a stand-in for the shapes an animation passes through). It
+//! half weight. The halfway shapes stand in for the shapes an animation
+//! passes through; they are samples, not a guarantee: a triangle can stay
+//! unfolded at 0, ½ and 1 and still fold at a weight in between. It
 //! searches every triangulation of the loop with the standard O(n³)
 //! dynamic programme for polygon triangulation.
 //!
@@ -48,9 +50,16 @@ const DEGENERATE_AREA: f64 = 1e-3;
 /// its triangles and a second run changes nothing.
 const IMPROVEMENT: f64 = 1e-6;
 
-/// Loops with more vertices than this are left alone: the search grows
-/// with the cube of the vertex count.
-const MAX_LOOP_VERTICES: usize = 512;
+/// Loops with more vertices than this are left alone. The search grows
+/// with the cube of the vertex count times the number of shapes, and it runs
+/// synchronously (in the browser, on the main thread): at this size and
+/// thirty shapes it is about a hundred million triangle evaluations.
+const MAX_LOOP_VERTICES: usize = 256;
+
+/// A shape that still has more than this much reversed area after the
+/// pass, relative to its own area, is one no triangulation of its vertices
+/// follows: the part needs remodelling there.
+pub const STILL_FOLDS: f64 = 0.01;
 
 /// What [`crate::optimize_morph_triangles`] did with every polygon it considered.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -103,15 +112,18 @@ pub enum Skip {
     NotIndexed,
     /// Its geometry is Draco-compressed.
     Compressed,
-    /// Its index data is shared with another primitive, which rewriting
-    /// would change too.
+    /// Its index bytes are also read by another accessor or primitive,
+    /// which rewriting them would change too.
     SharedIndices,
-    /// The piece has vertices inside its outline, or is not one disk; its
-    /// triangles were authored deliberately (a grid, a ring of quads).
+    /// The piece is not a single polygon: it has vertices inside its
+    /// outline, a hole, or more than one outline. Its triangles were authored
+    /// deliberately (a grid, a ring) or cannot be re-chosen from an outline.
     NotAPolygon,
-    /// The loop has more than 512 vertices; the search grows with the cube
-    /// of the vertex count.
+    /// The outline has more vertices than the search takes.
     TooManyVertices,
+    /// No shape of the piece has any area, so every triangulation draws the
+    /// same nothing.
+    NoArea,
     /// The data could not be read.
     Unreadable(String),
 }
@@ -122,8 +134,13 @@ impl fmt::Display for Skip {
             Skip::NotTriangles => f.write_str("not a triangle list"),
             Skip::NotIndexed => f.write_str("has no index data"),
             Skip::Compressed => f.write_str("is Draco-compressed"),
-            Skip::SharedIndices => f.write_str("shares its index data with another primitive"),
-            Skip::NotAPolygon => f.write_str("has vertices inside its outline"),
+            Skip::SharedIndices => {
+                f.write_str("shares its index data with other mesh data")
+            }
+            Skip::NotAPolygon => f.write_str(
+                "is not a single polygon (vertices inside its outline, a hole, or several outlines)",
+            ),
+            Skip::NoArea => f.write_str("has no area in any shape"),
             Skip::TooManyVertices => {
                 write!(f, "has more than {MAX_LOOP_VERTICES} outline vertices")
             }
@@ -132,11 +149,14 @@ impl fmt::Display for Skip {
     }
 }
 
-/// How much of one shape's area is covered with reversed winding, before
-/// and after. `None` when the shape has no area to speak of.
+/// The area one shape's triangles cover with reversed winding, before and
+/// after, as a multiple of the shape's own area. It exceeds 1 when the
+/// wrongly drawn area is larger than the shape itself, as with a pupil
+/// squashed to a thin arc. `None` when the shape has no area to speak of.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShapeFold {
-    /// `rest`, or the morph target's name (`target N` without one).
+    /// `rest`; a morph target's name (`target N` without one) at full
+    /// weight; or that name followed by ` (halfway)` at half weight.
     pub shape: String,
     pub before: Option<f64>,
     pub after: Option<f64>,
@@ -158,6 +178,7 @@ impl From<Unsupported> for Skip {
 pub(crate) fn optimize(json: &Value, bin: &mut [u8]) -> Report {
     let mut report = Report::default();
     let index_users = index_accessor_users(json);
+    let accessor_ranges = Document { json, bin: &*bin }.accessor_ranges();
     let meshes = json.get("meshes").and_then(Value::as_array);
     for (m, mesh) in meshes.into_iter().flatten().enumerate() {
         let mesh_name = mesh.get("name").and_then(Value::as_str).map(str::to_owned);
@@ -189,14 +210,19 @@ pub(crate) fn optimize(json: &Value, bin: &mut [u8]) -> Report {
                 folds: Vec::new(),
             };
             let doc = Document { json, bin: &*bin };
-            let (parts, writes) =
-                match primitive_parts(&doc, primitive, &target_names, &index_users) {
-                    Ok(found) => found,
-                    Err((vertices, why)) => {
-                        report.parts.push(skipped(vertices, why));
-                        continue;
-                    }
-                };
+            let (parts, writes) = match primitive_parts(
+                &doc,
+                primitive,
+                &target_names,
+                &index_users,
+                &accessor_ranges,
+            ) {
+                Ok(found) => found,
+                Err((vertices, why)) => {
+                    report.parts.push(skipped(vertices, why));
+                    continue;
+                }
+            };
             for (slots, i, value) in writes {
                 write_index(bin, slots, i, value);
             }
@@ -243,6 +269,7 @@ fn primitive_parts(
     primitive: &Value,
     target_names: &[String],
     index_users: &HashMap<u64, usize>,
+    accessor_ranges: &[(u64, std::ops::Range<usize>)],
 ) -> Result<(Vec<Part>, Vec<Write>), (usize, Skip)> {
     let position = primitive
         .pointer("/attributes/POSITION")
@@ -266,8 +293,17 @@ fn primitive_parts(
     if index_users.get(&indices).copied().unwrap_or(0) > 1 {
         return Err(fail(Skip::SharedIndices));
     }
-    let base = doc.read_vec3(position).map_err(|u| fail(u.into()))?;
+    let base = doc.read_vec3(position, None).map_err(|u| fail(u.into()))?;
     let (index_values, slots) = doc.read_indices(indices).map_err(|u| fail(u.into()))?;
+    // Another accessor reading the same bytes (an aliasing copy of this
+    // one, or data packed over it) would change with every rewrite.
+    let written = slots.range(index_values.len());
+    if accessor_ranges
+        .iter()
+        .any(|(a, r)| *a != indices && r.start < written.end && written.start < r.end)
+    {
+        return Err(fail(Skip::SharedIndices));
+    }
     if !index_values.len().is_multiple_of(3)
         || index_values.iter().any(|&i| i as usize >= base.len())
     {
@@ -291,7 +327,9 @@ fn primitive_parts(
             .cloned()
             .unwrap_or_else(|| format!("target {t}"));
         let deltas = match target.get("POSITION").and_then(Value::as_u64) {
-            Some(acc) => doc.read_vec3(acc).map_err(|u| fail(u.into()))?,
+            Some(acc) => doc
+                .read_vec3(acc, Some(base.len()))
+                .map_err(|u| fail(u.into()))?,
             None => vec![[0.0; 3]; base.len()],
         };
         if deltas.len() != base.len() {
@@ -305,10 +343,18 @@ fn primitive_parts(
                 .map(|(b, d)| std::array::from_fn(|k| b[k] as f64 + w * d[k] as f64))
                 .collect()
         };
+        halves.push((Some(format!("{name} (halfway)")), at(0.5)));
         shapes.push((Some(name), at(1.0)));
-        halves.push((None, at(0.5)));
     }
     shapes.extend(halves);
+    if shapes
+        .iter()
+        .any(|(_, points)| points.iter().flatten().any(|c| !c.is_finite()))
+    {
+        return Err(fail(Skip::Unreadable(
+            "positions or morph deltas are not finite".into(),
+        )));
+    }
 
     let triangles: Vec<[u32; 3]> = index_values
         .chunks_exact(3)
@@ -337,6 +383,10 @@ fn primitive_parts(
             continue;
         }
         let measured = measure(&shapes, &outline);
+        if measured.largest <= 0.0 {
+            parts.push(part(Outcome::Skipped(Skip::NoArea), Vec::new()));
+            continue;
+        }
         let current: Vec<[u32; 3]> = piece.triangles.iter().map(|&t| triangles[t]).collect();
         let before = measured.fold_per_shape(&current);
         let chosen = measured.best_triangulation(&outline);
@@ -545,8 +595,8 @@ fn measure(shapes: &[(Option<String>, Vec<[f64; 3]>)], outline: &[u32]) -> Measu
 }
 
 impl Measured {
-    /// The reversed area of triangle `(i, j, k)` (outline positions, in
-    /// winding order) in one shape, as a fraction of the shape's area.
+    /// The area triangle `(i, j, k)` (outline positions, in winding order)
+    /// covers with reversed winding in one shape.
     fn reversed(shape: &Shape, i: usize, j: usize, k: usize) -> f64 {
         let (a, b, c) = (shape.points[i], shape.points[j], shape.points[k]);
         let signed = dot(cross(sub(b, a), sub(c, a)), shape.normal) / 2.0;
@@ -612,6 +662,9 @@ impl Measured {
             for i in 0..n - len {
                 let j = i + len;
                 let mut least = f64::INFINITY;
+                // A valid apex from the start, so the rebuild below always
+                // terminates whatever the costs compare as.
+                apex[i * n + j] = (i + 1) as u32;
                 for k in i + 1..j {
                     let c = best[i * n + k] + best[k * n + j] + cost(i, k, j);
                     if c < least {

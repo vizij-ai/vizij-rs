@@ -30,22 +30,28 @@ data changes. A file the pass has already been through is left untouched.
 
 Left alone, and reported:
 
-- pieces with vertices inside their outline (grids, rings of quads): their
-  triangles were authored deliberately;
+- pieces that are not a single polygon — vertices inside their outline
+  (a grid), a hole (a ring), or several outlines: their triangles were
+  authored deliberately or cannot be re-chosen from one outline;
+- pieces with no area in any shape;
 - primitives without index data, other than triangle lists, Draco-compressed,
-  sharing their index data with another primitive, or with quantized
-  positions;
-- outlines longer than 512 vertices.
+  with quantized or non-finite positions, or whose index bytes another
+  accessor or primitive also reads (a rewrite would change that data too);
+- outlines with more vertices than the search takes (the report names the
+  limit): the search grows with the cube of the vertex count and runs
+  synchronously.
 
 Some shapes still fold after the pass: an outline that crosses itself, or
 that bends further than any triangulation of its vertices can follow (a
-lip curling into a hook with few vertices along it). The report flags every
-shape still folding by more than 1% so the part can be remodelled — more
+lip curling into a hook with few vertices along it). The report flags those
+shapes (`morph_triangles::STILL_FOLDS`) so the part can be remodelled — more
 vertices along the bend, or upper and lower edges whose vertices pair up in
 every shape.
 
-Morph targets are checked at weights between 0 and 1; combinations of
-targets that a face's poses blend are not checked one by one.
+Each morph target is checked at full and at half weight. Those are samples:
+a triangle can stay unfolded at 0, ½ and 1 and still fold at a weight in
+between. Combinations of targets that a face's poses blend are not checked
+one by one.
 
 ## Usage
 
@@ -59,8 +65,11 @@ vizij-import --morph-triangles --check a.glb b.glb   # like --dry-run, exit 1 if
 At least one pass must be named. Exit status: `0` success (including
 nothing to do), `1` `--check` found files that would change, `2` error.
 
-The report lists each part the pass changed, skipped, or that still folds,
-with the share of each shape's area drawn reversed before and after:
+The report lists each part the pass changed, skipped, or that still folds.
+For each shape — the rest shape, each target, and each target halfway — it
+gives the area drawn with reversed winding before and after, relative to
+that shape's own area. It exceeds 100% when the wrongly drawn area is larger
+than the shape itself, as with a pupil squashed to a thin arc:
 
 ```
 face.glb: mouth (primitive 0, 65 vertices): retriangulated
