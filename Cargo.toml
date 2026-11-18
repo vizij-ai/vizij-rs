@@ -16,6 +16,7 @@ members = [
   "crates/interop/vizij-piper",
   "crates/tools/vizij-bundle",
   "crates/tools/vizij-glb-migrate",
+  "crates/tools/vizij-import",
   "crates/vizij",
   "crates/vizij-wasm",
 ]
