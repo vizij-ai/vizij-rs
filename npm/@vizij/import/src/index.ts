@@ -15,7 +15,7 @@ import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/brow
 const EXPECTED_ABI = 1;
 
 interface WasmResult {
-  readonly bytes: Uint8Array | undefined;
+  readonly bytes: Uint8Array<ArrayBuffer> | undefined;
   readonly reportJson: string;
   free(): void;
 }
@@ -115,8 +115,12 @@ export interface MorphTrianglesReport {
 }
 
 export interface MorphTrianglesResult {
-  /** The rewritten GLB, or `null` when the pass changed nothing. */
-  bytes: Uint8Array | null;
+  /**
+   * The rewritten GLB, or `null` when the pass changed nothing. A fresh
+   * copy backed by its own `ArrayBuffer`, so it can go straight into a
+   * `Blob` or `File`.
+   */
+  bytes: Uint8Array<ArrayBuffer> | null;
   report: MorphTrianglesReport;
 }
 
