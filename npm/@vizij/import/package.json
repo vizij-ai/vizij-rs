@@ -1,0 +1,47 @@
+{
+  "name": "@vizij/import",
+  "version": "0.1.0",
+  "description": "Optional import-time passes over a face's GLB, compiled to WebAssembly.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vizij-ai/vizij-rs"
+  },
+  "homepage": "https://github.com/vizij-ai/vizij-rs",
+  "keywords": [
+    "vizij",
+    "glb",
+    "morph-targets",
+    "wasm"
+  ],
+  "type": "module",
+  "main": "dist/import/src/index.js",
+  "module": "dist/import/src/index.js",
+  "types": "dist/import/src/index.d.ts",
+  "files": [
+    "dist/",
+    "pkg/",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/import/src/index.js",
+      "types": "./dist/import/src/index.d.ts"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node ../../../scripts/copy-wasm-pkg.mjs import",
+    "test": "pnpm run build && node --test dist/import/tests/*.test.js",
+    "clean": "rm -rf dist",
+    "prepack": "pnpm run build",
+    "prepublishOnly": "node -e \"const fs=require('fs');if(!fs.existsSync('pkg')){console.error('Missing pkg/. Run pnpm run build:wasm:import.');process.exit(1);}\""
+  },
+  "dependencies": {
+    "@vizij/wasm-loader": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "@types/node": "^24.19.2"
+  }
+}

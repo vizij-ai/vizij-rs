@@ -17,6 +17,7 @@ members = [
   "crates/tools/vizij-bundle",
   "crates/tools/vizij-glb-migrate",
   "crates/tools/vizij-import",
+  "crates/tools/vizij-import-wasm",
   "crates/vizij",
   "crates/vizij-wasm",
 ]

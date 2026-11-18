@@ -11344,6 +11344,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "vizij-import-wasm"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "vizij-import",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "vizij-piper"
 version = "0.0.0"
 dependencies = [

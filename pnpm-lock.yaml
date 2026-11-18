@@ -21,6 +21,19 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  npm/@vizij/import:
+    dependencies:
+      '@vizij/wasm-loader':
+        specifier: workspace:*
+        version: link:../wasm-loader
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   npm/@vizij/node-graph:
     dependencies:
       '@vizij/value-json':
