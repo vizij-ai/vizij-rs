@@ -8,6 +8,8 @@ use serde_json::json;
 use vizij_import::morph_triangles::{Outcome, ShapeKind, Skip};
 use vizij_import::{optimize_morph_triangles, Mode};
 
+type Edit = fn(&mut serde_json::Value);
+
 fn only_outcome(bytes: &[u8]) -> Outcome {
     let optimized = optimize_morph_triangles(bytes, Mode::Safe).expect("the file parses");
     assert_eq!(optimized.report.parts.len(), 1, "{:?}", optimized.report);
@@ -96,7 +98,6 @@ fn a_target_count_unlike_the_mesh_is_reported() {
 #[test]
 fn primitives_the_pass_cannot_rewrite_are_left_alone() {
     let bytes = build(&[mouth(6)]).bytes;
-    type Edit = fn(&mut serde_json::Value);
     let cases: [(Edit, Skip); 3] = [
         (
             |doc| {
@@ -485,4 +486,154 @@ fn every_checked_shape_is_reported_with_its_kind() {
             ("a + b (halfway)", ShapeKind::BlendHalfway),
         ]
     );
+}
+
+/// The square with its corners moved to `points`.
+fn square_target(points: [[f32; 2]; 4]) -> Vec<[f32; 3]> {
+    flat(&points)
+}
+
+#[test]
+fn safe_mode_protects_a_shape_whose_outline_cancels_out() {
+    // "twist" swaps two corners: a bowtie whose two loops cancel, so it has
+    // no net area, yet it still draws triangles a rewrite can make worse.
+    let spec = square("quad")
+        .target(
+            "twist",
+            square_target([[0., 0.], [1., 0.], [0., 1.], [1., 1.]]),
+        )
+        .target(
+            "t",
+            square_target([[0.93, -0.06], [-1.2, -0.33], [-0.24, -1.34], [0.6, -0.01]]),
+        );
+    let bytes = build(&[spec]).bytes;
+    assert!(optimize_morph_triangles(&bytes, Mode::Overall)
+        .unwrap()
+        .bytes
+        .is_some());
+    let safe = optimize_morph_triangles(&bytes, Mode::Safe).unwrap();
+    assert!(safe.bytes.is_none());
+    let twist = safe.report.parts[0]
+        .folds
+        .iter()
+        .find(|f| f.shape == "twist")
+        .unwrap();
+    assert_eq!((twist.before, twist.after), (None, None));
+}
+
+#[test]
+fn safe_mode_tolerates_a_worsening_too_small_to_see() {
+    let spec = square("quad").target(
+        "t",
+        square_target([[0.93, -1.48], [0.8, -0.42], [-1.45, -0.75], [-0.13, -0.35]]),
+    );
+    let bytes = build(&[spec]).bytes;
+    let safe = optimize_morph_triangles(&bytes, Mode::Safe).unwrap();
+    assert_eq!(safe.report.parts[0].outcome, Outcome::Retriangulated);
+}
+
+#[test]
+fn the_default_pose_is_the_rest_shape_plus_the_default_weights() {
+    // With the target at half weight by default, the default pose is the
+    // halfway shape, and folds exactly as much.
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        doc["meshes"][0]["weights"] = json!([0.5]);
+    });
+    let optimized = optimize_morph_triangles(&bytes, Mode::Safe).unwrap();
+    let fold = |name: &str| {
+        optimized.report.parts[0]
+            .folds
+            .iter()
+            .find(|f| f.shape == name)
+            .unwrap()
+            .clone()
+    };
+    let default = fold("default pose");
+    let halfway = fold("smile_shape (halfway)");
+    assert_eq!(
+        (default.before, default.after),
+        (halfway.before, halfway.after)
+    );
+}
+
+#[test]
+fn a_part_with_too_many_shapes_to_check_is_left_alone() {
+    // 256 outline vertices and ten targets: every pair of targets at two
+    // weights takes the search past its budget.
+    let n = 256;
+    let at = |i: usize| (i as f32) * std::f32::consts::TAU / n as f32;
+    let circle: Vec<[f32; 3]> = (0..n).map(|i| [at(i).cos(), at(i).sin(), 0.0]).collect();
+    let mut spec = MeshSpec::new("big", circle.clone(), fan(n as u32));
+    for t in 0..10 {
+        let names = ["t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9"];
+        let squashed = circle
+            .iter()
+            .map(|p| [p[0], (0.1 + 0.05 * t as f32) * p[1], 0.0])
+            .collect();
+        spec = spec.target(names[t], squashed);
+    }
+    assert_eq!(skip_reason(&build(&[spec]).bytes), Skip::TooManyShapes);
+}
+
+#[test]
+fn an_index_count_that_is_not_whole_triangles_is_reported() {
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        doc["accessors"][1]["count"] = json!(7);
+    });
+    assert!(unreadable(&bytes).contains("do not form triangles"));
+}
+
+#[test]
+fn index_bytes_another_accessors_sparse_values_read_are_left_alone() {
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        doc["accessors"].as_array_mut().unwrap().push(json!({
+            "componentType": 5126, "count": 12, "type": "VEC3",
+            "sparse": {
+                "count": 1,
+                "indices": { "bufferView": 0, "componentType": 5125 },
+                "values": { "bufferView": 1 }
+            }
+        }));
+    });
+    assert_eq!(skip_reason(&bytes), Skip::SharedIndices);
+}
+
+#[test]
+fn an_index_accessor_used_anywhere_else_is_left_alone() {
+    let bytes = build(&[mouth(6)]).bytes;
+    let uses: [(&str, Edit); 4] = [
+        ("skin", |doc| {
+            doc["skins"] = json!([{ "joints": [0], "inverseBindMatrices": 1 }])
+        }),
+        ("animation input", |doc| {
+            doc["animations"] = json!([{
+                "channels": [],
+                "samplers": [{ "input": 1, "output": 0 }]
+            }])
+        }),
+        ("animation output", |doc| {
+            doc["animations"] = json!([{
+                "channels": [],
+                "samplers": [{ "input": 0, "output": 1 }]
+            }])
+        }),
+        ("morph target", |doc| {
+            doc["meshes"][0]["primitives"][0]["targets"][0]["NORMAL"] = json!(1)
+        }),
+    ];
+    for (name, edit) in uses {
+        assert_eq!(
+            skip_reason(&with_json(&bytes, edit)),
+            Skip::SharedIndices,
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn a_stride_shorter_than_a_position_is_reported() {
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        doc["bufferViews"][0]["byteStride"] = json!(8);
+    });
+    assert!(unreadable(&bytes).contains("byteStride"));
 }

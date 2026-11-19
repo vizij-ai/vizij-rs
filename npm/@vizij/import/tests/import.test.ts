@@ -82,7 +82,10 @@ test("a file whose triangles fold comes back rewritten, with a report", async ()
   const result = optimizeMorphTriangles(input, "safe");
   assert.ok(result.bytes, "the pass rewrites the folding fan");
   assert.equal(result.bytes.length, input.length);
+  // A fresh copy owns its whole buffer; a view into wasm memory would not.
   assert.ok(result.bytes.buffer instanceof ArrayBuffer);
+  assert.equal(result.bytes.byteOffset, 0);
+  assert.equal(result.bytes.buffer.byteLength, result.bytes.length);
   assert.notDeepEqual(result.bytes, input);
   assert.equal(result.report.parts[0].meshName, "quad");
   assert.equal(result.report.parts[0].outcome, "retriangulated");

@@ -12,10 +12,12 @@
 //! This pass finds each such polygon (a connected piece of a morphed mesh
 //! whose vertices all lie on one boundary loop) and replaces its triangles
 //! with the triangulation of the same loop that folds least, summed over
-//! the rest shape, each morph target at full weight, and each target at
-//! half weight. The halfway shapes stand in for the shapes an animation
-//! passes through; they are samples, not a guarantee: a triangle can stay
-//! unfolded at 0, ½ and 1 and still fold at a weight in between. It
+//! the rest shape, each target and each pair of targets at full and at half
+//! weight, and the mesh's default pose. These are samples of the shapes an
+//! animation passes through, not a guarantee: a triangle can stay unfolded
+//! at the sampled weights and still fold at one in between, or in a blend
+//! of three targets. [`Mode`] sets whether a rewrite may make any one
+//! checked shape worse. It
 //! searches every triangulation of the loop with the standard O(n³)
 //! dynamic programme for polygon triangulation.
 //!
@@ -28,10 +30,13 @@
 //! remainder bounds the overdraw.
 //!
 //! Vertices are never added, moved or reordered, and a polygon keeps its
-//! triangle count, so only the index data changes. A shape whose outline
-//! crosses itself, or that bends further than any triangulation of its
-//! vertices can follow, still folds afterwards; the report names those
-//! shapes so the part can be remodelled.
+//! triangle count, so only the index data changes. A shape that bends
+//! further than any triangulation of its vertices can follow still folds
+//! afterwards, and the report gives its fold so the part can be remodelled.
+//! A shape with almost no net area — collapsed to a line, or an outline
+//! that crosses itself so its loops cancel — is still checked, measured
+//! against the part's main facing direction, but the report gives it no
+//! fold, having no area of its own to give it relative to.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -80,8 +85,8 @@ pub const STILL_FOLDS: f64 = 0.01;
 pub enum Mode {
     /// Rewrite a part only when no checked shape — rest, each target at
     /// full and half weight, every pair of targets at full and half weight,
-    /// the default pose — comes out visibly worse. Fixes less; harms
-    /// nothing it checks.
+    /// the default pose — comes out visibly worse: no shape may gain more
+    /// wrongly drawn area than 1% of the part's largest shape. Fixes less.
     #[default]
     Safe,
     /// Rewrite a part whenever the checked shapes improve overall, even if
@@ -398,82 +403,83 @@ fn primitive_parts(
     }
     // Rest first; then each target at full weight, at half weight; every
     // pair of targets at full and at half weight; and the default pose.
-    let mut shapes: Vec<(String, ShapeKind, Vec<[f64; 3]>)> =
-        vec![("rest".into(), ShapeKind::Rest, widen(&base))];
-    let mut targets_read: Vec<(String, Vec<[f32; 3]>)> = Vec::new();
-    let mut default_pose = widen(&base);
-    let mut has_default_pose = false;
+    // Each shape is a recipe of weighted targets, worked out only for the
+    // outline of each part as it is measured: the pairs grow with the
+    // square of the target count, and a full copy of the primitive's
+    // vertices for each would outgrow memory on a large face.
+    let mut deltas: Vec<Vec<[f32; 3]>> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
+    let mut default_terms: Vec<(usize, f64)> = Vec::new();
     let targets = primitive
         .get("targets")
         .and_then(Value::as_array)
         .into_iter()
         .flatten();
     for (t, target) in targets.enumerate() {
-        let name = target_names
-            .get(t)
-            .filter(|n| !n.is_empty())
-            .cloned()
-            .unwrap_or_else(|| format!("target {t}"));
-        let deltas = match target.get("POSITION").and_then(Value::as_u64) {
+        names.push(
+            target_names
+                .get(t)
+                .filter(|n| !n.is_empty())
+                .cloned()
+                .unwrap_or_else(|| format!("target {t}")),
+        );
+        deltas.push(match target.get("POSITION").and_then(Value::as_u64) {
             Some(acc) => doc
                 .read_vec3(acc, Some(base.len()))
                 .map_err(|u| fail(u.into()))?,
             None => vec![[0.0; 3]; base.len()],
-        };
+        });
         let weight = default_weights
             .and_then(|w| w.get(t))
             .and_then(Value::as_f64)
             .unwrap_or(0.0);
         if weight != 0.0 {
-            has_default_pose = true;
-            for (point, delta) in default_pose.iter_mut().zip(&deltas) {
-                for k in 0..3 {
-                    point[k] += weight * delta[k] as f64;
-                }
-            }
-        }
-        targets_read.push((name, deltas));
-    }
-    let blend = |parts: &[&Vec<[f32; 3]>], w: f64| -> Vec<[f64; 3]> {
-        (0..base.len())
-            .map(|v| {
-                std::array::from_fn(|k| {
-                    base[v][k] as f64 + parts.iter().map(|d| w * d[v][k] as f64).sum::<f64>()
-                })
-            })
-            .collect()
-    };
-    for (name, deltas) in &targets_read {
-        shapes.push((name.clone(), ShapeKind::Target, blend(&[deltas], 1.0)));
-    }
-    for (name, deltas) in &targets_read {
-        shapes.push((
-            format!("{name} (halfway)"),
-            ShapeKind::TargetHalfway,
-            blend(&[deltas], 0.5),
-        ));
-    }
-    for (a, (first, da)) in targets_read.iter().enumerate() {
-        for (second, db) in &targets_read[a + 1..] {
-            let pair = format!("{first} + {second}");
-            shapes.push((pair.clone(), ShapeKind::Blend, blend(&[da, db], 1.0)));
-            shapes.push((
-                format!("{pair} (halfway)"),
-                ShapeKind::BlendHalfway,
-                blend(&[da, db], 0.5),
-            ));
+            default_terms.push((t, weight));
         }
     }
-    if has_default_pose {
-        shapes.push(("default pose".into(), ShapeKind::DefaultPose, default_pose));
-    }
-    if shapes
+    if base
         .iter()
-        .any(|(_, _, points)| points.iter().flatten().any(|c| !c.is_finite()))
+        .chain(deltas.iter().flatten())
+        .flatten()
+        .any(|c| !c.is_finite())
+        || default_terms.iter().any(|(_, w)| !w.is_finite())
     {
         return Err(fail(Skip::Unreadable(
             "positions or morph deltas are not finite".into(),
         )));
+    }
+    let mut shapes = vec![Recipe::new("rest".into(), ShapeKind::Rest, vec![])];
+    for (t, name) in names.iter().enumerate() {
+        shapes.push(Recipe::new(name.clone(), ShapeKind::Target, vec![(t, 1.0)]));
+    }
+    for (t, name) in names.iter().enumerate() {
+        shapes.push(Recipe::new(
+            format!("{name} (halfway)"),
+            ShapeKind::TargetHalfway,
+            vec![(t, 0.5)],
+        ));
+    }
+    for (a, first) in names.iter().enumerate() {
+        for (b, second) in names.iter().enumerate().skip(a + 1) {
+            let pair = format!("{first} + {second}");
+            shapes.push(Recipe::new(
+                pair.clone(),
+                ShapeKind::Blend,
+                vec![(a, 1.0), (b, 1.0)],
+            ));
+            shapes.push(Recipe::new(
+                format!("{pair} (halfway)"),
+                ShapeKind::BlendHalfway,
+                vec![(a, 0.5), (b, 0.5)],
+            ));
+        }
+    }
+    if !default_terms.is_empty() {
+        shapes.push(Recipe::new(
+            "default pose".into(),
+            ShapeKind::DefaultPose,
+            default_terms,
+        ));
     }
 
     let triangles: Vec<[u32; 3]> = index_values
@@ -507,7 +513,7 @@ fn primitive_parts(
             parts.push(part(Outcome::Skipped(Skip::TooManyShapes), Vec::new()));
             continue;
         }
-        let measured = measure(&shapes, &outline);
+        let measured = measure(&shapes, &base, &deltas, &outline);
         if measured.largest <= 0.0 {
             parts.push(part(Outcome::Skipped(Skip::NoArea), Vec::new()));
             continue;
@@ -523,9 +529,9 @@ fn primitive_parts(
         let folds = shapes
             .iter()
             .zip(before.iter().zip(&after))
-            .map(|((name, kind, _), (b, a))| ShapeFold {
-                shape: name.clone(),
-                kind: *kind,
+            .map(|(recipe, (b, a))| ShapeFold {
+                shape: recipe.name.clone(),
+                kind: recipe.kind,
                 before: *b,
                 after: if improved { *a } else { *b },
             })
@@ -542,13 +548,6 @@ fn primitive_parts(
         }
     }
     Ok((parts, writes))
-}
-
-fn widen(points: &[[f32; 3]]) -> Vec<[f64; 3]> {
-    points
-        .iter()
-        .map(|p| [p[0] as f64, p[1] as f64, p[2] as f64])
-        .collect()
 }
 
 /// A connected set of triangles, by triangle index.
@@ -628,9 +627,6 @@ fn outline(triangles: &[[u32; 3]], piece: &Piece) -> Option<Vec<u32>> {
             }
         }
     }
-    if next.len() != piece.vertices {
-        return None;
-    }
     let start = *next.keys().min().expect("non-empty");
     let mut outline = vec![start];
     let mut v = next[&start];
@@ -644,10 +640,36 @@ fn outline(triangles: &[[u32; 3]], piece: &Piece) -> Option<Vec<u32>> {
     (outline.len() == piece.vertices).then_some(outline)
 }
 
-/// Each shape's outline points, in outline order, with its unit normal and
-/// area; `None` for a shape with no area to speak of.
+/// A shape the pass checks: the rest shape plus each target scaled by its
+/// weight.
+struct Recipe {
+    name: String,
+    kind: ShapeKind,
+    terms: Vec<(usize, f64)>,
+}
+
+impl Recipe {
+    fn new(name: String, kind: ShapeKind, terms: Vec<(usize, f64)>) -> Self {
+        Recipe { name, kind, terms }
+    }
+
+    /// This shape's position of `vertex`.
+    fn at(&self, base: &[[f32; 3]], deltas: &[Vec<[f32; 3]>], vertex: usize) -> [f64; 3] {
+        std::array::from_fn(|k| {
+            base[vertex][k] as f64
+                + self
+                    .terms
+                    .iter()
+                    .map(|&(t, w)| w * deltas[t][vertex][k] as f64)
+                    .sum::<f64>()
+        })
+    }
+}
+
+/// Each shape's outline points, in outline order, with the normal its
+/// winding is measured against and its area.
 struct Measured {
-    shapes: Vec<Option<Shape>>,
+    shapes: Vec<Shape>,
     /// The part's largest shape area. The search weighs reversed area
     /// against it rather than against each shape's own area, so it trades
     /// shapes off by the overdraw a viewer sees: a sliver-thin shape (a
@@ -661,6 +683,11 @@ struct Shape {
     points: Vec<[f64; 3]>,
     normal: [f64; 3],
     area: f64,
+    /// The shape has almost no net area: its outline collapsed to a line, or
+    /// crosses itself so that its loops cancel. Its own normal is noise, so
+    /// it is measured against the part's largest shape's normal instead,
+    /// and it has no fold to report relative to its own area.
+    degenerate: bool,
 }
 
 fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
@@ -679,11 +706,19 @@ fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-fn measure(shapes: &[(String, ShapeKind, Vec<[f64; 3]>)], outline: &[u32]) -> Measured {
-    let mut measured: Vec<Option<Shape>> = shapes
+fn measure(
+    shapes: &[Recipe],
+    base: &[[f32; 3]],
+    deltas: &[Vec<[f32; 3]>],
+    outline: &[u32],
+) -> Measured {
+    let mut measured: Vec<Shape> = shapes
         .iter()
-        .map(|(_, _, all)| {
-            let points: Vec<[f64; 3]> = outline.iter().map(|&v| all[v as usize]).collect();
+        .map(|recipe| {
+            let points: Vec<[f64; 3]> = outline
+                .iter()
+                .map(|&v| recipe.at(base, deltas, v as usize))
+                .collect();
             // Newell's method: the loop's vector area, whose direction is
             // the loop's normal for its winding.
             let mut n = [0.0; 3];
@@ -693,24 +728,30 @@ fn measure(shapes: &[(String, ShapeKind, Vec<[f64; 3]>)], outline: &[u32]) -> Me
                 n = [n[0] + c[0], n[1] + c[1], n[2] + c[2]];
             }
             let len = dot(n, n).sqrt();
-            (len > 0.0).then(|| Shape {
+            let normal = if len > 0.0 {
+                [n[0] / len, n[1] / len, n[2] / len]
+            } else {
+                [0.0; 3]
+            };
+            Shape {
                 points,
-                normal: [n[0] / len, n[1] / len, n[2] / len],
+                normal,
                 area: len / 2.0,
-            })
+                degenerate: false,
+            }
         })
         .collect();
-    let largest = measured
-        .iter()
-        .flatten()
-        .map(|s| s.area)
-        .fold(0.0, f64::max);
+    let (largest, reference) = measured.iter().fold((0.0, [0.0; 3]), |(area, normal), s| {
+        if s.area > area {
+            (s.area, s.normal)
+        } else {
+            (area, normal)
+        }
+    });
     for shape in &mut measured {
-        if shape
-            .as_ref()
-            .is_some_and(|s| s.area < DEGENERATE_AREA * largest)
-        {
-            *shape = None;
+        if shape.area < DEGENERATE_AREA * largest {
+            shape.degenerate = true;
+            shape.normal = reference;
         }
     }
     Measured {
@@ -729,20 +770,18 @@ impl Measured {
         (-signed).max(0.0)
     }
 
-    fn fold(shape: &Shape, i: usize, j: usize, k: usize) -> f64 {
-        Self::reversed(shape, i, j, k) / shape.area
-    }
-
+    /// Reversed area relative to the shape's own area; `None` for a
+    /// degenerate shape, which has none to be relative to.
     fn fold_per_shape(&self, triangles: &[[u32; 3]]) -> Vec<Option<f64>> {
         self.shapes
             .iter()
-            .map(|shape| {
-                shape.as_ref().map(|s| {
+            .map(|s| {
+                (!s.degenerate).then(|| {
                     triangles
                         .iter()
                         .map(|t| {
                             let [i, j, k] = t.map(|v| self.position_of[&v]);
-                            Self::fold(s, i, j, k)
+                            Self::reversed(s, i, j, k) / s.area
                         })
                         .sum()
                 })
@@ -764,14 +803,13 @@ impl Measured {
         };
         self.shapes
             .iter()
-            .flatten()
             .any(|s| reversed(s, chosen) - reversed(s, current) > limit * self.largest)
     }
 
     /// Reversed area summed over every shape, against the largest shape's
     /// area: the quantity [`Self::best_triangulation`] minimises.
     fn weighted_total(&self, triangles: &[[u32; 3]]) -> f64 {
-        let shapes: Vec<&Shape> = self.shapes.iter().flatten().collect();
+        let shapes = &self.shapes;
         triangles
             .iter()
             .map(|t| {
@@ -789,7 +827,7 @@ impl Measured {
     /// over every shape, as vertex-index triangles in winding order.
     fn best_triangulation(&self, outline: &[u32]) -> Vec<[u32; 3]> {
         let n = outline.len();
-        let shapes: Vec<&Shape> = self.shapes.iter().flatten().collect();
+        let shapes = &self.shapes;
         let cost = |i: usize, j: usize, k: usize| -> f64 {
             shapes
                 .iter()

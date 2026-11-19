@@ -177,6 +177,23 @@ fn print_part(path: &Path, part: &Part) {
             percent(fold.after)
         );
     }
+    // Blends are listed above only when they got worse; say how many there
+    // are each way, so a rewrite whose listed lines all got worse is not
+    // mistaken for a rewrite that made nothing better.
+    let blends = part
+        .folds
+        .iter()
+        .filter(|f| matches!(f.kind, ShapeKind::Blend | ShapeKind::BlendHalfway));
+    let (better, worse) = blends.fold((0, 0), |(better, worse), f| {
+        let change = f.after.unwrap_or(0.0) - f.before.unwrap_or(0.0);
+        (
+            better + usize::from(change < -STILL_FOLDS),
+            worse + usize::from(change > STILL_FOLDS),
+        )
+    });
+    if better + worse > 0 {
+        println!("    blends of two targets: {better} better, {worse} worse");
+    }
 }
 
 fn process_file(path: &Path, options: &Options) -> Result<Outcome, String> {

@@ -39,14 +39,16 @@ target and each pair of targets at full and at half weight, and the mesh's
 default pose. `mode` sets how far it may go:
 
 - `"safe"`: a part is rewritten only when no checked shape comes out visibly
-  worse. Fixes less; harms nothing it checks.
+  worse (gains more than 1% of the part's largest area). Fixes less.
 - `"overall"`: a part is rewritten whenever the checked shapes improve
   overall. Fixes more; some blends may get worse, and the report shows which. It returns the rewritten file
 (`null` when nothing changed) and a report: for each part, whether it was
-`retriangulated`, `kept` (already least folded) or `skipped` (with the
-reason), and for each shape (the rest shape, each target, and each target
-halfway) the area drawn with reversed winding before and after, relative to
-the shape's own area.
+`retriangulated`; `kept`, left as it was because no triangulation folds
+noticeably less or, in safe mode, because the best one would make a checked
+shape visibly worse; or `skipped`, with the reason. For each shape checked,
+with its `kind`, it gives the area drawn with reversed winding before and
+after, relative to the shape's own area; `null` for a shape with almost no
+net area of its own (collapsed, or crossing itself), which is still checked.
 
 Some shapes still fold afterwards — an outline that crosses itself, or bends
 further than any triangulation of its vertices can follow.

@@ -23,8 +23,8 @@ polygons to re-triangulate.
 For each connected piece of a morphed mesh whose vertices all lie on one
 boundary loop (the shape a single exported polygon leaves), the pass
 searches every triangulation of that loop and keeps the one with the least
-area drawn with reversed winding, summed over the rest shape, each morph
-target at full weight, and each target at half weight. Vertices are not
+area drawn with reversed winding, summed over the rest shape, each target and each pair of targets at full and at half
+weight, and the mesh's default pose when its default weights set any target. Vertices are not
 added, moved or reordered and the triangle count is kept, so only index
 data changes. A file the pass has already been through is left untouched.
 
@@ -43,6 +43,11 @@ Left alone, and reported:
   limit): the search grows with the cube of the vertex count and runs
   synchronously.
 
+A shape with almost no net area — a target collapsed to a line, or one whose
+outline crosses itself so its loops cancel — is still checked, measured
+against the part's main facing direction, but the report gives it no fold
+relative to its own area.
+
 Some shapes still fold after the pass: an outline that crosses itself, or
 that bends further than any triangulation of its vertices can follow (a
 lip curling into a hook with few vertices along it). The report flags those
@@ -58,7 +63,8 @@ three or more targets are not checked. A part is rewritten only when the
 improvement is large enough to see, and the mode sets what else must hold:
 
 - `safe` (the default): no checked shape may come out visibly worse. Fixes
-  less; harms nothing it checks.
+  less. A shape may still gain up to 1% of the part's largest area, too
+  little to see.
 - `overall`: the checked shapes must improve overall. Fixes more; blends that
   got worse are listed in the report.
 
