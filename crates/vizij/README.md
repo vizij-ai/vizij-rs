@@ -204,7 +204,9 @@ limit, and no GLES build draws.
   faces share one App, one window or canvas — each face framed on a
   rectangle of it (`ViewEvent::PlaceFace`), any rectangle, the part inside
   the target drawing — and a click on a mesh reports
-  the face and the RobotData element it belongs to (`view::Picks`). The
+  the face and the RobotData element it belongs to (`view::Picked`, the
+  shared layer's pick), and a selection is outlined as the shared layer
+  outlines one in a robot scene. The
   desktop shows one face; the browser module shows as many as the page loads.
 - **`view::snapshot`** is the headless pipeline (recipe from ros-viz-rs):
   `WinitPlugin` disabled, `ScheduleRunnerPlugin`, camera → `RenderTarget`

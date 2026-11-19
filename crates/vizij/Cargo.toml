@@ -61,8 +61,9 @@ uuid = { version = "1", features = ["serde"] }
 # download. What stays is the 3D render path (glTF, PBR, morph targets —
 # Bevy batches morph-target rendering, the faces' main workload), scene
 # spawning, winit windowing, picking (the pointer events, and the mesh ray
-# cast a pick runs over morphed positions), line gizmos (the selection glow:
-# wireframes are unavailable on WebGL2) and WebGL2 as the browser backend.
+# cast a pick runs over morphed positions) and WebGL2 as the browser backend.
+# What the shared layer draws with beyond these (its selection outline, its
+# gizmos) it names itself.
 # The face GLBs embed no textures, so no image codec. The per-platform
 # windowing backends, and what only the native builds carry, are in the
 # target tables below.
@@ -87,7 +88,6 @@ bevy = { version = "0.20", default-features = false, features = [
     "bevy_winit",
     "bevy_picking",
     "mesh_picking",
-    "bevy_gizmos_render",
     "webgl2",
 ] }
 # The shared layer under every Semio renderer: asset semantics, picking, the

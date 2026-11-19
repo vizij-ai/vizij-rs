@@ -62,7 +62,7 @@ use crate::face::{self, FaceConfig, LoadedFace};
 use crate::view::hold::HoldTarget;
 use crate::view::meta::FaceMeta;
 use crate::view::{
-    self, FaceAssets, FaceView, Fit, Picked, Picks, SafeAreas, ToneMapping, ViewEvent, ViewEvents,
+    self, FaceAssets, FaceView, Fit, Picked, SafeAreas, ToneMapping, ViewEvent, ViewEvents,
     ViewOptions,
 };
 
@@ -83,14 +83,15 @@ thread_local! {
 /// the page last drained them, and where each Vizij's safe area lies (CSS
 /// pixels, `[x, y, width, height]` from the canvas's corner).
 static READY: Mutex<Vec<(String, Instant)>> = Mutex::new(Vec::new());
-static PICKS: Mutex<Vec<Picked>> = Mutex::new(Vec::new());
+/// The picks as `(Vizij id, element id)`, `None` for a miss.
+static PICKS: Mutex<Vec<(String, Option<String>)>> = Mutex::new(Vec::new());
 static SAFE_AREAS: Mutex<Vec<(String, [f32; 4])>> = Mutex::new(Vec::new());
 
 /// The App's report to the page. A Vizij being reloaded is not ready until
 /// its new scene is.
 fn report(
     faces: Query<&view::EntityInstance, Without<view::Superseded>>,
-    mut picks: ResMut<Picks>,
+    mut picks: MessageReader<Picked>,
     areas: Res<SafeAreas>,
 ) {
     if let Ok(mut ready) = READY.lock() {
@@ -117,9 +118,15 @@ fn report(
             }
         });
     }
-    if !picks.0.is_empty() {
+    // Every frame, as a message lives two frames: the page drains its own
+    // copy on its own schedule.
+    if !picks.is_empty() {
         if let Ok(mut out) = PICKS.lock() {
-            out.append(&mut picks.0);
+            out.extend(
+                picks
+                    .read()
+                    .map(|pick| (pick.instance_id.clone(), pick.element_id.clone())),
+            );
         }
     }
     if areas.is_changed() {
@@ -434,15 +441,20 @@ pub fn ready(vizij_id: String) -> bool {
     drawn_since(&vizij_id).is_some()
 }
 
-/// The pointer presses on Vizijs since the last drain, oldest first, as
-/// `{ vizijId, elementId }`: the slot whose rectangle the press was in, and
+/// The clicks on Vizijs since the last drain, oldest first, as
+/// `{ vizijId, elementId }`: the Vizij whose rectangle the click was in, and
 /// the element under the pointer by the id the GLB's RobotData declares —
-/// `null` for a press that hit no element (a miss). The element is found
-/// over its mesh as drawn, morphs applied; a press outside every Vizij's
-/// rectangle is not reported.
+/// `null` for a click that hit no element (a miss). A click is the primary
+/// button's or a touch's, decided on release: a press and release on the
+/// same element picks it; a release over no element within 2 px of its
+/// press is a miss, and a drag that ends over nothing is not reported. The
+/// element is found over its mesh as drawn, morphs applied; where Vizijs
+/// overlap, the one drawn last is the one clicked. A click outside every
+/// Vizij's rectangle, or on something drawn over the canvas, is not
+/// reported.
 #[wasm_bindgen(js_name = drainPicks)]
 pub fn drain_picks() -> Result<JsValue, JsValue> {
-    let picks: Vec<Picked> = PICKS
+    let picks: Vec<(String, Option<String>)> = PICKS
         .lock()
         .map(|mut p| p.drain(..).collect())
         .unwrap_or_default();
@@ -450,7 +462,7 @@ pub fn drain_picks() -> Result<JsValue, JsValue> {
         picks
             .into_iter()
             .map(
-                |pick| serde_json::json!({ "vizijId": pick.face_id, "elementId": pick.element_id }),
+                |(vizij_id, element_id)| serde_json::json!({ "vizijId": vizij_id, "elementId": element_id }),
             )
             .collect(),
     );
@@ -458,10 +470,11 @@ pub fn drain_picks() -> Result<JsValue, JsValue> {
 }
 
 /// Outline the Vizij's elements `element_ids` (the ids its RobotData
-/// declares, as [`describe`] lists them) with the selection glow, replacing
-/// the previous selection; an empty list clears it. A selected group glows
-/// every element mesh under it. Kept across the Vizij's reloads; an id the
-/// Vizij does not declare glows nothing.
+/// declares, as [`describe`] lists them) in the selection red, replacing
+/// the previous selection; an empty list clears it. One line runs around the
+/// whole of what is selected, over whatever stands in front of it; a
+/// selected group outlines every element mesh under it. Kept across the
+/// Vizij's reloads; an id the Vizij does not declare outlines nothing.
 #[wasm_bindgen(js_name = setSelection)]
 pub fn set_selection(vizij_id: String, element_ids: Vec<String>) -> Result<(), JsValue> {
     send(ViewEvent::SetSelection {

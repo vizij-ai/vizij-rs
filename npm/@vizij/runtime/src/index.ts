@@ -28,8 +28,8 @@
  * (a graph on a store, nothing drawn) — a bench, or a graph run in Node.
  *
  * An authoring page edits what it shows in place: {@link drainPicks}
- * reports presses on elements and misses, {@link setSelection} glows the
- * selected elements, {@link Runtime.hold} keeps rig outputs against the
+ * reports clicks on elements and misses, {@link setSelection} outlines
+ * the selected elements, {@link Runtime.hold} keeps rig outputs against the
  * device, {@link Runtime.holdKeys} keeps the store keys it edits against
  * the Vizij's behavior, {@link setStaticFeature} sets a static feature
  * without a reload,
@@ -208,9 +208,9 @@ export function runStatus(value: unknown): RunStatus | undefined {
   return variant ? RUN_STATUS_VARIANTS[variant] : undefined;
 }
 
-/** A pointer press on a Vizij: the slot whose rectangle it was in, and the
+/** A click on a Vizij: the Vizij whose rectangle it was in, and the
  * element under the pointer by the id its GLB's RobotData declares — `null`
- * for a press that hit no element (a miss). */
+ * for a click that hit no element (a miss). */
 export interface Pick {
   vizijId: string;
   elementId: string | null;
@@ -1154,23 +1154,28 @@ export function whenReady(vizijId: string, timeoutMs = 60_000): Promise<void> {
 }
 
 /**
- * The pointer presses on Vizijs since the last drain, oldest first: each
- * names the Vizij whose rectangle it was in and the element under the
- * pointer, or `null` for a press that hit no element — what clears an
- * authoring selection. The element is found over its mesh as drawn, morphs
- * applied, the nearest along the ray. A press outside every Vizij's
- * rectangle is not reported.
+ * The clicks on Vizijs since the last drain, oldest first: each names the
+ * Vizij whose rectangle it was in and the element under the pointer, or
+ * `null` for a click that hit no element — what clears an authoring
+ * selection. A click is the primary button's or a touch's, decided on
+ * release: press and release on the same element pick it, a release over no
+ * element within 2 px of its press is a miss, and a drag that ends over
+ * nothing is not reported. The element is found over its mesh as drawn,
+ * morphs applied, the nearest along the ray; where Vizijs overlap, the one
+ * drawn last is clicked. A click outside every Vizij's rectangle, or on
+ * something drawn over the canvas, is not reported.
  */
 export function drainPicks(): Pick[] {
   return bindings().drainPicks();
 }
 
 /**
- * Glow the outlines of the Vizij's elements `elementIds` (the ids its
- * RobotData declares, as {@link describe} lists them), replacing the
- * previous selection; an empty list clears it. The outline is each mesh's
- * feature edges, drawn over the face in the selection red; a selected group
- * glows every element mesh under it. Kept across the Vizij's reloads.
+ * Outline the Vizij's elements `elementIds` (the ids its RobotData
+ * declares, as {@link describe} lists them), replacing the previous
+ * selection; an empty list clears it. One line in the selection red runs
+ * around the whole of what is selected, over whatever stands in front of
+ * it; a selected group outlines every element mesh under it. Kept across the
+ * Vizij's reloads.
  */
 export function setSelection(vizijId: string, elementIds: string[]): void {
   bindings().setSelection(vizijId, elementIds);

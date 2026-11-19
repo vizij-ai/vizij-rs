@@ -16,8 +16,8 @@
 //! on desktop, in the browser and on Android. A face comes into view once
 //! indexed, and is ready once the GPU has drawn every mesh visible to its
 //! camera ([`EntityInstance::ready`], [`drawn`]). A mesh shown later, and
-//! what is drawn over the meshes (captions, the selection glow), may still
-//! compile when it first draws.
+//! what is drawn over the meshes (captions, the selection outline), may
+//! still compile when it first draws.
 //!
 //! A face's entity carries the shared [`EntityInstance`] — its id, metadata,
 //! GLB, joins to the scene, camera and readiness — so the shared layer's
@@ -31,20 +31,22 @@
 //! With the `captions` feature, each face shows the face standard's caption
 //! over it ([`captions`]).
 //!
-//! What an authoring front end asks of the view beyond the device's pose:
-//! a press resolved to the element under it or to a miss ([`pick`]), a glow
-//! on the elements it has selected ([`glow`]), rig outputs held against the
-//! device ([`hold`]), and a static feature set in place
-//! ([`ViewEvent::SetStaticFeature`]).
+//! What an authoring front end asks of the view beyond the device's pose
+//! is the shared layer's, so a face picks and outlines exactly as a robot
+//! does in a scene that embeds the same layer: a click resolved to the
+//! element under it or to a miss, as a [`Picked`] message
+//! ([`arora_visuals::pick`]); the outline of the elements it has selected
+//! ([`ViewEvent::SetSelection`] into [`Selections`], drawn by
+//! [`arora_visuals::outline`] through every face camera's [`OutlineView`]);
+//! rig outputs held against the device ([`hold`]); and a static feature set
+//! in place ([`ViewEvent::SetStaticFeature`]).
 
 #[cfg(feature = "captions")]
 pub mod captions;
 pub mod diagnostics;
 pub mod frames;
-mod glow;
 pub use arora_visuals::hold;
 pub mod meta;
-mod pick;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod snapshot;
 
@@ -76,6 +78,10 @@ pub use arora_visuals::binding::{ElementTargets, SceneBinding, SceneBindings};
 use arora_visuals::drawn;
 use arora_visuals::instance::ClearCamera;
 pub use arora_visuals::instance::{EntityInstance, Superseded, ViewOf, CLEAR_ORDER};
+use arora_visuals::outline::{OutlinePlugin, OutlineView};
+use arora_visuals::pick::PickPlugin;
+pub use arora_visuals::pick::Picked;
+use arora_visuals::select::{Selection, Selections};
 pub use arora_visuals::tone::ToneMapping;
 use arora_visuals::value::Decoded;
 use hold::{HoldTarget, Holds};
@@ -213,9 +219,9 @@ pub enum ViewEvent {
     /// Frame and tone-map the face by `view`, in place of the face's previous
     /// view. Kept across the face's reloads, like its placement.
     SetFaceView { face_id: String, view: FaceView },
-    /// Outline these elements of the face (RobotData element ids) with the
-    /// selection glow; an empty list clears it. Kept across the face's
-    /// reloads.
+    /// Outline these elements of the face (RobotData element ids); an empty
+    /// list clears the selection. A selected group outlines every element
+    /// mesh under it. Kept across the face's reloads.
     SetSelection {
         face_id: String,
         elements: Vec<String>,
@@ -317,18 +323,6 @@ pub struct Compositions(pub HashMap<String, Vec<vizij_arora_host::Contention>>);
 /// The front ends' requests, drained each frame ([`ViewEvent`]).
 #[derive(Resource)]
 pub struct ViewEvents(pub Mutex<Receiver<ViewEvent>>);
-
-/// A pointer press on a face: the element under it, by the ids its face's
-/// RobotData declares, or `None` for a press that hit no element.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Picked {
-    pub face_id: String,
-    pub element_id: Option<String>,
-}
-
-/// The picks (pointer presses on faces) since a consumer last drained them.
-#[derive(Resource, Default)]
-pub struct Picks(pub Vec<Picked>);
 
 /// Where each face draws, by face id ([`ViewEvent::PlaceFace`]); a face
 /// without an entry, or with `None`, draws over the whole target — the
@@ -530,13 +524,15 @@ pub struct OffscreenTarget(pub Handle<Image>);
 
 /// The distance between two faces' slots along X. A face spans a few units
 /// (its authored bounds), so slots this far apart never share a camera's
-/// frustum or a pointer ray.
+/// frustum.
 ///
-/// Slots, not render layers: a mesh carrying `RenderLayers` renders its
-/// morph targets at zero weight on Bevy 0.19.1's storage-buffer morph path
-/// (every desktop GPU; WebGL2 takes the uniform path and does not show it),
-/// which closes Toasty's eyes. Spacing the faces apart needs nothing of the
-/// renderer.
+/// Every face is drawn on the default render layer and every face camera
+/// draws it, so distance alone keeps one face out of another's camera. The
+/// selection outline relies on that too: a selected mesh joins the mask of
+/// every outlined view whose layers it shares — every face camera — and only
+/// the other cameras' frustums keep it out of their masks. The render layers
+/// above the default are the shared layer's, given per view for the outline's
+/// mask and quad.
 pub const SLOT_STRIDE: f32 = 1000.0;
 
 /// The slots in use, so an unloaded face's slot goes back to the pool.
@@ -591,21 +587,19 @@ impl Plugin for ViewPlugin {
             .register_type::<bevy::gltf::GltfExtras>()
             .register_type::<bevy::gltf::GltfMeshExtras>()
             .register_type::<bevy::gltf::GltfMaterialExtras>();
-        // Picking runs its own ray cast over the morphed meshes on a press
-        // ([`pick`]); Bevy's picking only delivers the press, through the
-        // window backend every press reaches when no other backend reports
-        // a hit.
+        // Picking casts its own ray over the morphed meshes on a click
+        // ([`arora_visuals::pick`]); Bevy's picking only delivers the press
+        // and release, through the window backend every press reaches when
+        // no other backend reports a hit, so no mesh picking backend is
+        // added.
         app.init_resource::<Slots>()
             .init_resource::<Placements>()
             .init_resource::<FaceViews>()
             .init_resource::<SafeAreas>()
-            .init_resource::<Picks>()
             .init_resource::<PendingStatics>()
             .init_resource::<Holds>()
             .init_resource::<Compositions>()
-            .add_plugins(glow::GlowPlugin)
-            .add_plugins(drawn::DrawnPlugin)
-            .add_observer(pick::on_press)
+            .add_plugins((drawn::DrawnPlugin, PickPlugin, OutlinePlugin))
             .add_systems(
                 Update,
                 (
@@ -645,7 +639,7 @@ fn apply_view_events(
     mut slots: ResMut<Slots>,
     mut placements: ResMut<Placements>,
     mut views: ResMut<FaceViews>,
-    mut selections: ResMut<glow::Selections>,
+    mut selections: ResMut<Selections>,
     mut holds: ResMut<Holds>,
     mut statics: ResMut<PendingStatics>,
     mut compositions: ResMut<Compositions>,
@@ -762,7 +756,9 @@ fn apply_view_events(
                 if elements.is_empty() {
                     selections.0.remove(&face_id);
                 } else {
-                    selections.0.insert(face_id, elements);
+                    selections
+                        .0
+                        .insert(face_id, elements.into_iter().map(Selection::of).collect());
                 }
             }
             ViewEvent::Composed { face_id, contended } => {
@@ -1063,8 +1059,17 @@ fn retire_superseded(
     }
 }
 
+/// The selection outline's look on a face: the authoring app's selection
+/// red, nearly opaque, as a line with no fill.
+const OUTLINE: OutlineView = OutlineView {
+    colour: Color::srgba(1.0, 16.0 / 255.0, 16.0 / 255.0, 0.9),
+    width: 3.0,
+    fill: 0.0,
+};
+
 /// A face's camera: the fit over its framing, over its slot, drawing over
-/// what the target holds ([`ClearCamera`] clears it).
+/// what the target holds ([`ClearCamera`] clears it), with the selection
+/// outlined through it.
 fn camera_for(framing: Framing, slot: usize, offscreen: Option<&OffscreenTarget>) -> impl Bundle {
     // Lighting is baked into the materials (see `ViewOptions::albedo_factor`);
     // no scene light is spawned.
@@ -1101,6 +1106,7 @@ fn camera_for(framing: Framing, slot: usize, offscreen: Option<&OffscreenTarget>
         // The faces are lit by the ambient term alone: no light to cluster,
         // so one cluster spares the per-frame cluster grid.
         bevy::light::cluster::ClusterConfig::Single,
+        OUTLINE,
     )
 }
 

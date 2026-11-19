@@ -114,8 +114,8 @@ device with no Vizij (`startRuntime`) keeps time from its first step.
 
 A Vizij's paths are its own: `quori.rigPrefix` is `rig/<faceId>/` (the
 bundle's `faceId`) and `quori.path(relative)` builds one. `drainPicks()`
-reports pointer presses as `{ vizijId, elementId }` — the slot and the
-element id the GLB's RobotData declares, `null` for a press on no element;
+reports clicks as `{ vizijId, elementId }` — the Vizij and the element id
+the GLB's RobotData declares, `null` for a click on no element;
 `describe(glb)` reads what a GLB declares without loading it: its elements,
 animatables, bounds, graphs (each with its id and kind) and programs (each
 with its label and graph), and from
@@ -207,12 +207,15 @@ const next = await loadVizij("quori", exportedGlb);
 quori.dispose(); // the previous scene drew until the new one was ready
 ```
 
-- A pick is found over each element's mesh as drawn, its morph targets
-  applied, the nearest along the pointer's ray; a press in a Vizij's
-  rectangle that meets no element is that Vizij's miss.
-- The selection glow outlines each selected element's mesh along its
-  feature edges (its boundary and its creases), drawn over the face in the
-  selection red; a selected group glows every element mesh under it.
+- A pick is a click of the primary button or a touch, decided on release:
+  found over each element's mesh as drawn, its morph targets applied, the
+  nearest along the pointer's ray, it picks the element when press and
+  release land on it; a release in a Vizij's rectangle that meets no element,
+  within 2 px of its press, is that Vizij's miss, and a drag that ends over
+  nothing is no pick. Where Vizijs overlap, the one drawn last is clicked.
+- The selection outline is one line around the whole of what is selected,
+  in the selection red, drawn over whatever stands in front of it; a
+  selected group outlines every element mesh under it.
 - A hold is the view declining the device's writes to an output, whole
   (`<animatableId>`) or per component (`<animatableId>:x` … `:z`, `:r` …
   `:b`); the device and its store run on untouched.
