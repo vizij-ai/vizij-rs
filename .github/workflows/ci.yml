@@ -113,6 +113,8 @@ jobs:
       # wasm32: the cache is what keeps this under the job's budget.
       - name: Build the runtime WASM (the vizij crate for the browser) into npm wrapper pkg/
         run: node scripts/build-runtime-wasm.mjs
+      - name: Build the import WASM into npm wrapper pkg/
+        run: node scripts/build-import-wasm.mjs
       - name: Install pnpm
         uses: pnpm/action-setup@v4
       - name: Setup Node
@@ -129,10 +131,12 @@ jobs:
         run: |
           pnpm --filter @vizij/node-graph run build
           pnpm --filter @vizij/runtime run build
+          pnpm --filter @vizij/import run build
       - name: Run wrapper tests
         run: |
           pnpm --filter @vizij/node-graph run test
           pnpm --filter @vizij/runtime run test
+          pnpm --filter @vizij/import run test
       # What the browser tests serve: the runtime's dist (the wasm module
       # included) and the two workspace packages its page imports by name.
       - uses: actions/upload-artifact@v4

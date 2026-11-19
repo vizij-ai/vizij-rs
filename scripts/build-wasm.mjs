@@ -10,6 +10,7 @@ const __dirname = dirname(__filename);
 const TARGETS = new Map([
   ["graph", "build-graph-wasm.mjs"],
   ["runtime", "build-runtime-wasm.mjs"],
+  ["import", "build-import-wasm.mjs"],
 ]);
 
 function runBuild(target) {

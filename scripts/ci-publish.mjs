@@ -40,6 +40,7 @@ const DRY_RUN = process.argv.includes("--dry-run");
 const WASM_TARGETS = {
   "node-graph": "graph",
   runtime: "runtime",
+  import: "import",
 };
 
 function run(cmd, args, opts = {}) {

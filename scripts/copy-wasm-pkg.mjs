@@ -19,6 +19,7 @@ if (packages.length === 0) {
 const bootstrapScripts = {
   "node-graph": "build:wasm:graph",
   runtime: "build:wasm:runtime",
+  import: "build:wasm:import",
 };
 
 async function ensurePkgExists(packageName, pkgSrc) {
