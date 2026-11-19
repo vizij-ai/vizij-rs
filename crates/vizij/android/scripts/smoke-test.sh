@@ -33,6 +33,12 @@
 #     again it is the face shown (the activity's `model.glb`);
 #   - the app's log has no `Caught` line (Bevy's report of a device loss or
 #     a rendering error), no panic and no fatal signal.
+# adb loses the emulator now and then (`adb: device offline`) and finds it
+# again within seconds: every adb call first waits for the device, and a
+# screenshot cut short in that gap is taken again, so the checks read whole
+# frames. The `say` waits for the emulator's network to be validated, since
+# its provider is a cloud service; the provider's own error lines (`tts:`)
+# are printed with the app's log.
 # `dumpsys gfxinfo` counts HWUI frames only and reads 0 for Bevy, so the
 # screenshots are the frame evidence. <out-dir> keeps the two screenshots
 # (face-a.png, face-b.png), with a second face opened.png and
@@ -58,8 +64,21 @@ fail() {
   echo "::error::$1"
   failures+=("$1")
 }
-frame() { adb exec-out screencap > "$OUT/$1.raw"; }
+# Waits up to a minute for the device; a command it still cannot reach
+# fails as before.
+adb() {
+  timeout 60 adb wait-for-device
+  command adb "$@"
+}
 measure() { python3 "$HERE/frames.py" "$@"; }
+frame() {
+  for _ in 1 2 3; do
+    adb exec-out screencap > "$OUT/$1.raw"
+    measure whole "$OUT/$1.raw" && return
+    echo "$1: a partial screenshot, taken again"
+    sleep 2
+  done
+}
 resumed() { adb shell dumpsys activity activities | grep -m1 -E 'topResumedActivity|mResumedActivity' | tr -d '\r'; }
 in_front() { case "$(resumed)" in *"$PKG/"*) return 0 ;; *) return 1 ;; esac; }
 
@@ -120,6 +139,15 @@ fi
 
 # A `say` through the local bridge, followed to its end.
 if [ -n "$shown" ]; then
+  validated=""
+  for _ in $(seq 1 12); do
+    if adb shell dumpsys connectivity | grep -qw VALIDATED; then
+      validated=1
+      break
+    fi
+    sleep 5
+  done
+  [ -n "$validated" ] || echo "the emulator's network is not validated; saying anyway"
   adb forward tcp:9000 tcp:9000 > /dev/null
   python3 -I "$HERE/say.py" 9000 "Hello from Vizij on Android." | tee "$OUT/say.txt" \
     || fail "say did not speak"
@@ -258,7 +286,7 @@ uid=$(adb shell pm list packages -U "$PKG" | tr -d '\r' | sed -nE "s/^package:$P
 adb logcat -d -v threadtime --uid "$uid" > "$OUT/logcat-app.txt"
 sed -n '/App Summary/,/TOTAL SWAP/p' "$OUT/meminfo.txt"
 echo "--- adapter and errors in the app's log"
-grep -E "AdapterInfo|Caught|panicked|Encountered a panic|Quitting the application|Fatal signal|FATAL EXCEPTION|UnsatisfiedLinkError|vizij:" "$OUT/logcat-app.txt" | cut -c1-240 | head -40
+grep -E "AdapterInfo|Caught|panicked|Encountered a panic|Quitting the application|Fatal signal|FATAL EXCEPTION|UnsatisfiedLinkError|vizij:|tts:" "$OUT/logcat-app.txt" | cut -c1-240 | head -40
 if [ ! -s "$OUT/logcat-app.txt" ]; then fail "no log from the app (uid ${uid:-unknown})"; fi
 if grep -qE "Caught" "$OUT/logcat-app.txt"; then fail "the app's log has a Caught line"; fi
 if grep -qE "panicked at|Encountered a panic" "$OUT/logcat-app.txt"; then fail "the app panicked"; fi
