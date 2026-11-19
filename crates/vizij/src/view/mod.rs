@@ -1202,7 +1202,7 @@ impl CameraProjection for FitProjection {
         let left = area.min.x + sub_view.offset.x * scale.x;
         let top = area.max.y - sub_view.offset.y * scale.y;
         let size = sub_view.size.as_vec2() * scale;
-        Mat4::orthographic_rh(
+        bevy::math::proj::orthographic(
             left,
             left + size.x,
             top - size.y,

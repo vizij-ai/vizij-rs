@@ -66,7 +66,7 @@ uuid = { version = "1", features = ["serde"] }
 # The face GLBs embed no textures, so no image codec. The per-platform
 # windowing backends, and what only the native builds carry, are in the
 # target tables below.
-bevy = { version = "0.19", default-features = false, features = [
+bevy = { version = "0.20", default-features = false, features = [
     "bevy_asset",
     "async_executor",
     "std",
@@ -157,7 +157,7 @@ vizij-arora-tts = { version = "8", path = "../interop/vizij-arora-tts" }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The native engine's own: the multi-threaded schedule executor and task
 # pools (the browser has one thread), and the log plugin the apps disable.
-bevy = { version = "0.19", default-features = false, features = ["bevy_log", "multi_threaded"] }
+bevy = { version = "0.20", default-features = false, features = ["bevy_log", "multi_threaded"] }
 # The native driver (`native`): the stand-alone device on a worker thread under
 # arora's operator flow — `native` is the run loop, the local WS bridge and
 # the module executors — with the bridges the build adds, among them the
@@ -176,21 +176,21 @@ futures = "0.3"
 # plays its audio; note it links GPLv3 code into the binary.
 rodio = { version = "0.23", optional = true }
 vizij-piper = { path = "../interop/vizij-piper", optional = true }
-# The settings pane (`settings`), drawn with egui over the view: 0.42 is the
-# line for Bevy 0.19. Its rendering, its embedded fonts and its picking
+# The settings pane (`settings`), drawn with egui over the view: 0.43 is the
+# line for Bevy 0.20. Its rendering, its embedded fonts and its picking
 # backend (a press on the pane is the pane's, not the face's); not its
 # clipboard (arboard), URL opener or bevy_ui integration.
-bevy_egui = { version = "0.42", default-features = false, features = ["render", "default_fonts", "picking"], optional = true }
+bevy_egui = { version = "0.43", default-features = false, features = ["render", "default_fonts", "picking"], optional = true }
 # The pane's operator implements arora's `Operator`, an async trait.
 async-trait = { version = "0.1", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-bevy = { version = "0.19", default-features = false, features = ["x11", "wayland"] }
+bevy = { version = "0.20", default-features = false, features = ["x11", "wayland"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 # The framework's `android.app.NativeActivity` (no games-activity AAR): Bevy
 # without its default features selects no Android activity backend.
-bevy = { version = "0.19", default-features = false, features = ["android-native-activity"] }
+bevy = { version = "0.20", default-features = false, features = ["android-native-activity"] }
 # The `log` records — the crate's, arora's and Bevy's through tracing's `log`
 # feature — into logcat, where `env_logger` would write to a stderr nobody
 # reads.

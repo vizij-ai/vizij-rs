@@ -49,7 +49,12 @@ use std::sync::{Mutex, OnceLock};
 
 use anyhow::{anyhow, Context, Result};
 use bevy::android::android_activity::AndroidApp;
-use bevy::prelude::*;
+// Named, not globbed: the prelude also brings Bevy's `ContextExt`, whose
+// `context` and `with_context` collide with anyhow's on `Result`.
+use bevy::prelude::{
+    bevy_main, default, App, AppExit, Color, DefaultPlugins, Local, MessageReader, PluginGroup,
+    Query, Res, ResMut, Time, Touches, Update, Vec2, Window, With, World,
+};
 use bevy::render::error_handler::{ErrorType, RenderError, RenderErrorHandler, RenderErrorPolicy};
 use bevy::render::settings::RenderCreation;
 

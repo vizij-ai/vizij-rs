@@ -8,7 +8,7 @@
 
 use std::time::Duration;
 
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use bevy::app::{PluginsState, ScheduleRunnerPlugin};
 use bevy::asset::{AssetMetaCheck, AssetPlugin};
 use bevy::image::TextureFormatPixelInfo;
@@ -151,11 +151,11 @@ fn frame_to_image(data: &[u8], width: u32, height: u32) -> Result<RgbaImage> {
     for row in data.chunks_exact(padded_row) {
         pixels.extend_from_slice(&row[..unpadded_row]);
     }
-    RgbaImage::from_raw(width, height, pixels).context("readback buffer mismatch")
+    RgbaImage::from_raw(width, height, pixels).ok_or_else(|| anyhow!("readback buffer mismatch"))
 }
 
 /// Saves a captured frame as PNG.
 pub fn save_png(img: &RgbaImage, path: &std::path::Path) -> Result<()> {
     img.save_with_format(path, image::ImageFormat::Png)
-        .with_context(|| format!("failed to save PNG to {}", path.display()))
+        .map_err(|e| anyhow!(e).context(format!("failed to save PNG to {}", path.display())))
 }
