@@ -9,6 +9,8 @@
                                           exit 0 when the colour fills the
                                           background
     frames.py png <frame.raw> <out.png>   write the frame as a PNG
+    frames.py whole <frame.raw>           exit 0 when the frame holds its
+                                          header and every row
 
 A raw frame is the screencap header (width, height, pixel format, and from
 Android 9 a colour space: four little-endian u32 each) then RGBA rows. Both
@@ -45,13 +47,27 @@ SHOWN_PIXELS = 200
 BACKGROUND_SHARE = 0.25
 
 
-def read(path):
-    data = open(path, "rb").read()
+def header_size(data):
+    """The header's length, or None when the data is not a whole frame: a
+    capture adb cut short holds fewer bytes than its header promises."""
+    if len(data) < 8:
+        return None
     width, height = struct.unpack_from("<II", data, 0)
     header = len(data) - width * height * 4
-    if header not in (12, 16):
+    return header if header in (12, 16) else None
+
+
+def read(path):
+    data = open(path, "rb").read()
+    header = header_size(data)
+    width, height = struct.unpack_from("<II", data, 0) if len(data) >= 8 else (0, 0)
+    if header is None:
         sys.exit(f"{path}: not a raw screencap ({len(data)} bytes for {width}x{height})")
     return width, height, memoryview(data)[header:]
+
+
+def whole(path):
+    return header_size(open(path, "rb").read()) is not None
 
 
 def band(width, height):
@@ -194,5 +210,6 @@ if __name__ == "__main__":
         "find": find,
         "background": background,
         "png": png,
+        "whole": whole,
     }[command](*args)
     sys.exit(0 if ok else 1)
