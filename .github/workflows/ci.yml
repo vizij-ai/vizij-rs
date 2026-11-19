@@ -91,7 +91,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      # Stopgap: Rust 1.100's wasm32-wasip2 linker emits a component with a
+      # shim and no fixups module, whose layout arora-engine 7.1 rejects. Move
+      # back to stable once arora-engine accepts it.
+      - uses: dtolnay/rust-toolchain@1.99
         with:
           components: rustfmt, clippy
           # wasm32-wasip2 builds arora-animation-module's guest, which
