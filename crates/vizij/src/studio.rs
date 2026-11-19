@@ -563,16 +563,19 @@ mod tests {
             rest,
         };
         let meta = FaceMeta {
-            animatables: HashMap::from([
-                (
-                    x.to_string(),
-                    binding(FeatureKind::Translation, Some(0), Rest::Scalar(0.5)),
-                ),
-                (
-                    color.to_string(),
-                    binding(FeatureKind::Color, None, Rest::Components([0.1, 0.2, 0.3])),
-                ),
-            ]),
+            asset: AssetMeta {
+                animatables: HashMap::from([
+                    (
+                        x.to_string(),
+                        binding(FeatureKind::Translation, Some(0), Rest::Scalar(0.5)),
+                    ),
+                    (
+                        color.to_string(),
+                        binding(FeatureKind::Color, None, Rest::Components([0.1, 0.2, 0.3])),
+                    ),
+                ]),
+                ..AssetMeta::default()
+            },
             ..FaceMeta::default()
         };
         (meta, x, color)

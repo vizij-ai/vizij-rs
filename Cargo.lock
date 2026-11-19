@@ -746,6 +746,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "arora-visuals"
+version = "0.1.0"
+source = "git+https://github.com/semio-ai/arora-visuals?rev=44b1925#44b1925bf5a2a99e59ece990ad5676ad531b86b8"
+dependencies = [
+ "anyhow",
+ "bevy",
+ "bevy_asset",
+ "bevy_ecs",
+ "bevy_image",
+ "bevy_math",
+ "image",
+ "log",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "arora-web"
 version = "15.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11365,6 +11382,7 @@ dependencies = [
  "arora-module",
  "arora-msgs-ros2",
  "arora-types",
+ "arora-visuals",
  "arora-web",
  "async-trait",
  "bevy",

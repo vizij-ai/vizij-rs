@@ -35,12 +35,11 @@ pub mod diagnostics;
 mod drawn;
 pub mod frames;
 mod glow;
-pub mod hold;
+pub use arora_visuals::hold;
 pub mod meta;
 mod pick;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod snapshot;
-pub mod tone;
 
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 use std::path::Path;
@@ -66,9 +65,10 @@ use bevy::render::render_resource::BlendState;
 use vizij_api_core::value::{as_bool, as_float, as_vec3, as_vector};
 use vizij_api_core::Value;
 
+pub use arora_visuals::tone::ToneMapping;
+use arora_visuals::value::Decoded;
 use hold::{HoldTarget, Holds};
 use meta::{Binding, FaceMeta, FeatureKind, PrimitiveShape};
-pub use tone::ToneMapping;
 
 /// The in-memory asset source the faces' GLBs are served from: a loaded
 /// face's bytes live here under a path of their own until the face is
@@ -1697,14 +1697,6 @@ fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneF
     }
 }
 
-/// A feature value in the form the scene takes it: a triple (a vector, an
-/// euler, a linear RGB colour) or a scalar.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum Decoded {
-    Triple([f32; 3]),
-    Scalar(f32),
-}
-
 /// `value` read as what `feature` takes — or, for a per-axis binding, its
 /// `axis` component takes: a scalar; `None` when it is no such value.
 fn decode(feature: &FeatureKind, axis: Option<usize>, value: &Value) -> Option<Decoded> {
@@ -2066,7 +2058,10 @@ mod tests {
             unlit: false,
         };
         let meta = FaceMeta {
-            root_bounds: Some((1.0, 2.0, 3.0, 4.0)),
+            asset: meta::AssetMeta {
+                root_bounds: Some((1.0, 2.0, 3.0, 4.0)),
+                ..Default::default()
+            },
             ..FaceMeta::default()
         };
         let page = Framing::of(&meta, &options, None);
