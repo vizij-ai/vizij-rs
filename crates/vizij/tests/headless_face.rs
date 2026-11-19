@@ -20,7 +20,7 @@ use vizij::face::{FaceConfig, ProgramSelect};
 use vizij::native::{start, BridgeConfig, Mode, FACE};
 use vizij::view::meta::FeatureKind;
 use vizij::view::snapshot::{capture, SnapshotPlugin};
-use vizij::view::{self, Face, FaceAssets, ViewEvents, ViewOptions, ViewPlugin};
+use vizij::view::{self, EntityInstance, Face, FaceAssets, ViewEvents, ViewOptions, ViewPlugin};
 
 use common::{glb, plate_face_glb, studio_face_glb};
 
@@ -77,22 +77,27 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
     // joined: every animatable is a pose entry the rig holds and a binding
     // the view indexed, one of them a transform the scene carries, and every
     // element a pick would report is a RobotData element.
-    let mut faces = app.world_mut().query::<&Face>();
-    let face = faces.single(app.world()).expect("one face");
-    assert_eq!(face.id, FACE);
+    let mut faces = app.world_mut().query::<(&EntityInstance, &Face)>();
+    let (instance, face) = faces.single(app.world()).expect("one face");
+    assert_eq!(instance.id, FACE);
     assert_eq!(face.slot, 0, "the first face takes the first slot");
     let pose = rig.pose();
     assert!(!pose.is_empty(), "the rig holds no pose");
     let bound = pose
         .iter()
-        .filter(|(path, _)| face.bindings.by_id.contains_key(path.to_string().as_str()))
+        .filter(|(path, _)| {
+            instance
+                .bindings
+                .by_id
+                .contains_key(path.to_string().as_str())
+        })
         .count();
     assert_eq!(
         bound,
-        face.meta.animatables.len(),
+        instance.meta.animatables.len(),
         "every animatable is driven and bound"
     );
-    let translated = face
+    let translated = instance
         .bindings
         .by_id
         .values()
@@ -106,17 +111,21 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
     );
     // InnerFace and the four lids share a material, and its colour.
     assert_eq!(
-        face.bindings.by_id["c627bc47-95bb-4a89-a67c-e6a6e76bef8d"].len(),
+        instance.bindings.by_id["c627bc47-95bb-4a89-a67c-e6a6e76bef8d"].len(),
         5,
         "the shared colour lands on each element that shares it"
     );
     let element_ids: std::collections::HashSet<&String> =
-        face.meta.elements.iter().map(|e| &e.id).collect();
+        instance.meta.elements.iter().map(|e| &e.id).collect();
     assert!(
-        face.bindings.elements.values().any(|e| e.mesh.is_some()),
+        instance
+            .bindings
+            .elements
+            .values()
+            .any(|e| e.mesh.is_some()),
         "no element has a mesh"
     );
-    for element_id in face.bindings.elements.keys() {
+    for element_id in instance.bindings.elements.keys() {
         assert!(
             element_ids.contains(element_id),
             "{element_id} is no element id"
@@ -216,7 +225,7 @@ fn renders_its_per_axis_pose(element: &str, [x, y, yaw, color]: [String; 4]) {
     .add_plugins(ViewPlugin);
     let image = capture(&mut app, WIDTH, HEIGHT, 60, view::all_faces_ready).expect("a frame");
 
-    let mut faces = app.world_mut().query::<&Face>();
+    let mut faces = app.world_mut().query::<&EntityInstance>();
     let face = faces.single(app.world()).expect("one face");
     assert_eq!(face.bindings.by_id.len(), 4, "every animatable binds");
     for id in [&x, &y, &yaw, &color] {
@@ -367,7 +376,7 @@ fn an_ellipse_draws_as_its_unit_circle() {
     .add_plugins(ViewPlugin);
     let image = capture(&mut app, WIDTH, HEIGHT, 60, view::all_faces_ready).expect("a frame");
 
-    let mut faces = app.world_mut().query::<&Face>();
+    let mut faces = app.world_mut().query::<&EntityInstance>();
     let face = faces.single(app.world()).expect("one face");
     let targets = *face.bindings.elements.values().next().expect("the eye");
     let scale = app
@@ -464,8 +473,8 @@ fn two_faces_share_one_target_each_in_its_own_viewport() {
     .add_plugins(ViewPlugin);
 
     let image = capture(&mut app, 2 * half, HEIGHT, 60, view::all_faces_ready).expect("a frame");
-    let mut faces = app.world_mut().query::<&Face>();
-    let slots: Vec<usize> = faces.iter(app.world()).map(|face| face.slot).collect();
+    let mut faces = app.world_mut().query::<(&EntityInstance, &Face)>();
+    let slots: Vec<usize> = faces.iter(app.world()).map(|(_, face)| face.slot).collect();
     assert_eq!(slots.len(), 2);
     assert_ne!(slots[0], slots[1], "two faces, two slots");
 
@@ -495,7 +504,7 @@ fn two_faces_share_one_target_each_in_its_own_viewport() {
     }
     let remaining: Vec<String> = faces
         .iter(app.world())
-        .map(|face| face.id.clone())
+        .map(|(instance, _)| instance.id.clone())
         .collect();
     assert_eq!(remaining, vec!["left".to_string()]);
 }
@@ -693,7 +702,7 @@ fn a_face_draws_on_its_target_only_once_ready() {
     }
     fn drawn(app: &mut App) -> Vec<Drawn> {
         let world = app.world_mut();
-        let mut faces = world.query::<(&Face, Has<Superseded>, &InheritedVisibility)>();
+        let mut faces = world.query::<(&EntityInstance, Has<Superseded>, &InheritedVisibility)>();
         let mut cameras = world.query::<&Camera>();
         faces
             .iter(world)

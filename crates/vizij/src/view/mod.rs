@@ -15,7 +15,15 @@
 //! ([`FaceAssets`]), so the view never touches a file system — the same path
 //! on desktop, in the browser and on Android. A face comes into view once
 //! indexed, and is ready once the GPU has drawn every mesh visible to its
-//! camera ([`Face::ready`]).
+//! camera ([`EntityInstance::ready`], [`drawn`]). A mesh shown later, and
+//! what is drawn over the meshes (captions, the selection glow), may still
+//! compile when it first draws.
+//!
+//! A face's entity carries the shared [`EntityInstance`] — its id, metadata,
+//! GLB, joins to the scene, camera and readiness — so the shared layer's
+//! systems see it as they see any instance, and beside it a [`Face`] with
+//! what is vizij's: the bundle, the device's rig, the slot and the pose
+//! state.
 //! [`snapshot`] renders offscreen and reads the pixels back; [`frames`]
 //! publishes what is rendered into the device's store, and [`diagnostics`]
 //! the device's health.
@@ -32,7 +40,6 @@
 #[cfg(feature = "captions")]
 pub mod captions;
 pub mod diagnostics;
-mod drawn;
 pub mod frames;
 mod glow;
 pub use arora_visuals::hold;
@@ -65,10 +72,14 @@ use bevy::render::render_resource::BlendState;
 use vizij_api_core::value::{as_bool, as_float, as_vec3, as_vector};
 use vizij_api_core::Value;
 
+pub use arora_visuals::binding::{ElementTargets, SceneBinding, SceneBindings};
+use arora_visuals::drawn;
+use arora_visuals::instance::ClearCamera;
+pub use arora_visuals::instance::{EntityInstance, Superseded, ViewOf, CLEAR_ORDER};
 pub use arora_visuals::tone::ToneMapping;
 use arora_visuals::value::Decoded;
 use hold::{HoldTarget, Holds};
-use meta::{Binding, FaceMeta, FeatureKind, PrimitiveShape};
+use meta::{AssetMeta, Binding, FaceMeta, FeatureKind, PrimitiveShape};
 
 /// The in-memory asset source the faces' GLBs are served from: a loaded
 /// face's bytes live here under a path of their own until the face is
@@ -123,64 +134,32 @@ impl FaceAssets {
     }
 }
 
-/// A face shown by the view: an entity carrying the metadata, the GLB served
-/// from memory, the device's rig feed, its slot and the joins to the spawned
-/// scene once indexed. Its scene is a child; its camera is its own
-/// entity ([`FaceCamera`]).
+/// What of a face shown by the view is vizij's own, beside the shared
+/// [`EntityInstance`] on the same entity: the bundle the device runs, the
+/// device's rig feed, the slot the face stands in and its pose state. The
+/// instance carries the id, the metadata, the GLB, the joins to the scene,
+/// the camera ([`ViewOf`]) and whether it is ready.
 #[derive(Component)]
 pub struct Face {
-    /// The slot name the face was loaded under — what a front end names it
-    /// by, and what a pick reports.
-    pub id: String,
-    pub meta: FaceMeta,
-    /// Where its GLB is served from ([`FaceAssets::push`]).
-    pub asset_path: String,
+    /// The face's `VIZIJ_bundle` ([`FaceMeta::bundle`]): its graphs, programs
+    /// and neutral pose, and the rig prefix its keys sit under.
+    pub bundle: vizij_arora_host::Bundle,
     /// The device driving it; the view reads its pose each frame.
     pub rig: vizij_arora_hal::RigHal,
     /// The slot the face occupies in the world: faces stand [`SLOT_STRIDE`]
     /// apart along X, each with its camera over it, so a camera sees only
     /// its own face and a pointer ray from it meets no other.
     pub slot: usize,
-    /// The joins to the spawned scene, once every element's node exists.
-    pub bindings: Bindings,
-    /// Its camera.
-    pub camera: Entity,
-    /// Whether it is drawn: every mesh visible to its camera has its
-    /// pipeline compiled and the GPU has finished a frame drawing them —
-    /// or, should something keep that from happening, ten seconds of frames
-    /// at 60 Hz have gone by, and a warning says what held it back. From
-    /// then on it draws in its place on the target; until then its camera
-    /// draws it under the camera that clears the target, so the target never
-    /// shows a face whose mesh pipelines are still compiling. A mesh shown
-    /// later, and what is drawn over the meshes (captions, the selection
-    /// glow), may still compile when it first draws.
-    pub ready: bool,
+    /// What applying the device's pose keeps between frames.
+    pub pose: PoseState,
 }
 
-/// Where one animatable lands in a face's spawned scene.
-#[derive(Debug, Clone)]
-pub struct Bound {
-    /// The entity it moves: the element's node for a transform feature, its
-    /// mesh for a material feature, the bearer of its morph weights for a
-    /// morph.
-    pub entity: Entity,
-    pub feature: FeatureKind,
-    /// The component of the feature it drives alone ([`Binding::axis`]).
-    pub axis: Option<usize>,
-    /// The morph target's index among the mesh's weights, for a morph.
-    pub morph_index: Option<usize>,
-}
-
-/// The joins from a face's animatables to its spawned scene: built once the
-/// GLB scene has spawned, empty until then.
+/// What applying a face's pose keeps between frames: what each animatable
+/// last landed, which ones contend for a target, the triples per-axis writes
+/// assemble, and the materials the face's tone mapping goes over. Reset when
+/// the face is indexed.
 #[derive(Default)]
-pub struct Bindings {
-    /// animatable id → where it lands: one place per element it drives,
-    /// each taking the same value.
-    pub by_id: HashMap<String, Vec<Bound>>,
-    /// element id → the entities its features land on: what a pick tests,
-    /// what the glow outlines, what a static feature is set on.
-    pub elements: HashMap<String, ElementTargets>,
+pub struct PoseState {
     /// animatable id → the value last applied to the scene, what a held
     /// component keeps ([`hold`]), and what a pose that has not changed
     /// since leaves alone.
@@ -203,34 +182,7 @@ pub struct Bindings {
     /// The meshes whose materials the view composes ([`Surface`]): what the
     /// face's tone mapping goes over.
     surfaces: Vec<Entity>,
-    /// Whether the joins are built: from then on the face is posed, shaded
-    /// and in view.
-    pub indexed: bool,
 }
-
-/// The entities one element's features land on.
-#[derive(Debug, Clone, Copy)]
-pub struct ElementTargets {
-    /// Its glTF node: the transform features.
-    pub node: Entity,
-    /// Its own mesh — the node's, or its first primitive's: the static
-    /// material features, the pick, the glow. `None` for a group.
-    pub mesh: Option<Entity>,
-    /// The descendant carrying its morph weights, if it has morph targets.
-    pub morph: Option<Entity>,
-}
-
-/// A face being replaced by a reload under the same id: it keeps drawing
-/// until its successor is ready, then goes ([`retire_superseded`]), so a
-/// reload never shows an empty rectangle. It is not reported ready and
-/// reports no picks.
-#[derive(Component)]
-pub struct Superseded;
-
-/// A face's camera: orthographic over the face's authored bounds, over the
-/// face's slot.
-#[derive(Component)]
-pub struct FaceCamera(pub Entity);
 
 /// A change the view applies, sent by whatever fronts the device.
 pub enum ViewEvent {
@@ -309,7 +261,7 @@ pub enum ViewEvent {
 pub struct FaceView {
     /// The world rectangle the camera frames instead of the authored
     /// rootBounds: `(center x, center y, width, height)`, as
-    /// [`FaceMeta::root_bounds`]. Positive sizes.
+    /// [`AssetMeta::root_bounds`]. Positive sizes.
     pub bounds: Option<(f32, f32, f32, f32)>,
     /// How the bounds fit the face's rectangle.
     pub fit: Option<Fit>,
@@ -343,7 +295,7 @@ struct Framing {
 }
 
 impl Framing {
-    fn of(meta: &FaceMeta, options: &ViewOptions, view: Option<&FaceView>) -> Self {
+    fn of(meta: &AssetMeta, options: &ViewOptions, view: Option<&FaceView>) -> Self {
         let (cx, cy, width, height) = view
             .and_then(|view| view.bounds)
             .or(meta.root_bounds)
@@ -390,10 +342,10 @@ struct Placements(HashMap<String, Option<IRect>>);
 #[derive(Resource, Default)]
 struct PendingStatics(HashMap<String, Vec<(String, String, Value)>>);
 
-/// Whether every requested face is ready ([`Face::ready`]) — and at least
-/// one is. What a snapshot waits for before it captures.
+/// Whether every requested face is ready ([`EntityInstance::ready`]) — and
+/// at least one is. What a snapshot waits for before it captures.
 pub fn all_faces_ready(app: &mut App) -> bool {
-    let mut faces = app.world_mut().query::<&Face>();
+    let mut faces = app.world_mut().query::<&EntityInstance>();
     let mut any = false;
     for face in faces.iter(app.world()) {
         if !face.ready {
@@ -660,7 +612,7 @@ impl Plugin for ViewPlugin {
                     apply_view_events,
                     // Before the cameras are placed, so a face made ready
                     // draws in its place from the frame it is ready.
-                    drawn::ready_drawn_faces,
+                    drawn::ready_drawn_instances,
                     clear_target,
                     place_cameras,
                     frame_cameras,
@@ -698,7 +650,7 @@ fn apply_view_events(
     mut statics: ResMut<PendingStatics>,
     mut compositions: ResMut<Compositions>,
     mut commands: Commands,
-    faces: Query<(Entity, &Face)>,
+    faces: Query<(Entity, &EntityInstance, &Face)>,
     asset_server: Res<AssetServer>,
 ) {
     let Some(events) = events else { return };
@@ -720,7 +672,7 @@ fn apply_view_events(
                 glb,
                 rig,
             } => {
-                for (entity, face) in &faces {
+                for (entity, face, _) in &faces {
                     if face.id == face_id && !gone.contains(&entity) {
                         commands.entity(entity).insert(Superseded);
                     }
@@ -749,17 +701,23 @@ fn apply_view_events(
                         offscreen.as_deref(),
                     ))
                     .id();
+                let FaceMeta { asset, bundle } = *meta;
                 let face = commands
                     .spawn((
-                        Face {
+                        EntityInstance {
                             id: face_id.clone(),
-                            meta: *meta,
                             asset_path: asset_path.clone(),
+                            meta: asset,
+                            bindings: SceneBindings::default(),
+                            camera,
+                            draw_order: drawing_order(slot),
+                            ready: false,
+                        },
+                        Face {
+                            bundle,
                             rig,
                             slot,
-                            bindings: Bindings::default(),
-                            camera,
-                            ready: false,
+                            pose: PoseState::default(),
                         },
                         Transform::from_translation(slot_origin(slot)),
                         // In view once indexed ([`index_faces`]).
@@ -769,13 +727,13 @@ fn apply_view_events(
                         )],
                     ))
                     .id();
-                commands.entity(camera).insert(FaceCamera(face));
+                commands.entity(camera).insert(ViewOf(face));
                 spawned.push((face_id, face, camera, asset_path, slot));
             }
             ViewEvent::UnloadFace { face_id } => {
-                for (entity, face) in &faces {
-                    if face.id == face_id && gone.insert(entity) {
-                        despawn_face(entity, face, &assets, &mut slots, &mut commands);
+                for (entity, instance, face) in &faces {
+                    if instance.id == face_id && gone.insert(entity) {
+                        despawn_face(entity, instance, face, &assets, &mut slots, &mut commands);
                         log::info!("face {face_id}: unloaded");
                     }
                 }
@@ -826,20 +784,8 @@ fn apply_view_events(
     }
 }
 
-/// The camera that clears the target with the background, below every
-/// ready face's: a face's camera only draws its face over it, so the target
-/// shows the background wherever no face draws — all of it when no face is placed
-/// on it — whichever faces come, go or leave the target. Its write to the
-/// target replaces what is there, so what a camera ordered below it draws —
-/// a face that is not ready yet ([`drawn`]) — never shows.
-#[derive(Component)]
-struct ClearCamera;
-
-/// The order among the target's cameras of the camera that clears it: a
-/// face's camera ordered below it draws nothing the target shows.
-pub const CLEAR_ORDER: isize = -1;
-
-/// The order of a ready face's camera: above the clear, by slot.
+/// The order of a ready face's camera ([`EntityInstance::draw_order`]):
+/// above the clear, by slot.
 fn drawing_order(slot: usize) -> isize {
     slot as isize
 }
@@ -850,7 +796,12 @@ fn warming_order(slot: usize) -> isize {
     CLEAR_ORDER - 1 - slot as isize
 }
 
-/// Keep the target's [`ClearCamera`], on the page's background.
+/// Keep the target's [`ClearCamera`], on the page's background: below every
+/// ready face's camera, so a face's camera only draws its face over it and
+/// the target shows the background wherever no face draws — all of it when
+/// no face is placed on it — whichever faces come, go or leave the target.
+/// Its write to the target replaces what is there, so what a camera ordered
+/// below it draws — a face that is not ready yet ([`drawn`]) — never shows.
 fn clear_target(
     options: Res<ViewOptions>,
     offscreen: Option<Res<OffscreenTarget>>,
@@ -897,8 +848,8 @@ fn clear_target(
 /// instead, as it becomes ready by drawing ([`drawn`]).
 fn place_cameras(
     placements: Res<Placements>,
-    faces: Query<&Face>,
-    mut cameras: Query<(&mut Camera, Has<drawn::Warming>), With<FaceCamera>>,
+    faces: Query<&EntityInstance>,
+    mut cameras: Query<(&mut Camera, Has<drawn::Warming>), With<ViewOf>>,
 ) {
     for face in &faces {
         let Ok((mut camera, warming)) = cameras.get_mut(face.camera) else {
@@ -970,14 +921,14 @@ fn placement(rect: IRect, target: UVec2) -> Option<(URect, Option<SubCameraView>
 fn frame_cameras(
     views: Res<FaceViews>,
     options: Res<ViewOptions>,
-    faces: Query<&Face>,
-    mut cameras: Query<(&Camera, &mut Projection, &mut Transform), With<FaceCamera>>,
+    faces: Query<(&EntityInstance, &Face)>,
+    mut cameras: Query<(&Camera, &mut Projection, &mut Transform), With<ViewOf>>,
 ) {
-    for face in &faces {
-        let Ok((camera, mut projection, mut transform)) = cameras.get_mut(face.camera) else {
+    for (instance, face) in &faces {
+        let Ok((camera, mut projection, mut transform)) = cameras.get_mut(instance.camera) else {
             continue;
         };
-        let framing = Framing::of(&face.meta, &options, views.0.get(&face.id));
+        let framing = Framing::of(&instance.meta, &options, views.0.get(&instance.id));
         let slot = camera
             .sub_camera_view
             .map(|sub_view| sub_view.full_size.as_vec2());
@@ -1001,17 +952,17 @@ fn frame_cameras(
 /// changes.
 fn tone_faces(
     views: Res<FaceViews>,
-    faces: Query<&Face>,
+    faces: Query<(&EntityInstance, &Face)>,
     mut surfaces: Query<(&MeshMaterial3d<StandardMaterial>, &mut Surface)>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    for face in &faces {
+    for (instance, face) in &faces {
         let tone = views
             .0
-            .get(&face.id)
+            .get(&instance.id)
             .map(|view| view.tone_mapping)
             .unwrap_or_default();
-        for mesh in &face.bindings.surfaces {
+        for mesh in &face.pose.surfaces {
             let Ok((handle, mut surface)) = surfaces.get_mut(*mesh) else {
                 continue;
             };
@@ -1031,8 +982,8 @@ fn measure_safe_areas(
     views: Res<FaceViews>,
     options: Res<ViewOptions>,
     placements: Res<Placements>,
-    faces: Query<&Face, Without<Superseded>>,
-    cameras: Query<&Camera, With<FaceCamera>>,
+    faces: Query<&EntityInstance, Without<Superseded>>,
+    cameras: Query<&Camera, With<ViewOf>>,
     mut areas: ResMut<SafeAreas>,
 ) {
     areas.0.clear();
@@ -1068,33 +1019,45 @@ fn safe_area(framing: &Framing, rect: Rect) -> Rect {
 /// Take a face down: its scene, its camera, its GLB, its slot.
 fn despawn_face(
     entity: Entity,
+    instance: &EntityInstance,
     face: &Face,
     assets: &FaceAssets,
     slots: &mut Slots,
     commands: &mut Commands,
 ) {
-    commands.entity(face.camera).despawn();
+    commands.entity(instance.camera).despawn();
     commands.entity(entity).despawn();
-    assets.remove(&face.asset_path);
+    assets.remove(&instance.asset_path);
     slots.release(face.slot);
 }
 
 /// Once a reloaded face is ready, the faces it supersedes go: the swap lands
 /// in one frame, the new scene posed, shaded and drawn once already.
 fn retire_superseded(
-    faces: Query<(Entity, &Face, Has<Superseded>)>,
+    faces: Query<(Entity, &EntityInstance, &Face, Has<Superseded>)>,
     assets: Res<FaceAssets>,
     mut slots: ResMut<Slots>,
     mut commands: Commands,
 ) {
-    for (_, face, superseded) in &faces {
-        if superseded || !face.ready {
+    for (_, instance, _, superseded) in &faces {
+        if superseded || !instance.ready {
             continue;
         }
-        for (old, old_face, old_superseded) in &faces {
-            if old_superseded && old_face.id == face.id {
-                despawn_face(old, old_face, &assets, &mut slots, &mut commands);
-                log::info!("face {}: reloaded, slot {} retired", face.id, old_face.slot);
+        for (old, old_instance, old_face, old_superseded) in &faces {
+            if old_superseded && old_instance.id == instance.id {
+                despawn_face(
+                    old,
+                    old_instance,
+                    old_face,
+                    &assets,
+                    &mut slots,
+                    &mut commands,
+                );
+                log::info!(
+                    "face {}: reloaded, slot {} retired",
+                    instance.id,
+                    old_face.slot
+                );
             }
         }
     }
@@ -1280,7 +1243,7 @@ fn visible_extent(bounds: Vec2, fit: Fit, zoom: Vec2, width: f32, height: f32) -
 /// ready ([`drawn`]).
 #[allow(clippy::too_many_arguments)]
 fn index_faces(
-    mut faces: Query<(Entity, &mut Face)>,
+    mut faces: Query<(Entity, &mut EntityInstance, &mut Face)>,
     options: Res<ViewOptions>,
     views: Res<FaceViews>,
     names: Query<&Name>,
@@ -1292,8 +1255,8 @@ fn index_faces(
     mut mesh_assets: ResMut<Assets<Mesh>>,
     mut commands: Commands,
 ) {
-    for (root, mut face) in &mut faces {
-        if face.bindings.indexed {
+    for (root, mut instance, mut face) in &mut faces {
+        if instance.bindings.indexed {
             continue;
         }
         // Wait until the scene has spawned under the face's scene root.
@@ -1323,7 +1286,7 @@ fn index_faces(
                 stack.extend(kids.iter().map(|kid| (kid, depth + 1)));
             }
         }
-        if !face
+        if !instance
             .meta
             .elements
             .iter()
@@ -1334,7 +1297,7 @@ fn index_faces(
 
         let tone = views
             .0
-            .get(&face.id)
+            .get(&instance.id)
             .map(|view| view.tone_mapping)
             .unwrap_or_default();
         // Give `mesh` a material of its own: `loaded` under the web's
@@ -1365,7 +1328,7 @@ fn index_faces(
         let mut shaded: HashSet<Entity> = HashSet::new();
         let mut morph_of: HashMap<String, Entity> = HashMap::new();
         let mut elements = HashMap::new();
-        for element in &face.meta.elements {
+        for element in &instance.meta.elements {
             let node = by_name[element.node_name.as_str()].0;
             let shading = Shading::of(element.material.as_deref());
             // The element's own mesh is the node's or its primitives (the
@@ -1466,13 +1429,13 @@ fn index_faces(
                 axis,
                 ..
             },
-        ) in &face.meta.animatables
+        ) in &instance.meta.animatables
         {
-            let bounds: Vec<Bound> = node_names
+            let bounds: Vec<SceneBinding> = node_names
                 .iter()
                 .filter_map(|node_name| {
                     let &(node, _) = by_name.get(node_name.as_str())?;
-                    let element = face
+                    let element = instance
                         .meta
                         .elements
                         .iter()
@@ -1490,7 +1453,7 @@ fn index_faces(
                             ),
                             _ => (*mesh_of.get(node_name)?, None),
                         };
-                    Some(Bound {
+                    Some(SceneBinding {
                         entity,
                         feature: feature.clone(),
                         axis: *axis,
@@ -1505,23 +1468,22 @@ fn index_faces(
 
         log::info!(
             "face {}: scene indexed, {} bindings over {} elements",
-            face.id,
+            instance.id,
             by_id.len(),
-            face.meta.elements.len(),
+            instance.meta.elements.len(),
         );
-        let contended = contended(&by_id);
-        face.bindings = Bindings {
+        face.pose = PoseState {
+            contended: contended(&by_id),
+            surfaces: shaded.into_iter().collect(),
+            ..PoseState::default()
+        };
+        instance.bindings = SceneBindings {
             by_id,
             elements,
-            shown: HashMap::new(),
-            contended,
-            reland: false,
-            assembled: HashMap::new(),
-            surfaces: shaded.into_iter().collect(),
             indexed: true,
         };
         commands.entity(root).insert(Visibility::Inherited);
-        commands.entity(face.camera).insert(drawn::Warming);
+        commands.entity(instance.camera).insert(drawn::Warming);
     }
 }
 
@@ -1556,33 +1518,35 @@ fn primitive_mesh(shape: PrimitiveShape) -> Mesh {
 /// Set the static features waiting for their face, once it is indexed.
 fn apply_statics(
     mut pending: ResMut<PendingStatics>,
-    mut faces: Query<&mut Face, Without<Superseded>>,
+    mut faces: Query<(&EntityInstance, &mut Face), Without<Superseded>>,
     mut scene: SceneFeatures,
 ) {
     if pending.0.is_empty() {
         return;
     }
-    for mut face in &mut faces {
-        if !face.bindings.indexed {
+    for (instance, mut face) in &mut faces {
+        if !instance.bindings.indexed {
             continue;
         }
-        let face = &mut *face;
-        let Some(edits) = pending.0.remove(&face.id) else {
+        let Some(edits) = pending.0.remove(&instance.id) else {
             continue;
         };
         for (element_id, feature, value) in edits {
-            let target = face
+            let target = instance
                 .meta
                 .elements
                 .iter()
                 .find(|element| element.id == element_id)
-                .zip(face.bindings.elements.get(&element_id));
+                .zip(instance.bindings.elements.get(&element_id));
             let Some((element, targets)) = target else {
-                log::warn!("face {}: no element {element_id}", face.id);
+                log::warn!("face {}: no element {element_id}", instance.id);
                 continue;
             };
             let Some((kind, axis)) = FeatureKind::parse(&feature, &element.morph_targets) else {
-                log::warn!("face {}: {element_id} has no feature {feature:?}", face.id);
+                log::warn!(
+                    "face {}: {element_id} has no feature {feature:?}",
+                    instance.id
+                );
                 continue;
             };
             let (entity, morph_index) = match &kind {
@@ -1598,18 +1562,18 @@ fn apply_statics(
             let (Some(entity), Some(decoded)) = (entity, decode(&kind, axis, &value)) else {
                 log::warn!(
                     "face {}: {feature} of {element_id} does not take {value:?}",
-                    face.id
+                    instance.id
                 );
                 continue;
             };
-            let bound = Bound {
+            let bound = SceneBinding {
                 entity,
                 feature: kind,
                 axis,
                 morph_index,
             };
-            scene.land(&mut face.bindings.assembled, &bound, decoded);
-            face.bindings.reland = true;
+            scene.land(&mut face.pose.assembled, &bound, decoded);
+            face.pose.reland = true;
         }
     }
 }
@@ -1617,8 +1581,8 @@ fn apply_statics(
 /// The animatables of `by_id` whose target — entity, feature, morph
 /// target — another one lands on too, one of them binding it whole: per-axis
 /// animatables alone each set their own component, so they do not contend.
-fn contended(by_id: &HashMap<String, Vec<Bound>>) -> HashSet<String> {
-    let target = |bound: &Bound| (bound.entity, bound.feature.clone(), bound.morph_index);
+fn contended(by_id: &HashMap<String, Vec<SceneBinding>>) -> HashSet<String> {
+    let target = |bound: &SceneBinding| (bound.entity, bound.feature.clone(), bound.morph_index);
     // Per target: how many land on it, and whether one binds it whole.
     let mut sharing = HashMap::new();
     for bound in by_id.values().flatten() {
@@ -1643,15 +1607,20 @@ fn contended(by_id: &HashMap<String, Vec<Bound>>) -> HashSet<String> {
 /// shows is left alone, so an unchanged transform, morph weight or surface
 /// is not marked changed and what follows from it (transform propagation,
 /// the morph weights' upload) is not done again.
-fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneFeatures) {
-    for mut face in &mut faces {
-        if !face.bindings.indexed {
+fn apply_poses(
+    mut faces: Query<(&EntityInstance, &mut Face)>,
+    holds: Res<Holds>,
+    mut scene: SceneFeatures,
+) {
+    for (instance, mut face) in &mut faces {
+        if !instance.bindings.indexed {
             continue;
         }
         let face = &mut *face;
-        let held = holds.of(&face.id);
-        let bindings = &mut face.bindings;
-        let reland = std::mem::take(&mut bindings.reland);
+        let held = holds.of(&instance.id);
+        let bindings = &instance.bindings;
+        let pose = &mut face.pose;
+        let reland = std::mem::take(&mut pose.reland);
         face.rig.visit_pose(|id, value| {
             // The rig keys its pose by bare animatable id.
             // Every place it lands takes the same feature and component:
@@ -1667,8 +1636,7 @@ fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneF
             };
             if let Some(held) = held {
                 let shown = || {
-                    bindings
-                        .shown
+                    pose.shown
                         .get(id)
                         .copied()
                         .or_else(|| scene.read(bound.entity, &bound.feature, bound.morph_index))
@@ -1678,19 +1646,16 @@ fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneF
                     None => return,
                 }
             }
-            if !reland
-                && bindings.shown.get(id) == Some(&decoded)
-                && !bindings.contended.contains(id)
-            {
+            if !reland && pose.shown.get(id) == Some(&decoded) && !pose.contended.contains(id) {
                 return;
             }
             for bound in bounds {
-                scene.land(&mut bindings.assembled, bound, decoded);
+                scene.land(&mut pose.assembled, bound, decoded);
             }
-            match bindings.shown.get_mut(id) {
+            match pose.shown.get_mut(id) {
                 Some(shown) => *shown = decoded,
                 None => {
-                    bindings.shown.insert(id.to_string(), decoded);
+                    pose.shown.insert(id.to_string(), decoded);
                 }
             }
         });
@@ -1747,7 +1712,7 @@ impl SceneFeatures<'_, '_> {
     fn land(
         &mut self,
         assembled: &mut HashMap<(Entity, FeatureKind), [f32; 3]>,
-        bound: &Bound,
+        bound: &SceneBinding,
         value: Decoded,
     ) {
         let key = || (bound.entity, bound.feature.clone());
@@ -2137,7 +2102,7 @@ mod tests {
         let mut world = World::new();
         world.init_resource::<Assets<StandardMaterial>>();
         let node = world.spawn(Transform::from_xyz(1.0, 2.0, 3.0)).id();
-        let axis = |feature: FeatureKind, axis: usize| Bound {
+        let axis = |feature: FeatureKind, axis: usize| SceneBinding {
             entity: node,
             feature,
             axis: Some(axis),
@@ -2183,27 +2148,34 @@ mod tests {
                 &arora_types::data::StateChange::set(id.as_str(), vec3(value)),
             )
         };
-        let bound = Bound {
+        let bound = SceneBinding {
             entity: node,
             feature: FeatureKind::Translation,
             axis: None,
             morph_index: None,
         };
         let face = world
-            .spawn(Face {
-                id: "face".into(),
-                meta: FaceMeta::default(),
-                asset_path: String::new(),
-                rig: rig.clone(),
-                slot: 0,
-                bindings: Bindings {
-                    by_id: HashMap::from([(id.clone(), vec![bound])]),
-                    indexed: true,
-                    ..Default::default()
+            .spawn((
+                EntityInstance {
+                    id: "face".into(),
+                    asset_path: String::new(),
+                    meta: AssetMeta::default(),
+                    bindings: SceneBindings {
+                        by_id: HashMap::from([(id.clone(), vec![bound])]),
+                        indexed: true,
+                        ..Default::default()
+                    },
+                    camera: Entity::PLACEHOLDER,
+                    draw_order: drawing_order(0),
+                    ready: true,
                 },
-                camera: Entity::PLACEHOLDER,
-                ready: true,
-            })
+                Face {
+                    bundle: Default::default(),
+                    rig: rig.clone(),
+                    slot: 0,
+                    pose: PoseState::default(),
+                },
+            ))
             .id();
         let frame = |world: &mut World| {
             world.increment_change_tick();
@@ -2230,7 +2202,7 @@ mod tests {
         // A static feature lands over the pose: the next frame lands the
         // pose again, unchanged as it is.
         world.get_mut::<Transform>(node).unwrap().translation = Vec3::ZERO;
-        world.get_mut::<Face>(face).unwrap().bindings.reland = true;
+        world.get_mut::<Face>(face).unwrap().pose.reland = true;
         let (shown, _) = frame(&mut world);
         assert_eq!(shown, Vec3::new(4.0, 5.0, 6.0));
     }
@@ -2251,26 +2223,33 @@ mod tests {
         ];
         let id = "lids".to_string();
         let rig = vizij_arora_hal::RigHal::new();
-        let bound = |entity| Bound {
+        let bound = |entity| SceneBinding {
             entity,
             feature: FeatureKind::Translation,
             axis: None,
             morph_index: None,
         };
-        world.spawn(Face {
-            id: "face".into(),
-            meta: FaceMeta::default(),
-            asset_path: String::new(),
-            rig: rig.clone(),
-            slot: 0,
-            bindings: Bindings {
-                by_id: HashMap::from([(id.clone(), nodes.map(bound).to_vec())]),
-                indexed: true,
-                ..Default::default()
+        world.spawn((
+            EntityInstance {
+                id: "face".into(),
+                asset_path: String::new(),
+                meta: AssetMeta::default(),
+                bindings: SceneBindings {
+                    by_id: HashMap::from([(id.clone(), nodes.map(bound).to_vec())]),
+                    indexed: true,
+                    ..Default::default()
+                },
+                camera: Entity::PLACEHOLDER,
+                draw_order: drawing_order(0),
+                ready: true,
             },
-            camera: Entity::PLACEHOLDER,
-            ready: true,
-        });
+            Face {
+                bundle: Default::default(),
+                rig: rig.clone(),
+                slot: 0,
+                pose: PoseState::default(),
+            },
+        ));
 
         let drive = |value: [f32; 3]| {
             arora_hal::Hal::try_send(
@@ -2294,7 +2273,7 @@ mod tests {
     fn a_whole_binding_contends_with_whatever_shares_its_target() {
         let mut world = World::new();
         let (a, b) = (world.spawn_empty().id(), world.spawn_empty().id());
-        let bound = |entity, axis| Bound {
+        let bound = |entity, axis| SceneBinding {
             entity,
             feature: FeatureKind::Translation,
             axis,

@@ -20,7 +20,7 @@ use bevy::prelude::*;
 use vizij_arora_host::diagnostics::{self as host, FaceHealth};
 use vizij_arora_host::profile;
 
-use super::{Compositions, Face, Superseded};
+use super::{Compositions, EntityInstance, Face, Superseded};
 
 pub struct DiagnosticsPlugin;
 
@@ -42,7 +42,7 @@ struct Meter {
 fn report(
     time: Res<Time>,
     mut meter: ResMut<Meter>,
-    faces: Query<(Entity, &Face), Without<Superseded>>,
+    faces: Query<(Entity, &EntityInstance, &Face), Without<Superseded>>,
     compositions: Res<Compositions>,
     mut levels: Local<HashMap<Entity, u8>>,
 ) {
@@ -56,15 +56,22 @@ fn report(
 
     levels.retain(|entity, _| faces.contains(*entity));
     let stamp = SystemTime::now();
-    for (entity, face) in &faces {
-        let bundle = &face.meta.bundle;
+    for (entity, instance, face) in &faces {
+        let bundle = &face.bundle;
         let level = *levels.entry(entity).or_insert_with(|| {
             profile::coverage(bundle.face_id.clone(), &bundle.input_paths()).level
         });
         let health = FaceHealth {
-            face_id: bundle.face_id.clone().unwrap_or_else(|| face.id.clone()),
+            face_id: bundle
+                .face_id
+                .clone()
+                .unwrap_or_else(|| instance.id.clone()),
             level,
-            contended: compositions.0.get(&face.id).cloned().unwrap_or_default(),
+            contended: compositions
+                .0
+                .get(&instance.id)
+                .cloned()
+                .unwrap_or_default(),
         };
         let report = host::report(frame_rate, &[health], stamp);
         face.rig
@@ -108,7 +115,7 @@ mod tests {
 
     use super::*;
     use crate::view::meta::FaceMeta;
-    use crate::view::Bindings;
+    use crate::view::PoseState;
 
     /// A face shown by the view reports about once a second: the rate the
     /// view renders at, the face's id and compliance level, and the paths
@@ -136,16 +143,23 @@ mod tests {
                 sources: vec!["rig".into(), "ros4hri".into()],
             }],
         );
-        app.world_mut().spawn(Face {
-            id: "face".into(),
-            meta,
-            asset_path: String::new(),
-            rig: rig.clone(),
-            slot: 0,
-            bindings: Bindings::default(),
-            camera: Entity::PLACEHOLDER,
-            ready: false,
-        });
+        app.world_mut().spawn((
+            EntityInstance {
+                id: "face".into(),
+                asset_path: String::new(),
+                meta: meta.asset,
+                bindings: Default::default(),
+                camera: Entity::PLACEHOLDER,
+                draw_order: 0,
+                ready: false,
+            },
+            Face {
+                bundle: meta.bundle,
+                rig: rig.clone(),
+                slot: 0,
+                pose: PoseState::default(),
+            },
+        ));
 
         // 2.5 s of frames at 100 Hz on the app's clock, stepped by hand so
         // the rate is the test's and not the host's: two reports.

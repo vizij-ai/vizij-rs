@@ -17,7 +17,7 @@ use bevy::mesh::Indices;
 use bevy::prelude::*;
 
 use super::pick::ElementMeshes;
-use super::{ElementTargets, Face, Superseded};
+use super::{ElementTargets, EntityInstance, Superseded};
 
 /// The angle two adjacent triangles turn by for their shared edge to be
 /// outlined — the authoring app's glow threshold.
@@ -69,7 +69,7 @@ struct FeatureEdges(HashMap<AssetId<Mesh>, Arc<Vec<[u32; 2]>>>);
 /// Outline every selected element of every indexed face.
 fn draw_glow(
     selections: Res<Selections>,
-    faces: Query<&Face, Without<Superseded>>,
+    faces: Query<&EntityInstance, Without<Superseded>>,
     parents: Query<&ChildOf>,
     elements: ElementMeshes,
     mut edges: ResMut<FeatureEdges>,

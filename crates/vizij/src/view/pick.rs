@@ -22,12 +22,12 @@ use bevy::picking::events::PointerPress;
 use bevy::picking::mesh_picking::ray_cast::{ray_mesh_intersection, Backfaces};
 use bevy::prelude::*;
 
-use super::{ElementTargets, Face, Picked, Picks, Superseded};
+use super::{ElementTargets, EntityInstance, Picked, Picks, Superseded};
 
 /// Resolve a press to a pick or a miss ([module docs](self)).
 pub(super) fn on_press(
     press: On<PointerPress>,
-    faces: Query<&Face, Without<Superseded>>,
+    faces: Query<&EntityInstance, Without<Superseded>>,
     cameras: Query<(&Camera, &GlobalTransform)>,
     elements: ElementMeshes,
     mut picks: ResMut<Picks>,
@@ -37,7 +37,7 @@ pub(super) fn on_press(
         return;
     }
     let position = press.pointer.position;
-    let mut under: Vec<(&Face, &Camera, &GlobalTransform)> = faces
+    let mut under: Vec<(&EntityInstance, &Camera, &GlobalTransform)> = faces
         .iter()
         .filter(|face| face.ready)
         .filter_map(|face| {

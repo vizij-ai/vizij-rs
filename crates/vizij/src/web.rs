@@ -89,7 +89,7 @@ static SAFE_AREAS: Mutex<Vec<(String, [f32; 4])>> = Mutex::new(Vec::new());
 /// The App's report to the page. A Vizij being reloaded is not ready until
 /// its new scene is.
 fn report(
-    faces: Query<&view::Face, Without<view::Superseded>>,
+    faces: Query<&view::EntityInstance, Without<view::Superseded>>,
     mut picks: ResMut<Picks>,
     areas: Res<SafeAreas>,
 ) {

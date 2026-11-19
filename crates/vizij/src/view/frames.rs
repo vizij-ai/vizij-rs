@@ -502,14 +502,10 @@ mod tests {
             .init_resource::<Captured>()
             .add_systems(Last, complete);
         app.world_mut().spawn(Face {
-            id: "face".into(),
-            meta: FaceMeta::default(),
-            asset_path: String::new(),
+            bundle: Default::default(),
             rig: rig.clone(),
             slot: 0,
-            bindings: Default::default(),
-            camera: Entity::PLACEHOLDER,
-            ready: true,
+            pose: Default::default(),
         });
         let write = |rate: f64| rig.try_send(&StateChange::set(FRAME_RATE, Value::F64(rate)));
 
