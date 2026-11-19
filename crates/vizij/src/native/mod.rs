@@ -565,7 +565,7 @@ async fn enroll(
         log::error!("no Semio Studio bridge: {why}");
     }
     let Some(studio_handle) = handle.clone() else {
-        return futures::future::pending().await;
+        match futures::future::pending::<std::convert::Infallible>().await {}
     };
     loop {
         match studio_handle.enroll_when_needed(&*enroller).await {
@@ -574,12 +574,12 @@ async fn enroll(
                 share(Some(e.to_string()));
                 if !offers_on_request {
                     log::error!("the device stays offline with Studio for the rest of this run");
-                    return futures::future::pending().await;
+                    match futures::future::pending::<std::convert::Infallible>().await {}
                 }
             }
             ended => {
                 log::error!("{ended}");
-                return futures::future::pending().await;
+                match futures::future::pending::<std::convert::Infallible>().await {}
             }
         }
     }

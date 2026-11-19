@@ -1,8 +1,8 @@
 //! Self-provisioning build: everything Piper needs, fetched and prepared here so
 //! `cargo build` is the whole setup — no API keys, no env vars, no manual steps.
 //!
-//! 1. Builds `libpiper` (cmake; it fetches espeak-ng and a prebuilt onnxruntime)
-//!    from a pinned piper1-gpl commit.
+//! 1. Builds `libpiper` (cmake; it fetches espeak-ng) from a pinned piper1-gpl
+//!    commit, against a prebuilt onnxruntime taken from its NuGet package.
 //! 2. Downloads the default voice from Hugging Face.
 //! 3. Patches the voice for phoneme alignments — the upstream Python
 //!    `patch_voice_with_alignment` is a one-line graph edit (mark the model's
@@ -22,6 +22,15 @@ use std::process::Command;
 /// Pinned piper1-gpl commit (the revision validated in the Piper bootstrap
 /// exercise: exact alignment reconciliation on the Python and C APIs).
 const PIPER_COMMIT: &str = "4bfd11c5b5998660c52aaa743c4fa05717104e98";
+
+/// The onnxruntime release libpiper is built against: the version its
+/// CMakeLists expects. It comes from the `Microsoft.ML.OnnxRuntime` NuGet
+/// package, which carries the headers and every desktop platform's shared
+/// library, because a NuGet version is immutable once published while a
+/// GitHub release's assets can be removed. libpiper's own fallback downloads
+/// the GitHub asset without checking the result, so a missing asset surfaces
+/// only as a library CMake cannot find.
+const ONNXRUNTIME_VERSION: &str = "1.22.0";
 
 /// The default voice. Medium-quality US English — the bootstrap baseline voice.
 const VOICE: &str = "en_US-lessac-medium";
@@ -129,10 +138,11 @@ fn build_libpiper(cache: &Path) -> PathBuf {
          ({espeak_build_path_len} chars) — set VIZIJ_PIPER_CACHE to a shorter directory"
     );
 
+    let onnxruntime = provision_onnxruntime(cache);
     let build = src.join("libpiper/build");
-    // current_dir(cache): libpiper's cmake drops a `download/` dir (the
-    // onnxruntime archive) relative to the working directory — keep it in the
-    // cache, never in the crate.
+    // current_dir(cache): libpiper's CMakeLists writes paths relative to the
+    // working directory (a `download/` dir when it fetches onnxruntime
+    // itself) — keep anything it writes in the cache, never in the crate.
     run(Command::new("cmake")
         .current_dir(cache)
         .arg("-B")
@@ -140,7 +150,8 @@ fn build_libpiper(cache: &Path) -> PathBuf {
         .arg("-S")
         .arg(src.join("libpiper"))
         .arg("-DCMAKE_BUILD_TYPE=Release")
-        .arg(format!("-DCMAKE_INSTALL_PREFIX={}", install.display())));
+        .arg(format!("-DCMAKE_INSTALL_PREFIX={}", install.display()))
+        .arg(format!("-DONNXRUNTIME_DIR={}", onnxruntime.display())));
     // espeak-ng's data compiler resolves `../phsource` / `../dictsource`
     // relative to ESPEAK_DATA_PATH (the external project's build dir), i.e. one
     // level ABOVE it — where nothing puts them. Pre-plant symlinks to the
@@ -193,6 +204,73 @@ fn build_libpiper(cache: &Path) -> PathBuf {
     install
 }
 
+/// Lay out onnxruntime as libpiper's CMakeLists reads `ONNXRUNTIME_DIR`:
+/// `include/` with the C and C++ API headers, `lib/` with the shared library
+/// under the name the linker searches and under the install name the library
+/// records, which is what libpiper's dependency on it names. Idempotent: the
+/// layout is cached per version and platform.
+fn provision_onnxruntime(cache: &Path) -> PathBuf {
+    let os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    let (rid, file, install_name) = match (os.as_str(), arch.as_str()) {
+        ("linux", "x86_64") => (
+            "linux-x64",
+            "libonnxruntime.so",
+            "libonnxruntime.so.1".to_string(),
+        ),
+        ("linux", "aarch64") => (
+            "linux-arm64",
+            "libonnxruntime.so",
+            "libonnxruntime.so.1".to_string(),
+        ),
+        ("macos", "x86_64") => (
+            "osx-x64",
+            "libonnxruntime.dylib",
+            format!("libonnxruntime.{ONNXRUNTIME_VERSION}.dylib"),
+        ),
+        ("macos", "aarch64") => (
+            "osx-arm64",
+            "libonnxruntime.dylib",
+            format!("libonnxruntime.{ONNXRUNTIME_VERSION}.dylib"),
+        ),
+        _ => panic!("vizij-piper: no prebuilt onnxruntime for {arch} {os}"),
+    };
+    let dir = cache.join(format!("onnxruntime-{ONNXRUNTIME_VERSION}-{rid}"));
+    let lib = dir.join("lib");
+    if lib.join(file).exists() && lib.join(&install_name).exists() && dir.join("include").exists() {
+        return dir;
+    }
+    let package = cache.join(format!("onnxruntime-{ONNXRUNTIME_VERSION}.nupkg"));
+    if !package.exists() {
+        download(
+            &format!(
+                "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/\
+                 {ONNXRUNTIME_VERSION}/microsoft.ml.onnxruntime.{ONNXRUNTIME_VERSION}.nupkg"
+            ),
+            &package,
+        );
+    }
+    let unpacked = cache.join(format!("onnxruntime-{ONNXRUNTIME_VERSION}-nupkg"));
+    let _ = std::fs::remove_dir_all(&unpacked);
+    run(Command::new("unzip")
+        .arg("-q")
+        .arg(&package)
+        .arg("build/native/include/*")
+        .arg(format!("runtimes/{rid}/native/*"))
+        .arg("-d")
+        .arg(&unpacked));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("create the onnxruntime dir");
+    std::fs::rename(unpacked.join("build/native/include"), dir.join("include"))
+        .expect("move the onnxruntime headers into place");
+    std::fs::rename(unpacked.join(format!("runtimes/{rid}/native")), &lib)
+        .expect("move the onnxruntime libraries into place");
+    std::os::unix::fs::symlink(file, lib.join(&install_name))
+        .expect("link the onnxruntime library under its install name");
+    let _ = std::fs::remove_dir_all(&unpacked);
+    dir
+}
+
 /// Copy every `libonnxruntime*` shared object found in the build tree into the
 /// install's lib dir, unless a file of that name is already staged.
 fn copy_missing_onnxruntime(build: &Path, lib_dir: &Path) {
@@ -221,10 +299,10 @@ fn copy_missing_onnxruntime(build: &Path, lib_dir: &Path) {
     }
 }
 
-/// The onnxruntime prebuilt installs `libX.so.1.22.0` without the `libX.so.1`
-/// SONAME symlink libpiper's DT_NEEDED references — the loader then fails even
-/// with a correct rpath. Create any missing `libX.so.<major>` links (no-op on
-/// macOS, whose dylib naming is complete).
+/// A library installed only as `libX.so.<major>.<minor>…` is missing the
+/// `libX.so.<major>` SONAME link its dependents' DT_NEEDED names, and the
+/// loader then fails even with a correct rpath. Create any missing links
+/// (no-op on macOS, whose dylib naming is complete).
 fn ensure_soname_links(lib_dir: &Path) {
     let Ok(entries) = std::fs::read_dir(lib_dir) else {
         return; // the layout varies by platform; absent dirs are fine
