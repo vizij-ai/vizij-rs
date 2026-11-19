@@ -525,10 +525,7 @@ fn primitive_parts(
         }
     }
 
-    let triangles: Vec<[u32; 3]> = index_values
-        .chunks_exact(3)
-        .map(|c| [c[0], c[1], c[2]])
-        .collect();
+    let triangles: Vec<[u32; 3]> = index_values.as_chunks::<3>().0.to_vec();
     let mut parts = Vec::new();
     let mut writes = Vec::new();
     for piece in pieces(&triangles, base.len()) {
