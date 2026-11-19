@@ -46,7 +46,6 @@
     "@types/node": "^24.19.2"
   },
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   }
 }
