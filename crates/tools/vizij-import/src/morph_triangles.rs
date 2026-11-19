@@ -46,9 +46,11 @@ use crate::gltf::{write_index, Document, IndexSlots, Unsupported};
 const DEGENERATE_AREA: f64 = 1e-3;
 
 /// A replacement is written only when it removes more than this much
-/// reversed area (as a fraction of the part's largest shape), so a part already at its best keeps
-/// its triangles and a second run changes nothing.
-const IMPROVEMENT: f64 = 1e-6;
+/// reversed area, summed over the shapes and measured against the part's
+/// largest shape. Below it the difference is not visible, so a file is not
+/// rewritten (or flagged by `--check`) for it; and a part already at its
+/// best keeps its triangles, so a second run changes nothing.
+const IMPROVEMENT: f64 = 1e-3;
 
 /// Loops with more vertices than this are left alone. The search grows
 /// with the cube of the vertex count times the number of shapes, and it runs
@@ -156,7 +158,8 @@ impl fmt::Display for Skip {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShapeFold {
     /// `rest`; a morph target's name (`target N` without one) at full
-    /// weight; or that name followed by ` (halfway)` at half weight.
+    /// weight; that name followed by ` (halfway)` at half weight; or
+    /// `default pose`, the mesh's default weights, when any is set.
     pub shape: String,
     pub before: Option<f64>,
     pub after: Option<f64>,
@@ -177,8 +180,8 @@ impl From<Unsupported> for Skip {
 /// the new indices into `bin` (the GLB binary chunk, buffer 0).
 pub(crate) fn optimize(json: &Value, bin: &mut [u8]) -> Report {
     let mut report = Report::default();
-    let index_users = index_accessor_users(json);
-    let accessor_ranges = Document { json, bin: &*bin }.accessor_ranges();
+    let index_users = accessor_uses(json);
+    let reader_ranges = Document { json, bin: &*bin }.reader_ranges();
     let meshes = json.get("meshes").and_then(Value::as_array);
     for (m, mesh) in meshes.into_iter().flatten().enumerate() {
         let mesh_name = mesh.get("name").and_then(Value::as_str).map(str::to_owned);
@@ -215,7 +218,8 @@ pub(crate) fn optimize(json: &Value, bin: &mut [u8]) -> Report {
                 primitive,
                 &target_names,
                 &index_users,
-                &accessor_ranges,
+                &reader_ranges,
+                mesh.get("weights").and_then(Value::as_array),
             ) {
                 Ok(found) => found,
                 Err((vertices, why)) => {
@@ -237,27 +241,53 @@ pub(crate) fn optimize(json: &Value, bin: &mut [u8]) -> Report {
     report
 }
 
-/// How many primitives use each index accessor.
-fn index_accessor_users(json: &Value) -> HashMap<u64, usize> {
-    let mut users = HashMap::new();
-    for mesh in json
-        .get("meshes")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-    {
-        for primitive in mesh
-            .get("primitives")
+/// How many times each accessor is referenced: as a primitive's indices,
+/// attribute or morph target, a skin's inverse bind matrices, or an
+/// animation sampler's input or output. An index accessor is rewritten only
+/// when its one use is the primitive being rewritten.
+fn accessor_uses(json: &Value) -> HashMap<u64, usize> {
+    let mut uses = HashMap::new();
+    let mut count = |value: Option<&Value>| {
+        if let Some(a) = value.and_then(Value::as_u64) {
+            *uses.entry(a).or_insert(0) += 1;
+        }
+    };
+    let list = |key: &str| {
+        json.get(key)
             .and_then(Value::as_array)
             .into_iter()
             .flatten()
-        {
-            if let Some(i) = primitive.get("indices").and_then(Value::as_u64) {
-                *users.entry(i).or_insert(0) += 1;
+    };
+    for mesh in list("meshes") {
+        let primitives = mesh.get("primitives").and_then(Value::as_array);
+        for primitive in primitives.into_iter().flatten() {
+            count(primitive.get("indices"));
+            let attributes = primitive.get("attributes").and_then(Value::as_object);
+            attributes
+                .into_iter()
+                .flatten()
+                .for_each(|(_, a)| count(Some(a)));
+            let targets = primitive.get("targets").and_then(Value::as_array);
+            for target in targets.into_iter().flatten() {
+                let target = target.as_object();
+                target
+                    .into_iter()
+                    .flatten()
+                    .for_each(|(_, a)| count(Some(a)));
             }
         }
     }
-    users
+    for skin in list("skins") {
+        count(skin.get("inverseBindMatrices"));
+    }
+    for animation in list("animations") {
+        let samplers = animation.get("samplers").and_then(Value::as_array);
+        for sampler in samplers.into_iter().flatten() {
+            count(sampler.get("input"));
+            count(sampler.get("output"));
+        }
+    }
+    uses
 }
 
 type Write = (IndexSlots, usize, u32);
@@ -269,7 +299,8 @@ fn primitive_parts(
     primitive: &Value,
     target_names: &[String],
     index_users: &HashMap<u64, usize>,
-    accessor_ranges: &[(u64, std::ops::Range<usize>)],
+    reader_ranges: &[(Option<u64>, std::ops::Range<usize>)],
+    default_weights: Option<&Vec<Value>>,
 ) -> Result<(Vec<Part>, Vec<Write>), (usize, Skip)> {
     let position = primitive
         .pointer("/attributes/POSITION")
@@ -295,13 +326,13 @@ fn primitive_parts(
     }
     let base = doc.read_vec3(position, None).map_err(|u| fail(u.into()))?;
     let (index_values, slots) = doc.read_indices(indices).map_err(|u| fail(u.into()))?;
-    // Another accessor reading the same bytes (an aliasing copy of this
-    // one, or data packed over it) would change with every rewrite.
+    // Anything else reading the same bytes (an aliasing copy of this
+    // accessor, data packed over it, an image) would change with every
+    // rewrite.
     let written = slots.range(index_values.len());
-    if accessor_ranges
-        .iter()
-        .any(|(a, r)| *a != indices && r.start < written.end && written.start < r.end)
-    {
+    if reader_ranges.iter().any(|(reader, r)| {
+        *reader != Some(indices) && r.start < written.end && written.start < r.end
+    }) {
         return Err(fail(Skip::SharedIndices));
     }
     if !index_values.len().is_multiple_of(3)
@@ -315,6 +346,7 @@ fn primitive_parts(
     let mut shapes: Vec<(Option<String>, Vec<[f64; 3]>)> =
         vec![(Some("rest".into()), widen(&base))];
     let mut halves = Vec::new();
+    let mut default_pose = widen(&base);
     let targets = primitive
         .get("targets")
         .and_then(Value::as_array)
@@ -332,21 +364,32 @@ fn primitive_parts(
                 .map_err(|u| fail(u.into()))?,
             None => vec![[0.0; 3]; base.len()],
         };
-        if deltas.len() != base.len() {
-            return Err(fail(Skip::Unreadable(format!(
-                "{name} has a different vertex count"
-            ))));
-        }
         let at = |w: f64| -> Vec<[f64; 3]> {
             base.iter()
                 .zip(&deltas)
                 .map(|(b, d)| std::array::from_fn(|k| b[k] as f64 + w * d[k] as f64))
                 .collect()
         };
+        let weight = default_weights
+            .and_then(|w| w.get(t))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        if weight != 0.0 {
+            for (point, delta) in default_pose.iter_mut().zip(&deltas) {
+                for k in 0..3 {
+                    point[k] += weight * delta[k] as f64;
+                }
+            }
+        }
         halves.push((Some(format!("{name} (halfway)")), at(0.5)));
         shapes.push((Some(name), at(1.0)));
     }
     shapes.extend(halves);
+    // The mesh's default weights are what it shows when nothing drives it,
+    // which is not the rest shape when any of them is set.
+    if default_weights.is_some_and(|w| w.iter().any(|v| v.as_f64().unwrap_or(0.0) != 0.0)) {
+        shapes.push((Some("default pose".into()), default_pose));
+    }
     if shapes
         .iter()
         .any(|(_, points)| points.iter().flatten().any(|c| !c.is_finite()))

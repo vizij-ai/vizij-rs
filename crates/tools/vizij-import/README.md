@@ -35,8 +35,10 @@ Left alone, and reported:
   authored deliberately or cannot be re-chosen from one outline;
 - pieces with no area in any shape;
 - primitives without index data, other than triangle lists, Draco-compressed,
-  with quantized or non-finite positions, or whose index bytes another
-  accessor or primitive also reads (a rewrite would change that data too);
+  with quantized or non-finite positions, with data outside the GLB binary
+  chunk (buffer 0), or whose index bytes anything else also reads — another
+  primitive or accessor, an attribute, an image — since a rewrite would
+  change that data too;
 - outlines with more vertices than the search takes (the report names the
   limit): the search grows with the cube of the vertex count and runs
   synchronously.
@@ -48,10 +50,12 @@ shapes (`morph_triangles::STILL_FOLDS`) so the part can be remodelled — more
 vertices along the bend, or upper and lower edges whose vertices pair up in
 every shape.
 
-Each morph target is checked at full and at half weight. Those are samples:
-a triangle can stay unfolded at 0, ½ and 1 and still fold at a weight in
-between. Combinations of targets that a face's poses blend are not checked
-one by one.
+The shapes checked are the rest shape, each morph target at full and at half
+weight, and the mesh's default pose when its default weights set any target.
+Those are samples: a triangle can stay unfolded at 0, ½ and 1 and still fold
+at a weight in between. Blends of several targets are not checked, so a
+rewrite that improves every checked shape can make a blend worse. A part is
+rewritten only when the improvement is large enough to see.
 
 ## Usage
 
@@ -66,7 +70,7 @@ At least one pass must be named. Exit status: `0` success (including
 nothing to do), `1` `--check` found files that would change, `2` error.
 
 The report lists each part the pass changed, skipped, or that still folds.
-For each shape — the rest shape, each target, and each target halfway — it
+For each shape checked it
 gives the area drawn with reversed winding before and after, relative to
 that shape's own area. It exceeds 100% when the wrongly drawn area is larger
 than the shape itself, as with a pupil squashed to a thin arc:

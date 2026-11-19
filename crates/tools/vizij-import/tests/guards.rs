@@ -222,3 +222,199 @@ fn a_shape_collapsed_to_a_line_reports_no_area() {
         .unwrap();
     assert_eq!((closed.before, closed.after), (None, None));
 }
+
+/// Points on a circle, one per vertex, so any triangles over them have area.
+fn ring(n: usize) -> Vec<[f32; 3]> {
+    let at = |i: usize| (i as f32) * std::f32::consts::TAU / n as f32;
+    (0..n).map(|i| [at(i).cos(), at(i).sin(), 0.0]).collect()
+}
+
+fn squashed(points: &[[f32; 3]]) -> Vec<[f32; 3]> {
+    points.iter().map(|p| [p[0], 0.3 * p[1], p[2]]).collect()
+}
+
+#[test]
+fn an_index_accessor_another_primitive_also_uses_is_left_alone() {
+    let built = build(&[mouth(6), mouth(6)]);
+    let shared = with_json(&built.bytes, |doc| {
+        doc["meshes"][1]["primitives"][0]["indices"] = json!(1);
+    });
+    let optimized = optimize_morph_triangles(&shared).unwrap();
+    assert!(optimized.bytes.is_none());
+    assert!(optimized
+        .report
+        .parts
+        .iter()
+        .all(|p| p.outcome == Outcome::Skipped(Skip::SharedIndices)));
+}
+
+#[test]
+fn an_index_accessor_also_used_as_an_attribute_is_left_alone() {
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        doc["meshes"][0]["primitives"][0]["attributes"]["_FEATURE_ID_0"] = json!(1);
+    });
+    assert_eq!(skip_reason(&bytes), Skip::SharedIndices);
+}
+
+#[test]
+fn index_bytes_an_image_reads_are_left_alone() {
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        doc["images"] = json!([{ "bufferView": 1, "mimeType": "image/png" }]);
+    });
+    assert_eq!(skip_reason(&bytes), Skip::SharedIndices);
+}
+
+#[test]
+fn index_bytes_another_accessors_sparse_indices_read_are_left_alone() {
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        doc["accessors"].as_array_mut().unwrap().push(json!({
+            "componentType": 5126, "count": 12, "type": "VEC3",
+            "sparse": {
+                "count": 2,
+                "indices": { "bufferView": 1, "componentType": 5123 },
+                "values": { "bufferView": 0 }
+            }
+        }));
+    });
+    assert_eq!(skip_reason(&bytes), Skip::SharedIndices);
+}
+
+#[test]
+fn index_accessors_packed_side_by_side_in_one_view_are_both_rewritten() {
+    // Each accessor's exact range counts, not the whole view they share.
+    let built = build(&[mouth(6), mouth(6)]);
+    let packed = with_json(&built.bytes, |doc| {
+        let first = doc["accessors"][1]["bufferView"].as_u64().unwrap() as usize;
+        let views = doc["bufferViews"].as_array().unwrap().clone();
+        let second_accessor = doc["meshes"][1]["primitives"][0]["indices"]
+            .as_u64()
+            .unwrap() as usize;
+        let second = doc["accessors"][second_accessor]["bufferView"]
+            .as_u64()
+            .unwrap() as usize;
+        let start = views[first]["byteOffset"].as_u64().unwrap();
+        let end = views[second]["byteOffset"].as_u64().unwrap()
+            + views[second]["byteLength"].as_u64().unwrap();
+        doc["bufferViews"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({ "buffer": 0, "byteOffset": start, "byteLength": end - start }));
+        let wide = doc["bufferViews"].as_array().unwrap().len() - 1;
+        doc["accessors"][1]["bufferView"] = json!(wide);
+        doc["accessors"][second_accessor]["bufferView"] = json!(wide);
+        doc["accessors"][second_accessor]["byteOffset"] =
+            json!(views[second]["byteOffset"].as_u64().unwrap() - start);
+    });
+    let optimized = optimize_morph_triangles(&packed).unwrap();
+    let outcomes: Vec<_> = optimized.report.parts.iter().map(|p| &p.outcome).collect();
+    assert_eq!(
+        outcomes,
+        [&Outcome::Retriangulated, &Outcome::Retriangulated]
+    );
+}
+
+#[test]
+fn a_buffer_other_than_the_binary_chunk_is_not_read() {
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        let length = doc["buffers"][0]["byteLength"].clone();
+        doc["buffers"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({ "byteLength": length }));
+        doc["bufferViews"][1]["buffer"] = json!(1);
+    });
+    assert!(unreadable(&bytes).contains("outside the GLB"));
+}
+
+#[test]
+fn an_index_past_the_vertices_is_reported_not_panicked() {
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        doc["accessors"][0]["count"] = json!(3);
+    });
+    assert!(unreadable(&bytes).contains("do not form triangles"));
+}
+
+#[test]
+fn a_view_past_the_binary_chunk_is_reported_not_panicked() {
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        doc["bufferViews"][0]["byteLength"] = json!(1_000_000);
+    });
+    assert!(unreadable(&bytes).contains("past the binary chunk"));
+}
+
+#[test]
+fn positions_without_a_view_are_reported_not_allocated() {
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        doc["accessors"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("bufferView");
+        doc["accessors"][0]["count"] = json!(1u64 << 36);
+    });
+    assert!(unreadable(&bytes).contains("no bufferView"));
+}
+
+#[test]
+fn outlines_that_are_not_one_loop_are_not_polygons() {
+    // Found by fuzzing the outline walk: in the first, two triangles leave
+    // the same vertex along the boundary; in the second, the boundary closes
+    // a loop that misses some of the piece's vertices.
+    for triangles in [
+        vec![[1, 3, 0], [3, 5, 2], [1, 4, 5], [5, 7, 3], [4, 1, 2]],
+        vec![[0, 2, 6], [5, 6, 2], [3, 6, 4], [5, 0, 6]],
+    ] {
+        let points = ring(8);
+        let spec = MeshSpec::new("odd", points.clone(), triangles).target("t", squashed(&points));
+        assert_eq!(skip_reason(&build(&[spec]).bytes), Skip::NotAPolygon);
+    }
+}
+
+#[test]
+fn a_lone_triangle_is_not_considered() {
+    let points = ring(3);
+    let spec = MeshSpec::new("tri", points.clone(), vec![[0, 1, 2]]).target("t", squashed(&points));
+    let optimized = optimize_morph_triangles(&build(&[spec]).bytes).unwrap();
+    assert!(optimized.report.parts.is_empty());
+}
+
+#[test]
+fn a_part_kept_reports_its_triangles_as_they_are() {
+    let once = optimize_morph_triangles(&build(&[mouth(10)]).bytes)
+        .unwrap()
+        .bytes
+        .unwrap();
+    let twice = optimize_morph_triangles(&once).unwrap();
+    let part = &twice.report.parts[0];
+    assert_eq!(part.outcome, Outcome::Kept);
+    assert!(part.folds.iter().all(|f| f.before == f.after), "{part:?}");
+}
+
+#[test]
+fn the_default_pose_is_checked_when_the_mesh_sets_one() {
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        doc["meshes"][0]["weights"] = json!([0.5]);
+    });
+    let optimized = optimize_morph_triangles(&bytes).unwrap();
+    assert!(optimized.report.parts[0]
+        .folds
+        .iter()
+        .any(|f| f.shape == "default pose"));
+}
+
+#[test]
+fn a_gain_too_small_to_see_keeps_the_triangles_and_says_so() {
+    // The target pushes vertex 3 just across the fan's 0–2 diagonal: that
+    // diagonal folds a sliver the other one would not, but the sliver is
+    // far below what a viewer notices.
+    let spec = square("quad").target(
+        "nudge",
+        flat(&[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.5005, 0.4995]]),
+    );
+    let optimized = optimize_morph_triangles(&build(&[spec]).bytes).unwrap();
+    assert!(optimized.bytes.is_none());
+    let part = &optimized.report.parts[0];
+    assert_eq!(part.outcome, Outcome::Kept);
+    let nudge = part.folds.iter().find(|f| f.shape == "nudge").unwrap();
+    assert!(nudge.before.unwrap() > 0.0);
+    assert_eq!(nudge.before, nudge.after);
+}

@@ -57,8 +57,10 @@ impl<'a> Document<'a> {
     fn view(&self, index: u64) -> Result<View, Unsupported> {
         let view = self.get("bufferViews", index)?;
         let buffer = view.get("buffer").and_then(Value::as_u64).unwrap_or(0);
-        // Only a uri-less buffer refers to the GLB binary chunk.
-        if self.get("buffers", buffer)?.get("uri").is_some() {
+        // In a GLB only buffer 0, without a uri, is the binary chunk. Any
+        // other buffer — one with a uri, or a uri-less one such as an
+        // extension's fallback buffer — holds bytes this pass cannot see.
+        if buffer != 0 || self.get("buffers", buffer)?.get("uri").is_some() {
             return Err(Unsupported::ExternalBuffer);
         }
         let offset = view.get("byteOffset").and_then(Value::as_u64).unwrap_or(0) as usize;
@@ -263,12 +265,25 @@ impl IndexSlots {
 }
 
 impl Document<'_> {
-    /// The binary-chunk byte range every accessor reads, its sparse indices
-    /// and values included, tagged with the accessor's index. An accessor
-    /// whose exact range cannot be worked out is given its whole bufferView,
-    /// so a byte it might read is never taken for unused.
-    pub fn accessor_ranges(&self) -> Vec<(u64, Range<usize>)> {
-        let mut ranges = Vec::new();
+    /// The binary-chunk byte ranges the document reads, each tagged with the
+    /// accessor reading it (`None` for a bufferView something other than an
+    /// accessor references directly, such as an image, read whole). An
+    /// accessor's range includes its sparse indices and values; one whose
+    /// exact range cannot be worked out is given its whole bufferView, so a
+    /// byte it might read is never taken for unused.
+    pub fn reader_ranges(&self) -> Vec<(Option<u64>, Range<usize>)> {
+        let mut ranges: Vec<(Option<u64>, Range<usize>)> = Vec::new();
+        let mut direct = Vec::new();
+        for (key, value) in self.json.as_object().into_iter().flatten() {
+            if key != "accessors" && key != "bufferViews" {
+                collect_view_refs(value, &mut direct);
+            }
+        }
+        for view in direct {
+            if let Ok(view) = self.view(view) {
+                ranges.push((None, view.offset..view.offset + view.length));
+            }
+        }
         let accessors = self.json.get("accessors").and_then(Value::as_array);
         for (a, acc) in accessors.into_iter().flatten().enumerate() {
             let a = a as u64;
@@ -296,7 +311,7 @@ impl Document<'_> {
                         .checked_add(start)?;
                     Some(start..end)
                 })();
-                ranges.push((a, exact.unwrap_or(whole)));
+                ranges.push((Some(a), exact.unwrap_or(whole)));
             };
             push(acc, count, element);
             if let Some(sparse) = acc.get("sparse") {
@@ -311,6 +326,22 @@ impl Document<'_> {
             }
         }
         ranges
+    }
+}
+
+/// Every `bufferView` index referenced anywhere in `value`.
+fn collect_view_refs(value: &Value, out: &mut Vec<u64>) {
+    match value {
+        Value::Object(map) => {
+            for (key, inner) in map {
+                match (key.as_str(), inner.as_u64()) {
+                    ("bufferView", Some(view)) => out.push(view),
+                    _ => collect_view_refs(inner, out),
+                }
+            }
+        }
+        Value::Array(items) => items.iter().for_each(|v| collect_view_refs(v, out)),
+        _ => {}
     }
 }
 
