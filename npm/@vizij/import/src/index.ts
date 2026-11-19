@@ -12,7 +12,7 @@ import {
 import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 
 /** The wasm interface version this wrapper is written against. */
-const EXPECTED_ABI = 3;
+const EXPECTED_ABI = 4;
 
 interface WasmResult {
   readonly bytes: Uint8Array<ArrayBuffer> | undefined;
@@ -126,6 +126,14 @@ export type MorphTrianglesOutcome =
 export interface ShapeFold {
   shape: string;
   kind: ShapeKind;
+  /**
+   * Whether the rewrite changed this shape's wrongly drawn area by more
+   * than safe mode's tolerance (1% of the part's largest shape), for the
+   * worse or the better; both false when the part was not rewritten. This is
+   * the rule safe mode applies, so judge "visibly worse" by it.
+   */
+  visiblyWorse: boolean;
+  visiblyBetter: boolean;
   before: number | null;
   after: number | null;
 }
@@ -180,10 +188,11 @@ export function optimizeMorphTriangles(
 
 /**
  * The shapes, per part, still drawn with more reversed area than
- * `threshold` (relative to the shape's own area) after the pass: shapes no
- * triangulation of the part's vertices follows, which need remodelling.
- * The caller chooses the threshold for its audience: what counts as worth
- * reporting differs between a CI check and a notice for a face author.
+ * `threshold` (relative to the shape's own area) after the pass. In a part
+ * the pass rewrote or kept, no triangulation of its vertices follows such a
+ * shape together with the part's other shapes, so reshaping the source
+ * model is what fixes it; in a part safe mode `declined`, overall mode may
+ * improve it. The caller chooses the threshold for its audience.
  */
 export function stillFolding(
   report: MorphTrianglesReport,

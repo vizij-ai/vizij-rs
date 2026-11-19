@@ -109,3 +109,31 @@ fn the_mode_is_chosen_on_the_flag() {
     assert_eq!(unknown.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&unknown.stderr).contains("unknown option"));
 }
+
+#[test]
+fn a_part_safe_mode_declined_is_listed_even_when_no_pose_still_folds() {
+    // Every pose of this square is clean; only blends of its two targets
+    // fold, and the rewrite that unfolds them would worsen a pose.
+    use common::{flat, square};
+    let spec = square("quad")
+        .target(
+            "a",
+            flat(&[[-0.2, -0.14], [0.15, 0.68], [0.13, 1.83], [-0.63, 0.38]]),
+        )
+        .target(
+            "b",
+            flat(&[[0.63, 0.58], [0.52, 0.1], [0.96, 1.39], [-0.57, 1.59]]),
+        );
+    let path = scratch("declined");
+    std::fs::write(&path, build(&[spec]).bytes).unwrap();
+    let result = run(&[
+        "--morph-triangles=safe",
+        "--dry-run",
+        path.to_str().unwrap(),
+    ]);
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    assert!(
+        stdout.contains("quad (primitive 0, 4 vertices): kept (overall mode would rewrite it"),
+        "{stdout}"
+    );
+}

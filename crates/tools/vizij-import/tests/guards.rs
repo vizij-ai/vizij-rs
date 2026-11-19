@@ -638,3 +638,156 @@ fn a_stride_shorter_than_a_position_is_reported() {
     });
     assert!(unreadable(&bytes).contains("byteStride"));
 }
+
+#[test]
+fn a_nodes_own_default_weights_are_checked_as_its_pose() {
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        doc["nodes"][0]["name"] = json!("face");
+        doc["nodes"][0]["weights"] = json!([1.0]);
+    });
+    let optimized = optimize_morph_triangles(&bytes, Mode::Safe).unwrap();
+    let folds = &optimized.report.parts[0].folds;
+    let pose = folds
+        .iter()
+        .find(|f| f.shape == "default pose of face")
+        .expect("the node's pose is checked");
+    let smile = folds.iter().find(|f| f.shape == "smile_shape").unwrap();
+    assert_eq!((pose.before, pose.after), (smile.before, smile.after));
+}
+
+#[test]
+fn a_rewrite_flags_the_shapes_it_made_visibly_worse_or_better() {
+    let bytes = build(&[blend_trap()]).bytes;
+    let overall = optimize_morph_triangles(&bytes, Mode::Overall).unwrap();
+    let folds = &overall.report.parts[0].folds;
+    assert!(folds
+        .iter()
+        .any(|f| f.visibly_worse && f.kind == ShapeKind::BlendHalfway));
+    assert!(folds.iter().any(|f| f.visibly_better));
+    let safe = optimize_morph_triangles(&bytes, Mode::Safe).unwrap();
+    assert!(safe.report.parts[0]
+        .folds
+        .iter()
+        .all(|f| !f.visibly_worse && !f.visibly_better));
+}
+
+/// The decisions below were found with a model of the pass: in each, the
+/// rule named decides between two outcomes.
+fn quad(targets: &[(&'static str, [[f32; 2]; 4])]) -> Vec<u8> {
+    let mut spec = square("quad");
+    for (name, points) in targets {
+        spec = spec.target(name, flat(points));
+    }
+    build(&[spec]).bytes
+}
+
+#[test]
+fn a_shape_with_no_net_area_is_measured_facing_the_part() {
+    // "flipped" is a bowtie pushed just past flat: its own normal points
+    // away from the part's, and measured against it, its reversed area would
+    // count as drawn the right way round.
+    let bytes = quad(&[
+        (
+            "a",
+            [[-0.86, 0.01], [1.02, -0.36], [0.34, 1.69], [-1.02, 1.56]],
+        ),
+        (
+            "flipped",
+            [[0.0, 0.0], [1.0, -0.0018], [0.0, 1.0], [1.0, 1.0]],
+        ),
+    ]);
+    assert_eq!(only_outcome_in(&bytes, Mode::Overall), Outcome::Kept);
+}
+
+#[test]
+fn blends_at_full_weight_are_checked() {
+    let bytes = quad(&[
+        (
+            "a",
+            [[-0.35, 0.52], [-0.03, 0.37], [1.56, 1.95], [0.23, 1.59]],
+        ),
+        (
+            "b",
+            [[-0.6, 1.04], [0.05, 0.03], [0.12, -0.12], [0.96, -0.18]],
+        ),
+    ]);
+    assert_eq!(only_outcome_in(&bytes, Mode::Overall), Outcome::Kept);
+}
+
+#[test]
+fn safe_mode_measures_a_worsening_against_the_largest_shape() {
+    // A small shape worsens by more than 1% of its own area but less than
+    // 1% of the largest shape's: too little to see, so safe mode rewrites.
+    let bytes = quad(&[
+        (
+            "a",
+            [[0.8, 0.3], [0.55, -0.88], [0.63, 1.32], [0.76, -0.19]],
+        ),
+        (
+            "b",
+            [[-0.38, -0.69], [-0.14, 0.18], [1.13, 1.29], [-0.79, 2.03]],
+        ),
+    ]);
+    assert_eq!(only_outcome_in(&bytes, Mode::Safe), Outcome::Retriangulated);
+}
+
+#[test]
+fn a_gain_is_measured_against_the_largest_shape_at_any_scale() {
+    // The marginal-gain square from above, ten times larger: the gain is
+    // still too small to see relative to the part, so it is still kept.
+    let scale = |p: [[f32; 2]; 4]| p.map(|[x, y]| [10.0 * x, 10.0 * y]);
+    let spec = MeshSpec::new(
+        "quad",
+        flat(&scale([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])),
+        fan(4),
+    )
+    .target(
+        "nudge",
+        flat(&scale([
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [1.0, 1.0],
+            [0.5005, 0.4995],
+        ])),
+    );
+    assert_eq!(
+        only_outcome_in(&build(&[spec]).bytes, Mode::Safe),
+        Outcome::Kept
+    );
+}
+
+#[test]
+fn index_bytes_overlapped_by_a_single_byte_are_left_alone() {
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        let view = doc["accessors"][1]["bufferView"].as_u64().unwrap() as usize;
+        let start = doc["bufferViews"][view]["byteOffset"].as_u64().unwrap();
+        let length = doc["bufferViews"][view]["byteLength"].as_u64().unwrap();
+        // A one-byte scalar whose only byte is the index data's last one.
+        doc["bufferViews"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({ "buffer": 0, "byteOffset": start + length - 1, "byteLength": 1 }));
+        let last = doc["bufferViews"].as_array().unwrap().len() - 1;
+        doc["accessors"].as_array_mut().unwrap().push(
+            json!({ "bufferView": last, "componentType": 5121, "count": 1, "type": "SCALAR" }),
+        );
+    });
+    assert_eq!(skip_reason(&bytes), Skip::SharedIndices);
+}
+
+#[test]
+fn an_accessor_of_unknown_size_counts_as_reading_its_whole_view() {
+    let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
+        doc["accessors"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({ "bufferView": 1, "componentType": 5126, "count": 1, "type": "VEC5" }));
+    });
+    assert_eq!(skip_reason(&bytes), Skip::SharedIndices);
+}
+
+fn only_outcome_in(bytes: &[u8], mode: Mode) -> Outcome {
+    let optimized = optimize_morph_triangles(bytes, mode).unwrap();
+    assert_eq!(optimized.report.parts.len(), 1, "{:?}", optimized.report);
+    optimized.report.parts[0].outcome.clone()
+}

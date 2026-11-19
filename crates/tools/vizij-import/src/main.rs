@@ -129,12 +129,13 @@ fn percent(fraction: Option<f64>) -> String {
 }
 
 fn print_part(path: &Path, part: &Part) {
-    // A part left as it was is only worth a line when it still folds.
     let still_folds = part.folds.iter().any(|f| {
         !matches!(f.kind, ShapeKind::Blend | ShapeKind::BlendHalfway)
             && f.after.unwrap_or(0.0) > STILL_FOLDS
     });
-    if matches!(part.outcome, PartOutcome::Kept | PartOutcome::Declined) && !still_folds {
+    // A part left as it was is only worth a line when it still folds, or
+    // when safe mode declined a rewrite overall mode would make.
+    if part.outcome == PartOutcome::Kept && !still_folds {
         return;
     }
     let name = part
@@ -163,7 +164,7 @@ fn print_part(path: &Path, part: &Part) {
         // Blends of two targets number in the hundreds; one is listed only
         // when the rewrite made it worse.
         let blend = matches!(fold.kind, ShapeKind::Blend | ShapeKind::BlendHalfway);
-        if blend && fold.after.unwrap_or(0.0) - fold.before.unwrap_or(0.0) <= STILL_FOLDS {
+        if blend && !fold.visibly_worse {
             continue;
         }
         let flag = if blend {
@@ -188,10 +189,9 @@ fn print_part(path: &Path, part: &Part) {
         .iter()
         .filter(|f| matches!(f.kind, ShapeKind::Blend | ShapeKind::BlendHalfway));
     let (better, worse) = blends.fold((0, 0), |(better, worse), f| {
-        let change = f.after.unwrap_or(0.0) - f.before.unwrap_or(0.0);
         (
-            better + usize::from(change < -STILL_FOLDS),
-            worse + usize::from(change > STILL_FOLDS),
+            better + usize::from(f.visibly_better),
+            worse + usize::from(f.visibly_worse),
         )
     });
     if better + worse > 0 {

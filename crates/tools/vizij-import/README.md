@@ -56,8 +56,9 @@ vertices along the bend, or upper and lower edges whose vertices pair up in
 every shape.
 
 The shapes checked are the rest shape, each morph target and each pair of
-targets at full and at half weight, and the mesh's default pose when its
-default weights set any target. Those are samples: a triangle can stay
+targets at full and at half weight, and each default pose: the mesh's
+default weights, and those of each node that overrides them for its
+instance. Those are samples: a triangle can stay
 unfolded at 0, ½ and 1 and still fold at a weight in between, and blends of
 three or more targets are not checked. A part is rewritten only when the
 improvement is large enough to see, and the mode sets what else must hold:
@@ -84,16 +85,28 @@ vizij-import --morph-triangles --check a.glb b.glb   # like --dry-run, exit 1 if
 At least one pass must be named. Exit status: `0` success (including
 nothing to do), `1` `--check` found files that would change, `2` error.
 
-The report lists each part the pass changed, skipped, or that still folds.
-For each shape checked it
-gives the area drawn with reversed winding before and after, relative to
-that shape's own area. It exceeds 100% when the wrongly drawn area is larger
-than the shape itself, as with a pupil squashed to a thin arc:
+The report lists each part the pass changed, skipped, declined (in safe mode,
+a rewrite overall mode would make), or that still folds. For each shape
+checked it gives the area drawn with reversed winding before and after,
+relative to that shape's own area; this exceeds 100% when the wrongly drawn
+area is larger than the shape itself, as with a pupil squashed to a thin arc.
+Blends of two targets are listed only when the rewrite made them visibly
+worse, with a count of those made better and worse. From a face whose mouth
+is one 65-sided polygon, in safe and then overall mode (excerpts):
 
 ```
+$ vizij-import --morph-triangles --dry-run face.glb
+face.glb: left_pupil (primitive 0, 32 vertices): retriangulated
+    wink_shape               folded 380.1% -> 0.0%
+    sleeping_shape           folded 2160.2% -> 0.0%
+face.glb: mouth (primitive 0, 65 vertices): kept (overall mode would rewrite it, making some checked shape worse)
+    rest                     folded 46.4% -> 46.4%  still folds
+
+$ vizij-import --morph-triangles=overall --dry-run face.glb
 face.glb: mouth (primitive 0, 65 vertices): retriangulated
-    smile_shape              folded 41.2% -> 12.1%  still folds
-    approval_shape           folded 23.3% -> 0.9%
+    smile_shape              folded 41.2% -> 1.3%  still folds
+    approval_shape           folded 23.3% -> 5.8%  still folds
+    blends of two targets: 139 better, 4 worse
 ```
 
 ## Library

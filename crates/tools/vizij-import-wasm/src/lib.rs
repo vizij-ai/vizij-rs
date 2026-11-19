@@ -12,7 +12,7 @@ use wasm_bindgen::prelude::*;
 /// version, which catches a stale `pkg/` after a rebuild of one side only.
 #[wasm_bindgen]
 pub fn abi_version() -> u32 {
-    3
+    4
 }
 
 /// The outcome of [`optimize_morph_triangles`].
@@ -31,8 +31,8 @@ impl MorphTrianglesResult {
     }
 
     /// The pass's report as JSON: `{ parts: [{ mesh, meshName, primitive,
-    /// vertices, outcome, skipReason, folds: [{ shape, kind, before, after
-    /// }] }] }`, where `outcome` is `retriangulated`, `kept`, `declined`
+    /// vertices, outcome, skipReason, folds: [{ shape, kind, before, after,
+    /// visiblyWorse, visiblyBetter }] }] }`, where `outcome` is `retriangulated`, `kept`, `declined`
     /// (safe mode left a rewrite overall mode would write) or `skipped`;
     /// `kind` is `rest`, `target`, `targetHalfway`, `blend`, `blendHalfway`
     /// or `defaultPose`; and a fold is the area drawn with reversed winding
@@ -93,6 +93,8 @@ fn report_json(report: &Report) -> Value {
                         "kind": kind_name(f.kind),
                         "before": f.before,
                         "after": f.after,
+                        "visiblyWorse": f.visibly_worse,
+                        "visiblyBetter": f.visibly_better,
                     })
                 })
                 .collect();
@@ -130,6 +132,8 @@ mod tests {
                         kind: ShapeKind::Blend,
                         before: Some(0.4),
                         after: None,
+                        visibly_worse: false,
+                        visibly_better: true,
                     }],
                 },
                 Part {
@@ -150,7 +154,8 @@ mod tests {
                     "outcome": "retriangulated", "skipReason": null,
                     "folds": [{
                         "shape": "smile_shape + sad_shape", "kind": "blend",
-                        "before": 0.4, "after": null
+                        "before": 0.4, "after": null,
+                        "visiblyWorse": false, "visiblyBetter": true
                     }]
                 },
                 {

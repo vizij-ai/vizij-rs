@@ -76,8 +76,10 @@ const MAX_EVALUATIONS: f64 = 3e8;
 const VISIBLY_WORSE: f64 = 0.01;
 
 /// A shape that still has more than this much reversed area after the
-/// pass, relative to its own area, is one no triangulation of its vertices
-/// follows: the part needs remodelling there.
+/// pass, relative to its own area, is flagged as still folding. In a part
+/// the pass rewrote or kept, no triangulation of its vertices follows it
+/// together with the part's other shapes, so remodelling is what fixes it;
+/// in a part safe mode declined, overall mode may improve it.
 pub const STILL_FOLDS: f64 = 0.01;
 
 /// How far the pass may go for a part.
@@ -204,6 +206,13 @@ pub struct ShapeFold {
     /// ` (halfway)` at half weight; or `default pose`.
     pub shape: String,
     pub kind: ShapeKind,
+    /// Whether the rewrite changed this shape's wrongly drawn area by more
+    /// than safe mode's tolerance (1% of the part's largest shape), for the
+    /// worse or for the better. Both are false when the part was not
+    /// rewritten. Consumers judge "visibly worse" by these, the same rule
+    /// safe mode applies.
+    pub visibly_worse: bool,
+    pub visibly_better: bool,
     pub before: Option<f64>,
     pub after: Option<f64>,
 }
@@ -273,13 +282,14 @@ pub(crate) fn optimize(json: &Value, bin: &mut [u8], mode: Mode) -> Report {
                 folds: Vec::new(),
             };
             let doc = Document { json, bin: &*bin };
+            let default_weights = default_weight_sets(json, m, mesh);
             let (parts, writes) = match primitive_parts(
                 &doc,
                 primitive,
                 &target_names,
                 &index_users,
                 &reader_ranges,
-                mesh.get("weights").and_then(Value::as_array),
+                &default_weights,
                 mode,
             ) {
                 Ok(found) => found,
@@ -300,6 +310,41 @@ pub(crate) fn optimize(json: &Value, bin: &mut [u8], mode: Mode) -> Report {
         }
     }
     report
+}
+
+/// The default weights mesh `m` is shown with when nothing drives it, each
+/// with the name its pose is reported under: the mesh's own `weights`, and
+/// the `weights` of each node instancing it, which override the mesh's for
+/// that instance. Sets that repeat an earlier one are left out.
+fn default_weight_sets<'a>(
+    json: &'a Value,
+    m: usize,
+    mesh: &'a Value,
+) -> Vec<(String, &'a Vec<Value>)> {
+    let mut sets: Vec<(String, &Vec<Value>)> = Vec::new();
+    if let Some(weights) = mesh.get("weights").and_then(Value::as_array) {
+        sets.push(("default pose".into(), weights));
+    }
+    let nodes = json
+        .get("nodes")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten();
+    for (n, node) in nodes.enumerate() {
+        if node.get("mesh").and_then(Value::as_u64) != Some(m as u64) {
+            continue;
+        }
+        if let Some(weights) = node.get("weights").and_then(Value::as_array) {
+            if sets.iter().all(|(_, seen)| *seen != weights) {
+                let name = node
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .map_or_else(|| format!("node {n}"), str::to_owned);
+                sets.push((format!("default pose of {name}"), weights));
+            }
+        }
+    }
+    sets
 }
 
 /// How many times each accessor is referenced: as a primitive's indices,
@@ -361,7 +406,7 @@ fn primitive_parts(
     target_names: &[String],
     index_users: &HashMap<u64, usize>,
     reader_ranges: &[(Option<u64>, std::ops::Range<usize>)],
-    default_weights: Option<&Vec<Value>>,
+    default_weights: &[(String, &Vec<Value>)],
     mode: Mode,
 ) -> Result<(Vec<Part>, Vec<Write>), (usize, Skip)> {
     let position = primitive
@@ -412,7 +457,6 @@ fn primitive_parts(
     // vertices for each would outgrow memory on a large face.
     let mut deltas: Vec<Vec<[f32; 3]>> = Vec::new();
     let mut names: Vec<String> = Vec::new();
-    let mut default_terms: Vec<(usize, f64)> = Vec::new();
     let targets = primitive
         .get("targets")
         .and_then(Value::as_array)
@@ -432,20 +476,12 @@ fn primitive_parts(
                 .map_err(|u| fail(u.into()))?,
             None => vec![[0.0; 3]; base.len()],
         });
-        let weight = default_weights
-            .and_then(|w| w.get(t))
-            .and_then(Value::as_f64)
-            .unwrap_or(0.0);
-        if weight != 0.0 {
-            default_terms.push((t, weight));
-        }
     }
     if base
         .iter()
         .chain(deltas.iter().flatten())
         .flatten()
         .any(|c| !c.is_finite())
-        || default_terms.iter().any(|(_, w)| !w.is_finite())
     {
         return Err(fail(Skip::Unreadable(
             "positions or morph deltas are not finite".into(),
@@ -477,12 +513,16 @@ fn primitive_parts(
             ));
         }
     }
-    if !default_terms.is_empty() {
-        shapes.push(Recipe::new(
-            "default pose".into(),
-            ShapeKind::DefaultPose,
-            default_terms,
-        ));
+    for (name, weights) in default_weights {
+        let terms: Vec<(usize, f64)> = weights
+            .iter()
+            .take(names.len())
+            .enumerate()
+            .filter_map(|(t, w)| w.as_f64().filter(|w| *w != 0.0).map(|w| (t, w)))
+            .collect();
+        if !terms.is_empty() {
+            shapes.push(Recipe::new(name.clone(), ShapeKind::DefaultPose, terms));
+        }
     }
 
     let triangles: Vec<[u32; 3]> = index_values
@@ -530,14 +570,18 @@ fn primitive_parts(
         let harms_a_shape =
             mode == Mode::Safe && measured.worsens_any(&current, &chosen, VISIBLY_WORSE);
         let improved = better_overall && !harms_a_shape;
+        let change = measured.reversed_change(&current, &chosen);
         let folds = shapes
             .iter()
             .zip(before.iter().zip(&after))
-            .map(|(recipe, (b, a))| ShapeFold {
+            .zip(&change)
+            .map(|((recipe, (b, a)), &delta)| ShapeFold {
                 shape: recipe.name.clone(),
                 kind: recipe.kind,
                 before: *b,
                 after: if improved { *a } else { *b },
+                visibly_worse: improved && delta > VISIBLY_WORSE,
+                visibly_better: improved && delta < -VISIBLY_WORSE,
             })
             .collect();
         if improved {
@@ -795,9 +839,9 @@ impl Measured {
             .collect()
     }
 
-    /// Whether `chosen` adds more than `limit` (against the largest shape's
-    /// area) of reversed area to any single shape that `current` draws.
-    fn worsens_any(&self, current: &[[u32; 3]], chosen: &[[u32; 3]], limit: f64) -> bool {
+    /// Per shape, the reversed area `chosen` draws minus what `current`
+    /// draws, against the largest shape's area.
+    fn reversed_change(&self, current: &[[u32; 3]], chosen: &[[u32; 3]]) -> Vec<f64> {
         let reversed = |s: &Shape, triangles: &[[u32; 3]]| -> f64 {
             triangles
                 .iter()
@@ -809,7 +853,16 @@ impl Measured {
         };
         self.shapes
             .iter()
-            .any(|s| reversed(s, chosen) - reversed(s, current) > limit * self.largest)
+            .map(|s| (reversed(s, chosen) - reversed(s, current)) / self.largest)
+            .collect()
+    }
+
+    /// Whether `chosen` adds more than `limit` (against the largest shape's
+    /// area) of reversed area to any single shape that `current` draws.
+    fn worsens_any(&self, current: &[[u32; 3]], chosen: &[[u32; 3]], limit: f64) -> bool {
+        self.reversed_change(current, chosen)
+            .iter()
+            .any(|&delta| delta > limit)
     }
 
     /// Reversed area summed over every shape, against the largest shape's

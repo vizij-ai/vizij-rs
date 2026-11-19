@@ -112,9 +112,9 @@ test("stillFolding keeps only shapes above the threshold", () => {
     outcome: "retriangulated" as const,
     skipReason: null,
     folds: [
-      { shape: "smile_shape", kind: "target" as const, before: 0.4, after: 0.12 },
-      { shape: "a_shape", kind: "target" as const, before: 0.007, after: 0 },
-      { shape: "rest", kind: "rest" as const, before: null, after: null },
+      { shape: "smile_shape", kind: "target" as const, before: 0.4, after: 0.12, visiblyWorse: false, visiblyBetter: false },
+      { shape: "a_shape", kind: "target" as const, before: 0.007, after: 0, visiblyWorse: false, visiblyBetter: false },
+      { shape: "rest", kind: "rest" as const, before: null, after: null, visiblyWorse: false, visiblyBetter: false },
     ],
   };
   assert.deepEqual(stillFolding({ parts: [part] }, 0.01), [
