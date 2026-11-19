@@ -311,9 +311,13 @@ jobs:
           }
           bin=$(cargo test -p vizij --test headless_face --no-run --message-format=json \
             | jq -r 'select(.profile.test == true and .target.name == "headless_face") | .executable')
+          # One test at a time: each builds its own Vulkan instance, and the
+          # runner's Vulkan loader unloads a driver library (dlclose, inside
+          # vkEnumeratePhysicalDevices) while another test's thread is in
+          # that driver, which crashes the process.
           gdb -q -batch -ex 'set pagination off' -ex 'set print thread-events off' \
             -ex 'handle SIGPIPE nostop noprint' -ex run -ex 'thread apply all bt 40' \
-            --args "$bin" --ignored --nocapture > headless_face.log 2>&1 || true
+            --args "$bin" --ignored --nocapture --test-threads=1 > headless_face.log 2>&1 || true
           cat headless_face.log
           if ! grep -q '^test result: ok' headless_face.log; then
             runner
