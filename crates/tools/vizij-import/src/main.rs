@@ -134,7 +134,7 @@ fn print_part(path: &Path, part: &Part) {
         !matches!(f.kind, ShapeKind::Blend | ShapeKind::BlendHalfway)
             && f.after.unwrap_or(0.0) > STILL_FOLDS
     });
-    if part.outcome == PartOutcome::Kept && !still_folds {
+    if matches!(part.outcome, PartOutcome::Kept | PartOutcome::Declined) && !still_folds {
         return;
     }
     let name = part
@@ -144,6 +144,9 @@ fn print_part(path: &Path, part: &Part) {
     let what = match &part.outcome {
         PartOutcome::Retriangulated => "retriangulated".to_string(),
         PartOutcome::Kept => "kept".to_string(),
+        PartOutcome::Declined => {
+            "kept (overall mode would rewrite it, making some checked shape worse)".to_string()
+        }
         PartOutcome::Skipped(why) => format!("skipped: {why}"),
     };
     println!(

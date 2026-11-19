@@ -462,7 +462,7 @@ fn safe_mode_keeps_a_part_whose_rewrite_would_worsen_a_blend() {
 
     let safe = optimize_morph_triangles(&bytes, Mode::Safe).unwrap();
     assert!(safe.bytes.is_none());
-    assert_eq!(safe.report.parts[0].outcome, Outcome::Kept);
+    assert_eq!(safe.report.parts[0].outcome, Outcome::Declined);
 }
 
 #[test]
@@ -513,6 +513,7 @@ fn safe_mode_protects_a_shape_whose_outline_cancels_out() {
         .is_some());
     let safe = optimize_morph_triangles(&bytes, Mode::Safe).unwrap();
     assert!(safe.bytes.is_none());
+    assert_eq!(safe.report.parts[0].outcome, Outcome::Declined);
     let twist = safe.report.parts[0]
         .folds
         .iter()

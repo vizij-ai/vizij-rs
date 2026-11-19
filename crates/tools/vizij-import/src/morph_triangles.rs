@@ -131,9 +131,12 @@ pub enum Outcome {
     /// Its triangles were replaced with ones that fold less.
     Retriangulated,
     /// Its triangles were left as they were: no triangulation folds
-    /// noticeably less, or the one that does would make some checked shape
-    /// visibly worse.
+    /// noticeably less.
     Kept,
+    /// Its triangles were left as they were, in [`Mode::Safe`], although a
+    /// triangulation folding noticeably less overall exists: it would make
+    /// some checked shape visibly worse. [`Mode::Overall`] would write it.
+    Declined,
     /// It was left alone, for the reason given.
     Skipped(Skip),
 }
@@ -522,10 +525,11 @@ fn primitive_parts(
         let before = measured.fold_per_shape(&current);
         let chosen = measured.best_triangulation(&outline);
         let after = measured.fold_per_shape(&chosen);
+        let better_overall =
+            measured.weighted_total(&current) - measured.weighted_total(&chosen) > IMPROVEMENT;
         let harms_a_shape =
             mode == Mode::Safe && measured.worsens_any(&current, &chosen, VISIBLY_WORSE);
-        let improved = !harms_a_shape
-            && measured.weighted_total(&current) - measured.weighted_total(&chosen) > IMPROVEMENT;
+        let improved = better_overall && !harms_a_shape;
         let folds = shapes
             .iter()
             .zip(before.iter().zip(&after))
@@ -543,6 +547,8 @@ fn primitive_parts(
                 }
             }
             parts.push(part(Outcome::Retriangulated, folds));
+        } else if better_overall {
+            parts.push(part(Outcome::Declined, folds));
         } else {
             parts.push(part(Outcome::Kept, folds));
         }

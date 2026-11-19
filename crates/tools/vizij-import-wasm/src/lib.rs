@@ -12,7 +12,7 @@ use wasm_bindgen::prelude::*;
 /// version, which catches a stale `pkg/` after a rebuild of one side only.
 #[wasm_bindgen]
 pub fn abi_version() -> u32 {
-    2
+    3
 }
 
 /// The outcome of [`optimize_morph_triangles`].
@@ -32,7 +32,8 @@ impl MorphTrianglesResult {
 
     /// The pass's report as JSON: `{ parts: [{ mesh, meshName, primitive,
     /// vertices, outcome, skipReason, folds: [{ shape, kind, before, after
-    /// }] }] }`, where `outcome` is `retriangulated`, `kept` or `skipped`;
+    /// }] }] }`, where `outcome` is `retriangulated`, `kept`, `declined`
+    /// (safe mode left a rewrite overall mode would write) or `skipped`;
     /// `kind` is `rest`, `target`, `targetHalfway`, `blend`, `blendHalfway`
     /// or `defaultPose`; and a fold is the area drawn with reversed winding
     /// relative to the shape's own area (`null` for a shape with no area).
@@ -80,6 +81,7 @@ fn report_json(report: &Report) -> Value {
             let (outcome, skip_reason) = match &part.outcome {
                 Outcome::Retriangulated => ("retriangulated", None),
                 Outcome::Kept => ("kept", None),
+                Outcome::Declined => ("declined", None),
                 Outcome::Skipped(why) => ("skipped", Some(why.to_string())),
             };
             let folds: Vec<Value> = part

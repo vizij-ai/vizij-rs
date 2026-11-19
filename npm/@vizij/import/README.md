@@ -43,9 +43,10 @@ default pose. `mode` sets how far it may go:
 - `"overall"`: a part is rewritten whenever the checked shapes improve
   overall. Fixes more; some blends may get worse, and the report shows which. It returns the rewritten file
 (`null` when nothing changed) and a report: for each part, whether it was
-`retriangulated`; `kept`, left as it was because no triangulation folds
-noticeably less or, in safe mode, because the best one would make a checked
-shape visibly worse; or `skipped`, with the reason. For each shape checked,
+`retriangulated`; `kept`, because no triangulation folds noticeably less;
+`declined`, left as it was in safe mode because the triangulation that folds
+less overall would make a checked shape visibly worse (overall mode writes
+it); or `skipped`, with the reason. For each shape checked,
 with its `kind`, it gives the area drawn with reversed winding before and
 after, relative to the shape's own area; `null` for a shape with almost no
 net area of its own (collapsed, or crossing itself), which is still checked.

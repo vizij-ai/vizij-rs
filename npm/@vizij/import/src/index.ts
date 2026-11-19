@@ -12,7 +12,7 @@ import {
 import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 
 /** The wasm interface version this wrapper is written against. */
-const EXPECTED_ABI = 2;
+const EXPECTED_ABI = 3;
 
 interface WasmResult {
   readonly bytes: Uint8Array<ArrayBuffer> | undefined;
@@ -104,7 +104,16 @@ export type ShapeKind =
   | "defaultPose";
 
 /** What the morph-triangle pass did with one part of a mesh. */
-export type MorphTrianglesOutcome = "retriangulated" | "kept" | "skipped";
+/**
+ * `kept`: no triangulation folds noticeably less. `declined`: in safe mode,
+ * one that folds less overall exists but would make some checked shape
+ * visibly worse; overall mode would write it.
+ */
+export type MorphTrianglesOutcome =
+  | "retriangulated"
+  | "kept"
+  | "declined"
+  | "skipped";
 
 /**
  * The area one shape's triangles draw with reversed winding, before and
