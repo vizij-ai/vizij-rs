@@ -10,8 +10,9 @@
 //!   targets ([`morph_triangles`] explains why exported triangles fold).
 //!
 //! ```no_run
+//! use vizij_import::Mode;
 //! let bytes = std::fs::read("face.glb")?;
-//! let optimized = vizij_import::optimize_morph_triangles(&bytes)?;
+//! let optimized = vizij_import::optimize_morph_triangles(&bytes, Mode::Safe)?;
 //! if let Some(rewritten) = optimized.bytes {
 //!     std::fs::write("face.glb", rewritten)?;
 //! }
@@ -24,7 +25,7 @@ pub mod morph_triangles;
 use thiserror::Error;
 use vizij_glb_migrate::glb::{Glb, GlbError, CHUNK_BIN};
 
-pub use morph_triangles::Report;
+pub use morph_triangles::{Mode, Report};
 
 /// Why a file could not go through a pass at all. Problems confined to one
 /// mesh are reported in that pass's report instead, and the mesh is left
@@ -49,7 +50,7 @@ pub struct Optimized {
 /// the triangulation of the same outline that folds least across the
 /// mesh's morph targets. Vertices, the JSON chunk and every other mesh are
 /// unchanged; see [`morph_triangles`] for which parts qualify.
-pub fn optimize_morph_triangles(glb: &[u8]) -> Result<Optimized, ImportError> {
+pub fn optimize_morph_triangles(glb: &[u8], mode: Mode) -> Result<Optimized, ImportError> {
     let mut container = Glb::parse(glb)?;
     let json: serde_json::Value = serde_json::from_slice(&container.json)?;
     let Some(bin) = container.tail.iter_mut().find(|c| c.kind == CHUNK_BIN) else {
@@ -58,7 +59,7 @@ pub fn optimize_morph_triangles(glb: &[u8]) -> Result<Optimized, ImportError> {
             report: Report::default(),
         });
     };
-    let report = morph_triangles::optimize(&json, &mut bin.data);
+    let report = morph_triangles::optimize(&json, &mut bin.data, mode);
     let bytes = report.changed().then(|| container.to_bytes());
     Ok(Optimized { bytes, report })
 }

@@ -71,7 +71,7 @@ function foldingSquare(): Uint8Array {
 
 test("a file without morphed meshes is left as it is", async () => {
   await init(await wasm());
-  const result = optimizeMorphTriangles(glb({ asset: { version: "2.0" } }));
+  const result = optimizeMorphTriangles(glb({ asset: { version: "2.0" } }), "safe");
   assert.equal(result.bytes, null);
   assert.deepEqual(result.report, { parts: [] });
 });
@@ -79,7 +79,7 @@ test("a file without morphed meshes is left as it is", async () => {
 test("a file whose triangles fold comes back rewritten, with a report", async () => {
   await init(await wasm());
   const input = foldingSquare();
-  const result = optimizeMorphTriangles(input);
+  const result = optimizeMorphTriangles(input, "safe");
   assert.ok(result.bytes, "the pass rewrites the folding fan");
   assert.equal(result.bytes.length, input.length);
   assert.ok(result.bytes.buffer instanceof ArrayBuffer);
@@ -93,7 +93,11 @@ test("a file whose triangles fold comes back rewritten, with a report", async ()
 
 test("a file that is not a GLB is rejected", async () => {
   await init(await wasm());
-  assert.throws(() => optimizeMorphTriangles(new Uint8Array([1, 2, 3])));
+  assert.throws(() => optimizeMorphTriangles(new Uint8Array([1, 2, 3]), "safe"));
+  assert.throws(
+    () => optimizeMorphTriangles(foldingSquare(), "bold" as "safe"),
+    /unknown mode/,
+  );
 });
 
 test("stillFolding keeps only shapes above the threshold", () => {
@@ -105,9 +109,9 @@ test("stillFolding keeps only shapes above the threshold", () => {
     outcome: "retriangulated" as const,
     skipReason: null,
     folds: [
-      { shape: "smile_shape", before: 0.4, after: 0.12 },
-      { shape: "a_shape", before: 0.007, after: 0 },
-      { shape: "rest", before: null, after: null },
+      { shape: "smile_shape", kind: "target" as const, before: 0.4, after: 0.12 },
+      { shape: "a_shape", kind: "target" as const, before: 0.007, after: 0 },
+      { shape: "rest", kind: "rest" as const, before: null, after: null },
     ],
   };
   assert.deepEqual(stillFolding({ parts: [part] }, 0.01), [

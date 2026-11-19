@@ -50,17 +50,26 @@ shapes (`morph_triangles::STILL_FOLDS`) so the part can be remodelled — more
 vertices along the bend, or upper and lower edges whose vertices pair up in
 every shape.
 
-The shapes checked are the rest shape, each morph target at full and at half
-weight, and the mesh's default pose when its default weights set any target.
-Those are samples: a triangle can stay unfolded at 0, ½ and 1 and still fold
-at a weight in between. Blends of several targets are not checked, so a
-rewrite that improves every checked shape can make a blend worse. A part is
-rewritten only when the improvement is large enough to see.
+The shapes checked are the rest shape, each morph target and each pair of
+targets at full and at half weight, and the mesh's default pose when its
+default weights set any target. Those are samples: a triangle can stay
+unfolded at 0, ½ and 1 and still fold at a weight in between, and blends of
+three or more targets are not checked. A part is rewritten only when the
+improvement is large enough to see, and the mode sets what else must hold:
+
+- `safe` (the default): no checked shape may come out visibly worse. Fixes
+  less; harms nothing it checks.
+- `overall`: the checked shapes must improve overall. Fixes more; blends that
+  got worse are listed in the report.
+
+The search grows with the number of shapes as well as the outline, so a part
+with very many targets may be skipped as too large to check every blend.
 
 ## Usage
 
 ```
-vizij-import --morph-triangles face.glb              # rewrite in place; original saved as face.glb.bak
+vizij-import --morph-triangles face.glb              # safe mode; rewrite in place, original saved as face.glb.bak
+vizij-import --morph-triangles=overall face.glb      # overall mode
 vizij-import --morph-triangles face.glb -o out.glb   # write elsewhere; input untouched
 vizij-import --morph-triangles --dry-run a.glb b.glb # report what would change; write nothing
 vizij-import --morph-triangles --check a.glb b.glb   # like --dry-run, exit 1 if a file would change (CI)
@@ -83,6 +92,6 @@ face.glb: mouth (primitive 0, 65 vertices): retriangulated
 
 ## Library
 
-`vizij_import::optimize_morph_triangles(&bytes)` runs the same pass and
+`vizij_import::optimize_morph_triangles(&bytes, Mode::Safe)` runs the same pass and
 returns the rewritten file (when anything changed) with its
 `morph_triangles::Report`.

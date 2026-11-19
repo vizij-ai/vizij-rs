@@ -58,10 +58,36 @@ const IMPROVEMENT: f64 = 1e-3;
 /// thirty shapes it is about a hundred million triangle evaluations.
 const MAX_LOOP_VERTICES: usize = 256;
 
+/// The most triangle-and-shape evaluations one part's search may take:
+/// every triangle of the outline (about n³/6) against every shape checked.
+/// The search runs synchronously, in the browser on the main thread, and
+/// this keeps one part to a few seconds there.
+const MAX_EVALUATIONS: f64 = 3e8;
+
+/// In [`Mode::Safe`], a rewrite is not written when it would add more than
+/// this much reversed area to any one checked shape, measured against the
+/// part's largest shape: no shape the pass checks comes out visibly worse,
+/// even when the shapes as a whole would improve.
+const VISIBLY_WORSE: f64 = 0.01;
+
 /// A shape that still has more than this much reversed area after the
 /// pass, relative to its own area, is one no triangulation of its vertices
 /// follows: the part needs remodelling there.
 pub const STILL_FOLDS: f64 = 0.01;
+
+/// How far the pass may go for a part.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Mode {
+    /// Rewrite a part only when no checked shape — rest, each target at
+    /// full and half weight, every pair of targets at full and half weight,
+    /// the default pose — comes out visibly worse. Fixes less; harms
+    /// nothing it checks.
+    #[default]
+    Safe,
+    /// Rewrite a part whenever the checked shapes improve overall, even if
+    /// some get worse; the report shows which. Fixes more.
+    Overall,
+}
 
 /// What [`crate::optimize_morph_triangles`] did with every polygon it considered.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -99,7 +125,9 @@ pub struct Part {
 pub enum Outcome {
     /// Its triangles were replaced with ones that fold less.
     Retriangulated,
-    /// Its triangles already fold as little as any triangulation can.
+    /// Its triangles were left as they were: no triangulation folds
+    /// noticeably less, or the one that does would make some checked shape
+    /// visibly worse.
     Kept,
     /// It was left alone, for the reason given.
     Skipped(Skip),
@@ -123,6 +151,9 @@ pub enum Skip {
     NotAPolygon,
     /// The outline has more vertices than the search takes.
     TooManyVertices,
+    /// The outline and the shapes to check (every target and every pair of
+    /// targets) are together more than the search takes.
+    TooManyShapes,
     /// No shape of the piece has any area, so every triangulation draws the
     /// same nothing.
     NoArea,
@@ -143,6 +174,9 @@ impl fmt::Display for Skip {
                 "is not a single polygon (vertices inside its outline, a hole, or several outlines)",
             ),
             Skip::NoArea => f.write_str("has no area in any shape"),
+            Skip::TooManyShapes => f.write_str(
+                "has too many outline vertices and morph targets to check every blend",
+            ),
             Skip::TooManyVertices => {
                 write!(f, "has more than {MAX_LOOP_VERTICES} outline vertices")
             }
@@ -157,12 +191,30 @@ impl fmt::Display for Skip {
 /// squashed to a thin arc. `None` when the shape has no area to speak of.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShapeFold {
-    /// `rest`; a morph target's name (`target N` without one) at full
-    /// weight; that name followed by ` (halfway)` at half weight; or
-    /// `default pose`, the mesh's default weights, when any is set.
+    /// `rest`; a morph target's name (`target N` without one); two names
+    /// joined by ` + ` for a blend of both targets; either followed by
+    /// ` (halfway)` at half weight; or `default pose`.
     pub shape: String,
+    pub kind: ShapeKind,
     pub before: Option<f64>,
     pub after: Option<f64>,
+}
+
+/// Which shape of a part a [`ShapeFold`] measures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShapeKind {
+    /// No morph target applied.
+    Rest,
+    /// One morph target at full weight.
+    Target,
+    /// One morph target at half weight.
+    TargetHalfway,
+    /// Two morph targets together, both at full weight.
+    Blend,
+    /// Two morph targets together, both at half weight.
+    BlendHalfway,
+    /// The mesh's default weights, when any is set: what it shows undriven.
+    DefaultPose,
 }
 
 impl From<Unsupported> for Skip {
@@ -178,7 +230,7 @@ impl From<Unsupported> for Skip {
 
 /// Re-triangulates every polygon of every morphed mesh in `json`, writing
 /// the new indices into `bin` (the GLB binary chunk, buffer 0).
-pub(crate) fn optimize(json: &Value, bin: &mut [u8]) -> Report {
+pub(crate) fn optimize(json: &Value, bin: &mut [u8], mode: Mode) -> Report {
     let mut report = Report::default();
     let index_users = accessor_uses(json);
     let reader_ranges = Document { json, bin: &*bin }.reader_ranges();
@@ -220,6 +272,7 @@ pub(crate) fn optimize(json: &Value, bin: &mut [u8]) -> Report {
                 &index_users,
                 &reader_ranges,
                 mesh.get("weights").and_then(Value::as_array),
+                mode,
             ) {
                 Ok(found) => found,
                 Err((vertices, why)) => {
@@ -301,6 +354,7 @@ fn primitive_parts(
     index_users: &HashMap<u64, usize>,
     reader_ranges: &[(Option<u64>, std::ops::Range<usize>)],
     default_weights: Option<&Vec<Value>>,
+    mode: Mode,
 ) -> Result<(Vec<Part>, Vec<Write>), (usize, Skip)> {
     let position = primitive
         .pointer("/attributes/POSITION")
@@ -342,11 +396,13 @@ fn primitive_parts(
             "indices do not form triangles over the vertices".into(),
         )));
     }
-    // Rest first, then each target at full weight, then each at half.
-    let mut shapes: Vec<(Option<String>, Vec<[f64; 3]>)> =
-        vec![(Some("rest".into()), widen(&base))];
-    let mut halves = Vec::new();
+    // Rest first; then each target at full weight, at half weight; every
+    // pair of targets at full and at half weight; and the default pose.
+    let mut shapes: Vec<(String, ShapeKind, Vec<[f64; 3]>)> =
+        vec![("rest".into(), ShapeKind::Rest, widen(&base))];
+    let mut targets_read: Vec<(String, Vec<[f32; 3]>)> = Vec::new();
     let mut default_pose = widen(&base);
+    let mut has_default_pose = false;
     let targets = primitive
         .get("targets")
         .and_then(Value::as_array)
@@ -364,35 +420,56 @@ fn primitive_parts(
                 .map_err(|u| fail(u.into()))?,
             None => vec![[0.0; 3]; base.len()],
         };
-        let at = |w: f64| -> Vec<[f64; 3]> {
-            base.iter()
-                .zip(&deltas)
-                .map(|(b, d)| std::array::from_fn(|k| b[k] as f64 + w * d[k] as f64))
-                .collect()
-        };
         let weight = default_weights
             .and_then(|w| w.get(t))
             .and_then(Value::as_f64)
             .unwrap_or(0.0);
         if weight != 0.0 {
+            has_default_pose = true;
             for (point, delta) in default_pose.iter_mut().zip(&deltas) {
                 for k in 0..3 {
                     point[k] += weight * delta[k] as f64;
                 }
             }
         }
-        halves.push((Some(format!("{name} (halfway)")), at(0.5)));
-        shapes.push((Some(name), at(1.0)));
+        targets_read.push((name, deltas));
     }
-    shapes.extend(halves);
-    // The mesh's default weights are what it shows when nothing drives it,
-    // which is not the rest shape when any of them is set.
-    if default_weights.is_some_and(|w| w.iter().any(|v| v.as_f64().unwrap_or(0.0) != 0.0)) {
-        shapes.push((Some("default pose".into()), default_pose));
+    let blend = |parts: &[&Vec<[f32; 3]>], w: f64| -> Vec<[f64; 3]> {
+        (0..base.len())
+            .map(|v| {
+                std::array::from_fn(|k| {
+                    base[v][k] as f64 + parts.iter().map(|d| w * d[v][k] as f64).sum::<f64>()
+                })
+            })
+            .collect()
+    };
+    for (name, deltas) in &targets_read {
+        shapes.push((name.clone(), ShapeKind::Target, blend(&[deltas], 1.0)));
+    }
+    for (name, deltas) in &targets_read {
+        shapes.push((
+            format!("{name} (halfway)"),
+            ShapeKind::TargetHalfway,
+            blend(&[deltas], 0.5),
+        ));
+    }
+    for (a, (first, da)) in targets_read.iter().enumerate() {
+        for (second, db) in &targets_read[a + 1..] {
+            let pair = format!("{first} + {second}");
+            shapes.push((pair.clone(), ShapeKind::Blend, blend(&[da, db], 1.0)));
+            shapes.push((
+                format!("{pair} (halfway)"),
+                ShapeKind::BlendHalfway,
+                blend(&[da, db], 0.5),
+            ));
+        }
+    }
+    if has_default_pose {
+        shapes.push(("default pose".into(), ShapeKind::DefaultPose, default_pose));
     }
     if shapes
         .iter()
-        .any(|(_, points)| points.iter().flatten().any(|c| !c.is_finite()))
+        .any(|(_, _, points)| points.iter().flatten().any(|c| !c.is_finite()))
     {
         return Err(fail(Skip::Unreadable(
             "positions or morph deltas are not finite".into(),
@@ -425,6 +502,11 @@ fn primitive_parts(
             parts.push(part(Outcome::Skipped(Skip::TooManyVertices), Vec::new()));
             continue;
         }
+        let n = outline.len() as f64;
+        if n * n * n / 6.0 * shapes.len() as f64 > MAX_EVALUATIONS {
+            parts.push(part(Outcome::Skipped(Skip::TooManyShapes), Vec::new()));
+            continue;
+        }
         let measured = measure(&shapes, &outline);
         if measured.largest <= 0.0 {
             parts.push(part(Outcome::Skipped(Skip::NoArea), Vec::new()));
@@ -434,17 +516,18 @@ fn primitive_parts(
         let before = measured.fold_per_shape(&current);
         let chosen = measured.best_triangulation(&outline);
         let after = measured.fold_per_shape(&chosen);
-        let improved =
-            measured.weighted_total(&current) - measured.weighted_total(&chosen) > IMPROVEMENT;
+        let harms_a_shape =
+            mode == Mode::Safe && measured.worsens_any(&current, &chosen, VISIBLY_WORSE);
+        let improved = !harms_a_shape
+            && measured.weighted_total(&current) - measured.weighted_total(&chosen) > IMPROVEMENT;
         let folds = shapes
             .iter()
             .zip(before.iter().zip(&after))
-            .filter_map(|((name, _), (b, a))| {
-                name.as_ref().map(|shape| ShapeFold {
-                    shape: shape.clone(),
-                    before: *b,
-                    after: if improved { *a } else { *b },
-                })
+            .map(|((name, kind, _), (b, a))| ShapeFold {
+                shape: name.clone(),
+                kind: *kind,
+                before: *b,
+                after: if improved { *a } else { *b },
             })
             .collect();
         if improved {
@@ -596,10 +679,10 @@ fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-fn measure(shapes: &[(Option<String>, Vec<[f64; 3]>)], outline: &[u32]) -> Measured {
+fn measure(shapes: &[(String, ShapeKind, Vec<[f64; 3]>)], outline: &[u32]) -> Measured {
     let mut measured: Vec<Option<Shape>> = shapes
         .iter()
-        .map(|(_, all)| {
+        .map(|(_, _, all)| {
             let points: Vec<[f64; 3]> = outline.iter().map(|&v| all[v as usize]).collect();
             // Newell's method: the loop's vector area, whose direction is
             // the loop's normal for its winding.
@@ -665,6 +748,24 @@ impl Measured {
                 })
             })
             .collect()
+    }
+
+    /// Whether `chosen` adds more than `limit` (against the largest shape's
+    /// area) of reversed area to any single shape that `current` draws.
+    fn worsens_any(&self, current: &[[u32; 3]], chosen: &[[u32; 3]], limit: f64) -> bool {
+        let reversed = |s: &Shape, triangles: &[[u32; 3]]| -> f64 {
+            triangles
+                .iter()
+                .map(|t| {
+                    let [i, j, k] = t.map(|v| self.position_of[&v]);
+                    Self::reversed(s, i, j, k)
+                })
+                .sum()
+        };
+        self.shapes
+            .iter()
+            .flatten()
+            .any(|s| reversed(s, chosen) - reversed(s, current) > limit * self.largest)
     }
 
     /// Reversed area summed over every shape, against the largest shape's

@@ -92,3 +92,20 @@ fn output_is_written_even_when_nothing_changes() {
     assert_eq!(result.status.code(), Some(0));
     assert_eq!(std::fs::read(&out).unwrap(), optimized);
 }
+
+#[test]
+fn the_mode_is_chosen_on_the_flag() {
+    let path = scratch("mode");
+    std::fs::write(&path, build(&[mouth(10)]).bytes).unwrap();
+    let p = path.to_str().unwrap();
+    for flag in ["--morph-triangles=safe", "--morph-triangles=overall"] {
+        assert_eq!(
+            run(&[flag, "--dry-run", p]).status.code(),
+            Some(0),
+            "{flag}"
+        );
+    }
+    let unknown = run(&["--morph-triangles=bold", p]);
+    assert_eq!(unknown.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&unknown.stderr).contains("unknown option"));
+}

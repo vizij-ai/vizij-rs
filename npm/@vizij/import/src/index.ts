@@ -12,7 +12,7 @@ import {
 import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 
 /** The wasm interface version this wrapper is written against. */
-const EXPECTED_ABI = 1;
+const EXPECTED_ABI = 2;
 
 interface WasmResult {
   readonly bytes: Uint8Array<ArrayBuffer> | undefined;
@@ -23,7 +23,7 @@ interface WasmResult {
 interface WasmBindings {
   default: (input?: unknown) => Promise<unknown>;
   abi_version: () => number;
-  optimizeMorphTriangles: (glb: Uint8Array) => WasmResult;
+  optimizeMorphTriangles: (glb: Uint8Array, mode: string) => WasmResult;
 }
 
 const bindingCache: { current: WasmBindings | null } = { current: null };
@@ -84,6 +84,25 @@ function bindings(): WasmBindings {
   return bindingCache.current;
 }
 
+/**
+ * How far the morph-triangle pass may go for a part. Both change index data
+ * only. `safe` rewrites a part only when no checked shape — rest, each
+ * target and each pair of targets, at full and half weight, the default
+ * pose — comes out visibly worse; it fixes less. `overall` rewrites whenever
+ * the checked shapes improve overall, and the report shows any that got
+ * worse.
+ */
+export type MorphTrianglesMode = "safe" | "overall";
+
+/** Which shape of a part a {@link ShapeFold} measures. */
+export type ShapeKind =
+  | "rest"
+  | "target"
+  | "targetHalfway"
+  | "blend"
+  | "blendHalfway"
+  | "defaultPose";
+
 /** What the morph-triangle pass did with one part of a mesh. */
 export type MorphTrianglesOutcome = "retriangulated" | "kept" | "skipped";
 
@@ -91,11 +110,13 @@ export type MorphTrianglesOutcome = "retriangulated" | "kept" | "skipped";
  * The area one shape's triangles draw with reversed winding, before and
  * after the pass, as a multiple of the shape's own area (above 1 when the
  * wrongly drawn area exceeds the shape, as with a pupil squashed to a thin
- * arc); `null` for a shape with no area. `shape` is `rest`, a morph
- * target's name at full weight, or that name followed by ` (halfway)`.
+ * arc); `null` for a shape with no area. `shape` names it: `rest`, a
+ * target's name, two names joined by ` + ` for a blend, either followed by
+ * ` (halfway)` at half weight, or `default pose`; `kind` classifies it.
  */
 export interface ShapeFold {
   shape: string;
+  kind: ShapeKind;
   before: number | null;
   after: number | null;
 }
@@ -130,10 +151,14 @@ export interface MorphTrianglesResult {
  * Re-triangulates every part of a GLB modelled as one large polygon (a
  * mouth, a pupil) so its triangles stay unfolded across its morph targets.
  * Vertices, triangle counts and the glTF JSON are unchanged; only index
- * data is rewritten. Throws when the input is not a GLB.
+ * data is rewritten. `mode` sets how far it may go. Throws when the input is
+ * not a GLB.
  */
-export function optimizeMorphTriangles(glb: Uint8Array): MorphTrianglesResult {
-  const result = bindings().optimizeMorphTriangles(glb);
+export function optimizeMorphTriangles(
+  glb: Uint8Array,
+  mode: MorphTrianglesMode,
+): MorphTrianglesResult {
+  const result = bindings().optimizeMorphTriangles(glb, mode);
   try {
     return {
       bytes: result.bytes ?? null,

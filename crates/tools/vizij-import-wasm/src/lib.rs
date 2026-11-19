@@ -3,7 +3,8 @@
 //! in the browser before it parses a face.
 
 use serde_json::{json, Value};
-use vizij_import::morph_triangles::{Outcome, Report};
+use vizij_import::morph_triangles::{Outcome, Report, ShapeKind};
+use vizij_import::Mode;
 use wasm_bindgen::prelude::*;
 
 /// The version of this interface: the exported functions and the report
@@ -11,7 +12,7 @@ use wasm_bindgen::prelude::*;
 /// version, which catches a stale `pkg/` after a rebuild of one side only.
 #[wasm_bindgen]
 pub fn abi_version() -> u32 {
-    1
+    2
 }
 
 /// The outcome of [`optimize_morph_triangles`].
@@ -30,10 +31,11 @@ impl MorphTrianglesResult {
     }
 
     /// The pass's report as JSON: `{ parts: [{ mesh, meshName, primitive,
-    /// vertices, outcome, skipReason, folds: [{ shape, before, after }] }] }`,
-    /// where `outcome` is `retriangulated`, `kept` or `skipped`, and a fold
-    /// is the share of the shape's area drawn with reversed winding (`null`
-    /// for a shape with no area).
+    /// vertices, outcome, skipReason, folds: [{ shape, kind, before, after
+    /// }] }] }`, where `outcome` is `retriangulated`, `kept` or `skipped`;
+    /// `kind` is `rest`, `target`, `targetHalfway`, `blend`, `blendHalfway`
+    /// or `defaultPose`; and a fold is the area drawn with reversed winding
+    /// relative to the shape's own area (`null` for a shape with no area).
     #[wasm_bindgen(getter, js_name = reportJson)]
     pub fn report_json(&self) -> String {
         self.report.clone()
@@ -42,15 +44,32 @@ impl MorphTrianglesResult {
 
 /// Re-triangulates every part of `glb` modelled as one large polygon so its
 /// triangles stay unfolded across its morph targets; see
-/// [`vizij_import::morph_triangles`].
+/// [`vizij_import::morph_triangles`]. `mode` is `safe` or `overall`
+/// ([`Mode`]).
 #[wasm_bindgen(js_name = optimizeMorphTriangles)]
-pub fn optimize_morph_triangles(glb: &[u8]) -> Result<MorphTrianglesResult, JsError> {
-    let optimized =
-        vizij_import::optimize_morph_triangles(glb).map_err(|e| JsError::new(&e.to_string()))?;
+pub fn optimize_morph_triangles(glb: &[u8], mode: &str) -> Result<MorphTrianglesResult, JsError> {
+    let mode = match mode {
+        "safe" => Mode::Safe,
+        "overall" => Mode::Overall,
+        other => return Err(JsError::new(&format!("unknown mode '{other}'"))),
+    };
+    let optimized = vizij_import::optimize_morph_triangles(glb, mode)
+        .map_err(|e| JsError::new(&e.to_string()))?;
     Ok(MorphTrianglesResult {
         bytes: optimized.bytes,
         report: report_json(&optimized.report).to_string(),
     })
+}
+
+fn kind_name(kind: ShapeKind) -> &'static str {
+    match kind {
+        ShapeKind::Rest => "rest",
+        ShapeKind::Target => "target",
+        ShapeKind::TargetHalfway => "targetHalfway",
+        ShapeKind::Blend => "blend",
+        ShapeKind::BlendHalfway => "blendHalfway",
+        ShapeKind::DefaultPose => "defaultPose",
+    }
 }
 
 fn report_json(report: &Report) -> Value {
@@ -66,7 +85,14 @@ fn report_json(report: &Report) -> Value {
             let folds: Vec<Value> = part
                 .folds
                 .iter()
-                .map(|f| json!({ "shape": f.shape, "before": f.before, "after": f.after }))
+                .map(|f| {
+                    json!({
+                        "shape": f.shape,
+                        "kind": kind_name(f.kind),
+                        "before": f.before,
+                        "after": f.after,
+                    })
+                })
                 .collect();
             json!({
                 "mesh": part.mesh,
@@ -98,7 +124,8 @@ mod tests {
                     vertices: 65,
                     outcome: Outcome::Retriangulated,
                     folds: vec![ShapeFold {
-                        shape: "smile_shape".into(),
+                        shape: "smile_shape + sad_shape".into(),
+                        kind: ShapeKind::Blend,
                         before: Some(0.4),
                         after: None,
                     }],
@@ -119,7 +146,10 @@ mod tests {
                 {
                     "mesh": 2, "meshName": "mouth", "primitive": 0, "vertices": 65,
                     "outcome": "retriangulated", "skipReason": null,
-                    "folds": [{ "shape": "smile_shape", "before": 0.4, "after": null }]
+                    "folds": [{
+                        "shape": "smile_shape + sad_shape", "kind": "blend",
+                        "before": 0.4, "after": null
+                    }]
                 },
                 {
                     "mesh": 3, "meshName": null, "primitive": 1, "vertices": 64,

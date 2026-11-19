@@ -5,11 +5,11 @@ mod common;
 
 use common::{build, fan, flat, mouth, square, with_json, MeshSpec};
 use serde_json::json;
-use vizij_import::morph_triangles::{Outcome, Skip};
-use vizij_import::optimize_morph_triangles;
+use vizij_import::morph_triangles::{Outcome, ShapeKind, Skip};
+use vizij_import::{optimize_morph_triangles, Mode};
 
 fn only_outcome(bytes: &[u8]) -> Outcome {
-    let optimized = optimize_morph_triangles(bytes).expect("the file parses");
+    let optimized = optimize_morph_triangles(bytes, Mode::Safe).expect("the file parses");
     assert_eq!(optimized.report.parts.len(), 1, "{:?}", optimized.report);
     optimized.report.parts[0].outcome.clone()
 }
@@ -58,7 +58,7 @@ fn index_bytes_another_accessor_reads_are_left_alone() {
         let last = doc["accessors"].as_array().unwrap().len() - 1;
         doc["meshes"][1]["primitives"][0]["indices"] = json!(last);
     });
-    let optimized = optimize_morph_triangles(&aliased).unwrap();
+    let optimized = optimize_morph_triangles(&aliased, Mode::Safe).unwrap();
     assert!(optimized.bytes.is_none());
     assert_eq!(
         optimized.report.parts[0].outcome,
@@ -171,7 +171,7 @@ fn halfway_shapes_decide_when_full_weight_ones_cannot() {
         flat(&[[1.4, 0.3], [-1.0, 0.8], [0.5, -1.8], [1.0, -1.1]]),
     );
     let built = build(std::slice::from_ref(&spec));
-    let optimized = optimize_morph_triangles(&built.bytes).unwrap();
+    let optimized = optimize_morph_triangles(&built.bytes, Mode::Safe).unwrap();
     let rewritten = optimized.bytes.expect("the halfway fold is removed");
     assert_ne!(built.triangles(&rewritten, 0), spec.triangles);
     let halfway = optimized.report.parts[0]
@@ -197,7 +197,7 @@ fn shapes_are_weighed_by_the_area_a_viewer_sees() {
             flat(&[[-0.41, 1.43], [-1.33, 1.0], [0.55, 0.17], [-0.16, 0.75]]),
         );
     let built = build(std::slice::from_ref(&spec));
-    let rewritten = optimize_morph_triangles(&built.bytes)
+    let rewritten = optimize_morph_triangles(&built.bytes, Mode::Overall)
         .unwrap()
         .bytes
         .expect("the other diagonal draws less on screen");
@@ -214,7 +214,7 @@ fn a_shape_collapsed_to_a_line_reports_no_area() {
         .map(|p| [p[0], p[1] * 1e-6, p[2]])
         .collect();
     let spec = mouth(6).target("closed", closed);
-    let optimized = optimize_morph_triangles(&build(&[spec]).bytes).unwrap();
+    let optimized = optimize_morph_triangles(&build(&[spec]).bytes, Mode::Safe).unwrap();
     let closed = optimized.report.parts[0]
         .folds
         .iter()
@@ -239,7 +239,7 @@ fn an_index_accessor_another_primitive_also_uses_is_left_alone() {
     let shared = with_json(&built.bytes, |doc| {
         doc["meshes"][1]["primitives"][0]["indices"] = json!(1);
     });
-    let optimized = optimize_morph_triangles(&shared).unwrap();
+    let optimized = optimize_morph_triangles(&shared, Mode::Safe).unwrap();
     assert!(optimized.bytes.is_none());
     assert!(optimized
         .report
@@ -305,7 +305,7 @@ fn index_accessors_packed_side_by_side_in_one_view_are_both_rewritten() {
         doc["accessors"][second_accessor]["byteOffset"] =
             json!(views[second]["byteOffset"].as_u64().unwrap() - start);
     });
-    let optimized = optimize_morph_triangles(&packed).unwrap();
+    let optimized = optimize_morph_triangles(&packed, Mode::Safe).unwrap();
     let outcomes: Vec<_> = optimized.report.parts.iter().map(|p| &p.outcome).collect();
     assert_eq!(
         outcomes,
@@ -373,17 +373,17 @@ fn outlines_that_are_not_one_loop_are_not_polygons() {
 fn a_lone_triangle_is_not_considered() {
     let points = ring(3);
     let spec = MeshSpec::new("tri", points.clone(), vec![[0, 1, 2]]).target("t", squashed(&points));
-    let optimized = optimize_morph_triangles(&build(&[spec]).bytes).unwrap();
+    let optimized = optimize_morph_triangles(&build(&[spec]).bytes, Mode::Safe).unwrap();
     assert!(optimized.report.parts.is_empty());
 }
 
 #[test]
 fn a_part_kept_reports_its_triangles_as_they_are() {
-    let once = optimize_morph_triangles(&build(&[mouth(10)]).bytes)
+    let once = optimize_morph_triangles(&build(&[mouth(10)]).bytes, Mode::Safe)
         .unwrap()
         .bytes
         .unwrap();
-    let twice = optimize_morph_triangles(&once).unwrap();
+    let twice = optimize_morph_triangles(&once, Mode::Safe).unwrap();
     let part = &twice.report.parts[0];
     assert_eq!(part.outcome, Outcome::Kept);
     assert!(part.folds.iter().all(|f| f.before == f.after), "{part:?}");
@@ -394,7 +394,7 @@ fn the_default_pose_is_checked_when_the_mesh_sets_one() {
     let bytes = with_json(&build(&[mouth(6)]).bytes, |doc| {
         doc["meshes"][0]["weights"] = json!([0.5]);
     });
-    let optimized = optimize_morph_triangles(&bytes).unwrap();
+    let optimized = optimize_morph_triangles(&bytes, Mode::Safe).unwrap();
     assert!(optimized.report.parts[0]
         .folds
         .iter()
@@ -410,11 +410,79 @@ fn a_gain_too_small_to_see_keeps_the_triangles_and_says_so() {
         "nudge",
         flat(&[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.5005, 0.4995]]),
     );
-    let optimized = optimize_morph_triangles(&build(&[spec]).bytes).unwrap();
+    let optimized = optimize_morph_triangles(&build(&[spec]).bytes, Mode::Safe).unwrap();
     assert!(optimized.bytes.is_none());
     let part = &optimized.report.parts[0];
     assert_eq!(part.outcome, Outcome::Kept);
     let nudge = part.folds.iter().find(|f| f.shape == "nudge").unwrap();
     assert!(nudge.before.unwrap() > 0.0);
     assert_eq!(nudge.before, nudge.after);
+}
+
+/// A square whose two targets each fold the fan's diagonal, so the other
+/// diagonal is no worse for any single shape, but the targets' blend folds
+/// under that other diagonal and not under the fan's.
+fn blend_trap() -> MeshSpec {
+    let corners = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+    let moved = |d: [[f32; 2]; 4]| -> Vec<[f32; 3]> {
+        (0..4)
+            .map(|i| [corners[i][0] + d[i][0], corners[i][1] + d[i][1], 0.0])
+            .collect()
+    };
+    square("quad")
+        .target(
+            "a",
+            moved([[0.07, 0.58], [-0.36, 0.82], [0.71, -0.3], [-0.83, -0.12]]),
+        )
+        .target(
+            "b",
+            moved([[0.1, 0.54], [-0.03, -0.94], [0.62, -0.87], [0.6, -0.65]]),
+        )
+}
+
+#[test]
+fn safe_mode_keeps_a_part_whose_rewrite_would_worsen_a_blend() {
+    let bytes = build(&[blend_trap()]).bytes;
+    let overall = optimize_morph_triangles(&bytes, Mode::Overall).unwrap();
+    assert!(overall.bytes.is_some(), "the shapes improve overall");
+    let folds = &overall.report.parts[0].folds;
+    let worse: Vec<_> = folds
+        .iter()
+        .filter(|f| f.after.unwrap_or(0.0) > f.before.unwrap_or(0.0) + 0.01)
+        .map(|f| (f.shape.as_str(), f.kind))
+        .collect();
+    assert!(!worse.is_empty(), "the rewrite worsens a blend");
+    assert!(
+        worse
+            .iter()
+            .all(|(_, kind)| matches!(kind, ShapeKind::Blend | ShapeKind::BlendHalfway)),
+        "only blends get worse: {worse:?}"
+    );
+
+    let safe = optimize_morph_triangles(&bytes, Mode::Safe).unwrap();
+    assert!(safe.bytes.is_none());
+    assert_eq!(safe.report.parts[0].outcome, Outcome::Kept);
+}
+
+#[test]
+fn every_checked_shape_is_reported_with_its_kind() {
+    let bytes = build(&[blend_trap()]).bytes;
+    let optimized = optimize_morph_triangles(&bytes, Mode::Safe).unwrap();
+    let kinds: Vec<(&str, ShapeKind)> = optimized.report.parts[0]
+        .folds
+        .iter()
+        .map(|f| (f.shape.as_str(), f.kind))
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            ("rest", ShapeKind::Rest),
+            ("a", ShapeKind::Target),
+            ("b", ShapeKind::Target),
+            ("a (halfway)", ShapeKind::TargetHalfway),
+            ("b (halfway)", ShapeKind::TargetHalfway),
+            ("a + b", ShapeKind::Blend),
+            ("a + b (halfway)", ShapeKind::BlendHalfway),
+        ]
+    );
 }

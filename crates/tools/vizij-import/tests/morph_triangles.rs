@@ -7,7 +7,7 @@ mod common;
 use common::{build, hub, mouth, pupil, reversed_fraction, Deltas, MeshSpec};
 use vizij_glb_migrate::glb::Glb;
 use vizij_import::morph_triangles::{Outcome, Skip};
-use vizij_import::optimize_morph_triangles;
+use vizij_import::{optimize_morph_triangles, Mode};
 
 /// Every shape of `spec` — rest and each target — folds by less than
 /// `tolerance` under `triangles`.
@@ -35,7 +35,7 @@ fn a_fan_folds_where_the_outline_bends() {
 fn bent_and_squashed_parts_are_retriangulated_unfolded() {
     let specs = [mouth(12), pupil(16)];
     let built = build(&specs);
-    let optimized = optimize_morph_triangles(&built.bytes).unwrap();
+    let optimized = optimize_morph_triangles(&built.bytes, Mode::Safe).unwrap();
     let rewritten = optimized.bytes.expect("the fans fold, so the file changes");
     for (m, spec) in specs.iter().enumerate() {
         let triangles = built.triangles(&rewritten, m);
@@ -55,7 +55,7 @@ fn bent_and_squashed_parts_are_retriangulated_unfolded() {
 #[test]
 fn only_index_bytes_change() {
     let built = build(&[mouth(10)]);
-    let rewritten = optimize_morph_triangles(&built.bytes)
+    let rewritten = optimize_morph_triangles(&built.bytes, Mode::Safe)
         .unwrap()
         .bytes
         .unwrap();
@@ -74,11 +74,11 @@ fn only_index_bytes_change() {
 #[test]
 fn a_second_run_changes_nothing() {
     let built = build(&[mouth(10), pupil(12)]);
-    let once = optimize_morph_triangles(&built.bytes)
+    let once = optimize_morph_triangles(&built.bytes, Mode::Safe)
         .unwrap()
         .bytes
         .unwrap();
-    let twice = optimize_morph_triangles(&once).unwrap();
+    let twice = optimize_morph_triangles(&once, Mode::Safe).unwrap();
     assert!(twice.bytes.is_none());
     assert!(twice
         .report
@@ -94,11 +94,11 @@ fn sparse_deltas_read_as_their_dense_equivalent() {
         deltas: Deltas::Sparse,
         ..mouth(10)
     }]);
-    let from_dense = optimize_morph_triangles(&dense.bytes)
+    let from_dense = optimize_morph_triangles(&dense.bytes, Mode::Safe)
         .unwrap()
         .bytes
         .unwrap();
-    let from_sparse = optimize_morph_triangles(&sparse.bytes)
+    let from_sparse = optimize_morph_triangles(&sparse.bytes, Mode::Safe)
         .unwrap()
         .bytes
         .unwrap();
@@ -116,7 +116,7 @@ fn every_index_width_is_rewritten() {
             ..pupil(16)
         };
         let built = build(std::slice::from_ref(&spec));
-        let rewritten = optimize_morph_triangles(&built.bytes)
+        let rewritten = optimize_morph_triangles(&built.bytes, Mode::Safe)
             .unwrap()
             .bytes
             .unwrap();
@@ -127,7 +127,7 @@ fn every_index_width_is_rewritten() {
 #[test]
 fn authored_interior_vertices_are_left_alone() {
     let built = build(&[hub(8)]);
-    let optimized = optimize_morph_triangles(&built.bytes).unwrap();
+    let optimized = optimize_morph_triangles(&built.bytes, Mode::Safe).unwrap();
     assert!(optimized.bytes.is_none());
     assert_eq!(
         optimized.report.parts[0].outcome,
@@ -141,7 +141,7 @@ fn meshes_without_targets_are_not_considered() {
         targets: Vec::new(),
         ..mouth(10)
     };
-    let optimized = optimize_morph_triangles(&build(&[spec]).bytes).unwrap();
+    let optimized = optimize_morph_triangles(&build(&[spec]).bytes, Mode::Safe).unwrap();
     assert!(optimized.bytes.is_none());
     assert!(optimized.report.parts.is_empty());
 }
@@ -155,7 +155,7 @@ fn a_shape_no_triangulation_can_follow_is_reported() {
     let n = spec.positions.len();
     let target = &mut spec.targets[0].1;
     target[n / 4][1] += 1.0;
-    let optimized = optimize_morph_triangles(&build(&[spec]).bytes).unwrap();
+    let optimized = optimize_morph_triangles(&build(&[spec]).bytes, Mode::Safe).unwrap();
     let smile = &optimized.report.parts[0].folds[1];
     assert!(smile.after.unwrap() > 0.01, "{smile:?}");
 }

@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use vizij_import::morph_triangles::{Outcome as PartOutcome, Part, STILL_FOLDS};
-use vizij_import::optimize_morph_triangles;
+use vizij_import::morph_triangles::{Outcome as PartOutcome, Part, ShapeKind, STILL_FOLDS};
+use vizij_import::{optimize_morph_triangles, Mode};
 
 const USAGE: &str = "\
 Run optional import passes over face .glb files. Each pass rewrites mesh
@@ -11,10 +11,18 @@ data only; the JSON chunk is preserved byte-for-byte.
 Usage: vizij-import <PASS>... [OPTIONS] <input.glb>...
 
 Passes (at least one):
-      --morph-triangles  Re-triangulate each part modelled as one large
+      --morph-triangles[=safe|overall]
+                         Re-triangulate each part modelled as one large
                          polygon so its triangles stay unfolded across its
                          morph targets, and report the shapes that still
-                         fold.
+                         fold. Only index data changes.
+                         safe (the default): a part is rewritten only when
+                           no checked shape (each target, each pair of
+                           targets, at full and half weight) comes out
+                           visibly worse.
+                         overall: a part is rewritten whenever the checked
+                           shapes improve overall; blends that got worse
+                           are listed.
 
 Options:
   -o, --output <path>  Write the result to <path> instead of rewriting the
@@ -40,7 +48,8 @@ struct Options {
     output: Option<PathBuf>,
     dry_run: bool,
     check: bool,
-    morph_triangles: bool,
+    /// The morph-triangle pass's mode; the only pass, so always chosen.
+    morph_triangles: Mode,
 }
 
 /// `Ok(None)` means help was printed and the process should exit cleanly.
@@ -49,7 +58,7 @@ fn parse_args(args: &[String]) -> Result<Option<Options>, String> {
     let mut output = None;
     let mut dry_run = false;
     let mut check = false;
-    let mut morph_triangles = false;
+    let mut morph_triangles = None;
     let mut positional_only = false;
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
@@ -71,7 +80,8 @@ fn parse_args(args: &[String]) -> Result<Option<Options>, String> {
             }
             "--dry-run" => dry_run = true,
             "--check" => check = true,
-            "--morph-triangles" => morph_triangles = true,
+            "--morph-triangles" | "--morph-triangles=safe" => morph_triangles = Some(Mode::Safe),
+            "--morph-triangles=overall" => morph_triangles = Some(Mode::Overall),
             other => {
                 if let Some(value) = other.strip_prefix("--output=") {
                     output = Some(PathBuf::from(value));
@@ -81,9 +91,9 @@ fn parse_args(args: &[String]) -> Result<Option<Options>, String> {
             }
         }
     }
-    if !morph_triangles {
+    let Some(morph_triangles) = morph_triangles else {
         return Err("no pass selected (use --morph-triangles)".to_string());
-    }
+    };
     if inputs.is_empty() {
         return Err("no input files given".to_string());
     }
@@ -120,10 +130,10 @@ fn percent(fraction: Option<f64>) -> String {
 
 fn print_part(path: &Path, part: &Part) {
     // A part left as it was is only worth a line when it still folds.
-    let still_folds = part
-        .folds
-        .iter()
-        .any(|f| f.after.unwrap_or(0.0) > STILL_FOLDS);
+    let still_folds = part.folds.iter().any(|f| {
+        !matches!(f.kind, ShapeKind::Blend | ShapeKind::BlendHalfway)
+            && f.after.unwrap_or(0.0) > STILL_FOLDS
+    });
     if part.outcome == PartOutcome::Kept && !still_folds {
         return;
     }
@@ -133,7 +143,7 @@ fn print_part(path: &Path, part: &Part) {
         .unwrap_or_else(|| format!("mesh {}", part.mesh));
     let what = match &part.outcome {
         PartOutcome::Retriangulated => "retriangulated".to_string(),
-        PartOutcome::Kept => "kept (already least folded)".to_string(),
+        PartOutcome::Kept => "kept".to_string(),
         PartOutcome::Skipped(why) => format!("skipped: {why}"),
     };
     println!(
@@ -147,7 +157,15 @@ fn print_part(path: &Path, part: &Part) {
         if worst <= LISTED {
             continue;
         }
-        let flag = if fold.after.unwrap_or(0.0) > STILL_FOLDS {
+        // Blends of two targets number in the hundreds; one is listed only
+        // when the rewrite made it worse.
+        let blend = matches!(fold.kind, ShapeKind::Blend | ShapeKind::BlendHalfway);
+        if blend && fold.after.unwrap_or(0.0) - fold.before.unwrap_or(0.0) <= STILL_FOLDS {
+            continue;
+        }
+        let flag = if blend {
+            "  worse"
+        } else if fold.after.unwrap_or(0.0) > STILL_FOLDS {
             "  still folds"
         } else {
             ""
@@ -163,11 +181,8 @@ fn print_part(path: &Path, part: &Part) {
 
 fn process_file(path: &Path, options: &Options) -> Result<Outcome, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("read: {e}"))?;
-    debug_assert!(
-        options.morph_triangles,
-        "the only pass, required by parse_args"
-    );
-    let optimized = optimize_morph_triangles(&bytes).map_err(|e| e.to_string())?;
+    let optimized =
+        optimize_morph_triangles(&bytes, options.morph_triangles).map_err(|e| e.to_string())?;
     for part in &optimized.report.parts {
         print_part(path, part);
     }
