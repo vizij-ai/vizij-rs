@@ -17,7 +17,8 @@
 //! indexed, and is ready once the GPU has drawn every mesh visible to its
 //! camera ([`EntityInstance::ready`], [`drawn`]). A mesh shown later, and
 //! what is drawn over the meshes (captions, the selection outline), may
-//! still compile when it first draws.
+//! still compile when it first draws. The view answers each load, and tells
+//! when each face is ready, as [`FaceEvent`] messages a front end reads.
 //!
 //! A face's entity carries the shared [`EntityInstance`] — its id, metadata,
 //! GLB, joins to the scene, camera and readiness — so the shared layer's
@@ -138,6 +139,70 @@ impl FaceAssets {
     fn scene(path: &str) -> bevy::asset::AssetPath<'static> {
         GltfAssetLabel::Scene(0).from_asset(format!("{}://{path}", Self::SOURCE))
     }
+}
+
+/// What the view tells its front end about each load, as [`FaceEvent`]s.
+///
+/// **Every load is answered once, and an instance's loads in the order they
+/// were asked for**: [`FaceEvent::Loaded`] once its scene is indexed, or
+/// [`FaceEvent::LoadFailed`] when its scene fails to load, a later load under
+/// the same id replaces it first, or the id is unloaded. A front end that
+/// queues its loads per id settles the oldest with each answer. Then, for a
+/// loaded face still current, [`FaceEvent::Ready`] once it is drawn.
+#[derive(Message, Clone, Debug, PartialEq)]
+pub enum FaceEvent {
+    /// The face's scene spawned and is indexed: its elements are joined to
+    /// their nodes, by `(id, name)` as its RobotData declares them. It draws
+    /// in its place once ready; a face it replaces draws until then.
+    Loaded {
+        face_id: String,
+        elements: Vec<(String, String)>,
+    },
+    /// The load did not finish, and why. Whatever the id showed still shows.
+    LoadFailed { face_id: String, error: String },
+    /// The face draws in its place from this frame. `drawn` is false when
+    /// readiness gave up waiting to see every visible mesh drawn
+    /// ([`drawn`]), and the face was made ready as it draws.
+    Ready { face_id: String, drawn: bool },
+}
+
+/// Why a load was answered with [`FaceEvent::LoadFailed`] without its scene
+/// failing.
+const REPLACED: &str = "a later load into the same instance replaced it";
+const UNLOADED: &str = "its instance was unloaded";
+
+/// Frames a face's camera warms before the shared layer gives up waiting to
+/// see the face drawn and makes it ready as it draws: `drawn`'s own bound,
+/// which it states only in its log. A face made ready after this many
+/// frames is reported as not seen drawn; one drawn in the last frames
+/// before the bound reads the same, which costs a host nothing it acts on.
+const GIVE_UP_FRAMES: u32 = 600;
+
+/// How far the warming count here trails the shared layer's: its count
+/// starts in the frame the camera starts warming, this one in the next, and
+/// its verdict lands a frame after it is reached.
+const GIVE_UP_LAG: u32 = 2;
+
+/// Where one load stands in what the view has told its front end
+/// ([`FaceEvent`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Answer {
+    Pending,
+    Loaded,
+}
+
+/// On a face spawned by [`ViewEvent::LoadFace`]: what its load has been
+/// answered, and its warming, so each event is sent once.
+#[derive(Component)]
+pub struct LoadReport {
+    /// The order loads were asked in, across ids: which of two faces under
+    /// one id is the newer.
+    serial: u64,
+    answer: Answer,
+    /// Frames its camera has warmed ([`drawn::Warming`]).
+    warmed: u32,
+    /// Whether [`FaceEvent::Ready`] was sent.
+    ready_told: bool,
 }
 
 /// What of a face shown by the view is vizij's own, beside the shared
@@ -599,14 +664,15 @@ impl Plugin for ViewPlugin {
             .init_resource::<PendingStatics>()
             .init_resource::<Holds>()
             .init_resource::<Compositions>()
+            .add_message::<FaceEvent>()
             .add_plugins((drawn::DrawnPlugin, PickPlugin, OutlinePlugin))
             .add_systems(
                 Update,
                 (
-                    apply_view_events,
+                    (apply_view_events, fail_unloadable_scenes).chain(),
                     // Before the cameras are placed, so a face made ready
                     // draws in its place from the frame it is ready.
-                    drawn::ready_drawn_instances,
+                    (drawn::ready_drawn_instances, report_ready).chain(),
                     clear_target,
                     place_cameras,
                     frame_cameras,
@@ -624,11 +690,21 @@ impl Plugin for ViewPlugin {
     }
 }
 
+/// Where [`apply_view_events`] answers loads, and the count that orders them
+/// ([`LoadReport::serial`]).
+#[derive(SystemParam)]
+struct Answers<'w, 's> {
+    events: MessageWriter<'w, FaceEvent>,
+    serial: Local<'s, u64>,
+}
+
 /// Apply the front ends' requests: load, reload or unload a face, place it
 /// or set its view, recolor the background, and the authoring requests —
 /// selection, holds, static features. A load under an id already shown
 /// supersedes the face there rather than unloading it: the old scene draws
-/// until the new one is ready ([`retire_superseded`]).
+/// until the new one is ready ([`retire_superseded`]). A face whose load is
+/// still unanswered never drew, so a load or an unload under its id takes
+/// it down at once and answers it ([`FaceEvent::LoadFailed`]).
 #[allow(clippy::too_many_arguments)]
 fn apply_view_events(
     events: Option<Res<ViewEvents>>,
@@ -644,8 +720,9 @@ fn apply_view_events(
     mut statics: ResMut<PendingStatics>,
     mut compositions: ResMut<Compositions>,
     mut commands: Commands,
-    faces: Query<(Entity, &EntityInstance, &Face)>,
+    faces: Query<(Entity, &EntityInstance, &Face, Option<&LoadReport>)>,
     asset_server: Res<AssetServer>,
+    mut told: Answers,
 ) {
     let Some(events) = events else { return };
     let Ok(receiver) = events.0.lock() else {
@@ -666,15 +743,28 @@ fn apply_view_events(
                 glb,
                 rig,
             } => {
-                for (entity, face, _) in &faces {
-                    if face.id == face_id && !gone.contains(&entity) {
+                for (entity, instance, face, report) in &faces {
+                    if instance.id != face_id || gone.contains(&entity) {
+                        continue;
+                    }
+                    if report.is_some_and(|report| report.answer == Answer::Pending) {
+                        gone.insert(entity);
+                        despawn_face(entity, instance, face, &assets, &mut slots, &mut commands);
+                        told.events.write(FaceEvent::LoadFailed {
+                            face_id: face_id.clone(),
+                            error: REPLACED.into(),
+                        });
+                    } else {
                         commands.entity(entity).insert(Superseded);
                     }
                 }
-                for (id, entity, ..) in &spawned {
-                    if *id == face_id {
-                        commands.entity(*entity).insert(Superseded);
-                    }
+                for _ in
+                    take_down_spawned(&mut spawned, &face_id, &assets, &mut slots, &mut commands)
+                {
+                    told.events.write(FaceEvent::LoadFailed {
+                        face_id: face_id.clone(),
+                        error: REPLACED.into(),
+                    });
                 }
                 let slot = slots.take();
                 let asset_path = assets.push(&face_id, glb);
@@ -713,6 +803,12 @@ fn apply_view_events(
                             slot,
                             pose: PoseState::default(),
                         },
+                        LoadReport {
+                            serial: *told.serial,
+                            answer: Answer::Pending,
+                            warmed: 0,
+                            ready_told: false,
+                        },
                         Transform::from_translation(slot_origin(slot)),
                         // In view once indexed ([`index_faces`]).
                         Visibility::Hidden,
@@ -721,26 +817,31 @@ fn apply_view_events(
                         )],
                     ))
                     .id();
+                *told.serial += 1;
                 commands.entity(camera).insert(ViewOf(face));
                 spawned.push((face_id, face, camera, asset_path, slot));
             }
             ViewEvent::UnloadFace { face_id } => {
-                for (entity, instance, face) in &faces {
+                for (entity, instance, face, report) in &faces {
                     if instance.id == face_id && gone.insert(entity) {
                         despawn_face(entity, instance, face, &assets, &mut slots, &mut commands);
+                        if report.is_some_and(|report| report.answer == Answer::Pending) {
+                            told.events.write(FaceEvent::LoadFailed {
+                                face_id: face_id.clone(),
+                                error: UNLOADED.into(),
+                            });
+                        }
                         log::info!("face {face_id}: unloaded");
                     }
                 }
-                spawned.retain(|(id, entity, camera, asset_path, slot)| {
-                    if *id != face_id {
-                        return true;
-                    }
-                    commands.entity(*camera).despawn();
-                    commands.entity(*entity).despawn();
-                    assets.remove(asset_path);
-                    slots.release(*slot);
-                    false
-                });
+                for _ in
+                    take_down_spawned(&mut spawned, &face_id, &assets, &mut slots, &mut commands)
+                {
+                    told.events.write(FaceEvent::LoadFailed {
+                        face_id: face_id.clone(),
+                        error: UNLOADED.into(),
+                    });
+                }
                 selections.0.remove(&face_id);
                 holds.clear(&face_id);
                 statics.0.remove(&face_id);
@@ -776,6 +877,105 @@ fn apply_view_events(
                 .entry(face_id)
                 .or_default()
                 .push((element_id, feature, value)),
+        }
+    }
+}
+
+/// Take down the faces under `face_id` that this drain of
+/// [`apply_view_events`] spawned: none has drawn, and none has had its load
+/// answered. How many it took down.
+fn take_down_spawned(
+    spawned: &mut Vec<(String, Entity, Entity, String, usize)>,
+    face_id: &str,
+    assets: &FaceAssets,
+    slots: &mut Slots,
+    commands: &mut Commands,
+) -> std::ops::Range<usize> {
+    let before = spawned.len();
+    spawned.retain(|(id, entity, camera, asset_path, slot)| {
+        if id != face_id {
+            return true;
+        }
+        commands.entity(*camera).despawn();
+        commands.entity(*entity).despawn();
+        assets.remove(asset_path);
+        slots.release(*slot);
+        false
+    });
+    0..before - spawned.len()
+}
+
+/// Answer and take down each face whose scene failed to load. It never
+/// drew, and the face it was to replace — the newest one under its id whose
+/// load was answered `Loaded` — is no longer superseded, so it draws on as
+/// the id's face.
+#[allow(clippy::type_complexity)]
+fn fail_unloadable_scenes(
+    faces: Query<(
+        Entity,
+        &EntityInstance,
+        &Face,
+        &LoadReport,
+        Option<&Children>,
+        Has<Superseded>,
+    )>,
+    roots: Query<&WorldAssetRoot>,
+    asset_server: Res<AssetServer>,
+    assets: Res<FaceAssets>,
+    mut slots: ResMut<Slots>,
+    mut told: MessageWriter<FaceEvent>,
+    mut commands: Commands,
+) {
+    for (entity, instance, face, report, children, _) in &faces {
+        if report.answer != Answer::Pending {
+            continue;
+        }
+        let failed = children.into_iter().flatten().find_map(|child| {
+            let root = roots.get(*child).ok()?;
+            match asset_server.load_state(&root.0) {
+                bevy::asset::LoadState::Failed(error) => Some(error.to_string()),
+                _ => None,
+            }
+        });
+        let Some(error) = failed else {
+            continue;
+        };
+        log::warn!("face {}: its scene failed to load: {error}", instance.id);
+        despawn_face(entity, instance, face, &assets, &mut slots, &mut commands);
+        told.write(FaceEvent::LoadFailed {
+            face_id: instance.id.clone(),
+            error,
+        });
+        let previous = faces
+            .iter()
+            .filter(|(_, other, _, other_report, _, superseded)| {
+                *superseded && other.id == instance.id && other_report.answer == Answer::Loaded
+            })
+            .max_by_key(|(_, _, _, other_report, _, _)| other_report.serial);
+        if let Some((previous, ..)) = previous {
+            commands.entity(previous).remove::<Superseded>();
+        }
+    }
+}
+
+/// Count each warming face's frames, and send [`FaceEvent::Ready`] once for
+/// each face the shared layer has made ready.
+fn report_ready(
+    mut faces: Query<(&EntityInstance, &mut LoadReport), Without<Superseded>>,
+    warming: Query<(), With<drawn::Warming>>,
+    mut told: MessageWriter<FaceEvent>,
+) {
+    for (instance, mut report) in &mut faces {
+        if instance.ready {
+            if !report.ready_told {
+                report.ready_told = true;
+                told.write(FaceEvent::Ready {
+                    face_id: instance.id.clone(),
+                    drawn: report.warmed + GIVE_UP_LAG < GIVE_UP_FRAMES,
+                });
+            }
+        } else if warming.contains(instance.camera) {
+            report.warmed += 1;
         }
     }
 }
@@ -1249,7 +1449,12 @@ fn visible_extent(bounds: Vec2, fit: Fit, zoom: Vec2, width: f32, height: f32) -
 /// ready ([`drawn`]).
 #[allow(clippy::too_many_arguments)]
 fn index_faces(
-    mut faces: Query<(Entity, &mut EntityInstance, &mut Face)>,
+    mut faces: Query<(
+        Entity,
+        &mut EntityInstance,
+        &mut Face,
+        Option<&mut LoadReport>,
+    )>,
     options: Res<ViewOptions>,
     views: Res<FaceViews>,
     names: Query<&Name>,
@@ -1259,9 +1464,10 @@ fn index_faces(
     mut transforms: Query<&mut Transform>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut mesh_assets: ResMut<Assets<Mesh>>,
+    mut told: MessageWriter<FaceEvent>,
     mut commands: Commands,
 ) {
-    for (root, mut instance, mut face) in &mut faces {
+    for (root, mut instance, mut face, report) in &mut faces {
         if instance.bindings.indexed {
             continue;
         }
@@ -1490,6 +1696,18 @@ fn index_faces(
         };
         commands.entity(root).insert(Visibility::Inherited);
         commands.entity(instance.camera).insert(drawn::Warming);
+        if let Some(mut report) = report.filter(|report| report.answer == Answer::Pending) {
+            report.answer = Answer::Loaded;
+            told.write(FaceEvent::Loaded {
+                face_id: instance.id.clone(),
+                elements: instance
+                    .meta
+                    .elements
+                    .iter()
+                    .map(|element| (element.id.clone(), element.name.clone()))
+                    .collect(),
+            });
+        }
     }
 }
 
@@ -2496,5 +2714,208 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// An app running only what answers loads: the requests drained, a
+    /// failed scene answered. No GLB loader is registered, so every scene
+    /// fails to load.
+    fn answering_app() -> (App, std::sync::mpsc::Sender<ViewEvent>) {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let mut app = App::new();
+        FaceAssets::register(&mut app);
+        app.add_plugins((MinimalPlugins, bevy::asset::AssetPlugin::default()))
+            .init_asset::<WorldAsset>()
+            .init_resource::<Slots>()
+            .init_resource::<Placements>()
+            .init_resource::<FaceViews>()
+            .init_resource::<PendingStatics>()
+            .init_resource::<Selections>()
+            .init_resource::<Holds>()
+            .init_resource::<Compositions>()
+            .insert_resource(ViewOptions {
+                background: Color::BLACK,
+                fit: Fit::Contain,
+                zoom: Vec2::ONE,
+                ambient: std::f32::consts::FRAC_PI_2,
+                unlit: false,
+            })
+            .insert_resource(ViewEvents(Mutex::new(receiver)))
+            .add_message::<FaceEvent>()
+            .add_systems(Update, (apply_view_events, fail_unloadable_scenes).chain());
+        (app, sender)
+    }
+
+    fn load(face_id: &str) -> ViewEvent {
+        ViewEvent::LoadFace {
+            face_id: face_id.into(),
+            meta: Box::new(FaceMeta {
+                asset: AssetMeta::default(),
+                bundle: Default::default(),
+            }),
+            glb: b"not a GLB".to_vec(),
+            rig: vizij_arora_hal::RigHal::new(),
+        }
+    }
+
+    /// Run frames until `count` answers have come, or give up.
+    fn answers(
+        app: &mut App,
+        cursor: &mut bevy::ecs::message::MessageCursor<FaceEvent>,
+        count: usize,
+    ) -> Vec<FaceEvent> {
+        let mut seen = Vec::new();
+        for _ in 0..200 {
+            app.update();
+            let messages = app.world().resource::<Messages<FaceEvent>>();
+            seen.extend(cursor.read(messages).cloned());
+            if seen.len() >= count {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        seen
+    }
+
+    fn failed(face_id: &str, error: &str) -> FaceEvent {
+        FaceEvent::LoadFailed {
+            face_id: face_id.into(),
+            error: error.into(),
+        }
+    }
+
+    /// A load replaced before its scene is indexed, and one whose instance
+    /// is unloaded, are each answered once, in the order they were asked
+    /// for, and take their face down.
+    #[test]
+    fn an_unanswered_load_replaced_or_unloaded_fails_saying_why() {
+        let (mut app, sender) = answering_app();
+        let mut cursor = app.world().resource::<Messages<FaceEvent>>().get_cursor();
+        sender.send(load("a")).unwrap();
+        sender.send(load("a")).unwrap();
+        sender
+            .send(ViewEvent::UnloadFace {
+                face_id: "a".into(),
+            })
+            .unwrap();
+        assert_eq!(
+            answers(&mut app, &mut cursor, 2),
+            [failed("a", REPLACED), failed("a", UNLOADED)]
+        );
+        let mut faces = app.world_mut().query::<&EntityInstance>();
+        assert_eq!(faces.iter(app.world()).count(), 0);
+        assert_eq!(answers(&mut app, &mut cursor, 1), [], "nothing more");
+    }
+
+    /// A load whose scene fails to load is answered with the loader's
+    /// error, and the face it was to replace is the instance's face again.
+    #[test]
+    fn a_scene_that_fails_to_load_answers_its_load_and_keeps_the_face_before() {
+        let (mut app, sender) = answering_app();
+        let mut cursor = app.world().resource::<Messages<FaceEvent>>().get_cursor();
+        let shown = app
+            .world_mut()
+            .spawn((
+                EntityInstance {
+                    id: "a".into(),
+                    asset_path: String::new(),
+                    meta: AssetMeta::default(),
+                    bindings: SceneBindings::default(),
+                    camera: Entity::PLACEHOLDER,
+                    draw_order: drawing_order(0),
+                    ready: true,
+                },
+                Face {
+                    bundle: Default::default(),
+                    rig: vizij_arora_hal::RigHal::new(),
+                    slot: 0,
+                    pose: PoseState::default(),
+                },
+                LoadReport {
+                    serial: 0,
+                    answer: Answer::Loaded,
+                    warmed: 0,
+                    ready_told: true,
+                },
+            ))
+            .id();
+        app.world_mut().resource_mut::<Slots>().take();
+        sender.send(load("a")).unwrap();
+        let told = answers(&mut app, &mut cursor, 1);
+        let [FaceEvent::LoadFailed { face_id, error }] = told.as_slice() else {
+            panic!("one failure, got {told:?}");
+        };
+        assert_eq!(face_id, "a");
+        assert!(
+            error != REPLACED && error != UNLOADED,
+            "the loader's: {error}"
+        );
+        app.update();
+        assert!(!app.world().entity(shown).contains::<Superseded>());
+        let mut faces = app.world_mut().query::<&EntityInstance>();
+        assert_eq!(
+            faces.iter(app.world()).count(),
+            1,
+            "the failed face is gone"
+        );
+    }
+
+    /// A face is reported ready once, drawn unless it warmed until the
+    /// shared layer gave up waiting to see it drawn.
+    #[test]
+    fn ready_is_told_once_and_says_whether_it_was_seen_drawn() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let mut world = World::new();
+        world.init_resource::<Messages<FaceEvent>>();
+        let face = |world: &mut World, id: &str| {
+            let camera = world.spawn(drawn::Warming).id();
+            let face = world
+                .spawn((
+                    EntityInstance {
+                        id: id.into(),
+                        asset_path: String::new(),
+                        meta: AssetMeta::default(),
+                        bindings: SceneBindings::default(),
+                        camera,
+                        draw_order: drawing_order(0),
+                        ready: false,
+                    },
+                    LoadReport {
+                        serial: 0,
+                        answer: Answer::Loaded,
+                        warmed: 0,
+                        ready_told: false,
+                    },
+                ))
+                .id();
+            face
+        };
+        let quick = face(&mut world, "quick");
+        let slow = face(&mut world, "slow");
+        let frames = |world: &mut World, n: u32| {
+            for _ in 0..n {
+                world.run_system_once(report_ready).expect("runs");
+            }
+        };
+        frames(&mut world, 10);
+        world.get_mut::<EntityInstance>(quick).unwrap().ready = true;
+        frames(&mut world, GIVE_UP_FRAMES);
+        world.get_mut::<EntityInstance>(slow).unwrap().ready = true;
+        frames(&mut world, 3);
+        let messages = world.resource::<Messages<FaceEvent>>();
+        let told: Vec<_> = messages.get_cursor().read(messages).cloned().collect();
+        assert_eq!(
+            told,
+            [
+                FaceEvent::Ready {
+                    face_id: "quick".into(),
+                    drawn: true
+                },
+                FaceEvent::Ready {
+                    face_id: "slow".into(),
+                    drawn: false
+                },
+            ]
+        );
     }
 }

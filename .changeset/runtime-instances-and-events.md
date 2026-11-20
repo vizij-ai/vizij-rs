@@ -1,0 +1,12 @@
+---
+"@vizij/runtime": major
+---
+
+A page drives its Vizijs through the handle `mount` resolves to, by instance — an id of the page's own, never rewritten, which every call about a face and every event from it carries — and hears from them through one pushed event stream, in the shape `@semio/scene` gives robots.
+
+- `vizijs.load(instance, glb, options)` loads a Vizij into the instance and resolves to its `Runtime` once the face has loaded whole; under an instance showing a face it replaces it, the face showing drawing until the new one is ready. It rejects, keeping what the instance showed, when the GLB does not read or build, its scene fails to load, or a later load into the instance, or its unload, comes first; the device of a load that rejects is disposed by the package. `options.key` names the content: a load of the key an instance shows, with none loading, resolves to the device showing it, and a load of the key it is loading joins that load. `vizijs.unload(instance)` takes the face down and rejects anything loading into it.
+- `vizijs.onEvent(handler)` hears every event, each naming its `instance`: `loaded` (`key`, `elements: { id, name }[]`), `loadFailed` (`key`, `error`), `ready` (`drawn`, false when readiness gave up waiting to see the face drawn), `pick` (`element`, `null` for a miss) and `safeArea` (`area`, `null` once it has none). An instance's `loaded` and `loadFailed` arrive in the order its loads were asked for. `vizijs.faces`, `vizijs.loading` and `vizijs.safeAreas` hold the current state, set before a handler hears the event that changed it.
+- `vizijs.place(instance, rect | "fill")` and `vizijs.placeIn(instance, element)` say where a face draws on the canvas; `vizijs.setView`, `vizijs.setSelection` take the instance.
+- `vizijs.setValue(instance, element, value, feature)` writes one number or three to a feature of an element in place. The feature is required: a face's animatables are its device's outputs, written through its `Runtime`.
+- `Runtime.instance` names the instance a device's face was loaded into.
+- **Breaking:** `loadVizij`, `unloadVizij`, `placeVizij`, `placeVizijIn`, `fillCanvas`, `setView`, `setSelection`, `setStaticFeature`, `safeArea`, `ready`, `whenReady`, `drainPicks`, the `Pick` type and `Runtime.vizijId` are gone: their work is the handle's and the event stream's. `mount` resolves to the handle rather than to nothing.

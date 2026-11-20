@@ -79,6 +79,14 @@ try {
   await loadVizij(page, "q", QUORI, { program: "none", audio: false });
   await frames(30);
 
+  // Its `loaded` event names every element the GLB declares.
+  const shown = await harness("shown", "q");
+  assert.deepEqual(
+    shown.elements.map((e) => e.id),
+    quori.elements.map((e) => e.id),
+    "the loaded face's elements",
+  );
+
   // A press on no element is the Vizij's miss; one on an element names it.
   {
     const png = await shot();
@@ -94,17 +102,17 @@ try {
     for (let attempt = 0; attempt < 5 && picks.length === 0; attempt++) {
       picks = await press(...empty);
     }
-    assert.deepEqual(picks, [{ vizijId: "q", elementId: null }], `a press at ${empty}`);
+    assert.deepEqual(picks, [{ instance: "q", element: null }], `a press at ${empty}`);
     picks = [];
     for (let attempt = 0; attempt < 5 && picks.length === 0; attempt++) {
       picks = await press(CANVAS.width / 2, CANVAS.height / 2);
     }
     assert.equal(picks.length, 1, JSON.stringify(picks));
     assert.ok(
-      quori.elements.some((e) => e.id === picks[0].elementId),
+      quori.elements.some((e) => e.id === picks[0].element),
       `the centre picked ${JSON.stringify(picks)}`,
     );
-    console.log(`picks: a miss at ${empty}, ${picks[0].elementId} at the centre`);
+    console.log(`picks: a miss at ${empty}, ${picks[0].element} at the centre`);
   }
 
   // The glow outlines the selected eye, and not the other one.
@@ -175,7 +183,7 @@ try {
     const loads = () => logs.filter((l) => l.includes("face s: loading")).length;
     const loadsBefore = loads();
     const before = await shot();
-    await harness("setStatic", "s", background.id, "color", { r: 1, g: 0, b: 0 });
+    await harness("setFeature", "s", background.id, "color", [1, 0, 0]);
     await frames(10);
     const after = await shot();
     const red = reddened(before, after);
@@ -266,23 +274,28 @@ try {
       assert.ok(diffAfter < 1, `the reloaded face differs (${diffAfter})`);
       timings.push(timing);
     }
-    // Two reloads in one turn: the second supersedes the first's pending
-    // scene too, and the one face left is the last loaded.
+    // Two reloads in one turn: the second replaces the first before it
+    // loads, which is answered `loadFailed` and never draws, and the face
+    // showing is retired once the last is ready — the one face left.
     const retired = () => logs.filter((l) => l.includes("face r: reloaded")).length;
     const retiredBefore = retired();
-    await page.evaluate(
-      ([url]) =>
-        Promise.all([
-          window.vizijHarness.reload("r", url, { program: "none" }),
-          window.vizijHarness.reload("r", url, { program: "none" }),
-        ]),
+    const outcomes = await page.evaluate(
+      async ([url]) =>
+        (
+          await Promise.allSettled([
+            window.vizijHarness.reload("r", url, { program: "none" }),
+            window.vizijHarness.reload("r", url, { program: "none" }),
+          ])
+        ).map((outcome) => outcome.reason?.message ?? outcome.status),
       [`/fixtures/${QUORI}`],
     );
+    assert.match(outcomes[0], /replaced/, `the first of two reloads: ${outcomes[0]}`);
+    assert.equal(outcomes[1], "fulfilled");
     await frames(30);
-    assert.equal(retired() - retiredBefore, 2, "a back-to-back reload left a face behind");
+    assert.equal(retired() - retiredBefore, 1, "a back-to-back reload left a face behind");
     assert.ok(meanDiff32(settled, await shotBuffer()) < 1, "the face after a double reload differs");
     const ms = (key) => timings.map((t) => t[key].toFixed(0)).join(", ");
-    console.log(`reload of ${QUORI} (ms): device built ${ms("loadMs")}; scene ready ${ms("readyMs")}`);
+    console.log(`reload of ${QUORI} (ms): device built ${ms("loadMs")}; face ready ${ms("readyMs")}`);
 
     // An exported GLB round-trips: what it declares and what it draws.
     const exported = process.env.VIZIJ_EXPORTED_QUORI;

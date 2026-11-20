@@ -45,16 +45,16 @@ try {
       await page.mouse.up();
       await frames(3);
       const picks = await page.evaluate(() => window.vizijHarness.picks());
-      if (picks.some((p) => p.vizijId === face)) return picks;
+      if (picks.some((p) => p.instance === face)) return picks;
     }
     return [];
   };
   const picks = [...(await press("left", 190, 243)), ...(await press("right", 572, 243))];
-  const byFace = (id) => picks.filter((p) => p.vizijId === id);
+  const byFace = (id) => picks.filter((p) => p.instance === id);
   assert.ok(byFace("left").length >= 1, `no pick on the left face: ${JSON.stringify(picks)}`);
   assert.ok(byFace("right").length >= 1, `no pick on the right face: ${JSON.stringify(picks)}`);
-  for (const pick of byFace("left")) assert.ok(elements.left.includes(pick.elementId), pick.elementId);
-  for (const pick of byFace("right")) assert.ok(elements.right.includes(pick.elementId), pick.elementId);
+  for (const pick of byFace("left")) assert.ok(elements.left.includes(pick.element), pick.element);
+  for (const pick of byFace("right")) assert.ok(elements.right.includes(pick.element), pick.element);
 
   const state = await page.evaluate(() => window.vizijHarness.state());
   assert.deepEqual(state.stepErrors, []);

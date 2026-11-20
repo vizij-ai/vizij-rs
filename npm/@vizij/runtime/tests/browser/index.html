@@ -38,7 +38,34 @@
     progress.push({ ...p, at: performance.now(), frame: window.frameCount ?? null }),
   );
   await vizij.init(params.get("wasm") ?? undefined);
-  await vizij.mount("#faces", { background });
+  const vizijs = await vizij.mount("#faces", { background });
+
+  // What the App has said: each instance's readiness from its last `ready`
+  // (whether it was seen drawn), forgotten when the instance loads again or
+  // is unloaded; the picks a test has not drained yet; every event, in
+  // order.
+  const readiness = new Map();
+  const readyWaiters = new Map();
+  const picked = [];
+  const events = [];
+  vizijs.onEvent((event) => {
+    events.push(event);
+    if (event.type === "ready") {
+      readiness.set(event.instance, event.drawn);
+      for (const resolve of readyWaiters.get(event.instance) ?? []) resolve();
+      readyWaiters.delete(event.instance);
+    } else if (event.type === "pick") {
+      picked.push({ instance: event.instance, element: event.element });
+    }
+  });
+  const forget = (id) => readiness.delete(id);
+  // Resolves on the instance's next `ready`, or at once if it is ready.
+  const nextReady = (id) =>
+    readiness.has(id)
+      ? Promise.resolve()
+      : new Promise((resolve) =>
+          readyWaiters.set(id, [...(readyWaiters.get(id) ?? []), resolve]),
+        );
 
   // The page owns every device and steps it on the device clock: by default
   // on the page's frames, each by the frame's wall time; once a test takes
@@ -115,12 +142,17 @@
   };
   const players = { scripted: scriptedPlay, page: pagePlay };
 
-  // Resolves on the first animation frame where `ready(id)` reads true.
-  const nextReady = (id) =>
-    new Promise((resolve) => {
-      const poll = () => (vizij.ready(id) ? resolve() : requestAnimationFrame(poll));
-      poll();
-    });
+  // Load into `id`: the instance is not ready until its new face is, and
+  // once loaded the new device takes over from the previous one, which is
+  // disposed. Resolves to the device.
+  async function loadInto(id, bytes, options) {
+    forget(id);
+    const device = await vizijs.load(id, bytes, options);
+    const previous = devices.get(id);
+    if (previous !== device) previous?.dispose();
+    devices.set(id, device);
+    return device;
+  }
 
   window.vizijHarness = {
     progress: () => progress,
@@ -145,44 +177,41 @@
     // stand-in, `audio: "page"` into the package's player from /audible/tts.
     async load(id, url, options) {
       const play = players[options?.audio];
-      const device = await vizij.loadVizij(id, await glb(url), {
+      const device = await loadInto(id, await glb(url), {
         ...options,
         audio: play ?? options?.audio,
         speechApiUrl: play
           ? `${location.origin}${play === pagePlay ? "/audible" : ""}`
           : options?.speechApiUrl,
       });
-      devices.get(id)?.dispose();
-      devices.set(id, device);
       return { rigPrefix: device.rigPrefix };
     },
-    // A reload from GLB bytes, timed: `loadMs` until `loadVizij` returns
+    // A reload from GLB bytes, timed: `loadMs` until the load is under way
     // (the GLB read, the graphs composed, the device built), `readyMs`
-    // until the new scene is indexed and posed — the frame the swap lands.
+    // until the new face is ready — the frame the swap lands. `readyAt`
+    // is whether the instance read ready once the new face had loaded.
     async reload(id, url, options) {
       const bytes = await glb(url);
       const start = performance.now();
-      const device = await vizij.loadVizij(id, bytes, { audio: false, ...options });
+      const loaded = loadInto(id, bytes, { audio: false, ...options });
       const loadMs = performance.now() - start;
-      devices.get(id)?.dispose();
-      devices.set(id, device);
-      const readyAt = vizij.ready(id);
+      await loaded;
+      const readyAt = readiness.has(id);
       await nextReady(id);
       return { loadMs, readyMs: performance.now() - start, readyAt };
     },
     // A Vizij from bytes the page built (an edited or exported GLB).
     async loadBytes(id, bytes, options) {
-      const device = await vizij.loadVizij(id, bytes, { audio: false, ...options });
-      devices.get(id)?.dispose();
-      devices.set(id, device);
+      const device = await loadInto(id, bytes, { audio: false, ...options });
       return { rigPrefix: device.rigPrefix };
     },
     describe: async (url) => vizij.describe(await glb(url)),
     describeBytes: (bytes) => vizij.describe(bytes),
     rigPrefix: (id) => ({ rigPrefix: devices.get(id).rigPrefix }),
-    select: (id, elementIds) => vizij.setSelection(id, elementIds),
-    setStatic: (id, elementId, feature, value) =>
-      vizij.setStaticFeature(id, elementId, feature, value),
+    select: (id, elementIds) => vizijs.setSelection(id, elementIds),
+    // A feature of an element, written in place: one number or three.
+    setFeature: (id, elementId, feature, value) =>
+      vizijs.setValue(id, elementId, value, feature),
     hold: (id, paths) => devices.get(id).hold(paths),
     release: (id, paths) => devices.get(id).release(paths),
     spawn: (id, call) => devices.get(id).spawn(call),
@@ -235,14 +264,21 @@
         requestAnimationFrame(next);
       }),
     snapshot: (id) => devices.get(id).snapshot(),
-    place: (id, rect) => vizij.placeVizij(id, rect),
-    setView: (id, view) => vizij.setView(id, view),
-    safeArea: (id) => vizij.safeArea(id),
-    ready: (id) => vizij.ready(id),
+    place: (id, rect) => vizijs.place(id, rect),
+    setView: (id, view) => vizijs.setView(id, view),
+    safeArea: (id) => vizijs.safeAreas.get(id) ?? null,
+    // Whether the instance's face is ready, from its `ready` event.
+    ready: (id) => readiness.has(id),
+    // Whether its `ready` said it was seen drawn; `undefined` before it.
+    drawn: (id) => readiness.get(id),
+    // The faces showing, as their `loaded` events described them.
+    shown: (id) => vizijs.faces.get(id) ?? null,
+    events: () => events.slice(),
     unload(id) {
       const device = devices.get(id);
       if (!device) return false;
-      vizij.unloadVizij(id);
+      vizijs.unload(id);
+      forget(id);
       device.dispose();
       devices.delete(id);
       return true;
@@ -251,7 +287,8 @@
     readValues: (id, paths) => devices.get(id).readValues(paths),
     path: (id, relative) => devices.get(id).path(relative),
     device: (id) => devices.get(id),
-    picks: () => vizij.drainPicks(),
+    // The `pick` events since the last call, oldest first.
+    picks: () => picked.splice(0),
     state: () => {
       const gl = canvas.getContext("webgl2");
       return {

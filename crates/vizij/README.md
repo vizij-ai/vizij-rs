@@ -56,7 +56,7 @@ piece of it, not a second device.
 | `face` | the composition: the GLB's bindings and bundle into one graph spec, folded with `RigHal` + `BlackboardStore` and the modules into an `AroraBuilder` a host may extend (`builder_for`); the bundle's animations loaded into the built device through the animation module's declared functions (`load_animations`); the program that runs from load, spawned beside the graph as a run of the interpreter's `run_behavior` (`spawn_program`); the free inputs and what the store says of them (`declare_keys`), the neutral pose, the skills' fragments | everywhere |
 | `modules` | the host modules any Arora loads: `animation` (Arora's `@arora/animation`, from `arora-animation-module`), `rest` (`reset`, `reset_keys`), `tts_piper` (feature) | everywhere (Piper native) |
 | `native` | the stand-alone device: the face's Arora on a worker thread under arora's operator flow, the bridges the build adds, the `RuntimeHandle` front ends speak through | every target but the browser |
-| `web` | the browser module behind [`@vizij/runtime`](../../npm/@vizij/runtime/README.md): one App per page (`mount`), a JS-paced Arora per Vizij (`loadVizij`, a `VizijRuntime`), Vizijs as rectangles of the canvas (`placeVizij`), picks, `describe` | `wasm32` |
+| `web` | the browser module behind [`@vizij/runtime`](../../npm/@vizij/runtime/README.md): one App per page (`mount`), a Vizij per instance the page names (`load`, `unload`), a JS-paced Arora per Vizij (the `VizijRuntime` `load` returns), Vizijs as rectangles of the canvas (`place`), element writes (`setValue`) and the selection, and one pushed event stream (`setEventHandler`: `loaded`, `loadFailed`, `ready`, `pick`, `safeArea`), `describe` | `wasm32` |
 | `main.rs`, `open.rs` | the CLI, the window, the terminal operator UI, opening a face by drop or dialog | feature `desktop` (default) |
 | `settings` | the settings pane over the face (egui): the background kept per face, and with `studio` the device's Studio enrollment and record; the pane is the device's operator and enroller (`settings::PaneOperator`); see [The settings pane](#the-settings-pane) | feature `settings` (in `desktop`), every target but the browser |
 | `android` (private) | the Android app's entry point (`android_main`): the device on the face last opened or the one the APK ships, the view full screen, faces received from the activity, logging into logcat; see [Android](#android) | Android |
@@ -206,7 +206,10 @@ limit, and no GLES build draws.
   the target drawing — and a click on a mesh reports
   the face and the RobotData element it belongs to (`view::Picked`, the
   shared layer's pick), and a selection is outlined as the shared layer
-  outlines one in a robot scene. The
+  outlines one in a robot scene. The view answers each load once — loaded
+  when its scene is indexed, failed when the scene fails, a later load
+  replaces it or its id is unloaded — and tells when each face is ready,
+  as `view::FaceEvent` messages. The
   desktop shows one face; the browser module shows as many as the page loads.
 - **`view::snapshot`** is the headless pipeline (recipe from ros-viz-rs):
   `WinitPlugin` disabled, `ScheduleRunnerPlugin`, camera → `RenderTarget`

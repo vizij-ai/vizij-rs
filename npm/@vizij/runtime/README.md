@@ -5,8 +5,8 @@ module, built from the [`vizij`
 crate](https://github.com/vizij-ai/vizij-rs/tree/main/crates/vizij) (its
 `web` module). A Vizij is what the authoring app exports: a GLB carrying a
 rig, its graphs and programs — a face, most often. A page mounts its canvas
-once — one App for the page's lifetime — then loads as many Vizijs as it
-shows. Each is a device of its own: an
+once — one App for the page's lifetime — then loads a Vizij into each
+instance it shows, an id of the page's own. Each is a device of its own: an
 [`arora`](https://crates.io/crates/arora) over a blackboard store, a rig HAL
 and the Vizij's composed graphs, with the animation module and the skills
 linked in, exposed through
@@ -19,16 +19,18 @@ registries fetches the view with it.
 ## Use
 
 ```ts
-import { init, mount, loadVizij, placeVizijIn, whenReady, unloadVizij, runStatus } from "@vizij/runtime";
+import { mount, runStatus } from "@vizij/runtime";
 
-await init();
-await mount("#vizijs"); // the canvas; transparent wherever no Vizij draws
+const vizijs = await mount("#vizijs"); // the canvas; transparent wherever no Vizij draws
+vizijs.onEvent((event) => {
+  // "loaded" | "loadFailed" | "ready" | "pick" | "safeArea", each naming its instance
+  if (event.type === "ready") spinner.hidden = true; // drawn on the GPU, in its place
+});
 
 const glb = new Uint8Array(await (await fetch("/faces/Quori_Current_Extended.glb")).arrayBuffer());
-const quori = await loadVizij("quori", glb); // composes its graphs, starts its device
-placeVizijIn("quori", document.getElementById("quori-slot")!, canvas); // where it draws
-await whenReady("quori"); // drawn on the GPU; the pose shows from here on
-quori.run(); // the device paces itself (or call quori.step(dtMs) per frame)
+const quori = await vizijs.load("quori", glb, { key: "quori@3" }); // its device, once loaded
+vizijs.placeIn("quori", document.getElementById("quori-slot")!); // where it draws
+quori.run(); // the device paces itself from its first drawn frame (or call quori.step(dtMs) per frame)
 
 // any time — the device's store stays live while it runs:
 quori.setValue(quori.path("standard/vizij/expression/happy"), 1);
@@ -36,9 +38,44 @@ const run = await quori.invoke("say", { text: "Hello" }); // a task method: its 
 runStatus(quori.readValues([run.status])[run.status]);  // "running" | "success" | "failure"
 await quori.halt(run.run);
 
-unloadVizij("quori"); // the scene, the camera, the GLB
+vizijs.unload("quori"); // the scene, the camera, the GLB
 quori.dispose();
 ```
+
+`mount` resolves to the page's handle. **Every face in it is an instance the
+page names**: its own string, never rewritten, which every call about that
+face and every event from it carries.
+
+- `load(instance, glb, options?)` loads a Vizij into the instance and starts
+  its device. Under a new id it adds a face; under one that shows a face it
+  replaces it, the face showing drawing until the new one is ready. It
+  resolves to the face's `Runtime` once the face has loaded whole, and
+  rejects — the instance showing what it showed — if the GLB is not a Vizij
+  the module can read or build, its scene fails to load, or a later load
+  into the instance, or its unload, comes first. `options.key` names the
+  content: a load of the key the instance shows, with none loading,
+  resolves to the device showing it, and a load of the key it is loading
+  joins that load; neither starts anything. The page disposes a `Runtime` it
+  was given once its face is unloaded or replaced.
+- `unload(instance)` takes the face down, and anything loading into it,
+  whose promise rejects.
+- `faces` (the faces showing, as their `loaded` events described them),
+  `loading` (the instances with a load under way) and `safeAreas` are current
+  before a handler hears the event that changed them, and hold what came
+  before a handler was set.
+- `onEvent(handler)` sets where the App's events go, replacing any earlier
+  handler. Nothing is polled:
+
+| Event | Fields | When |
+| --- | --- | --- |
+| `loaded` | `instance`, `key?`, `elements: { id, name }[]` | the face loaded whole: its scene indexed, its device built; `load` resolves |
+| `loadFailed` | `instance`, `key?`, `error` | the load did not finish: its scene failed, a later load replaced it, or the instance was unloaded; `load` rejects |
+| `ready` | `instance`, `drawn` | the face draws in its place from this frame; `drawn` is false when readiness gave up waiting to see it drawn, after ten seconds of frames |
+| `pick` | `instance`, `element \| null` | a click on the face: the element under it, or `null` for a miss |
+| `safeArea` | `instance`, `area: { x, y, width, height } \| null` | the face's framed bounds moved on the canvas, in CSS pixels; `null` once it has none |
+
+An instance's `loaded` and `loadFailed` arrive in the order its loads were
+asked for, one per load.
 
 A `Runtime` is a client of the Vizij's device with the surface any client of
 an Arora device has — a page here, a remote on a bridge, Semio Studio:
@@ -104,8 +141,8 @@ and the rest module's `reset` — every key back to the value it rests at
 each input the bundle's neutral pose names to its neutral) — and
 `reset_keys`, for the keys it names.
 
-A Vizij's device keeps no time until the Vizij is drawn. Until `ready`
-first reads true, every step is a `step(0)` whatever its `dtMs`, and the
+A Vizij's device keeps no time until the Vizij is drawn. Until its `ready`
+event, every step is a `step(0)` whatever its `dtMs`, and the
 first step after advances the time since the frame that drew the Vizij, at
 most its `dtMs`; a `run()` called before then starts its loop at that
 frame. The face's springs, programs and animations start from rest where
@@ -113,10 +150,9 @@ the page first shows them, however long its load and first draw took. A
 device with no Vizij (`startRuntime`) keeps time from its first step.
 
 A Vizij's paths are its own: `quori.rigPrefix` is `rig/<faceId>/` (the
-bundle's `faceId`) and `quori.path(relative)` builds one. `drainPicks()`
-reports clicks as `{ vizijId, elementId }` — the Vizij and the element id
-the GLB's RobotData declares, `null` for a click on no element;
-`describe(glb)` reads what a GLB declares without loading it: its elements,
+bundle's `faceId`) and `quori.path(relative)` builds one. Elements go by
+the ids the GLB's RobotData declares, in picks, the selection and
+`setValue` alike. `describe(glb)` reads what a GLB declares without loading it: its elements,
 animatables, bounds, graphs (each with its id and kind) and programs (each
 with its label and graph), and from
 its bundle the face's hardware and software versions, the poses and their groups, the rig's inputs with their ranges
@@ -125,21 +161,25 @@ and defaults, the animations, and the bundle's metadata as authored
 controls from.
 
 Vizijs share the page's canvas, not its framing:
-`setView("quori", { bounds, fit, zoom, toneMapping })` frames and tone-maps
-one Vizij over `mount`'s options, and `safeArea("quori")` says where its
-framed bounds lie on the canvas, in CSS pixels, for a DOM overlay.
+`vizijs.setView("quori", { bounds, fit, zoom, toneMapping })` frames and
+tone-maps one Vizij over `mount`'s options, and its `safeArea` events (and
+`vizijs.safeAreas`) say where its framed bounds lie on the canvas, in CSS
+pixels, for a DOM overlay.
 
-Where a Vizij draws is its rectangle of the canvas:
+Where a Vizij draws is its rectangle of the canvas, its placement:
 
-- `placeVizij(id, { x, y, width, height })` (or `placeVizijIn(id, element,
-  canvas)`, called again as the page scrolls or its layout changes) takes any
-  rectangle. The Vizij is framed on the whole rectangle, and the part on the
-  canvas draws: a slot scrolled half past the canvas's edge shows half its
-  Vizij, at the position and scale the whole slot gives it.
+- `vizijs.place(instance, { x, y, width, height })` (or
+  `vizijs.placeIn(instance, element)`, called again as the page scrolls or
+  its layout changes) takes any rectangle. The Vizij is framed on the whole
+  rectangle, and the part on the canvas draws: a slot scrolled half past the
+  canvas's edge shows half its Vizij, at the position and scale the whole
+  slot gives it.
 - An empty rectangle (a width or height of 0 or less) or one wholly off the
   canvas draws nothing, and its Vizij takes no picks.
-- A Vizij never placed, or given back with `fillCanvas(id)`, draws over the
-  whole canvas — the single face of a page.
+- A Vizij never placed, or placed with `"fill"`, draws over the whole canvas
+  — the single face of a page.
+- A placement and a view are the instance's: they carry over a reload, and
+  may be set before the first load.
 - Wherever no Vizij draws, the canvas shows `mount`'s `background`, and is
   transparent without one.
 
@@ -164,7 +204,7 @@ await quori.invoke("reset_keys", { keys: { strs: outputs } }); // back to rest, 
 const runs = await quori.listKeys(BEHAVIOR_RUNS);   // every run: <run id>/status and <run id>/name
 ```
 
-- `loadVizij`'s `program` option (the bundle's active program by default)
+- `load`'s `program` option (the bundle's active program by default)
   names the program that runs from load, as a run named after the program.
 - A run's state is its status key: `running` until halted, `failure` once
   halted. Its name is a key of its own beside it, so any client tells which
@@ -189,23 +229,33 @@ const runs = await quori.listKeys(BEHAVIOR_RUNS);   // every run: <run id>/statu
 An authoring viewport edits what the view shows while the device runs:
 
 ```ts
-import { drainPicks, setSelection, setStaticFeature, loadVizij } from "@vizij/runtime";
-
-for (const { vizijId, elementId } of drainPicks()) {
-  setSelection(vizijId, elementId ? [elementId] : []); // a miss clears the selection
-}
+vizijs.onEvent((event) => {
+  if (event.type === "pick") {
+    // a miss clears the selection
+    vizijs.setSelection(event.instance, event.element ? [event.element] : []);
+  }
+});
 quori.hold([mouthOpenId, `${eyeOffsetId}:x`]); // keep what shows while the device writes on
 quori.release();                               // follow the device again
 const weight = quori.path("poses/pose_d_happy_d.weight");
 quori.holdKeys([weight]);   // the face's behavior no longer writes it…
 quori.setValue(weight, 0.8); // …so the edit stands, and drives the pose
 quori.releaseKeys();         // its writers write it again from the next step
-setStaticFeature("quori", plateId, "color", { r: 0.2, g: 0.4, b: 0.8 }); // in place, no reload
+vizijs.setValue("quori", plateId, [0.2, 0.4, 0.8], "color"); // in place, no reload
 
 // A structural edit: the authoring world exported to GLB bytes, reloaded.
-const next = await loadVizij("quori", exportedGlb);
-quori.dispose(); // the previous scene drew until the new one was ready
+const next = await vizijs.load("quori", exportedGlb);
+quori.dispose(); // the previous face draws until the new one is ready
 ```
+
+- `vizijs.setValue(instance, element, value, feature)` writes one number or
+  three to a feature of an element in place — a static feature, which no
+  device output drives: `translation`, `rotation` (an euler, radians),
+  `scale` (three, or one scaling evenly), `color`, `emissive` (linear RGB),
+  `opacity`, `metalness`, `emissiveIntensity`, one component of a triple by
+  its per-axis name (`translation.x`, `color.g`), or a morph target's name.
+  The feature is required: a face's animatables are its device's outputs,
+  written through its `Runtime`, or held with `hold`.
 
 - A pick is a click of the primary button or a touch, decided on release:
   found over each element's mesh as drawn, its morph targets applied, the
@@ -213,14 +263,16 @@ quori.dispose(); // the previous scene drew until the new one was ready
   release land on it; a release in a Vizij's rectangle that meets no element,
   within 2 px of its press, is that Vizij's miss, and a drag that ends over
   nothing is no pick. Where Vizijs overlap, the one drawn last is clicked.
+  A pick is sent to the handler set at the time; one with no handler set is
+  not kept.
 - The selection outline is one line around the whole of what is selected,
   in the selection red, drawn over whatever stands in front of it; a
   selected group outlines every element mesh under it.
 - A hold is the view declining the device's writes to an output, whole
   (`<animatableId>`) or per component (`<animatableId>:x` … `:z`, `:r` …
   `:b`); the device and its store run on untouched.
-- Selection and holds belong to the Vizij's slot: they carry over a reload
-  and go with `unloadVizij`.
+- Selection and holds belong to the instance: they carry over a reload and
+  go with `unload`.
 - `holdKeys(keys)` holds store keys — rig inputs, pose weights, a program's
   inputs, any key the face's behavior writes — at the values clients write:
   from the next step until `releaseKeys(keys?)`, the face's graphs, its
@@ -238,7 +290,7 @@ nothing drawn — for a bench or a graph run in Node; every `Runtime` method
 works on it.
 
 Arora wasm modules load into a device as guests: `startRuntime(graph, init,
-modules)` and `loadVizij`'s `options.modules` take `AroraModule`s —
+modules)` and `load`'s `options.modules` take `AroraModule`s —
 `{ headerJson, wasmBytes }`, a module directory's `header.json` and guest
 (an Arora module's `module_dir`, such as `arora-animation-module`'s, writes
 one); their functions are
@@ -256,7 +308,7 @@ A device's animations live in its animation module, and every client loads,
 plays and unloads them through the module's declared functions, by name. A
 Vizij's own animations (its bundle's `animations`, what
 `describe(glb).animations` lists) load when the face loads, unless
-`loadVizij(id, glb, { animations: false })`: each on a player named after the
+`vizijs.load(instance, glb, { animations: false })`: each on a player named after the
 animation's id, its instance at weight 0, stopped — silent until a client
 gives it a weight and plays it. The player states the animation source writes
 to `vizij/animations/players` each step say which player plays what and
@@ -366,7 +418,7 @@ blink it through `standard/vizij/blink` and move its eyes through
 `standard/vizij/{left,right}_eye/pos/{x,y}`.
 
 The ROS4HRI mapping is for a page that drives the face as a ROS robot does.
-It composes when asked for — `loadVizij(id, glb, { ros4hri: true })` (or
+It composes when asked for — `vizijs.load(instance, glb, { ros4hri: true })` (or
 `composeVizij`'s option of the same name) — and the device-scoped
 `standard/ros4hri/*` keys then drive the face too. The mapping brings two
 behaviours of its own: an idle blink, and the gaze of the `look_at` skill,
@@ -404,7 +456,7 @@ last byte is in, while the module compiles and instantiates; `start` once
 it is instantiated and its own start has run; `ready` once `init()` has
 resolved. On a visible page each of the last three stays for one painted
 frame, which is what that costs `init()`. Building the page's App is
-`mount()`'s work and showing a Vizij is `loadVizij()`'s, both after `ready`
+`mount()`'s work and showing a Vizij is `load()`'s, both after `ready`
 — and so is most of the compile: V8 compiles a function the first time it
 is called. A module passed to `init` as bytes or as a compiled
 `WebAssembly.Module` has no download.
