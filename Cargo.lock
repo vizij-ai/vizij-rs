@@ -748,7 +748,7 @@ dependencies = [
 [[package]]
 name = "arora-visuals"
 version = "0.1.0"
-source = "git+https://github.com/semio-ai/arora-visuals?rev=44b1925#44b1925bf5a2a99e59ece990ad5676ad531b86b8"
+source = "git+https://github.com/semio-ai/arora-visuals?rev=0d8bf1c#0d8bf1cabc3366bd7bc3e880e51af8eadd47e707"
 dependencies = [
  "anyhow",
  "bevy",
@@ -7568,15 +7568,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ordered-float"
-version = "5.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f59006ce1e204c30956638535b74d317bca99477b9356dfaec54c37f6f600ab"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "os_pipe"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8264,7 +8255,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -8358,7 +8349,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.3",
  "rustls",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
@@ -8399,7 +8390,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.61.2",
 ]
@@ -10482,7 +10473,7 @@ dependencies = [
  "nix 0.29.0",
  "num-derive 0.4.2",
  "num-traits",
- "ordered-float 4.6.0",
+ "ordered-float",
  "pest",
  "pest_derive",
  "phf 0.11.3",
@@ -11079,7 +11070,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.5",
+ "cfg-if 0.1.10",
  "static_assertions",
 ]
 
@@ -12456,7 +12447,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f2ab60e120fd6eaa68d9567f3226e876684639d22a4219b313ff69ec0ccd5ac"
 dependencies = [
  "log",
- "ordered-float 4.6.0",
+ "ordered-float",
  "strsim",
  "thiserror 1.0.69",
  "wezterm-dynamic-derive",
@@ -12608,7 +12599,7 @@ dependencies = [
  "objc2-metal 0.3.2",
  "objc2-quartz-core 0.3.2",
  "once_cell",
- "ordered-float 5.5.1",
+ "ordered-float",
  "parking_lot",
  "portable-atomic",
  "portable-atomic-util",

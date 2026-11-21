@@ -171,18 +171,6 @@ pub enum FaceEvent {
 const REPLACED: &str = "a later load into the same instance replaced it";
 const UNLOADED: &str = "its instance was unloaded";
 
-/// Frames a face's camera warms before the shared layer gives up waiting to
-/// see the face drawn and makes it ready as it draws: `drawn`'s own bound,
-/// which it states only in its log. A face made ready after this many
-/// frames is reported as not seen drawn; one drawn in the last frames
-/// before the bound reads the same, which costs a host nothing it acts on.
-const GIVE_UP_FRAMES: u32 = 600;
-
-/// How far the warming count here trails the shared layer's: its count
-/// starts in the frame the camera starts warming, this one in the next, and
-/// its verdict lands a frame after it is reached.
-const GIVE_UP_LAG: u32 = 2;
-
 /// Where one load stands in what the view has told its front end
 /// ([`FaceEvent`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -192,17 +180,13 @@ enum Answer {
 }
 
 /// On a face spawned by [`ViewEvent::LoadFace`]: what its load has been
-/// answered, and its warming, so each event is sent once.
+/// answered, so each answer is sent once.
 #[derive(Component)]
 pub struct LoadReport {
     /// The order loads were asked in, across ids: which of two faces under
     /// one id is the newer.
     serial: u64,
     answer: Answer,
-    /// Frames its camera has warmed ([`drawn::Warming`]).
-    warmed: u32,
-    /// Whether [`FaceEvent::Ready`] was sent.
-    ready_told: bool,
 }
 
 /// What of a face shown by the view is vizij's own, beside the shared
@@ -806,8 +790,6 @@ fn apply_view_events(
                         LoadReport {
                             serial: *told.serial,
                             answer: Answer::Pending,
-                            warmed: 0,
-                            ready_told: false,
                         },
                         Transform::from_translation(slot_origin(slot)),
                         // In view once indexed ([`index_faces`]).
@@ -958,24 +940,20 @@ fn fail_unloadable_scenes(
     }
 }
 
-/// Count each warming face's frames, and send [`FaceEvent::Ready`] once for
-/// each face the shared layer has made ready.
+/// Tell [`FaceEvent::Ready`] for each face the shared layer makes ready, with
+/// its word on whether the face was seen drawn. The shared layer makes each
+/// instance ready once, and never one superseded meanwhile.
 fn report_ready(
-    mut faces: Query<(&EntityInstance, &mut LoadReport), Without<Superseded>>,
-    warming: Query<(), With<drawn::Warming>>,
+    mut ready: MessageReader<drawn::InstanceReady>,
+    faces: Query<(), (With<LoadReport>, Without<Superseded>)>,
     mut told: MessageWriter<FaceEvent>,
 ) {
-    for (instance, mut report) in &mut faces {
-        if instance.ready {
-            if !report.ready_told {
-                report.ready_told = true;
-                told.write(FaceEvent::Ready {
-                    face_id: instance.id.clone(),
-                    drawn: report.warmed + GIVE_UP_LAG < GIVE_UP_FRAMES,
-                });
-            }
-        } else if warming.contains(instance.camera) {
-            report.warmed += 1;
+    for ready in ready.read() {
+        if faces.contains(ready.instance) {
+            told.write(FaceEvent::Ready {
+                face_id: ready.id.clone(),
+                drawn: ready.drawn,
+            });
         }
     }
 }
@@ -2833,8 +2811,6 @@ mod tests {
                 LoadReport {
                     serial: 0,
                     answer: Answer::Loaded,
-                    warmed: 0,
-                    ready_told: true,
                 },
             ))
             .id();
@@ -2859,49 +2835,51 @@ mod tests {
         );
     }
 
-    /// A face is reported ready once, drawn unless it warmed until the
-    /// shared layer gave up waiting to see it drawn.
+    /// A face is told ready as the shared layer reports it, saying whether
+    /// it was seen drawn; a report for anything but a current face says
+    /// nothing.
     #[test]
-    fn ready_is_told_once_and_says_whether_it_was_seen_drawn() {
+    fn ready_says_what_the_shared_layer_saw() {
         use bevy::ecs::system::RunSystemOnce;
 
         let mut world = World::new();
         world.init_resource::<Messages<FaceEvent>>();
-        let face = |world: &mut World, id: &str| {
-            let camera = world.spawn(drawn::Warming).id();
-            let face = world
-                .spawn((
-                    EntityInstance {
-                        id: id.into(),
-                        asset_path: String::new(),
-                        meta: AssetMeta::default(),
-                        bindings: SceneBindings::default(),
-                        camera,
-                        draw_order: drawing_order(0),
-                        ready: false,
-                    },
-                    LoadReport {
-                        serial: 0,
-                        answer: Answer::Loaded,
-                        warmed: 0,
-                        ready_told: false,
-                    },
-                ))
-                .id();
-            face
-        };
-        let quick = face(&mut world, "quick");
-        let slow = face(&mut world, "slow");
-        let frames = |world: &mut World, n: u32| {
-            for _ in 0..n {
-                world.run_system_once(report_ready).expect("runs");
-            }
-        };
-        frames(&mut world, 10);
-        world.get_mut::<EntityInstance>(quick).unwrap().ready = true;
-        frames(&mut world, GIVE_UP_FRAMES);
-        world.get_mut::<EntityInstance>(slow).unwrap().ready = true;
-        frames(&mut world, 3);
+        world.init_resource::<Messages<drawn::InstanceReady>>();
+        let quick = world
+            .spawn(LoadReport {
+                serial: 0,
+                answer: Answer::Loaded,
+            })
+            .id();
+        let slow = world
+            .spawn(LoadReport {
+                serial: 1,
+                answer: Answer::Loaded,
+            })
+            .id();
+        let replaced = world
+            .spawn((
+                LoadReport {
+                    serial: 2,
+                    answer: Answer::Loaded,
+                },
+                Superseded,
+            ))
+            .id();
+        let not_a_face = world.spawn_empty().id();
+        for (instance, id, drawn) in [
+            (quick, "quick", true),
+            (slow, "slow", false),
+            (replaced, "replaced", true),
+            (not_a_face, "other", true),
+        ] {
+            world.write_message(drawn::InstanceReady {
+                instance,
+                id: id.into(),
+                drawn,
+            });
+        }
+        world.run_system_once(report_ready).expect("runs");
         let messages = world.resource::<Messages<FaceEvent>>();
         let told: Vec<_> = messages.get_cursor().read(messages).cloned().collect();
         assert_eq!(
