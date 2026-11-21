@@ -23,7 +23,8 @@ import { mount, runStatus } from "@vizij/runtime";
 
 const vizijs = await mount("#vizijs"); // the canvas; transparent wherever no Vizij draws
 vizijs.onEvent((event) => {
-  // "loaded" | "loadFailed" | "ready" | "pick" | "safeArea", each naming its instance
+  // "loaded" | "loadFailed" | "ready" | "pick" | "safeArea", each naming its
+  // instance; "overlay", "control" and "controlPress" for controls
   if (event.type === "ready") spinner.hidden = true; // drawn on the GPU, in its place
 });
 
@@ -69,10 +70,13 @@ face and every event from it carries.
 | Event | Fields | When |
 | --- | --- | --- |
 | `loaded` | `instance`, `key?`, `elements: { id, name }[]` | the face loaded whole: its scene indexed, its device built; `load` resolves |
-| `loadFailed` | `instance`, `key?`, `error` | the load did not finish: its scene failed, a later load replaced it, or the instance was unloaded; `load` rejects |
+| `loadFailed` | `instance`, `key?`, `error` | the load did not finish: its scene failed or lacks a node its RobotData names, a later load replaced it, or the instance was unloaded; `load` rejects |
 | `ready` | `instance`, `drawn` | the face draws in its place from this frame; `drawn` is false when readiness gave up waiting to see it drawn, after ten seconds of frames |
 | `pick` | `instance`, `element \| null` | a click on the face: the element under it, or `null` for a miss |
 | `safeArea` | `instance`, `area: { x, y, width, height } \| null` | the face's framed bounds moved on the canvas, in CSS pixels; `null` once it has none |
+| `overlay` | `elements`, `gizmos`, `pointer` | where elements and controls stand on the canvas, and the control the pointer has; sent each frame it changed |
+| `control` | `key`, `phase`, `pose?`, `scale?` | a drag on a control: what it asks for; nothing has moved |
+| `controlPress` | `key`, `handle`, `button`, `position` | a press with a button other than the primary on a control |
 
 An instance's `loaded` and `loadFailed` arrive in the order its loads were
 asked for, one per load.
@@ -255,7 +259,22 @@ quori.dispose(); // the previous face draws until the new one is ready
   `opacity`, `metalness`, `emissiveIntensity`, one component of a triple by
   its per-axis name (`translation.x`, `color.g`), or a morph target's name.
   The feature is required: a face's animatables are its device's outputs,
-  written through its `Runtime`, or held with `hold`.
+  written through its `Runtime`, or held with `hold`. The element features
+  and value shapes are those `@semio/scene`'s `setValue` takes for a robot,
+  where only an animatable may be written without a feature.
+
+- `vizijs.control(command)` adds, removes, shows, moves and changes transform
+  controls on faces, by the driver's key for each, in the command shape
+  `@semio/scene` takes for robots: `{ op: "add", key, control }`, `remove`,
+  `show`, `setPose`, `configure`, `highlight`. A control on a face names its
+  instance (`{ kind: "instance", instance }`, or `{ kind: "element", instance,
+  id }`); a goal (`{ kind: "goal", pose, view }`) names the face it is used
+  through as its `view`. Poses are Z up, as a face's world is. A drag moves
+  nothing: it is heard as a `control` event, and the driver sends `setPose` if
+  it wants the change. A control is 80 px on screen unless its add or a
+  `configure` gives it a `size` (`{ pixels }` or `{ metres }`). An unload
+  takes the controls on the face away, and so does a reload, as a robot swap
+  does in `@semio/scene`: add them again once the new face is `loaded`.
 
 - A pick is a click of the primary button or a touch, decided on release:
   found over each element's mesh as drawn, its morph targets applied, the

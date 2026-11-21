@@ -1042,6 +1042,100 @@ fn a_transform_control_on_a_face_draws_until_removed() {
     );
 }
 
+/// A load whose scene spawns without a node its RobotData names is answered
+/// as failed rather than left waiting, and the face it was to replace, which
+/// was loaded and not yet drawn when it was superseded, is made ready
+/// promptly once it is the instance's face again, rather than at the
+/// readiness give-up.
+#[test]
+#[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job with VIZIJ_FIXTURES set"]
+fn an_unindexable_load_fails_and_the_face_it_replaced_is_made_ready() {
+    use bevy::ecs::message::{MessageCursor, Messages};
+    use vizij::view::{FaceEvent, ViewEvent};
+
+    let Some(fixtures) = std::env::var_os("VIZIJ_FIXTURES").map(PathBuf::from) else {
+        eprintln!("VIZIJ_FIXTURES unset — skipping the lifecycle test");
+        return;
+    };
+    let glb = std::fs::read(fixtures.join("Quori_Current_Extended.glb")).expect("read Quori");
+    let meta = vizij::view::meta::FaceMeta::from_glb_bytes(&glb).expect("reads");
+    let (events_tx, events_rx) = std::sync::mpsc::channel();
+    let mut app = App::new();
+    FaceAssets::register(&mut app);
+    app.add_plugins(SnapshotPlugin {
+        width: 320,
+        height: 200,
+    })
+    .insert_resource(ViewEvents(std::sync::Mutex::new(events_rx)))
+    .insert_resource(ViewOptions {
+        background: Color::BLACK,
+        fit: view::Fit::Contain,
+        zoom: Vec2::ONE,
+        ambient: std::f32::consts::FRAC_PI_2,
+        unlit: false,
+    })
+    .add_plugins(ViewPlugin);
+    vizij::view::snapshot::ensure_ready(&mut app);
+    let mut cursor: MessageCursor<FaceEvent> =
+        app.world().resource::<Messages<FaceEvent>>().get_cursor();
+    let load = |meta: vizij::view::meta::FaceMeta| ViewEvent::LoadFace {
+        face_id: "q".into(),
+        meta: Box::new(meta),
+        glb: glb.clone(),
+        rig: vizij_arora_hal::RigHal::new(),
+    };
+    // Frames until `wanted` is told, and what was told on the way.
+    let mut until = |app: &mut App, wanted: &dyn Fn(&FaceEvent) -> bool, most: u32| {
+        let mut told = Vec::new();
+        for frame in 0..most {
+            app.update();
+            let messages = app.world().resource::<Messages<FaceEvent>>();
+            told.extend(cursor.read(messages).cloned());
+            if told.iter().any(wanted) {
+                return (frame, told);
+            }
+        }
+        panic!("not told within {most} frames: {told:?}");
+    };
+
+    events_tx.send(load(meta.clone())).unwrap();
+    until(&mut app, &|e| matches!(e, FaceEvent::Ready { .. }), 2000);
+    // A second face, loaded and then at once superseded by a load whose
+    // scene lacks a node its RobotData names.
+    events_tx.send(load(meta.clone())).unwrap();
+    until(&mut app, &|e| matches!(e, FaceEvent::Loaded { .. }), 2000);
+    let mut lacking = meta.clone();
+    lacking.asset.elements[0].node_name = "no-such-node".into();
+    events_tx.send(load(lacking)).unwrap();
+    let (_, told) = until(
+        &mut app,
+        &|e| matches!(e, FaceEvent::LoadFailed { .. }),
+        300,
+    );
+    assert!(
+        told.iter().any(|e| matches!(
+            e,
+            FaceEvent::LoadFailed { error, .. } if error.contains("no-such-node")
+        )),
+        "the failure names the missing node: {told:?}"
+    );
+    // Well inside the 600-frame give-up. It may have been drawn before the
+    // failure was told, in which case it is ready already.
+    let ready = |e: &FaceEvent| matches!(e, FaceEvent::Ready { .. });
+    let (frames, told) = if told.iter().any(ready) {
+        (0, told)
+    } else {
+        until(&mut app, &ready, 120)
+    };
+    assert!(
+        told.contains(&FaceEvent::Ready {
+            face_id: "q".into(),
+            drawn: true
+        }),
+        "the second face is ready, seen drawn, {frames} frames on: {told:?}"
+    );
+}
+
 /// A click on a face picks the element under it, over the face's own
 /// bindings, and a click on the face's empty space is its miss.
 ///
@@ -1238,13 +1332,23 @@ fn drawn_elements(app: &mut App) -> Vec<(String, Rect)> {
 
 /// The pixels `after` changed from `before`: how many of those within
 /// `reach` are the selection red (sRGB 255, 16, 16 at 0.9, over whatever is
-/// under it), and where every other changed pixel is.
+/// under it), and where every other changed pixel is that the outline does
+/// not account for — anywhere outside `reach`, and inside it any change that
+/// is not a blend toward the red, such as a selected element whose own
+/// pixels changed.
 fn changed_pixels(
     before: &image::RgbaImage,
     after: &image::RgbaImage,
     reach: Rect,
 ) -> (usize, Vec<(u32, u32)>) {
     let red = |p: &image::Rgba<u8>| p.0[0] > 150 && p.0[1] < 90 && p.0[2] < 90;
+    // The outline is drawn over what was there, so where it is partly
+    // covering, red rises and green and blue fall.
+    let toward_red = |was: &image::Rgba<u8>, now: &image::Rgba<u8>| {
+        now.0[0].saturating_add(8) >= was.0[0]
+            && now.0[1] <= was.0[1].saturating_add(8)
+            && now.0[2] <= was.0[2].saturating_add(8)
+    };
     let mut around = 0;
     let mut elsewhere = Vec::new();
     for (x, y, now) in after.enumerate_pixels() {
@@ -1252,7 +1356,7 @@ fn changed_pixels(
         if (0..3).all(|channel| was.0[channel].abs_diff(now.0[channel]) <= 8) {
             continue;
         }
-        if reach.contains(Vec2::new(x as f32 + 0.5, y as f32 + 0.5)) {
+        if reach.contains(Vec2::new(x as f32 + 0.5, y as f32 + 0.5)) && toward_red(was, now) {
             around += usize::from(red(now));
         } else {
             elsewhere.push((x, y));

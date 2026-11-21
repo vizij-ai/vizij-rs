@@ -100,6 +100,28 @@ await tick();
 assert.deepEqual(after, { state: "resolved", value: "dev-b2" });
 assert.equal(disposed.includes("dev-b2"), false, "a device handed to the page is the page's");
 
+// A device is freed once: by the unload, not again by a second unload or by
+// the module's later answer for its load.
+const twice = outcome(tracked.load("d", undefined, begin("dev-d1")));
+tracked.unload("d");
+tracked.unload("d");
+send({ type: "loadFailed", instance: "d", error: "its instance was unloaded" });
+await tick();
+assert.equal(twice.state, "rejected");
+assert.equal(disposed.filter((device) => device === "dev-d1").length, 1, "freed once");
+
+// A load with no key names no content, so it is never taken for a repeat:
+// each one starts, and each settles on its own answer.
+const startedBefore = started;
+const plain1 = outcome(tracked.load("e", undefined, begin("dev-e1")));
+const plain2 = outcome(tracked.load("e", undefined, begin("dev-e2")));
+assert.equal(started, startedBefore + 2, "both unkeyed loads start");
+send({ type: "loadFailed", instance: "e", error: "a later load into the same instance replaced it" });
+send({ type: "loaded", instance: "e", elements: [] });
+await tick();
+assert.equal(plain1.state, "rejected");
+assert.deepEqual(plain2, { state: "resolved", value: "dev-e2" });
+
 // An unload drops the face showing, so its key loads again.
 tracked.unload("a");
 assert.equal(tracked.faces.has("a"), false);

@@ -337,7 +337,9 @@ pub enum ViewEvent {
     },
     /// Add, remove, show, move or change a control, by the driver's key for
     /// it ([`arora_visuals::control`]). A control on a face names it by its
-    /// id; one on a face still loading waits for it.
+    /// id; one on a face still loading waits for it. The controls on a face
+    /// go when it does, unloaded or replaced by a reload, as a robot's do on
+    /// a swap: a driver adds them again to the face that replaced it.
     Control(ControlCommand),
 }
 
@@ -691,14 +693,11 @@ impl Plugin for ViewPlugin {
                 OverlayPlugin,
             ))
             .add_systems(PostUpdate, tell_controls)
+            .add_observer(mark_spawned)
             .add_systems(
                 Update,
                 (
-                    // Before the controls' commands are carried out, so a
-                    // control sent with its face's load finds the face.
-                    (apply_view_events, fail_unloadable_scenes)
-                        .chain()
-                        .before(ControlSystems::Commands),
+                    answering_systems(),
                     // Before the cameras are placed, so a face made ready
                     // draws in its place from the frame it is ready.
                     (drawn::ready_drawn_instances, report_ready).chain(),
@@ -717,6 +716,15 @@ impl Plugin for ViewPlugin {
         #[cfg(feature = "captions")]
         app.add_plugins(captions::CaptionsPlugin);
     }
+}
+
+/// The systems that take the front ends' requests and answer loads,
+/// before the controls' commands are carried out, so a control sent with its
+/// face's load finds the face.
+fn answering_systems() -> bevy::ecs::schedule::ScheduleConfigs<bevy::ecs::system::ScheduleSystem> {
+    (apply_view_events, fail_unloadable_scenes)
+        .chain()
+        .before(ControlSystems::Commands)
 }
 
 /// Hand the controls' drags and presses on as [`FaceEvent`]s, so a front end
@@ -909,9 +917,12 @@ fn apply_view_events(
                         error: UNLOADED.into(),
                     });
                 }
+                // Controls on the face, and goals used through its camera,
+                // which is named by its id.
                 controls
                     .commands
                     .forget_instance(&face_id, &controls.placed);
+                controls.commands.forget_view(&face_id, &controls.placed);
                 selections.0.remove(&face_id);
                 holds.clear(&face_id);
                 statics.0.remove(&face_id);
@@ -976,7 +987,25 @@ fn take_down_spawned(
     0..before - spawned.len()
 }
 
-/// Answer and take down each face whose scene failed to load. It never
+/// On a face's scene root once its scene has spawned whole: an element whose
+/// node is not there by then never will be.
+#[derive(Component)]
+struct SceneSpawned;
+
+/// Marks the scene root a world instance spawned under ([`SceneSpawned`]).
+fn mark_spawned(ready: On<bevy::world_serialization::WorldInstanceReady>, mut commands: Commands) {
+    if let Ok(mut root) = commands.get_entity(ready.entity) {
+        root.insert(SceneSpawned);
+    }
+}
+
+/// Why a face's scene cannot be indexed: the RobotData elements whose nodes
+/// its spawned scene does not have.
+#[derive(Component)]
+struct Unindexable(String);
+
+/// Answer and take down each face whose scene failed to load, or spawned
+/// without a node one of its elements names ([`Unindexable`]). It never
 /// drew, and the face it was to replace — the newest one under its id whose
 /// load was answered `Loaded` — is no longer superseded, so it draws on as
 /// the id's face.
@@ -989,6 +1018,7 @@ fn fail_unloadable_scenes(
         &LoadReport,
         Option<&Children>,
         Has<Superseded>,
+        Option<&Unindexable>,
     )>,
     roots: Query<&WorldAssetRoot>,
     asset_server: Res<AssetServer>,
@@ -997,16 +1027,18 @@ fn fail_unloadable_scenes(
     mut told: MessageWriter<FaceEvent>,
     mut commands: Commands,
 ) {
-    for (entity, instance, face, report, children, _) in &faces {
+    for (entity, instance, face, report, children, _, unindexable) in &faces {
         if report.answer != Answer::Pending {
             continue;
         }
-        let failed = children.into_iter().flatten().find_map(|child| {
-            let root = roots.get(*child).ok()?;
-            match asset_server.load_state(&root.0) {
-                bevy::asset::LoadState::Failed(error) => Some(error.to_string()),
-                _ => None,
-            }
+        let failed = unindexable.map(|why| why.0.clone()).or_else(|| {
+            children.into_iter().flatten().find_map(|child| {
+                let root = roots.get(*child).ok()?;
+                match asset_server.load_state(&root.0) {
+                    bevy::asset::LoadState::Failed(error) => Some(error.to_string()),
+                    _ => None,
+                }
+            })
         });
         let Some(error) = failed else {
             continue;
@@ -1019,10 +1051,9 @@ fn fail_unloadable_scenes(
         });
         let previous = faces
             .iter()
-            .filter(|(_, other, _, other_report, _, superseded)| {
-                *superseded && other.id == instance.id && other_report.answer == Answer::Loaded
-            })
-            .max_by_key(|(_, _, _, other_report, _, _)| other_report.serial);
+            // Only a face answered `Loaded` is ever superseded.
+            .filter(|(_, other, _, _, _, superseded, _)| *superseded && other.id == instance.id)
+            .max_by_key(|(_, _, _, other_report, ..)| other_report.serial);
         if let Some((previous, ..)) = previous {
             commands.entity(previous).remove::<Superseded>();
         }
@@ -1533,6 +1564,7 @@ fn index_faces(
     mut mesh_assets: ResMut<Assets<Mesh>>,
     mut told: MessageWriter<FaceEvent>,
     mut commands: Commands,
+    spawned_whole: Query<(), With<SceneSpawned>>,
 ) {
     for (root, mut instance, mut face, report) in &mut faces {
         if instance.bindings.indexed {
@@ -1565,12 +1597,23 @@ fn index_faces(
                 stack.extend(kids.iter().map(|kid| (kid, depth + 1)));
             }
         }
-        if !instance
+        let missing: Vec<&str> = instance
             .meta
             .elements
             .iter()
-            .all(|e| by_name.contains_key(e.node_name.as_str()))
-        {
+            .map(|e| e.node_name.as_str())
+            .filter(|name| !by_name.contains_key(*name))
+            .collect();
+        if !missing.is_empty() {
+            let whole = children
+                .get(root)
+                .is_ok_and(|kids| kids.iter().any(|kid| spawned_whole.contains(kid)));
+            if whole {
+                commands.entity(root).insert(Unindexable(format!(
+                    "its scene has no node {} that its RobotData names",
+                    missing.join(", ")
+                )));
+            }
             continue;
         }
 
@@ -2810,7 +2853,8 @@ mod tests {
             })
             .insert_resource(ViewEvents(Mutex::new(receiver)))
             .add_message::<FaceEvent>()
-            .add_systems(Update, (apply_view_events, fail_unloadable_scenes).chain());
+            .add_plugins(ControlsPlugin)
+            .add_systems(Update, answering_systems());
         (app, sender)
     }
 
@@ -2859,34 +2903,62 @@ mod tests {
         )
     }
 
-    /// Control commands reach the shared queue in the order they were sent,
-    /// and an unload takes off those waiting for its face, leaving another
-    /// face's.
+    /// A control sent for a face that is unloaded before it is placed goes
+    /// with the face, and does not land on a face loaded under the same id
+    /// after it: neither a control on the face nor a goal used through its
+    /// camera. Another face's control is placed.
     #[test]
-    fn controls_queue_in_order_and_an_unload_forgets_its_face() {
+    fn an_unload_forgets_the_controls_sent_for_its_face() {
         let (mut app, sender) = answering_app();
-        sender.send(load("a")).unwrap();
-        sender.send(load("b")).unwrap();
-        sender.send(transform_on("on-a", "a")).unwrap();
-        sender.send(transform_on("on-b", "b")).unwrap();
-        app.update();
-        let keys = |app: &App| -> Vec<String> {
-            app.world()
-                .resource::<ControlCommands>()
-                .0
-                .iter()
-                .map(|command| command.key().to_string())
-                .collect()
+        let goal_through = |key: &str, view: &str| {
+            ViewEvent::Control(
+                serde_json::from_value(serde_json::json!({
+                    "op": "add",
+                    "key": key,
+                    "control": {
+                        "kind": "transform",
+                        "target": {
+                            "kind": "goal",
+                            "pose": { "position": [0, 0, 0] },
+                            "view": view,
+                        },
+                    },
+                }))
+                .unwrap(),
+            )
         };
-        assert_eq!(keys(&app), ["on-a", "on-b"]);
-
-        sender
-            .send(ViewEvent::UnloadFace {
+        for event in [
+            load("a"),
+            load("b"),
+            transform_on("on-a", "a"),
+            goal_through("through-a", "a"),
+            transform_on("on-b", "b"),
+            ViewEvent::UnloadFace {
                 face_id: "a".into(),
-            })
-            .unwrap();
+            },
+            load("a"),
+        ] {
+            sender.send(event).unwrap();
+        }
+        // One frame: a face's scene here soon fails (nothing loads its GLB),
+        // taking the controls on it; until then a control on it waits.
         app.update();
-        assert_eq!(keys(&app), ["on-b"]);
+        let controls = app.world().resource::<Controls>();
+        let waiting: Vec<&str> = app
+            .world()
+            .resource::<ControlCommands>()
+            .0
+            .iter()
+            .map(ControlCommand::key)
+            .collect();
+        assert!(
+            controls.gizmo("on-b").is_some() || waiting == ["on-b"],
+            "another face's is kept: waiting {waiting:?}"
+        );
+        for key in ["on-a", "through-a"] {
+            assert!(controls.gizmo(key).is_none(), "{key} went with its face");
+            assert!(!waiting.contains(&key), "{key} is not waiting");
+        }
     }
 
     /// The controls' drags and presses go out as face events, once, and do
@@ -2985,6 +3057,34 @@ mod tests {
             ))
             .id();
         app.world_mut().resource_mut::<Slots>().take();
+        // An older face under the id, superseded by the one shown.
+        let older = app
+            .world_mut()
+            .spawn((
+                EntityInstance {
+                    id: "a".into(),
+                    asset_path: String::new(),
+                    meta: AssetMeta::default(),
+                    bindings: SceneBindings::default(),
+                    camera: Entity::PLACEHOLDER,
+                    draw_order: drawing_order(1),
+                    ready: false,
+                },
+                Face {
+                    bundle: Default::default(),
+                    rig: vizij_arora_hal::RigHal::new(),
+                    slot: 1,
+                    pose: PoseState::default(),
+                },
+                LoadReport {
+                    serial: 0,
+                    answer: Answer::Loaded,
+                },
+                Superseded,
+            ))
+            .id();
+        app.world_mut().get_mut::<LoadReport>(shown).unwrap().serial = 1;
+        app.world_mut().resource_mut::<Slots>().take();
         sender.send(load("a")).unwrap();
         let told = answers(&mut app, &mut cursor, 1);
         let [FaceEvent::LoadFailed { face_id, error }] = told.as_slice() else {
@@ -2997,12 +3097,77 @@ mod tests {
         );
         app.update();
         assert!(!app.world().entity(shown).contains::<Superseded>());
+        assert!(
+            app.world().entity(older).contains::<Superseded>(),
+            "only the newest face before is current again"
+        );
         let mut faces = app.world_mut().query::<&EntityInstance>();
         assert_eq!(
             faces.iter(app.world()).count(),
-            1,
+            2,
             "the failed face is gone"
         );
+    }
+
+    /// A load or an unload in a later frame than the load it cancels, while
+    /// that load is still unanswered, answers it as replaced or unloaded.
+    #[test]
+    fn a_later_reload_or_unload_answers_the_load_it_cancels() {
+        let (mut app, sender) = answering_app();
+        let mut cursor = app.world().resource::<Messages<FaceEvent>>().get_cursor();
+        sender.send(load("a")).unwrap();
+        app.update();
+        sender.send(load("a")).unwrap();
+        app.update();
+        sender
+            .send(ViewEvent::UnloadFace {
+                face_id: "a".into(),
+            })
+            .unwrap();
+        assert_eq!(
+            answers(&mut app, &mut cursor, 2),
+            [failed("a", REPLACED), failed("a", UNLOADED)]
+        );
+    }
+
+    /// A control sent in the same batch as its face's load finds the face: a
+    /// goal used through the face's camera, by the face's id, is placed, and
+    /// a control on the face waits for it rather than being refused.
+    #[test]
+    fn a_control_sent_with_its_faces_load_finds_the_face() {
+        let (mut app, sender) = answering_app();
+        sender.send(load("a")).unwrap();
+        sender
+            .send(ViewEvent::Control(
+                serde_json::from_value(serde_json::json!({
+                    "op": "add",
+                    "key": "goal",
+                    "control": {
+                        "kind": "transform",
+                        "target": {
+                            "kind": "goal",
+                            "pose": { "position": [0, 0, 0] },
+                            "view": "a",
+                        },
+                    },
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        sender.send(transform_on("on-a", "a")).unwrap();
+        app.update();
+        assert!(
+            app.world().resource::<Controls>().gizmo("goal").is_some(),
+            "the goal is placed through the face's camera"
+        );
+        let waiting: Vec<String> = app
+            .world()
+            .resource::<ControlCommands>()
+            .0
+            .iter()
+            .map(|command| command.key().to_string())
+            .collect();
+        assert_eq!(waiting, ["on-a"], "the control on the face waits for it");
     }
 
     /// A face is told ready as the shared layer reports it, saying whether

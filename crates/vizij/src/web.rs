@@ -21,7 +21,9 @@
 //! each event an object whose `type` names it ([`VizijEvent`]). A load is
 //! answered by `loaded` or `loadFailed`, an instance's loads in the order
 //! they were asked for; a loaded face is `ready` once drawn; a click is a
-//! `pick`; a face's safe area moving is a `safeArea`. Nothing is polled.
+//! `pick`; a face's safe area moving is a `safeArea`; where elements and
+//! controls stand is an `overlay`; a drag on a control is a `control`, and a
+//! press on one with another button a `controlPress`. Nothing is polled.
 //!
 //! Values cross the boundary as JSON in the Arora `Value` vocabulary
 //! (`{"f32": 0.75}`), calls as Arora `Call`s, and a task run as the run

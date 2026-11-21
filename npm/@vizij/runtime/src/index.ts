@@ -1094,7 +1094,9 @@ export interface VizijHandle {
    * names (a weight). Drawn once the face is indexed; a reload shows what
    * its GLB carries, and a feature a device output drives is the device's
    * again at its next write. A face's animatables are its device's outputs:
-   * write the device's keys through its {@link Runtime}.
+   * write the device's keys through its {@link Runtime}. The features and
+   * value shapes are those `@semio/scene`'s `setValue` takes for a robot's
+   * elements.
    */
   setValue(instance: string, target: string, value: FeatureValue, feature: string): void;
   /**
