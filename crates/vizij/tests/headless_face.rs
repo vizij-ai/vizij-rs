@@ -952,6 +952,96 @@ fn a_selected_element_is_outlined_around_it_alone() {
     assert_outlined_alone(&bare, &selected, &element, rect);
 }
 
+/// A transform control added on a face draws its handles over it, through
+/// the face's own camera, and a remove takes them away again.
+#[test]
+#[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job with VIZIJ_FIXTURES set"]
+fn a_transform_control_on_a_face_draws_until_removed() {
+    use vizij::view::ViewEvent;
+
+    let Some(fixtures) = std::env::var_os("VIZIJ_FIXTURES").map(PathBuf::from) else {
+        eprintln!("VIZIJ_FIXTURES unset — skipping the control test");
+        return;
+    };
+    let glb = std::fs::read(fixtures.join("Quori_Current_Extended.glb")).expect("read Quori");
+    let meta = vizij::view::meta::FaceMeta::from_glb_bytes(&glb).expect("reads");
+    let (events_tx, events_rx) = std::sync::mpsc::channel();
+    events_tx
+        .send(ViewEvent::LoadFace {
+            face_id: "quori".into(),
+            meta: Box::new(meta),
+            glb,
+            rig: vizij_arora_hal::RigHal::new(),
+        })
+        .unwrap();
+    let mut app = App::new();
+    FaceAssets::register(&mut app);
+    app.add_plugins(SnapshotPlugin {
+        width: OUTLINED_W,
+        height: OUTLINED_H,
+    })
+    .insert_resource(ViewEvents(std::sync::Mutex::new(events_rx)))
+    .insert_resource(ViewOptions {
+        background: Color::BLACK,
+        fit: view::Fit::Contain,
+        zoom: Vec2::ONE,
+        ambient: std::f32::consts::FRAC_PI_2,
+        unlit: false,
+    })
+    .add_plugins(ViewPlugin);
+    let control = |command: serde_json::Value| {
+        events_tx
+            .send(ViewEvent::Control(
+                serde_json::from_value(command).expect("a control command"),
+            ))
+            .unwrap();
+    };
+
+    let bare = outlined_capture(&mut app);
+    control(serde_json::json!({
+        "op": "add",
+        "key": "move-face",
+        "control": {
+            "kind": "transform",
+            "target": { "kind": "instance", "instance": "quori" },
+            "modes": ["translate"],
+        },
+    }));
+    let with = outlined_capture(&mut app);
+    if let Some(out) = std::env::var_os("VIZIJ_CONTROL_PNG") {
+        vizij::view::snapshot::save_png(&with, std::path::Path::new(&out)).expect("saved");
+    }
+    assert!(
+        app.world()
+            .resource::<arora_visuals::control::Controls>()
+            .gizmo("move-face")
+            .is_some(),
+        "the control is placed"
+    );
+    // The X handle is red and the Y handle green, over a face with neither.
+    let tinted = |image: &image::RgbaImage, channel: usize| {
+        image
+            .pixels()
+            .filter(|p| {
+                let (main, others) = (p.0[channel], (0..3).filter(|c| *c != channel));
+                main > 150 && others.map(|c| p.0[c]).all(|other| other < 110)
+            })
+            .count()
+    };
+    for (channel, axis) in [(0, "X"), (1, "Y")] {
+        let added = tinted(&with, channel).saturating_sub(tinted(&bare, channel));
+        assert!(added > 30, "the {axis} handle draws ({added} pixels)");
+    }
+
+    control(serde_json::json!({ "op": "remove", "key": "move-face" }));
+    let removed = outlined_capture(&mut app);
+    assert_eq!(
+        changed_pixels(&bare, &removed, Rect::EMPTY).1.len(),
+        0,
+        "a removed control leaves the frame changed"
+    );
+}
+
 /// A click on a face picks the element under it, over the face's own
 /// bindings, and a click on the face's empty space is its miss.
 ///

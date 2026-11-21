@@ -6,6 +6,8 @@
  * can be fed to it.
  */
 
+import type { ControlEvent, ControlPress, OverlayFrame } from "./controls.js";
+
 /** A rectangle of the canvas, in CSS pixels from its top-left corner. */
 export interface Rect {
   x: number;
@@ -68,7 +70,16 @@ export type VizijEvent =
    * canvas now, in CSS pixels from its top-left corner, or `null` once it
    * has none (placed on an empty rectangle, or gone). Sent when it moves.
    */
-  | { type: "safeArea"; instance: string; area: Rect | null };
+  | { type: "safeArea"; instance: string; area: Rect | null }
+  /**
+   * Where the faces' elements and controls stand on the canvas, and the
+   * control the pointer has. Sent each frame it changed.
+   */
+  | ({ type: "overlay" } & OverlayFrame)
+  /** A drag on a control the driver added. Nothing has moved. */
+  | ({ type: "control" } & ControlEvent)
+  /** A press with a button other than the primary on a control. */
+  | ({ type: "controlPress" } & ControlPress);
 
 /** What takes a face down in the module, and frees a device. */
 export interface FaceModule<D> {

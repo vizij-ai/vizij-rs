@@ -94,7 +94,7 @@ bevy = { version = "0.20", default-features = false, features = [
 # selection outline, holds and readiness, so a face here behaves as it does
 # in a robot scene. `view` only: the capture harness and its engine features
 # come with `snapshot`, which the native build adds below.
-arora-visuals = { git = "https://github.com/semio-ai/arora-visuals", rev = "0d8bf1c", features = ["view"] }
+arora-visuals = { git = "https://github.com/semio-ai/arora-visuals", rev = "8cab303", features = ["view"] }
 # The device: an arora over the Vizij interop seams, run through the standard
 # operator flow (terminal UI on an interactive terminal, the open local bridge
 # auto-attached). No default features: the executor-free slice builds on every
@@ -164,7 +164,7 @@ vizij-arora-tts = { version = "8", path = "../interop/vizij-arora-tts" }
 # pools (the browser has one thread), and the log plugin the apps disable.
 bevy = { version = "0.20", default-features = false, features = ["bevy_log", "multi_threaded"] }
 # The offscreen capture harness the snapshot tool and tests render through.
-arora-visuals = { git = "https://github.com/semio-ai/arora-visuals", rev = "0d8bf1c", features = ["view", "snapshot"] }
+arora-visuals = { git = "https://github.com/semio-ai/arora-visuals", rev = "8cab303", features = ["view", "snapshot"] }
 # The native driver (`native`): the stand-alone device on a worker thread under
 # arora's operator flow — `native` is the run loop, the local WS bridge and
 # the module executors — with the bridges the build adds, among them the

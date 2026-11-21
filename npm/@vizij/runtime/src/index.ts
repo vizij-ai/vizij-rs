@@ -52,6 +52,8 @@ import { countDownload, nextPaint, reportProgress } from "./progress.js";
 
 export { onInitProgress, type InitProgress } from "./progress.js";
 export type { FaceElement, Rect, ShownFace, VizijEvent } from "./faces.js";
+export type * from "./controls.js";
+import type { ControlCommand } from "./controls.js";
 
 /** A Vizij graph spec, as an object or already-serialized JSON. */
 export type GraphSpecInput = object | string;
@@ -527,6 +529,7 @@ interface WasmBindings {
   setView(instance: string, view_json?: string): void;
   setSelection(instance: string, elements: string[]): void;
   setValue(instance: string, target: string, feature: string, values: Float32Array): void;
+  control(command: string): void;
   describe(glb: Uint8Array): VizijDescription;
   memoryBytes(): number;
   mappings(): Mapping[];
@@ -1095,6 +1098,15 @@ export interface VizijHandle {
    */
   setValue(instance: string, target: string, value: FeatureValue, feature: string): void;
   /**
+   * Adds, removes, shows, moves or changes a control, by the driver's key
+   * for it, in the shape `@semio/scene` takes for robots. A control on a
+   * face names it by its instance, and one on a face still loading waits
+   * for it; a goal names the face it is used through as its `view`. A drag
+   * moves nothing: it is heard as a `control` event, and the driver sends
+   * `setPose` if it wants the change.
+   */
+  control(command: ControlCommand): void;
+  /**
    * The faces showing, by instance, as their `loaded` events described
    * them. An event can come before a page has set its handler, so read
    * this rather than rely on hearing it.
@@ -1192,6 +1204,9 @@ export async function mount(
     setValue(instance, target, value, feature) {
       const values = typeof value === "number" ? [value] : value;
       wasm.setValue(instance, target, feature, Float32Array.from(values));
+    },
+    control(command) {
+      wasm.control(JSON.stringify(command));
     },
     onEvent(handler) {
       wasm.setEventHandler(tracked.dispatch(handler));

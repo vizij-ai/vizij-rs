@@ -39,8 +39,20 @@
 //! ([`arora_visuals::pick`]); the outline of the elements it has selected
 //! ([`ViewEvent::SetSelection`] into [`Selections`], drawn by
 //! [`arora_visuals::outline`] through every face camera's [`OutlineView`]);
-//! rig outputs held against the device ([`hold`]); and a static feature set
-//! in place ([`ViewEvent::SetStaticFeature`]).
+//! rig outputs held against the device ([`hold`]); a static feature set
+//! in place ([`ViewEvent::SetStaticFeature`]); and controls a driver adds by
+//! keys of its own ([`ViewEvent::Control`], [`arora_visuals::control`]), whose
+//! drags and presses come back as [`FaceEvent::Control`] and
+//! [`FaceEvent::ControlPress`], with where they stand on screen in the
+//! shared [`Overlay`].
+//!
+//! The face's world is already the drivers' frame, Z up, so its controls
+//! speak in it unturned. A transform control on a face is used through the
+//! face's own camera; a goal names the face it is used through by its id,
+//! the [`ControlView`] each face camera carries. A face is authored in units
+//! of its own, tens of them across, so its controls are sized on screen
+//! ([`FACE_CONTROL_SIZE`]) rather than in the world, unless a driver sizes
+//! one itself.
 
 #[cfg(feature = "captions")]
 pub mod captions;
@@ -76,14 +88,21 @@ use vizij_api_core::value::{as_bool, as_float, as_vec3, as_vector};
 use vizij_api_core::Value;
 
 pub use arora_visuals::binding::{ElementTargets, SceneBinding, SceneBindings};
+use arora_visuals::control::{
+    ControlCommand, ControlCommands, ControlEvent, ControlEvents, ControlPress, ControlPresses,
+    ControlSize, ControlSystems, ControlView, Controls, ControlsPlugin,
+};
 use arora_visuals::drawn;
 use arora_visuals::instance::ClearCamera;
 pub use arora_visuals::instance::{EntityInstance, Superseded, ViewOf, CLEAR_ORDER};
 use arora_visuals::outline::{OutlinePlugin, OutlineView};
+pub use arora_visuals::overlay::Overlay;
+use arora_visuals::overlay::OverlayPlugin;
 use arora_visuals::pick::PickPlugin;
 pub use arora_visuals::pick::Picked;
 use arora_visuals::select::{Selection, Selections};
 pub use arora_visuals::tone::ToneMapping;
+use arora_visuals::transform_gizmo::{GizmoSize, TransformGizmoPlugin};
 use arora_visuals::value::Decoded;
 use hold::{HoldTarget, Holds};
 use meta::{AssetMeta, Binding, FaceMeta, FeatureKind, PrimitiveShape};
@@ -164,7 +183,17 @@ pub enum FaceEvent {
     /// readiness gave up waiting to see every visible mesh drawn
     /// ([`drawn`]), and the face was made ready as it draws.
     Ready { face_id: String, drawn: bool },
+    /// A drag on a control: what it asks its target to become. Nothing has
+    /// moved; the driver writes the change if it wants it.
+    Control(ControlEvent),
+    /// A press with a button other than the primary on a control, the
+    /// driver's to act on.
+    ControlPress(ControlPress),
 }
+
+/// How big a control on a face is, unless its driver says: on screen, since a
+/// face's units are its author's and a size in them would be a guess.
+pub const FACE_CONTROL_SIZE: GizmoSize = GizmoSize::Pixels(80.0);
 
 /// Why a load was answered with [`FaceEvent::LoadFailed`] without its scene
 /// failing.
@@ -306,6 +335,10 @@ pub enum ViewEvent {
         feature: String,
         value: Value,
     },
+    /// Add, remove, show, move or change a control, by the driver's key for
+    /// it ([`arora_visuals::control`]). A control on a face names it by its
+    /// id; one on a face still loading waits for it.
+    Control(ControlCommand),
 }
 
 /// How one face is framed and tone-mapped, over the page's [`ViewOptions`]:
@@ -649,11 +682,23 @@ impl Plugin for ViewPlugin {
             .init_resource::<Holds>()
             .init_resource::<Compositions>()
             .add_message::<FaceEvent>()
-            .add_plugins((drawn::DrawnPlugin, PickPlugin, OutlinePlugin))
+            .add_plugins((
+                drawn::DrawnPlugin,
+                PickPlugin,
+                OutlinePlugin,
+                ControlsPlugin,
+                TransformGizmoPlugin,
+                OverlayPlugin,
+            ))
+            .add_systems(PostUpdate, tell_controls)
             .add_systems(
                 Update,
                 (
-                    (apply_view_events, fail_unloadable_scenes).chain(),
+                    // Before the controls' commands are carried out, so a
+                    // control sent with its face's load finds the face.
+                    (apply_view_events, fail_unloadable_scenes)
+                        .chain()
+                        .before(ControlSystems::Commands),
                     // Before the cameras are placed, so a face made ready
                     // draws in its place from the frame it is ready.
                     (drawn::ready_drawn_instances, report_ready).chain(),
@@ -672,6 +717,35 @@ impl Plugin for ViewPlugin {
         #[cfg(feature = "captions")]
         app.add_plugins(captions::CaptionsPlugin);
     }
+}
+
+/// Hand the controls' drags and presses on as [`FaceEvent`]s, so a front end
+/// hears them in the one stream and a view with no driver keeps none.
+fn tell_controls(
+    mut events: ResMut<ControlEvents>,
+    mut presses: ResMut<ControlPresses>,
+    mut told: MessageWriter<FaceEvent>,
+) {
+    told.write_batch(events.0.drain(..).map(FaceEvent::Control));
+    told.write_batch(presses.0.drain(..).map(FaceEvent::ControlPress));
+}
+
+/// What the front ends set on a face that is kept across its reloads, for
+/// [`apply_view_events`], and taken away when the face is unloaded.
+#[derive(SystemParam)]
+struct KeptByFace<'w> {
+    selections: ResMut<'w, Selections>,
+    holds: ResMut<'w, Holds>,
+    statics: ResMut<'w, PendingStatics>,
+    compositions: ResMut<'w, Compositions>,
+}
+
+/// The controls' queue, for [`apply_view_events`]: commands go on it, and an
+/// unload takes off what was waiting for its face.
+#[derive(SystemParam)]
+struct ControlQueue<'w> {
+    commands: ResMut<'w, ControlCommands>,
+    placed: Res<'w, Controls>,
 }
 
 /// Where [`apply_view_events`] answers loads, and the count that orders them
@@ -699,15 +773,19 @@ fn apply_view_events(
     mut slots: ResMut<Slots>,
     mut placements: ResMut<Placements>,
     mut views: ResMut<FaceViews>,
-    mut selections: ResMut<Selections>,
-    mut holds: ResMut<Holds>,
-    mut statics: ResMut<PendingStatics>,
-    mut compositions: ResMut<Compositions>,
+    kept: KeptByFace,
     mut commands: Commands,
     faces: Query<(Entity, &EntityInstance, &Face, Option<&LoadReport>)>,
     asset_server: Res<AssetServer>,
     mut told: Answers,
+    mut controls: ControlQueue,
 ) {
+    let KeptByFace {
+        mut selections,
+        mut holds,
+        mut statics,
+        mut compositions,
+    } = kept;
     let Some(events) = events else { return };
     let Ok(receiver) = events.0.lock() else {
         return;
@@ -800,7 +878,14 @@ fn apply_view_events(
                     ))
                     .id();
                 *told.serial += 1;
-                commands.entity(camera).insert(ViewOf(face));
+                commands.entity(camera).insert((
+                    ViewOf(face),
+                    ControlView(face_id.clone()),
+                    ControlSize {
+                        transform: Some(FACE_CONTROL_SIZE),
+                        joint: Some(FACE_CONTROL_SIZE),
+                    },
+                ));
                 spawned.push((face_id, face, camera, asset_path, slot));
             }
             ViewEvent::UnloadFace { face_id } => {
@@ -824,11 +909,15 @@ fn apply_view_events(
                         error: UNLOADED.into(),
                     });
                 }
+                controls
+                    .commands
+                    .forget_instance(&face_id, &controls.placed);
                 selections.0.remove(&face_id);
                 holds.clear(&face_id);
                 statics.0.remove(&face_id);
                 compositions.0.remove(&face_id);
             }
+            ViewEvent::Control(command) => controls.commands.0.push(command),
             ViewEvent::PlaceFace { face_id, rect } => {
                 placements.0.insert(face_id, rect);
             }
@@ -2710,6 +2799,8 @@ mod tests {
             .init_resource::<Selections>()
             .init_resource::<Holds>()
             .init_resource::<Compositions>()
+            .init_resource::<ControlCommands>()
+            .init_resource::<Controls>()
             .insert_resource(ViewOptions {
                 background: Color::BLACK,
                 fit: Fit::Contain,
@@ -2752,6 +2843,85 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
         seen
+    }
+
+    fn transform_on(key: &str, face_id: &str) -> ViewEvent {
+        ViewEvent::Control(
+            serde_json::from_value(serde_json::json!({
+                "op": "add",
+                "key": key,
+                "control": {
+                    "kind": "transform",
+                    "target": { "kind": "instance", "instance": face_id },
+                },
+            }))
+            .expect("a control command"),
+        )
+    }
+
+    /// Control commands reach the shared queue in the order they were sent,
+    /// and an unload takes off those waiting for its face, leaving another
+    /// face's.
+    #[test]
+    fn controls_queue_in_order_and_an_unload_forgets_its_face() {
+        let (mut app, sender) = answering_app();
+        sender.send(load("a")).unwrap();
+        sender.send(load("b")).unwrap();
+        sender.send(transform_on("on-a", "a")).unwrap();
+        sender.send(transform_on("on-b", "b")).unwrap();
+        app.update();
+        let keys = |app: &App| -> Vec<String> {
+            app.world()
+                .resource::<ControlCommands>()
+                .0
+                .iter()
+                .map(|command| command.key().to_string())
+                .collect()
+        };
+        assert_eq!(keys(&app), ["on-a", "on-b"]);
+
+        sender
+            .send(ViewEvent::UnloadFace {
+                face_id: "a".into(),
+            })
+            .unwrap();
+        app.update();
+        assert_eq!(keys(&app), ["on-b"]);
+    }
+
+    /// The controls' drags and presses go out as face events, once, and do
+    /// not pile up where no front end drains them.
+    #[test]
+    fn control_drags_and_presses_are_told_once() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let mut world = World::new();
+        world.init_resource::<Messages<FaceEvent>>();
+        let drag: ControlEvent = ControlEvent {
+            key: "k".into(),
+            phase: arora_visuals::control::Phase::Move,
+            value: None,
+            pose: None,
+            scale: None,
+        };
+        let press = ControlPress {
+            key: "k".into(),
+            handle: arora_visuals::transform_gizmo::GizmoHandle::Joint,
+            button: arora_visuals::control::PressButton::Secondary,
+            position: [1.0, 2.0],
+        };
+        world.insert_resource(ControlEvents(vec![drag.clone()]));
+        world.insert_resource(ControlPresses(vec![press.clone()]));
+        world.run_system_once(tell_controls).expect("runs");
+        world.run_system_once(tell_controls).expect("runs");
+        let messages = world.resource::<Messages<FaceEvent>>();
+        let told: Vec<_> = messages.get_cursor().read(messages).cloned().collect();
+        assert_eq!(
+            told,
+            [FaceEvent::Control(drag), FaceEvent::ControlPress(press)]
+        );
+        assert!(world.resource::<ControlEvents>().0.is_empty());
+        assert!(world.resource::<ControlPresses>().0.is_empty());
     }
 
     fn failed(face_id: &str, error: &str) -> FaceEvent {

@@ -103,8 +103,7 @@ static READY: Mutex<Vec<(String, Instant)>> = Mutex::new(Vec::new());
 /// An event for the page, serialised as the object its handler receives.
 /// Where a concept is shared with the robot scene's host (`@semio/scene`),
 /// the event has the scene's name and fields: `loaded`, `loadFailed`,
-/// `ready` and `pick`. The face's controls will add their events here, as
-/// the shared layer provides them.
+/// `ready`, `pick`, `overlay`, `control` and `controlPress`.
 #[derive(serde::Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum VizijEvent<'a> {
@@ -140,6 +139,16 @@ enum VizijEvent<'a> {
         instance: &'a str,
         area: Option<Area>,
     },
+    /// What the page needs to draw labels and tooltips over the faces this
+    /// frame: element and control boxes on screen, and the control the
+    /// pointer has. Sent each frame it changed.
+    Overlay(&'a arora_visuals::overlay::OverlayFrame),
+    /// A drag on a control: what it asks for. Nothing has moved; the page
+    /// writes the change if it wants it.
+    Control(&'a arora_visuals::control::ControlEvent),
+    /// A press with a button other than the primary on a control, which the
+    /// page acts on as it likes.
+    ControlPress(&'a arora_visuals::control::ControlPress),
 }
 
 /// An element as the page sees it: its id, which writes, picks and the
@@ -197,6 +206,7 @@ fn report(
     mut told: MessageReader<FaceEvent>,
     mut picks: MessageReader<Picked>,
     areas: Res<SafeAreas>,
+    overlay: Res<view::Overlay>,
 ) {
     if let Ok(mut ready) = READY.lock() {
         let now = Instant::now();
@@ -249,7 +259,12 @@ fn report(
                 instance: face_id,
                 drawn: *drawn,
             }),
+            FaceEvent::Control(event) => emit(&VizijEvent::Control(event)),
+            FaceEvent::ControlPress(press) => emit(&VizijEvent::ControlPress(press)),
         }
+    }
+    if overlay.is_changed() {
+        emit(&VizijEvent::Overlay(&overlay.0));
     }
     report_safe_areas(&areas);
     // Read either way, so a page that sets its handler late does not get a
@@ -605,6 +620,18 @@ pub fn set_selection(instance: String, elements: Vec<String>) -> Result<(), JsVa
         face_id: instance,
         elements,
     })
+}
+
+/// Add, remove, show, move or change a control, by a command as JSON in the
+/// shape `@semio/scene` takes (`{ op: "add", key, control }`, …). A control on
+/// a Vizij names it by its instance; a goal names the Vizij it is used through
+/// as its `view`. Takes effect in the next frame, or, for a control on a Vizij
+/// still loading, in the frame it is indexed.
+#[wasm_bindgen]
+pub fn control(command: String) -> Result<(), JsValue> {
+    let command = serde_json::from_str(&command)
+        .map_err(|e| JsValue::from_str(&format!("not a control command: {e}")))?;
+    send(ViewEvent::Control(command))
 }
 
 /// Write one value, one number or three, to `feature` of the element
