@@ -110,6 +110,12 @@ export type Control =
       local?: boolean;
       /** The X, Y and Z handles' CSS hex colours; red, green, blue when absent. */
       colors?: [string, string, string];
+      /**
+       * Turns each arrow, with its square and ball, to the side of its axis
+       * facing the camera. Absent, they stay on the positive side, so each
+       * arrow shows which way its axis runs.
+       */
+      faceViewer?: boolean;
     }
   | { kind: "joint"; instance: string; joint: string; color?: string };
 
@@ -130,7 +136,7 @@ export type ControlCommand =
       scale?: [number, number, number];
     }
   /**
-   * Changes a control in place: its `colors` and `local`, its `opacity`
+   * Changes a control in place: its `colors`, `local` and `faceViewer`, its `opacity`
    * (faded to over a fifth of a second; how it looks only) and whether it is
    * `interactive`, and its `size`. What is absent stays as it is.
    */
@@ -140,6 +146,7 @@ export type ControlCommand =
       color?: string;
       colors?: [string, string, string];
       local?: boolean;
+      faceViewer?: boolean;
       opacity?: number;
       interactive?: boolean;
       size?: ControlSize;
