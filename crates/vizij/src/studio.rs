@@ -549,7 +549,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::view::meta::{Binding, FeatureKind};
+    use crate::view::meta::{AssetMeta, Binding, FeatureKind};
 
     /// A Studio-exported face's bindings: `translation.x` on an animatable
     /// of its own, resting at 0.5, and `color.r/g/b` on the components of
