@@ -44,7 +44,8 @@
 # (face-a.png, face-b.png), with a second face opened.png and
 # relaunched.png, logcat.txt (the app's own lines in logcat-app.txt),
 # meminfo.txt, say.txt and checks.txt; the pane's controls.png, pane.png,
-# background.png, background-relaunched.png and device.png.
+# background.png, background-relaunched.png and device.png; and, when a
+# system dialog came up over the app, the first ones seen (dialog-1.png...).
 #
 # The emulator-runner action runs its `script` line by line, so the whole
 # smoke lives here.
@@ -60,9 +61,14 @@ mkdir -p "$OUT"
 rm -f "$OUT"/*.png "$OUT"/*.raw "$OUT"/checks.txt
 
 failures=()
+# A check that fails while a system dialog still covers the app has seen
+# the dialog, not the app: it is reported as the dialog, naming the check.
 fail() {
-  echo "::error::$1"
-  failures+=("$1")
+  local dialog=${covered:-$(system_dialog)}
+  local message=$1
+  [ -z "$dialog" ] || message="a system dialog covered the app (${dialog}); unchecked: $1"
+  echo "::error::$message"
+  failures+=("$message")
 }
 # Waits up to a minute for the device; a command it still cannot reach
 # fails as before.
@@ -71,13 +77,94 @@ adb() {
   command adb "$@"
 }
 measure() { python3 "$HERE/frames.py" "$@"; }
-frame() {
-  for _ in 1 2 3; do
-    adb exec-out screencap > "$OUT/$1.raw"
-    measure whole "$OUT/$1.raw" && return
-    echo "$1: a partial screenshot, taken again"
+
+# A system dialog ("<app> isn't responding", "<app> keeps stopping") can
+# come up over the app at any moment: on the runner's two cores the
+# emulator's own launcher is slow enough to be reported as not responding.
+# A screenshot then shows the dialog and a tap lands on it, so every
+# screenshot and every input first clears it, pressing its Wait button
+# (Close app on a crash dialog) or, with no button found, the back key,
+# until no such window is left. One still there after DIALOG_DEADLINE
+# seconds is left, and `covered` names it until a later clear succeeds.
+DIALOG_DEADLINE=${VIZIJ_SMOKE_DIALOG_DEADLINE:-60}
+covered=""
+dialogs=0
+# The dialog's window title, as the window manager lists it
+# ("Application Not Responding: <process>"), or nothing.
+system_dialog() {
+  adb shell dumpsys window windows | tr -d '\r' \
+    | sed -nE 's/.*Window\{[0-9a-f]+ u[0-9]+ ((Application Not Responding|Application Error): [^}]*)\}.*/\1/p' \
+    | head -1
+}
+DIALOG_BUTTON=$(cat <<'PY'
+import re, sys
+xml = sys.stdin.read()
+for name in ("aerr_wait", "aerr_close"):
+    m = re.search(r'resource-id="android:id/' + name + r'"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)
+    if m:
+        x1, y1, x2, y2 = map(int, m.groups())
+        print((x1 + x2) // 2, (y1 + y2) // 2)
+        break
+PY
+)
+# The centre of the dialog's Wait (or Close app) button, from the window
+# hierarchy; nothing when the dump fails, as it can while the system is busy.
+dialog_button() {
+  timeout 30 adb shell uiautomator dump /sdcard/window.xml > /dev/null 2>&1 || return 0
+  adb exec-out cat /sdcard/window.xml | python3 -I -c "$DIALOG_BUTTON"
+}
+clear_dialogs() {
+  local title at deadline=$(( $(date +%s) + DIALOG_DEADLINE ))
+  while title=$(system_dialog); [ -n "$title" ]; do
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      echo "a system dialog still covers the app after ${DIALOG_DEADLINE} s: ${title}"
+      covered=$title
+      return 1
+    fi
+    dialogs=$((dialogs + 1))
+    echo "a system dialog covers the app: ${title}"
+    # The first few are kept, the evidence of what covered the app.
+    if [ "$dialogs" -le 3 ]; then
+      adb exec-out screencap > "$OUT/dialog-$dialogs.raw"
+      measure png "$OUT/dialog-$dialogs.raw" "$OUT/dialog-$dialogs.png" 2> /dev/null || true
+    fi
+    at=$(dialog_button)
+    # Looked for again just before pressing: a dialog gone in the meantime
+    # leaves the app under the tap or the back key.
+    [ -n "$(system_dialog)" ] || break
+    if [ -n "$at" ]; then
+      echo "pressing its button at ${at}"
+      # shellcheck disable=SC2086 # "x y", two arguments
+      adb shell input tap $at
+    else
+      echo "no button found; pressing back"
+      adb shell input keyevent KEYCODE_BACK
+    fi
     sleep 2
   done
+  covered=""
+}
+input() {
+  clear_dialogs
+  adb shell input "$@"
+}
+# A frame of the app: whole, and with no system dialog over it unless one
+# could not be cleared. A dialog that comes up as the frame is taken is
+# cleared and the frame taken again.
+frame() {
+  for _ in 1 2 3; do
+    clear_dialogs
+    adb exec-out screencap > "$OUT/$1.raw"
+    if ! measure whole "$OUT/$1.raw"; then
+      echo "$1: a partial screenshot, taken again"
+    elif [ -z "$covered" ] && [ -n "$(system_dialog)" ]; then
+      echo "$1: a system dialog came up as it was taken, taken again"
+    else
+      return
+    fi
+    sleep 2
+  done
+  [ -n "$covered" ] || covered=$(system_dialog)
 }
 resumed() { adb shell dumpsys activity activities | grep -m1 -E 'topResumedActivity|mResumedActivity' | tr -d '\r'; }
 in_front() { case "$(resumed)" in *"$PKG/"*) return 0 ;; *) return 1 ;; esac; }
@@ -201,7 +288,7 @@ BUTTON=2563eb
 SWATCH=0f766e
 if [ -n "$shown" ]; then
   read -r width height < <(adb shell wm size | tr -d '\r' | sed -nE 's/.*: ([0-9]+)x([0-9]+).*/\1 \2/p' | tail -1)
-  adb shell input tap $((width / 2)) $((height / 2))
+  input tap $((width / 2)) $((height / 2))
   sleep 2
   frame controls
   measure png "$OUT/controls.raw" "$OUT/controls.png"
@@ -209,7 +296,7 @@ if [ -n "$shown" ]; then
     fail "a tap on the face does not show the Settings button"
   else
     # shellcheck disable=SC2086 # "x y", two arguments
-    adb shell input tap $at
+    input tap $at
     sleep 2
     frame pane
     measure png "$OUT/pane.raw" "$OUT/pane.png"
@@ -217,9 +304,9 @@ if [ -n "$shown" ]; then
       fail "the Settings button does not open the pane"
     else
       # shellcheck disable=SC2086
-      adb shell input tap $at
+      input tap $at
       sleep 1
-      adb shell input keyevent KEYCODE_BACK
+      input keyevent KEYCODE_BACK
       sleep 2
       frame closed
       measure png "$OUT/closed.raw" "$OUT/background.png"
@@ -237,14 +324,14 @@ if [ -n "$shown" ]; then
       # The Device section, at the end of the pane. The drag starts on the
       # swatch picked, a button, where no text takes it, and is slow enough
       # not to fling. Nothing is pressed in the section.
-      adb shell input tap $((width / 2)) $((height / 2))
+      input tap $((width / 2)) $((height / 2))
       sleep 2
       frame controls-again
       if ! at=$(measure find "$OUT/controls-again.raw" "$BUTTON"); then
         fail "a tap on the relaunched face does not show the Settings button"
       else
         # shellcheck disable=SC2086
-        adb shell input tap $at
+        input tap $at
         sleep 2
         frame pane-again
         if ! swatch=$(measure find "$OUT/pane-again.raw" "$SWATCH"); then
@@ -253,7 +340,7 @@ if [ -n "$shown" ]; then
           read -r x y <<< "$swatch"
           to=$(( y - height * 45 / 100 ))
           [ "$to" -ge 5 ] || to=5
-          adb shell input swipe "$x" "$y" "$x" "$to" 1000
+          input swipe "$x" "$y" "$x" "$to" 1000
           sleep 2
           frame device
           measure png "$OUT/device.raw" "$OUT/device.png"
@@ -263,7 +350,7 @@ if [ -n "$shown" ]; then
           if measure background "$OUT/device.raw" "$SWATCH"; then
             fail "the pane does not stay open on its Device section"
           fi
-          adb shell input keyevent KEYCODE_BACK
+          input keyevent KEYCODE_BACK
           sleep 2
         fi
       fi
@@ -285,6 +372,8 @@ adb logcat -d -v threadtime > "$OUT/logcat.txt"
 uid=$(adb shell pm list packages -U "$PKG" | tr -d '\r' | sed -nE "s/^package:$PKG uid:([0-9]+).*/\1/p")
 adb logcat -d -v threadtime --uid "$uid" > "$OUT/logcat-app.txt"
 sed -n '/App Summary/,/TOTAL SWAP/p' "$OUT/meminfo.txt"
+echo "--- applications the system found not responding"
+grep -E "ActivityManager: (ANR in|Killing .*user request after error)" "$OUT/logcat.txt" | cut -c1-240 | head -10
 echo "--- adapter and errors in the app's log"
 grep -E "AdapterInfo|Caught|panicked|Encountered a panic|Quitting the application|Fatal signal|FATAL EXCEPTION|UnsatisfiedLinkError|vizij:|tts:" "$OUT/logcat-app.txt" | cut -c1-240 | head -40
 if [ ! -s "$OUT/logcat-app.txt" ]; then fail "no log from the app (uid ${uid:-unknown})"; fi
