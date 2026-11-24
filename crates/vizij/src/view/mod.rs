@@ -93,7 +93,7 @@ use arora_visuals::control::{
     ControlSize, ControlSystems, ControlView, Controls, ControlsPlugin,
 };
 use arora_visuals::drawn;
-use arora_visuals::instance::ClearCamera;
+use arora_visuals::instance::{ClearCamera, InstanceIndex, InstanceSystems};
 pub use arora_visuals::instance::{EntityInstance, Superseded, ViewOf, CLEAR_ORDER};
 use arora_visuals::outline::{OutlinePlugin, OutlineView};
 pub use arora_visuals::overlay::Overlay;
@@ -698,25 +698,38 @@ impl Plugin for ViewPlugin {
                 Update,
                 (
                     answering_systems(),
-                    // Before the cameras are placed, so a face made ready
-                    // draws in its place from the frame it is ready.
-                    (drawn::ready_drawn_instances, report_ready).chain(),
-                    clear_target,
-                    place_cameras,
-                    frame_cameras,
-                    index_faces,
-                    retire_superseded,
-                    apply_statics,
-                    tone_faces,
-                    apply_poses,
-                    measure_safe_areas,
+                    (
+                        // Before the cameras are placed, so a face made ready
+                        // draws in its place from the frame it is ready.
+                        (drawn::ready_drawn_instances, report_ready).chain(),
+                        clear_target,
+                        place_cameras,
+                        frame_cameras,
+                        index_faces,
+                        retire_superseded,
+                    )
+                        .chain()
+                        .in_set(InstanceSystems::Index),
+                    (apply_statics, tone_faces, apply_poses)
+                        .chain()
+                        .in_set(InstanceSystems::Apply),
+                    measure_safe_areas.in_set(InstanceSystems::Derive),
                 )
-                    .chain(),
+                    .chain()
+                    .in_set(ViewSystems),
             );
         #[cfg(feature = "captions")]
         app.add_plugins(captions::CaptionsPlugin);
     }
 }
+
+/// The view's systems in `Update`, for a host sharing the app to order its
+/// own against. Each stage of the view's chain sits in the shared
+/// [`InstanceSystems`] stage it belongs to: the front ends' requests in
+/// `Intake`; readiness, camera placement and the faces' indexing in `Index`;
+/// static features, tone and poses in `Apply`; safe areas in `Derive`.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ViewSystems;
 
 /// The systems that take the front ends' requests and answer loads,
 /// before the controls' commands are carried out, so a control sent with its
@@ -724,6 +737,7 @@ impl Plugin for ViewPlugin {
 fn answering_systems() -> bevy::ecs::schedule::ScheduleConfigs<bevy::ecs::system::ScheduleSystem> {
     (apply_view_events, fail_unloadable_scenes)
         .chain()
+        .in_set(InstanceSystems::Intake)
         .before(ControlSystems::Commands)
 }
 
@@ -784,6 +798,7 @@ fn apply_view_events(
     kept: KeptByFace,
     mut commands: Commands,
     faces: Query<(Entity, &EntityInstance, &Face, Option<&LoadReport>)>,
+    index: Res<InstanceIndex>,
     asset_server: Res<AssetServer>,
     mut told: Answers,
     mut controls: ControlQueue,
@@ -813,8 +828,10 @@ fn apply_view_events(
                 glb,
                 rig,
             } => {
-                for (entity, instance, face, report) in &faces {
-                    if instance.id != face_id || gone.contains(&entity) {
+                for (entity, instance, face, report) in
+                    faces.iter_many(index.all(&face_id)).flatten()
+                {
+                    if gone.contains(&entity) {
                         continue;
                     }
                     if report.is_some_and(|report| report.answer == Answer::Pending) {
@@ -897,8 +914,10 @@ fn apply_view_events(
                 spawned.push((face_id, face, camera, asset_path, slot));
             }
             ViewEvent::UnloadFace { face_id } => {
-                for (entity, instance, face, report) in &faces {
-                    if instance.id == face_id && gone.insert(entity) {
+                for (entity, instance, face, report) in
+                    faces.iter_many(index.all(&face_id)).flatten()
+                {
+                    if gone.insert(entity) {
                         despawn_face(entity, instance, face, &assets, &mut slots, &mut commands);
                         if report.is_some_and(|report| report.answer == Answer::Pending) {
                             told.events.write(FaceEvent::LoadFailed {
@@ -1009,7 +1028,7 @@ struct Unindexable(String);
 /// drew, and the face it was to replace — the newest one under its id whose
 /// load was answered `Loaded` — is no longer superseded, so it draws on as
 /// the id's face.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn fail_unloadable_scenes(
     faces: Query<(
         Entity,
@@ -1026,6 +1045,7 @@ fn fail_unloadable_scenes(
     mut slots: ResMut<Slots>,
     mut told: MessageWriter<FaceEvent>,
     mut commands: Commands,
+    index: Res<InstanceIndex>,
 ) {
     for (entity, instance, face, report, children, _, unindexable) in &faces {
         if report.answer != Answer::Pending {
@@ -1050,9 +1070,10 @@ fn fail_unloadable_scenes(
             error,
         });
         let previous = faces
-            .iter()
+            .iter_many(index.all(&instance.id))
+            .flatten()
             // Only a face answered `Loaded` is ever superseded.
-            .filter(|(_, other, _, _, _, superseded, _)| *superseded && other.id == instance.id)
+            .filter(|(_, _, _, _, _, superseded, _)| *superseded)
             .max_by_key(|(_, _, _, other_report, ..)| other_report.serial);
         if let Some((previous, ..)) = previous {
             commands.entity(previous).remove::<Superseded>();
@@ -1329,6 +1350,7 @@ fn despawn_face(
 /// in one frame, the new scene posed, shaded and drawn once already.
 fn retire_superseded(
     faces: Query<(Entity, &EntityInstance, &Face, Has<Superseded>)>,
+    index: Res<InstanceIndex>,
     assets: Res<FaceAssets>,
     mut slots: ResMut<Slots>,
     mut commands: Commands,
@@ -1337,8 +1359,10 @@ fn retire_superseded(
         if superseded || !instance.ready {
             continue;
         }
-        for (old, old_instance, old_face, old_superseded) in &faces {
-            if old_superseded && old_instance.id == instance.id {
+        for (old, old_instance, old_face, old_superseded) in
+            faces.iter_many(index.all(&instance.id)).flatten()
+        {
+            if old_superseded {
                 despawn_face(
                     old,
                     old_instance,
@@ -2460,6 +2484,49 @@ mod tests {
         assert!(transform
             .rotation
             .abs_diff_eq(euler_zyx([0.1, 2.0, 0.0]), 1e-6));
+    }
+
+    /// Once a reloaded face is ready, the face it supersedes under the same
+    /// id goes, and a superseded face under another id stays.
+    #[test]
+    fn a_ready_reload_retires_the_face_it_supersedes() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let mut app = App::new();
+        let assets = FaceAssets::register(&mut app);
+        app.init_resource::<Slots>();
+        let world = app.world_mut();
+        let face = |world: &mut World, id: &str, ready: bool, superseded: bool| {
+            let camera = world.spawn_empty().id();
+            let mut spawned = world.spawn((
+                EntityInstance {
+                    id: id.into(),
+                    asset_path: assets.push(id, Vec::new()),
+                    meta: AssetMeta::default(),
+                    bindings: SceneBindings::default(),
+                    camera,
+                    draw_order: drawing_order(0),
+                    ready,
+                },
+                Face {
+                    bundle: Default::default(),
+                    rig: vizij_arora_hal::RigHal::new(),
+                    slot: 0,
+                    pose: PoseState::default(),
+                },
+            ));
+            if superseded {
+                spawned.insert(Superseded);
+            }
+            spawned.id()
+        };
+        let old = face(world, "a", true, true);
+        let new = face(world, "a", true, false);
+        let other = face(world, "b", true, true);
+        world.run_system_once(retire_superseded).expect("runs");
+        assert!(world.get_entity(old).is_err(), "the superseded face went");
+        assert!(world.get_entity(new).is_ok());
+        assert!(world.get_entity(other).is_ok(), "another id's face stays");
     }
 
     /// A pose value the scene already shows is not landed again: the
