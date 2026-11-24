@@ -628,11 +628,13 @@ pub fn set_selection(instance: String, elements: Vec<String>) -> Result<(), JsVa
 /// shape `@semio/scene` takes (`{ op: "add", key, control }`, …). A control on
 /// a Vizij names it by its instance; a goal names the Vizij it is used through
 /// as its `view`. Takes effect in the next frame, or, for a control on a Vizij
-/// still loading, in the frame it is indexed.
+/// still loading, in the frame it is indexed. A joint control is refused with
+/// an error: a Vizij has no joints.
 #[wasm_bindgen]
 pub fn control(command: String) -> Result<(), JsValue> {
     let command = serde_json::from_str(&command)
         .map_err(|e| JsValue::from_str(&format!("not a control command: {e}")))?;
+    crate::view::refuse_joint_controls(&command).map_err(|e| JsValue::from_str(&e))?;
     send(ViewEvent::Control(command))
 }
 

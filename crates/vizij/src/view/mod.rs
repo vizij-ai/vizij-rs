@@ -723,6 +723,23 @@ impl Plugin for ViewPlugin {
     }
 }
 
+/// Refuses a joint control: a face has no scene-style joints for one to
+/// drive, so the add is turned away where it is asked for, with an error the
+/// driver hears, rather than accepted and dropped unresolved. A face's rig,
+/// when it has one, is more likely a skeleton of bones than joints, and its
+/// control will take another form.
+pub fn refuse_joint_controls(command: &ControlCommand) -> Result<(), String> {
+    match command {
+        ControlCommand::Add {
+            key,
+            control: arora_visuals::control::Control::Joint { instance, .. },
+        } => Err(format!(
+            "joint control {key:?} on {instance:?} refused: a Vizij has no joints"
+        )),
+        _ => Ok(()),
+    }
+}
+
 /// The view's systems in `Update`, for a host sharing the app to order its
 /// own against. Each stage of the view's chain sits in the shared
 /// [`InstanceSystems`] stage it belongs to: the front ends' requests in
@@ -947,7 +964,10 @@ fn apply_view_events(
                 statics.0.remove(&face_id);
                 compositions.0.remove(&face_id);
             }
-            ViewEvent::Control(command) => controls.commands.0.push(command),
+            ViewEvent::Control(command) => match refuse_joint_controls(&command) {
+                Ok(()) => controls.commands.0.push(command),
+                Err(error) => log::warn!("{error}"),
+            },
             ViewEvent::PlaceFace { face_id, rect } => {
                 placements.0.insert(face_id, rect);
             }
@@ -2968,6 +2988,44 @@ mod tests {
             }))
             .expect("a control command"),
         )
+    }
+
+    /// A joint control on a face is refused where it is asked for, and never
+    /// reaches the controls' queue; a transform control on the same face is
+    /// taken.
+    #[test]
+    fn a_joint_control_on_a_face_is_refused() {
+        let joint = serde_json::from_value::<ControlCommand>(serde_json::json!({
+            "op": "add",
+            "key": "neck",
+            "control": { "kind": "joint", "instance": "face", "joint": "neck" },
+        }))
+        .unwrap();
+        assert!(refuse_joint_controls(&joint)
+            .unwrap_err()
+            .contains("no joints"));
+
+        // What the intake queued, read before the controls carry it out.
+        #[derive(Resource, Default)]
+        struct Queued(Vec<String>);
+        let (mut app, sender) = answering_app();
+        app.init_resource::<Queued>().add_systems(
+            Update,
+            (|commands: Res<ControlCommands>, mut queued: ResMut<Queued>| {
+                queued
+                    .0
+                    .extend(commands.0.iter().filter_map(|command| match command {
+                        ControlCommand::Add { key, .. } => Some(key.clone()),
+                        _ => None,
+                    }));
+            })
+            .after(InstanceSystems::Intake)
+            .before(ControlSystems::Commands),
+        );
+        sender.send(ViewEvent::Control(joint)).unwrap();
+        sender.send(transform_on("move", "face")).unwrap();
+        app.update();
+        assert_eq!(app.world().resource::<Queued>().0, ["move"]);
     }
 
     /// A control sent for a face that is unloaded before it is placed goes
