@@ -73,8 +73,8 @@ use crate::face::{self, FaceConfig, LoadedFace};
 use crate::view::hold::HoldTarget;
 use crate::view::meta::FaceMeta;
 use crate::view::{
-    self, FaceAssets, FaceEvent, FaceView, Fit, Picked, SafeAreas, ToneMapping, ViewEvent,
-    ViewEvents, ViewOptions,
+    self, ControlEvents, ControlPresses, FaceAssets, FaceEvent, FaceView, Fit, Picked, SafeAreas,
+    ToneMapping, ViewEvent, ViewEvents, ViewOptions,
 };
 
 /// The mounted page: the way into the App.
@@ -198,15 +198,25 @@ fn answered_key(instance: &str) -> Option<String> {
     })
 }
 
-/// The App's report to the page, at the end of each frame: which Vizijs are
-/// ready (for their devices' time), then, to the page's handler, the
-/// answers to loads and the readiness the view reported, the safe areas
-/// that moved, and the clicks. A Vizij being reloaded is not ready until its
-/// new scene is.
+/// The App's report to the page, in `Last`, after every system that changes
+/// what it reports — the overlay is published in `PostUpdate` — so all of a
+/// frame reaches the page with that frame: which Vizijs are ready (for their
+/// devices' time), then, to the page's handler, the answers to loads and the
+/// readiness the view reported, the drags and presses on controls, the
+/// overlay when it changed, the safe areas that moved, and the clicks on
+/// Vizijs. A Vizij being reloaded is not ready until its new scene is.
+///
+/// The drags and presses are drained here, and the clicks kept to the
+/// page's own Vizijs: the shared layer leaves both to the host that embeds
+/// the others, which this module is.
+#[allow(clippy::too_many_arguments)]
 fn report(
     faces: Query<&view::EntityInstance, Without<view::Superseded>>,
+    shown: Query<(), With<view::Face>>,
     mut told: MessageReader<FaceEvent>,
     mut picks: MessageReader<Picked>,
+    mut controls: ResMut<ControlEvents>,
+    mut presses: ResMut<ControlPresses>,
     areas: Res<SafeAreas>,
     overlay: Res<view::Overlay>,
 ) {
@@ -261,17 +271,28 @@ fn report(
                 instance: face_id,
                 drawn: *drawn,
             }),
-            FaceEvent::Control(event) => emit(&VizijEvent::Control(event)),
-            FaceEvent::ControlPress(press) => emit(&VizijEvent::ControlPress(press)),
         }
+    }
+    // Drained either way, so a page that sets its handler late does not get
+    // a backlog, and one with no driver keeps none.
+    for event in std::mem::take(&mut controls.0) {
+        emit(&VizijEvent::Control(&event));
+    }
+    for press in std::mem::take(&mut presses.0) {
+        emit(&VizijEvent::ControlPress(&press));
     }
     if overlay.is_changed() {
         emit(&VizijEvent::Overlay(&overlay.0));
     }
     report_safe_areas(&areas);
     // Read either way, so a page that sets its handler late does not get a
-    // backlog.
-    let picks: Vec<Picked> = picks.read().cloned().collect();
+    // backlog. A pick on an instance that is not a Vizij is another
+    // consumer's sharing the App.
+    let picks: Vec<Picked> = picks
+        .read()
+        .filter(|pick| shown.contains(pick.instance))
+        .cloned()
+        .collect();
     for pick in &picks {
         emit(&VizijEvent::Pick {
             instance: &pick.instance_id,
@@ -373,7 +394,7 @@ pub fn mount(canvas: String, options_json: Option<String>) -> Result<(), JsValue
     .insert_resource(options)
     .insert_resource(ViewEvents(Mutex::new(events_rx)))
     .add_plugins(view::ViewPlugin)
-    .add_systems(PostUpdate, report);
+    .add_systems(Last, report);
     PAGE.with(|page| *page.borrow_mut() = Some(Page { events: events_tx }));
     // On the web the winit runner spawns the loop and returns at once.
     app.run();

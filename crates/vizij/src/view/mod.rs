@@ -41,10 +41,15 @@
 //! [`arora_visuals::outline`] through every face camera's [`OutlineView`]);
 //! rig outputs held against the device ([`hold`]); a static feature set
 //! in place ([`ViewEvent::SetStaticFeature`]); and controls a driver adds by
-//! keys of its own ([`ViewEvent::Control`], [`arora_visuals::control`]), whose
-//! drags and presses come back as [`FaceEvent::Control`] and
-//! [`FaceEvent::ControlPress`], with where they stand on screen in the
-//! shared [`Overlay`].
+//! keys of its own ([`ViewEvent::Control`], [`arora_visuals::control`]), with
+//! where they stand on screen in the shared [`Overlay`].
+//!
+//! **The host that embeds the view hears the picks and the controls**, as
+//! the shared layer has it: the picks it reads from the [`Picked`] messages,
+//! keeping those whose instance is one of its faces, and the drags and
+//! presses it drains from [`ControlEvents`] and [`ControlPresses`]. The view
+//! drains neither, since a host embedding it beside another consumer of the
+//! shared layer — a robot scene, say — drains them once for both.
 //!
 //! The face's world is already the drivers' frame, Z up, so its controls
 //! speak in it unturned. A transform control on a face is used through the
@@ -91,9 +96,9 @@ use vizij_api_core::Value;
 
 pub use arora_visuals::binding::{ElementTargets, SceneBinding, SceneBindings};
 use arora_visuals::control::{
-    ControlCommand, ControlCommands, ControlEvent, ControlEvents, ControlPress, ControlPresses,
-    ControlSize, ControlView, Controls, ControlsPlugin,
+    ControlCommand, ControlCommands, ControlSize, ControlView, Controls, ControlsPlugin,
 };
+pub use arora_visuals::control::{ControlEvents, ControlPresses};
 use arora_visuals::drawn;
 use arora_visuals::instance::{ClearCamera, InstanceIndex, InstanceSystems};
 pub use arora_visuals::instance::{EntityInstance, Superseded, ViewOf, CLEAR_ORDER};
@@ -185,12 +190,6 @@ pub enum FaceEvent {
     /// readiness gave up waiting to see every visible mesh drawn
     /// ([`drawn`]), and the face was made ready as it draws.
     Ready { face_id: String, drawn: bool },
-    /// A drag on a control: what it asks its target to become. Nothing has
-    /// moved; the driver writes the change if it wants it.
-    Control(ControlEvent),
-    /// A press with a button other than the primary on a control, the
-    /// driver's to act on.
-    ControlPress(ControlPress),
 }
 
 /// How big a control on a face is, unless its driver says: on screen, since a
@@ -702,7 +701,6 @@ impl Plugin for ViewPlugin {
                 TransformGizmoPlugin,
                 OverlayPlugin,
             ))
-            .add_systems(PostUpdate, tell_controls)
             .add_observer(mark_spawned)
             .add_systems(
                 Update,
@@ -784,17 +782,6 @@ fn answering_systems() -> bevy::ecs::schedule::ScheduleConfigs<bevy::ecs::system
     (apply_view_events, fail_unloadable_scenes)
         .chain()
         .in_set(InstanceSystems::Intake)
-}
-
-/// Hand the controls' drags and presses on as [`FaceEvent`]s, so a front end
-/// hears them in the one stream and a view with no driver keeps none.
-fn tell_controls(
-    mut events: ResMut<ControlEvents>,
-    mut presses: ResMut<ControlPresses>,
-    mut told: MessageWriter<FaceEvent>,
-) {
-    told.write_batch(events.0.drain(..).map(FaceEvent::Control));
-    told.write_batch(presses.0.drain(..).map(FaceEvent::ControlPress));
 }
 
 /// What the front ends set on a face that is kept across its reloads, for
@@ -3203,41 +3190,6 @@ mod tests {
         app.update();
         assert!(!selected(&app, "a"), "the unloaded face's selection went");
         assert!(selected(&app, "b"), "another face's stays");
-    }
-
-    /// The controls' drags and presses go out as face events, once, and do
-    /// not pile up where no front end drains them.
-    #[test]
-    fn control_drags_and_presses_are_told_once() {
-        use bevy::ecs::system::RunSystemOnce;
-
-        let mut world = World::new();
-        world.init_resource::<Messages<FaceEvent>>();
-        let drag: ControlEvent = ControlEvent {
-            key: "k".into(),
-            phase: arora_visuals::control::Phase::Move,
-            value: None,
-            pose: None,
-            scale: None,
-        };
-        let press = ControlPress {
-            key: "k".into(),
-            handle: arora_visuals::transform_gizmo::GizmoHandle::Joint,
-            button: arora_visuals::control::PressButton::Secondary,
-            position: [1.0, 2.0],
-        };
-        world.insert_resource(ControlEvents(vec![drag.clone()]));
-        world.insert_resource(ControlPresses(vec![press.clone()]));
-        world.run_system_once(tell_controls).expect("runs");
-        world.run_system_once(tell_controls).expect("runs");
-        let messages = world.resource::<Messages<FaceEvent>>();
-        let told: Vec<_> = messages.get_cursor().read(messages).cloned().collect();
-        assert_eq!(
-            told,
-            [FaceEvent::Control(drag), FaceEvent::ControlPress(press)]
-        );
-        assert!(world.resource::<ControlEvents>().0.is_empty());
-        assert!(world.resource::<ControlPresses>().0.is_empty());
     }
 
     fn failed(face_id: &str, error: &str) -> FaceEvent {
