@@ -3,17 +3,27 @@
 //! exports — a GLB carrying a rig, its graphs and programs; a face, most often.
 //!
 //! JavaScript [`mount`]s the page's canvas once — one Bevy [`App`] for the
-//! page's lifetime — then [`load_vizij`]s as many Vizijs as it shows: each is a
-//! device of its own ([`VizijRuntime`]), JS-paced (the page calls `step(dt)`
-//! each frame, or hands the device its own `run` loop), drawn by the App into
-//! the rectangle of the canvas the page [`place_vizij`]s it in. The view reads
-//! each device's pose on its own frame, so a step's writes draw one frame
-//! later. The page owns the pacing: Bevy's frames run on
-//! `requestAnimationFrame`, which a hidden tab halts, while a device under
-//! `run` keeps stepping on its timer. A Vizij's device keeps no time until
-//! the Vizij is first drawn ([`ready`]): its steps carry the page's changes
-//! at a zero dt, and its time starts at that frame, so the face's springs,
-//! programs and animations start from rest where the page first shows them.
+//! page's lifetime — then [`load`]s a Vizij into each instance it shows: an
+//! id of the page's own, never rewritten, which every call about that face
+//! and every event from it carries. Each is a device of its own
+//! ([`VizijRuntime`]), JS-paced (the page calls `step(dt)` each frame, or
+//! hands the device its own `run` loop), drawn by the App into the rectangle
+//! of the canvas the page [`place`]s it in. The view reads each device's pose
+//! on its own frame, so a step's writes draw one frame later. The page owns
+//! the pacing: Bevy's frames run on `requestAnimationFrame`, which a hidden
+//! tab halts, while a device under `run` keeps stepping on its timer. A
+//! Vizij's device keeps no time until the Vizij is first drawn (its `ready`
+//! event): its steps carry the page's changes at a zero dt, and its time
+//! starts at that frame, so the face's springs, programs and animations
+//! start from rest where the page first shows them.
+//!
+//! **The App speaks to the page through one handler** ([`set_event_handler`]):
+//! each event an object whose `type` names it ([`VizijEvent`]). A load is
+//! answered by `loaded` or `loadFailed`, an instance's loads in the order
+//! they were asked for; a loaded face is `ready` once drawn; a click is a
+//! `pick`; a face's safe area moving is a `safeArea`; where elements and
+//! controls stand is an `overlay`; a drag on a control is a `control`, and a
+//! press on one with another button a `controlPress`. Nothing is polled.
 //!
 //! Values cross the boundary as JSON in the Arora `Value` vocabulary
 //! (`{"f32": 0.75}`), calls as Arora `Call`s, and a task run as the run
@@ -22,22 +32,22 @@
 //!
 //! What the App holds is reachable only through this module's statics: on
 //! the web `App::run` hands the App to winit and returns at once, so the
-//! page's requests travel as [`ViewEvent`]s and the App's answers (which
-//! Vizijs are ready, what was pressed) are copied out each frame.
+//! page's requests travel as [`ViewEvent`]s and the App's answers reach the
+//! page's handler from a system at the end of each frame.
 //!
 //! An authoring page edits what it shows through the same channel: it
 //! selects elements ([`set_selection`]), holds rig outputs against the
-//! device ([`VizijRuntime::hold`]), sets static features in place
-//! ([`set_static_feature`]), and reloads a structurally edited Vizij from
-//! its exported bytes with [`load_vizij`], whose previous scene draws until
-//! the new one is ready. It holds the store keys it edits — rig inputs, pose
-//! weights, a program's inputs — at the values it writes, against the
-//! Vizij's own behavior, with [`VizijRuntime::hold_keys`]: the page and the
-//! device share the module, so the holds are the device's interpreter's,
-//! reached from the page.
+//! device ([`VizijRuntime::hold`]), writes an element's feature in place
+//! ([`set_value`]), and reloads a structurally edited Vizij from its
+//! exported bytes with [`load`] under the same instance, whose previous
+//! scene draws until the new one is ready. It holds the store keys it edits
+//! — rig inputs, pose weights, a program's inputs — at the values it writes,
+//! against the Vizij's own behavior, with [`VizijRuntime::hold_keys`]: the
+//! page and the device share the module, so the holds are the device's
+//! interpreter's, reached from the page.
 
 use std::cell::{Cell, RefCell};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
 use std::sync::Mutex;
@@ -50,6 +60,7 @@ use bevy::prelude::*;
 use futures::channel::oneshot;
 use futures::future::{self, Either};
 use uuid::Uuid;
+use vizij_api_core::Value;
 use vizij_arora_behavior::{
     encode_edit_call, encode_load_call, parse_spec, parse_spec_diff, KeyHolds,
 };
@@ -62,8 +73,8 @@ use crate::face::{self, FaceConfig, LoadedFace};
 use crate::view::hold::HoldTarget;
 use crate::view::meta::FaceMeta;
 use crate::view::{
-    self, FaceAssets, FaceView, Fit, Picked, Picks, SafeAreas, ToneMapping, ViewEvent, ViewEvents,
-    ViewOptions,
+    self, ControlEvents, ControlPresses, FaceAssets, FaceEvent, FaceView, Fit, Picked, SafeAreas,
+    ToneMapping, ViewEvent, ViewEvents, ViewOptions,
 };
 
 /// The mounted page: the way into the App.
@@ -73,25 +84,146 @@ struct Page {
 
 thread_local! {
     static PAGE: RefCell<Option<Page>> = const { RefCell::new(None) };
-    /// The `run`s waiting for their Vizij to be drawn, by Vizij id: the
+    /// The `run`s waiting for their Vizij to be drawn, by instance: the
     /// App's report starts each once its Vizij is ready.
     static DRAWN: RefCell<Vec<(String, oneshot::Sender<()>)>> = const { RefCell::new(Vec::new()) };
+    /// Where the App's events go: the page's handler.
+    static HANDLER: RefCell<Option<js_sys::Function>> = const { RefCell::new(None) };
+    /// The keys of the loads not yet answered, per instance, oldest first:
+    /// the view answers an instance's loads in order, so each answer takes
+    /// the oldest.
+    static KEYS: RefCell<HashMap<String, VecDeque<Option<String>>>> = RefCell::new(HashMap::new());
+    /// Each instance's safe area as last sent, so a `safeArea` event goes
+    /// out only when one moves, appears or goes.
+    static AREAS: RefCell<HashMap<String, [f32; 4]>> = RefCell::new(HashMap::new());
+    /// Whether the next report sends the state the page hears only as
+    /// events — the overlay and every safe area — as it stands, changed or
+    /// not: set by a new handler ([`set_event_handler`]), which would
+    /// otherwise not hear it until something moved.
+    static SNAPSHOT: Cell<bool> = const { Cell::new(false) };
 }
 
-/// What the App reports back each frame: the Vizijs that are ready, each
-/// with the moment of the frame that first reported it so, the picks since
-/// the page last drained them, and where each Vizij's safe area lies (CSS
-/// pixels, `[x, y, width, height]` from the canvas's corner).
+/// The Vizijs that are ready, each with the moment of the frame that first
+/// reported it so: when each device's time starts ([`VizijRuntime::step`]).
 static READY: Mutex<Vec<(String, Instant)>> = Mutex::new(Vec::new());
-static PICKS: Mutex<Vec<Picked>> = Mutex::new(Vec::new());
-static SAFE_AREAS: Mutex<Vec<(String, [f32; 4])>> = Mutex::new(Vec::new());
 
-/// The App's report to the page. A Vizij being reloaded is not ready until
-/// its new scene is.
+/// An event for the page, serialised as the object its handler receives.
+/// Where a concept is shared with the robot scene's host (`@semio/scene`),
+/// the event has the scene's name and fields: `loaded`, `loadFailed`,
+/// `ready`, `pick`, `overlay`, `control` and `controlPress`.
+#[derive(serde::Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum VizijEvent<'a> {
+    /// A Vizij loaded whole into its instance: its scene is indexed, its
+    /// device built. It draws in its place once `ready`; the face it
+    /// replaces draws until then.
+    Loaded {
+        instance: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        key: Option<&'a str>,
+        elements: Vec<ElementInfo<'a>>,
+    },
+    /// A load that did not finish, and why: its scene failed to load, a
+    /// later load into the same instance replaced it, or the instance was
+    /// unloaded. Whatever the instance showed before still shows.
+    LoadFailed {
+        instance: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        key: Option<&'a str>,
+        error: &'a str,
+    },
+    /// The Vizij draws in its place from this frame; `drawn` is false when
+    /// readiness gave up waiting to see every visible mesh drawn.
+    Ready { instance: &'a str, drawn: bool },
+    /// A click on a Vizij: the element under it, or `null` for a miss.
+    Pick {
+        instance: &'a str,
+        element: Option<&'a str>,
+    },
+    /// Where the Vizij's safe area lies on the canvas now, or `null` when it
+    /// has none.
+    SafeArea {
+        instance: &'a str,
+        area: Option<Area>,
+    },
+    /// What the page needs to draw labels and tooltips over the faces this
+    /// frame: element and control boxes on screen, and the control the
+    /// pointer has. Sent each frame it changed.
+    Overlay(&'a arora_visuals::overlay::OverlayFrame),
+    /// A drag on a control: what it asks for. Nothing has moved; the page
+    /// writes the change if it wants it.
+    Control(&'a arora_visuals::control::ControlEvent),
+    /// A press with a button other than the primary on a control, which the
+    /// page acts on as it likes.
+    ControlPress(&'a arora_visuals::control::ControlPress),
+}
+
+/// An element as the page sees it: its id, which writes, picks and the
+/// selection name it by, and what its author called it (`""` where unnamed).
+#[derive(serde::Serialize)]
+struct ElementInfo<'a> {
+    id: &'a str,
+    name: &'a str,
+}
+
+/// A rectangle of the canvas, in CSS pixels from its top-left corner.
+#[derive(serde::Serialize)]
+struct Area {
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+}
+
+/// Hand `event` to the page's handler, if it has set one. A throwing
+/// handler is the page's error; it does not stop the frame.
+fn emit(event: &VizijEvent) {
+    // Cloned out, so a handler that sets another handler finds it free.
+    let Some(handler) = HANDLER.with(|h| h.borrow().clone()) else {
+        return;
+    };
+    let Ok(value) = to_js(event) else {
+        return;
+    };
+    if let Err(e) = handler.call1(&JsValue::NULL, &value) {
+        log::error!("the page's event handler threw: {e:?}");
+    }
+}
+
+/// The oldest unanswered load's key under `instance`, taken.
+fn answered_key(instance: &str) -> Option<String> {
+    KEYS.with(|keys| {
+        let mut keys = keys.borrow_mut();
+        let queue = keys.get_mut(instance)?;
+        let key = queue.pop_front().flatten();
+        if queue.is_empty() {
+            keys.remove(instance);
+        }
+        key
+    })
+}
+
+/// The App's report to the page, in `Last`, after every system that changes
+/// what it reports — the overlay is published in `PostUpdate` — so all of a
+/// frame reaches the page with that frame: which Vizijs are ready (for their
+/// devices' time), then, to the page's handler, the answers to loads and the
+/// readiness the view reported, the drags and presses on controls, the
+/// overlay when it changed, the safe areas that moved, and the clicks on
+/// Vizijs. A Vizij being reloaded is not ready until its new scene is.
+///
+/// The drags and presses are drained here, and the clicks kept to the
+/// page's own Vizijs: the shared layer leaves both to the host that embeds
+/// the others, which this module is.
+#[allow(clippy::too_many_arguments)]
 fn report(
-    faces: Query<&view::Face, Without<view::Superseded>>,
-    mut picks: ResMut<Picks>,
+    faces: Query<&view::EntityInstance, Without<view::Superseded>>,
+    shown: Query<(), With<view::Face>>,
+    mut told: MessageReader<FaceEvent>,
+    mut picks: MessageReader<Picked>,
+    mut controls: ResMut<ControlEvents>,
+    mut presses: ResMut<ControlPresses>,
     areas: Res<SafeAreas>,
+    overlay: Res<view::Overlay>,
 ) {
     if let Ok(mut ready) = READY.lock() {
         let now = Instant::now();
@@ -117,21 +249,108 @@ fn report(
             }
         });
     }
-    if !picks.0.is_empty() {
-        if let Ok(mut out) = PICKS.lock() {
-            out.append(&mut picks.0);
+    // Read every frame, as a message lives two frames; an answer's key is
+    // taken whether or not the page listens, so the queue stays in step.
+    for event in told.read() {
+        match event {
+            FaceEvent::Loaded { face_id, elements } => {
+                let key = answered_key(face_id);
+                emit(&VizijEvent::Loaded {
+                    instance: face_id,
+                    key: key.as_deref(),
+                    elements: elements
+                        .iter()
+                        .map(|(id, name)| ElementInfo { id, name })
+                        .collect(),
+                });
+            }
+            FaceEvent::LoadFailed { face_id, error } => {
+                let key = answered_key(face_id);
+                emit(&VizijEvent::LoadFailed {
+                    instance: face_id,
+                    key: key.as_deref(),
+                    error,
+                });
+            }
+            FaceEvent::Ready { face_id, drawn } => emit(&VizijEvent::Ready {
+                instance: face_id,
+                drawn: *drawn,
+            }),
         }
     }
-    if areas.is_changed() {
-        if let Ok(mut out) = SAFE_AREAS.lock() {
-            out.clear();
-            out.extend(areas.0.iter().map(|(id, area)| {
-                (
-                    id.clone(),
-                    [area.min.x, area.min.y, area.width(), area.height()],
-                )
-            }));
+    // Drained either way, so a page that sets its handler late does not get
+    // a backlog, and one with no driver keeps none.
+    for event in std::mem::take(&mut controls.0) {
+        emit(&VizijEvent::Control(&event));
+    }
+    for press in std::mem::take(&mut presses.0) {
+        emit(&VizijEvent::ControlPress(&press));
+    }
+    let snapshot = SNAPSHOT.with(|snapshot| snapshot.replace(false));
+    if snapshot || overlay.is_changed() {
+        emit(&VizijEvent::Overlay(&overlay.0));
+    }
+    report_safe_areas(&areas, snapshot);
+    // Read either way, so a page that sets its handler late does not get a
+    // backlog. A pick on an instance that is not a Vizij is another
+    // consumer's sharing the App.
+    let picks: Vec<Picked> = picks
+        .read()
+        .filter(|pick| shown.contains(pick.instance))
+        .cloned()
+        .collect();
+    for pick in &picks {
+        emit(&VizijEvent::Pick {
+            instance: &pick.instance_id,
+            element: pick.element_id.as_deref(),
+        });
+    }
+}
+
+/// Send a `safeArea` event for each Vizij whose safe area moved, appeared or
+/// went since the last one sent, and, for a `snapshot`, for every Vizij that
+/// has one.
+fn report_safe_areas(areas: &SafeAreas, snapshot: bool) {
+    let now: HashMap<&str, [f32; 4]> = areas
+        .0
+        .iter()
+        .map(|(id, area)| {
+            (
+                id.as_str(),
+                [area.min.x, area.min.y, area.width(), area.height()],
+            )
+        })
+        .collect();
+    let changes: Vec<(String, Option<[f32; 4]>)> = AREAS.with(|sent| {
+        let mut sent = sent.borrow_mut();
+        let mut changes: Vec<(String, Option<[f32; 4]>)> = now
+            .iter()
+            .filter(|(id, area)| snapshot || sent.get(**id) != Some(*area))
+            .map(|(id, area)| (id.to_string(), Some(*area)))
+            .collect();
+        changes.extend(
+            sent.keys()
+                .filter(|id| !now.contains_key(id.as_str()))
+                .map(|id| (id.clone(), None)),
+        );
+        for (id, area) in &changes {
+            match area {
+                Some(area) => sent.insert(id.clone(), *area),
+                None => sent.remove(id),
+            };
         }
+        changes
+    });
+    for (instance, area) in &changes {
+        emit(&VizijEvent::SafeArea {
+            instance,
+            area: area.map(|[x, y, width, height]| Area {
+                x,
+                y,
+                width,
+                height,
+            }),
+        });
     }
 }
 
@@ -182,11 +401,23 @@ pub fn mount(canvas: String, options_json: Option<String>) -> Result<(), JsValue
     .insert_resource(options)
     .insert_resource(ViewEvents(Mutex::new(events_rx)))
     .add_plugins(view::ViewPlugin)
-    .add_systems(PostUpdate, report);
+    .add_systems(Last, report);
     PAGE.with(|page| *page.borrow_mut() = Some(Page { events: events_tx }));
     // On the web the winit runner spawns the loop and returns at once.
     app.run();
     Ok(())
+}
+
+/// Set the function the App's events go to, replacing any earlier one. Each
+/// call gets one event object; its `type` says which ([`VizijEvent`]; the
+/// package's `VizijEvent` type). Events from before a handler is set are
+/// not kept, but a new handler starts with the state it would otherwise
+/// hear of only once it changes: the next frame sends the overlay and every
+/// Vizij's safe area as they stand.
+#[wasm_bindgen(js_name = setEventHandler)]
+pub fn set_event_handler(handler: js_sys::Function) {
+    HANDLER.with(|h| *h.borrow_mut() = Some(handler));
+    SNAPSHOT.with(|snapshot| snapshot.set(true));
 }
 
 /// Send a request to the mounted App.
@@ -200,34 +431,42 @@ fn send(event: ViewEvent) -> Result<(), JsValue> {
     })
 }
 
-/// Show a Vizij under `vizij_id` and start its device: the GLB's bindings and
-/// bundle are read, its graphs composed (`options_json` as
-/// [`compose_vizij`]'s: `graphs`, `ros4hri`, default `false`, plus
-/// `stageNeutral`, default `true`, `animations`, default `true`, and
-/// `speechApiUrl`, the TTS deployment), the device built over `RigHal` +
-/// `BlackboardStore` with the animation module, the rest module behind
-/// [`VizijRuntime::reset`] and the skills, its keys declared with where they
-/// rest, the bundle's animations loaded into it unless `animations` is
-/// `false` ([`face::load_animations`]), the program `program` names
-/// (`auto`, `none` or an id, as [`compose_vizij`]'s) running beside its graph
-/// as a task run ([`face::spawn_program`]) rather than composed into it, and
-/// — given `play`, the page's playback hook
+/// Load a Vizij into the instance `instance`, the page's own name for it,
+/// and start its device: the GLB's bindings and bundle are read, its graphs
+/// composed (`options_json` as [`compose_vizij`]'s: `graphs`, `ros4hri`,
+/// default `false`, plus `stageNeutral`, default `true`, `animations`,
+/// default `true`, `speechApiUrl`, the TTS deployment, and `key`, the
+/// page's name for the content, handed back in the load's answer), the
+/// device built over `RigHal` + `BlackboardStore` with the animation module,
+/// the rest module behind [`VizijRuntime::reset`] and the skills, its keys
+/// declared with where they rest, the bundle's animations loaded into it
+/// unless `animations` is `false` ([`face::load_animations`]), the program
+/// `program` names (`auto`, `none` or an id, as [`compose_vizij`]'s) running
+/// beside its graph as a task run ([`face::spawn_program`]) rather than
+/// composed into it, and — given `play`, the page's playback hook
 /// ([`vizij_arora_tts::Config::play`]) — the speech provider, and the scene
 /// queued for the App. `modules` optionally loads Arora wasm modules into
 /// the device's engine as guests: a JS array of `{ headerJson, wasmBytes }`
 /// (the module's header as JSON, its `.wasm` bytes as a `Uint8Array`); their
 /// functions are then reachable by id from `call` and from the graph's
-/// `ExternalFunction` nodes. The module set is fixed at build. A Vizij
-/// already shown under `vizij_id` is replaced — how an authoring page
-/// reloads a structurally edited Vizij from its exported bytes: the previous
-/// scene keeps drawing until the new one is ready, then [`ready`] holds
-/// again; its placement, selection and view holds carry over — the new
-/// device holds no keys ([`VizijRuntime::hold_keys`]) — and the page frees
-/// the previous device. The device comes back JS-owned: step it, or `run`
-/// it, and `free` it after [`unload_vizij`].
-#[wasm_bindgen(js_name = loadVizij)]
-pub fn load_vizij(
-    vizij_id: String,
+/// `ExternalFunction` nodes. The module set is fixed at build.
+///
+/// The device comes back at once, JS-owned: step it, or `run` it, and `free`
+/// it once its face is unloaded or replaced. The face is answered on the
+/// page's handler: `loaded` once its scene is indexed, `loadFailed` if its
+/// scene fails to load, a later load into the instance replaces it first,
+/// or the instance is unloaded; the device of a load that failed is the
+/// page's to free. Refused at once, with nothing queued, if the GLB does not
+/// read or its graphs do not build.
+///
+/// Under an instance already showing a Vizij this replaces it — how an
+/// authoring page reloads a structurally edited Vizij from its exported
+/// bytes: the previous scene keeps drawing until the new one is ready, its
+/// placement, selection and view holds carry over, and the new device holds
+/// no keys ([`VizijRuntime::hold_keys`]).
+#[wasm_bindgen]
+pub fn load(
+    instance: String,
     glb: Vec<u8>,
     options_json: Option<String>,
     play: Option<js_sys::Function>,
@@ -283,14 +522,21 @@ pub fn load_vizij(
     // The bytes move into the App's asset source; the copy wasm-bindgen made
     // from the page's buffer is the only one.
     send(ViewEvent::LoadFace {
-        face_id: vizij_id.clone(),
+        face_id: instance.clone(),
         meta: Box::new(meta),
         glb,
         rig,
     })?;
-    not_ready(&vizij_id);
+    let key = load_key(options_json.as_deref());
+    KEYS.with(|keys| {
+        keys.borrow_mut()
+            .entry(instance.clone())
+            .or_default()
+            .push_back(key)
+    });
+    not_ready(&instance);
     Ok(VizijRuntime {
-        vizij_id,
+        instance,
         rig_prefix,
         inner: Rc::new(AroraWeb::from(arora)),
         started: Rc::new(Cell::new(false)),
@@ -300,83 +546,90 @@ pub fn load_vizij(
     })
 }
 
-/// Take the Vizij down: its scene, its camera, its GLB, its selection and
-/// view holds. The device the page holds keeps stepping, its key holds
-/// with it, until the page frees it.
-#[wasm_bindgen(js_name = unloadVizij)]
-pub fn unload_vizij(vizij_id: String) -> Result<(), JsValue> {
+/// Take the Vizij in `instance` down: its scene, its camera, its GLB, its
+/// selection and view holds, and anything still loading into it, which is
+/// answered with `loadFailed`. The device the page holds keeps stepping,
+/// its key holds with it, until the page frees it.
+#[wasm_bindgen]
+pub fn unload(instance: String) -> Result<(), JsValue> {
     send(ViewEvent::UnloadFace {
-        face_id: vizij_id.clone(),
+        face_id: instance.clone(),
     })?;
-    not_ready(&vizij_id);
+    not_ready(&instance);
     Ok(())
 }
 
+/// The error a load into an instance is answered with (`loadFailed`) when
+/// the instance is unloaded first: what a page that settles such a load at
+/// the unload, before the answer arrives, rejects it with, so the two never
+/// disagree.
+#[wasm_bindgen(js_name = unloadedError)]
+pub fn unloaded_error() -> String {
+    view::UNLOADED.into()
+}
+
 /// Read the Vizij as not ready from now on, rather than from the App's next
-/// report: the page's next [`ready`] would otherwise still see the face the
-/// request replaces or takes down.
-fn not_ready(vizij_id: &str) {
+/// report: a device's time would otherwise start from the face the request
+/// replaces or takes down.
+fn not_ready(instance: &str) {
     if let Ok(mut ready) = READY.lock() {
-        ready.retain(|(id, _)| id != vizij_id);
+        ready.retain(|(id, _)| id != instance);
     }
 }
 
 /// When the Vizij was first drawn, as the App last reported; `None` while it
 /// is not ready.
-fn drawn_since(vizij_id: &str) -> Option<Instant> {
+fn drawn_since(instance: &str) -> Option<Instant> {
     READY.lock().ok().and_then(|ready| {
         ready
             .iter()
-            .find(|(id, _)| id == vizij_id)
+            .find(|(id, _)| id == instance)
             .map(|(_, since)| *since)
     })
 }
 
 /// Resolves at the App's report of the frame that draws the Vizij first.
-fn when_drawn(vizij_id: &str) -> oneshot::Receiver<()> {
+fn when_drawn(instance: &str) -> oneshot::Receiver<()> {
     let (drawn, wait) = oneshot::channel();
-    DRAWN.with(|waiting| waiting.borrow_mut().push((vizij_id.to_string(), drawn)));
+    DRAWN.with(|waiting| waiting.borrow_mut().push((instance.to_string(), drawn)));
     wait
 }
 
-/// Draw the Vizij into a rectangle of the canvas, in CSS pixels relative to
-/// the canvas (`x`, `y` from its top-left corner) — how several Vizijs share
-/// one canvas. Any rectangle: the Vizij is framed on all of it and the part
-/// on the canvas draws, so a rectangle scrolled past an edge shows its Vizij
-/// cut off there; an empty one (a width or height of 0 or less) or one
-/// wholly off the canvas draws nothing. The rectangle is kept across the
-/// Vizij's reloads.
-#[wasm_bindgen(js_name = placeVizij)]
-pub fn place_vizij(
-    vizij_id: String,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-) -> Result<(), JsValue> {
-    let scale = device_pixel_ratio();
-    // Edges, not sizes, are rounded, so rectangles that tile in CSS pixels
-    // tile in physical ones.
-    let px = |v: f64| (v * scale).round() as i32;
-    let min = IVec2::new(px(x), px(y));
-    let max = IVec2::new(px(x + width.max(0.0)), px(y + height.max(0.0)));
+/// Where the Vizij in `instance` draws on the canvas: `rect`, as `[x, y,
+/// width, height]` in CSS pixels from the canvas's top-left corner — how
+/// several Vizijs share one canvas — or, empty, the whole canvas. Any
+/// rectangle: the Vizij is framed on all of it and the part on the canvas
+/// draws, so a rectangle scrolled past an edge shows its Vizij cut off
+/// there; an empty one (a width or height of 0 or less) or one wholly off
+/// the canvas draws nothing. Kept across the Vizij's reloads, and may be
+/// set before it loads.
+#[wasm_bindgen]
+pub fn place(instance: String, rect: Vec<f64>) -> Result<(), JsValue> {
+    let rect = match rect.as_slice() {
+        [] => None,
+        &[x, y, width, height] => {
+            let scale = device_pixel_ratio();
+            // Edges, not sizes, are rounded, so rectangles that tile in CSS
+            // pixels tile in physical ones.
+            let px = |v: f64| (v * scale).round() as i32;
+            let min = IVec2::new(px(x), px(y));
+            let max = IVec2::new(px(x + width.max(0.0)), px(y + height.max(0.0)));
+            Some(IRect { min, max })
+        }
+        _ => {
+            return Err(JsValue::from_str(
+                "a placement is [x, y, width, height], or empty for the whole canvas",
+            ))
+        }
+    };
     send(ViewEvent::PlaceFace {
-        face_id: vizij_id,
-        rect: Some(IRect { min, max }),
+        face_id: instance,
+        rect,
     })
 }
 
-/// Give the Vizij's camera the whole canvas again.
-#[wasm_bindgen(js_name = fillCanvas)]
-pub fn fill_canvas(vizij_id: String) -> Result<(), JsValue> {
-    send(ViewEvent::PlaceFace {
-        face_id: vizij_id,
-        rect: None,
-    })
-}
-
-/// Frame and tone-map one Vizij, over the page's [`mount`] options.
-/// `view_json`, every field optional:
+/// Frame and tone-map the Vizij in `instance`, over the page's [`mount`]
+/// options. `view_json`, every field optional:
 /// - `bounds`: `{ center: { x, y }, size: { x, y } }`, the world rectangle
 ///   the camera frames in place of the GLB's authored rootBounds (the shape
 ///   [`describe`] reports them in);
@@ -389,111 +642,79 @@ pub fn fill_canvas(vizij_id: String) -> Result<(), JsValue> {
 /// takes the page's, and `{}` hands the Vizij back to the page. The view is
 /// kept across the Vizij's reloads, and can be set before it loads.
 #[wasm_bindgen(js_name = setView)]
-pub fn set_view(vizij_id: String, view_json: Option<String>) -> Result<(), JsValue> {
+pub fn set_view(instance: String, view_json: Option<String>) -> Result<(), JsValue> {
     let view = parse_face_view(view_json.as_deref())?;
     send(ViewEvent::SetFaceView {
-        face_id: vizij_id,
+        face_id: instance,
         view,
     })
 }
 
-/// Where the Vizij's safe area — the bounds its camera frames — lies on the
-/// canvas, as `{ x, y, width, height }` in CSS pixels from the canvas's
-/// top-left corner (the frame [`place_vizij`] takes), as of the last frame
-/// drawn; `null` before the Vizij's camera has drawn, and while it is placed
-/// on an empty rectangle. A zoom that crops the bounds reaches past the
-/// Vizij's rectangle, and a rectangle past the canvas's edge takes its safe
-/// area with it.
-#[wasm_bindgen(js_name = safeArea)]
-pub fn safe_area(vizij_id: String) -> Result<JsValue, JsValue> {
-    let area = SAFE_AREAS.lock().ok().and_then(|areas| {
-        areas
-            .iter()
-            .find(|(id, _)| *id == vizij_id)
-            .map(|(_, area)| *area)
-    });
-    match area {
-        Some([x, y, width, height]) => js_sys::JSON::parse(
-            &serde_json::json!({ "x": x, "y": y, "width": width, "height": height }).to_string(),
-        ),
-        None => Ok(JsValue::NULL),
-    }
-}
-
-/// Whether the Vizij is drawn: its scene has spawned, its bindings are
-/// joined, and the GPU has finished a frame drawing every mesh visible when
-/// it was drawn, each with its pipeline compiled — or, should something keep
-/// that from happening, 600 frames (ten seconds at 60 Hz) have gone by and
-/// the console says what held it back. From then on it draws in its place,
-/// its device's pose showing, and its device's time runs from that frame
-/// ([`VizijRuntime::step`]). False while a reload's new scene loads,
-/// compiles and draws for the first time; the previous scene draws
-/// meanwhile.
-#[wasm_bindgen]
-pub fn ready(vizij_id: String) -> bool {
-    drawn_since(&vizij_id).is_some()
-}
-
-/// The pointer presses on Vizijs since the last drain, oldest first, as
-/// `{ vizijId, elementId }`: the slot whose rectangle the press was in, and
-/// the element under the pointer by the id the GLB's RobotData declares —
-/// `null` for a press that hit no element (a miss). The element is found
-/// over its mesh as drawn, morphs applied; a press outside every Vizij's
-/// rectangle is not reported.
-#[wasm_bindgen(js_name = drainPicks)]
-pub fn drain_picks() -> Result<JsValue, JsValue> {
-    let picks: Vec<Picked> = PICKS
-        .lock()
-        .map(|mut p| p.drain(..).collect())
-        .unwrap_or_default();
-    let json = serde_json::Value::Array(
-        picks
-            .into_iter()
-            .map(
-                |pick| serde_json::json!({ "vizijId": pick.face_id, "elementId": pick.element_id }),
-            )
-            .collect(),
-    );
-    js_sys::JSON::parse(&json.to_string())
-}
-
-/// Outline the Vizij's elements `element_ids` (the ids its RobotData
-/// declares, as [`describe`] lists them) with the selection glow, replacing
-/// the previous selection; an empty list clears it. A selected group glows
-/// every element mesh under it. Kept across the Vizij's reloads; an id the
-/// Vizij does not declare glows nothing.
+/// Outline the elements `elements` of the Vizij in `instance` (the ids its
+/// RobotData declares, as [`describe`] lists them) in the selection red,
+/// replacing the previous selection; an empty list clears it. One line runs
+/// around the whole of what is selected, over whatever stands in front of
+/// it; a selected group outlines every element mesh under it. Kept across
+/// the Vizij's reloads; an id the Vizij does not declare outlines nothing.
 #[wasm_bindgen(js_name = setSelection)]
-pub fn set_selection(vizij_id: String, element_ids: Vec<String>) -> Result<(), JsValue> {
+pub fn set_selection(instance: String, elements: Vec<String>) -> Result<(), JsValue> {
     send(ViewEvent::SetSelection {
-        face_id: vizij_id,
-        elements: element_ids,
+        face_id: instance,
+        elements,
     })
 }
 
-/// Set `feature` of the Vizij's element `element_id` to `value_json` in
-/// place, with no reload: a static feature, which no device output drives,
-/// edited while the page scrubs it. `feature` is its RobotData name —
-/// `translation`, `rotation` (an euler, radians), `scale` (`{x, y, z}`, or
-/// a number scaling evenly), `color`, `emissive` (linear `{r, g, b}`),
-/// `opacity`, `metalness`, `emissiveIntensity` (numbers), one component of
-/// a triple by Studio's per-axis name (`translation.x`, `rotation.r`,
-/// `color.g`: a number), or one of the element's morph target names (a
-/// weight). `value_json` is the feature's
-/// value as RobotData stores a static one, or any accepted vizij payload
-/// form. Applied once the Vizij is ready; a reload shows what its GLB
-/// carries.
-#[wasm_bindgen(js_name = setStaticFeature)]
-pub fn set_static_feature(
-    vizij_id: String,
-    element_id: &str,
+/// Add, remove, show, move or change a control, by a command as JSON in the
+/// shape `@semio/scene` takes (`{ op: "add", key, control }`, …). A control on
+/// a Vizij names it by its instance; a goal names the Vizij it is used through
+/// as its `view`. Takes effect in the next frame, or, for a control or a goal
+/// on a Vizij with a load under way, once that load is answered, on the Vizij
+/// showing after it. A joint control, and a goal naming no `view`, are
+/// refused with an error ([`view::refuse_controls`]).
+#[wasm_bindgen]
+pub fn control(command: String) -> Result<(), JsValue> {
+    let command = serde_json::from_str(&command)
+        .map_err(|e| JsValue::from_str(&format!("not a control command: {e}")))?;
+    crate::view::refuse_controls(&command).map_err(|e| JsValue::from_str(&e))?;
+    send(ViewEvent::Control(command))
+}
+
+/// Write one value, one number or three, to `feature` of the element
+/// `target` of the Vizij in `instance`, in place, with no reload: a static
+/// feature, which no device output drives, edited while the page scrubs
+/// it. `feature` is its RobotData name — `translation`, `rotation` (an
+/// euler, radians), `scale` (three, or one scaling evenly), `color`,
+/// `emissive` (linear RGB), `opacity`, `metalness`, `emissiveIntensity`
+/// (one), one component of a triple by Studio's per-axis name
+/// (`translation.x`, `rotation.r`, `color.g`: one), or one of the element's
+/// morph target names (a weight). Applied once the Vizij is indexed; a
+/// reload shows what its GLB carries.
+///
+/// `feature` is required: a Vizij's animatables are its device's outputs,
+/// which the device writes every step, so the page writes them through the
+/// device's store ([`VizijRuntime::set_value`]) or holds them
+/// ([`VizijRuntime::hold`]).
+#[wasm_bindgen(js_name = setValue)]
+pub fn set_value(
+    instance: String,
+    target: String,
     feature: String,
-    value_json: &str,
+    values: Vec<f32>,
 ) -> Result<(), JsValue> {
-    let value = serde_json::from_str(&normalize_value_str(value_json)?)
-        .map_err(|e| JsValue::from_str(&format!("{feature}: {e}")))?;
+    if feature.is_empty() {
+        return Err(JsValue::from_str(
+            "a Vizij's animatables are its device's outputs: name the element's feature, \
+             or write the device's keys through its runtime",
+        ));
+    }
+    let value = match values.as_slice() {
+        [s] => Value::F32(*s),
+        [x, y, z] => Value::ArrayF32(vec![*x, *y, *z]),
+        _ => return Err(JsValue::from_str("a value is one number or three")),
+    };
     send(ViewEvent::SetStaticFeature {
-        face_id: vizij_id,
-        element_id: element_id.to_string(),
+        face_id: instance,
+        element_id: target,
         feature,
         value,
     })
@@ -646,11 +867,11 @@ pub fn run_edits(run: &str, from_json: &str, to_json: &str) -> Result<JsValue, J
 /// step does. `releaseKeys` takes the same step. `listKeys` and
 /// `describeMethods` answer at once, with no step.
 ///
-/// The device's time starts at its Vizij's first drawn frame ([`ready`]):
+/// The device's time starts at its Vizij's first drawn frame (its `ready` event):
 /// until then a step advances no time, and a `run` waits for that frame.
 #[wasm_bindgen]
 pub struct VizijRuntime {
-    vizij_id: String,
+    instance: String,
     rig_prefix: String,
     inner: Rc<AroraWeb>,
     /// Whether the device's time has started: its Vizij has been drawn, or
@@ -672,7 +893,7 @@ impl VizijRuntime {
     /// accepts) as its behavior over a fresh store and rig, its free inputs
     /// declared resting at their authored defaults, the animation and rest
     /// modules host-linked and `modules` loaded as guests (as
-    /// [`load_vizij`]'s). Nothing to draw; a test bench, a graph run in
+    /// [`load`]'s). Nothing to draw; a test bench, a graph run in
     /// Node. Omit the graph for the passthrough proof graph
     /// (`sensor/x` → `actuator/y`).
     #[wasm_bindgen(js_name = fromGraph)]
@@ -695,7 +916,7 @@ impl VizijRuntime {
             .build()
             .map_err(|e| JsValue::from_str(&format!("arora build failed: {e:?}")))?;
         Ok(VizijRuntime {
-            vizij_id: String::new(),
+            instance: String::new(),
             rig_prefix: String::new(),
             inner: Rc::new(AroraWeb::from(arora)),
             // Nothing to draw: its time starts with it.
@@ -706,10 +927,11 @@ impl VizijRuntime {
         })
     }
 
-    /// The slot the Vizij is shown under (empty for a device with no Vizij).
-    #[wasm_bindgen(getter, js_name = vizijId)]
-    pub fn vizij_id(&self) -> String {
-        self.vizij_id.clone()
+    /// The instance the Vizij was loaded into (empty for a device with no
+    /// Vizij).
+    #[wasm_bindgen(getter)]
+    pub fn instance(&self) -> String {
+        self.instance.clone()
     }
 
     /// The prefix the Vizij's own paths live under (`rig/<faceId>/`), empty
@@ -772,13 +994,13 @@ impl VizijRuntime {
         self.inner.request_step();
     }
 
-    /// The slot this device's Vizij is shown under; an error for a device
-    /// with none.
+    /// The instance this device's Vizij was loaded into; an error for a
+    /// device with none.
     fn shown_vizij(&self) -> Result<String, JsValue> {
-        if self.vizij_id.is_empty() {
+        if self.instance.is_empty() {
             return Err(JsValue::from_str("this device shows no Vizij"));
         }
-        Ok(self.vizij_id.clone())
+        Ok(self.instance.clone())
     }
 
     /// Advance the device one step. `dt_ms` is the wall time elapsed since
@@ -790,7 +1012,7 @@ impl VizijRuntime {
     /// shown once time passes. A `say` run follows its audio, which plays in
     /// real time. Unavailable while `run` owns the device.
     ///
-    /// Until its Vizij is first drawn ([`ready`]) every step is a step of 0,
+    /// Until its Vizij is first drawn (its `ready` event) every step is a step of 0,
     /// whatever `dt_ms` says, and the first step after advances the time
     /// since that frame, at most `dt_ms`: the device's time starts where
     /// the page first shows the face, not where the page created it.
@@ -803,7 +1025,7 @@ impl VizijRuntime {
         if self.started.get() {
             return dt_ms;
         }
-        match drawn_since(&self.vizij_id) {
+        match drawn_since(&self.instance) {
             None => 0.0,
             Some(since) => {
                 self.started.set(true);
@@ -818,13 +1040,13 @@ impl VizijRuntime {
     /// until a tick recovers; the promise rejects only if the runtime itself
     /// fails.
     ///
-    /// Called before its Vizij is first drawn ([`ready`]), the loop starts
+    /// Called before its Vizij is first drawn (its `ready` event), the loop starts
     /// at that frame, so its first step advances the time since: until
     /// then the device stays the page's, as before a `run`, its operations
     /// settling at a zero dt. `stop` in the meantime gives the run up, and
     /// the promise resolves.
     pub fn run(&self, period_ms: Option<f64>) -> js_sys::Promise {
-        if self.started.get() || drawn_since(&self.vizij_id).is_some() {
+        if self.started.get() || drawn_since(&self.instance).is_some() {
             self.started.set(true);
             return self.inner.run(period_ms);
         }
@@ -836,7 +1058,7 @@ impl VizijRuntime {
         {
             return js_sys::Promise::reject(&JsValue::from_str("the device is already running"));
         }
-        let drawn = when_drawn(&self.vizij_id);
+        let drawn = when_drawn(&self.instance);
         let (waiting, given_up) = oneshot::channel::<()>();
         *self.waiting.borrow_mut() = Some(waiting);
         let inner = self.inner.clone();
@@ -1184,7 +1406,7 @@ fn parse_zoom(options: &serde_json::Value) -> Result<Option<Vec2>, JsValue> {
     Ok(Some(zoom))
 }
 
-/// [`load_vizij`]'s `speechApiUrl`, else the cloud provider's default.
+/// [`load`]'s `speechApiUrl`, else the cloud provider's default.
 fn speech_api_url(json: Option<&str>) -> String {
     json.and_then(|json| serde_json::from_str::<serde_json::Value>(json).ok())
         .and_then(|options| {
@@ -1196,7 +1418,19 @@ fn speech_api_url(json: Option<&str>) -> String {
         .unwrap_or_else(|| vizij_arora_tts::DEFAULT_API_BASE.to_string())
 }
 
-/// [`load_vizij`]'s `animations` option: whether the face's own animations
+/// [`load`]'s `key`: the page's name for the content, handed back in the
+/// load's answer.
+fn load_key(json: Option<&str>) -> Option<String> {
+    json.and_then(|json| serde_json::from_str::<serde_json::Value>(json).ok())
+        .and_then(|options| {
+            options
+                .get("key")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
+}
+
+/// [`load`]'s `animations` option: whether the face's own animations
 /// load into its device (default `true`).
 fn loads_animations(json: Option<&str>) -> bool {
     json.and_then(|json| serde_json::from_str::<serde_json::Value>(json).ok())
@@ -1208,7 +1442,7 @@ fn loads_animations(json: Option<&str>) -> bool {
         .unwrap_or(true)
 }
 
-/// [`load_vizij`]'s options: the composition ([`compose_vizij`]'s fields) and
+/// [`load`]'s options: the composition ([`compose_vizij`]'s fields) and
 /// whether the neutral pose is staged.
 fn parse_face_config(json: Option<&str>) -> Result<(FaceConfig, bool), JsValue> {
     let options: serde_json::Value = match json {
@@ -1417,7 +1651,7 @@ fn parse_modules(modules: Option<js_sys::Array>) -> Result<Vec<face::GuestModule
 }
 
 /// The composed behavior graph of a Vizij's bundle — the composition the native
-/// `vizij` app deploys and [`load_vizij`] installs: the bundle's base graphs,
+/// `vizij` app deploys and [`load`] installs: the bundle's base graphs,
 /// its embedded standard mappings (each suppressing the built-in of the same
 /// id — an embedded copy is the author's pinned override), the built-in
 /// ROS4HRI mapping when asked for, then the selected program. The returned
@@ -1435,7 +1669,7 @@ fn parse_modules(modules: Option<js_sys::Array>) -> Result<Vec<face::GuestModule
 ///   profile a ROS robot asks for (the native app composes it unless
 ///   `--no-ros4hri`);
 /// - `animations`: compose the animation source — default `false`; a device
-///   built by [`load_vizij`] or [`VizijRuntime::from_graph`] always links the
+///   built by [`load`] or [`VizijRuntime::from_graph`] always links the
 ///   animation module, so the source dispatches there.
 #[wasm_bindgen(js_name = composeVizij)]
 pub fn compose_vizij(gltf_json: &str, options_json: Option<String>) -> Result<JsValue, JsValue> {

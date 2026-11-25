@@ -18,7 +18,7 @@ if (!FIXTURES) {
 
 const { page, logs, close } = await open(FIXTURES);
 try {
-  const gaps = await page.evaluate(async () => {
+  const { gaps, drawn } = await page.evaluate(async () => {
     const h = window.vizijHarness;
     const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
     await h.load("quori", "/fixtures/Quori_Current_Extended.glb", { program: "none" });
@@ -34,9 +34,11 @@ try {
       gaps.push(now - last);
       last = now;
     }
-    return gaps;
+    return { gaps, drawn: h.drawn("quori") };
   });
-  // Ready because it was drawn, not because something held it back.
+  // Ready because it was drawn, not because something held it back: the
+  // `ready` event says so, and nothing in the log says otherwise.
+  assert.equal(drawn, true, "the ready event says the face was seen drawn");
   const held = logs.filter((l) => l.includes("not drawn after") || l.includes("without being drawn"));
   assert.deepEqual(held, [], "the face was drawn, nothing held it back");
   const median = (xs) => xs.slice().sort((a, b) => a - b)[Math.floor(xs.length / 2)];

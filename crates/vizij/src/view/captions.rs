@@ -25,7 +25,7 @@ use vizij_api_core::Value;
 use vizij_arora_host::captions::{CaptionQueue, Chunk};
 use vizij_arora_host::standard;
 
-use super::{Face, Superseded};
+use super::{EntityInstance, Face, Superseded};
 
 /// Inter 4.001 Regular, subset to Basic Latin, Latin-1, Latin Extended-A/B
 /// and the common punctuation; its licence (the SIL Open Font License, no
@@ -85,28 +85,28 @@ fn load_font(mut fonts: ResMut<Assets<Font>>, mut commands: Commands) {
 /// queue behind.
 fn read_captions(
     time: Res<Time>,
-    faces: Query<&Face, Without<Superseded>>,
+    faces: Query<(&EntityInstance, &Face), Without<Superseded>>,
     mut queues: ResMut<CaptionQueues>,
 ) {
     let text = |face: &Face, path: &str| match face
         .rig
-        .value(&format!("{}{path}", face.meta.bundle.rig_prefix()))
+        .value(&format!("{}{path}", face.bundle.rig_prefix()))
     {
         Some(Value::String(text)) => text,
         _ => String::new(),
     };
-    for face in &faces {
+    for (instance, face) in &faces {
         let caption = text(face, standard::CAPTION_TEXT);
         let speaker = text(face, standard::CAPTION_SPEAKER);
         queues
             .0
-            .entry(face.id.clone())
+            .entry(instance.id.clone())
             .or_default()
             .read(&caption, &speaker);
     }
     queues
         .0
-        .retain(|id, _| faces.iter().any(|face| &face.id == id));
+        .retain(|id, _| faces.iter().any(|(instance, _)| &instance.id == id));
     for queue in queues.0.values_mut() {
         queue.advance(time.delta_secs());
     }
@@ -115,7 +115,7 @@ fn read_captions(
 /// Give every face an overlay on its camera, and take down the overlays of
 /// faces gone.
 fn keep_overlays(
-    faces: Query<(Entity, &Face)>,
+    faces: Query<(Entity, &EntityInstance)>,
     overlays: Query<(Entity, &CaptionOverlay)>,
     font: Option<Res<CaptionFont>>,
     mut commands: Commands,
@@ -169,7 +169,7 @@ fn keep_overlays(
 /// hide the overlay when nothing is showing.
 fn show_captions(
     queues: Res<CaptionQueues>,
-    faces: Query<(&Face, Has<Superseded>)>,
+    faces: Query<(&EntityInstance, Has<Superseded>)>,
     mut overlays: Query<(&CaptionOverlay, &Children, &mut Visibility)>,
     mut lines: Query<(&mut Text, &mut TextColor), With<CaptionLine>>,
 ) {

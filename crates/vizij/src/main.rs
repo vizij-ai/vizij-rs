@@ -7,7 +7,11 @@
 //! against the web renderer.
 
 use anyhow::{anyhow, Context, Result};
-use bevy::prelude::*;
+// Named, not globbed: the prelude also brings Bevy's `ContextExt`, whose
+// `context` and `with_context` collide with anyhow's on `Result`.
+use bevy::prelude::{
+    default, App, Assets, Color, DefaultPlugins, Image, PluginGroup, Vec2, Window, WindowPlugin,
+};
 use clap::Parser;
 
 mod open;

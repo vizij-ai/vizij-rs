@@ -20,7 +20,7 @@ use vizij::face::{FaceConfig, ProgramSelect};
 use vizij::native::{start, BridgeConfig, Mode, FACE};
 use vizij::view::meta::FeatureKind;
 use vizij::view::snapshot::{capture, SnapshotPlugin};
-use vizij::view::{self, Face, FaceAssets, ViewEvents, ViewOptions, ViewPlugin};
+use vizij::view::{self, EntityInstance, Face, FaceAssets, ViewEvents, ViewOptions, ViewPlugin};
 
 use common::{glb, plate_face_glb, studio_face_glb};
 
@@ -77,22 +77,27 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
     // joined: every animatable is a pose entry the rig holds and a binding
     // the view indexed, one of them a transform the scene carries, and every
     // element a pick would report is a RobotData element.
-    let mut faces = app.world_mut().query::<&Face>();
-    let face = faces.single(app.world()).expect("one face");
-    assert_eq!(face.id, FACE);
+    let mut faces = app.world_mut().query::<(&EntityInstance, &Face)>();
+    let (instance, face) = faces.single(app.world()).expect("one face");
+    assert_eq!(instance.id, FACE);
     assert_eq!(face.slot, 0, "the first face takes the first slot");
     let pose = rig.pose();
     assert!(!pose.is_empty(), "the rig holds no pose");
     let bound = pose
         .iter()
-        .filter(|(path, _)| face.bindings.by_id.contains_key(path.to_string().as_str()))
+        .filter(|(path, _)| {
+            instance
+                .bindings
+                .by_id
+                .contains_key(path.to_string().as_str())
+        })
         .count();
     assert_eq!(
         bound,
-        face.meta.animatables.len(),
+        instance.meta.animatables.len(),
         "every animatable is driven and bound"
     );
-    let translated = face
+    let translated = instance
         .bindings
         .by_id
         .values()
@@ -106,17 +111,21 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
     );
     // InnerFace and the four lids share a material, and its colour.
     assert_eq!(
-        face.bindings.by_id["c627bc47-95bb-4a89-a67c-e6a6e76bef8d"].len(),
+        instance.bindings.by_id["c627bc47-95bb-4a89-a67c-e6a6e76bef8d"].len(),
         5,
         "the shared colour lands on each element that shares it"
     );
     let element_ids: std::collections::HashSet<&String> =
-        face.meta.elements.iter().map(|e| &e.id).collect();
+        instance.meta.elements.iter().map(|e| &e.id).collect();
     assert!(
-        face.bindings.elements.values().any(|e| e.mesh.is_some()),
+        instance
+            .bindings
+            .elements
+            .values()
+            .any(|e| e.mesh.is_some()),
         "no element has a mesh"
     );
-    for element_id in face.bindings.elements.keys() {
+    for element_id in instance.bindings.elements.keys() {
         assert!(
             element_ids.contains(element_id),
             "{element_id} is no element id"
@@ -216,7 +225,7 @@ fn renders_its_per_axis_pose(element: &str, [x, y, yaw, color]: [String; 4]) {
     .add_plugins(ViewPlugin);
     let image = capture(&mut app, WIDTH, HEIGHT, 60, view::all_faces_ready).expect("a frame");
 
-    let mut faces = app.world_mut().query::<&Face>();
+    let mut faces = app.world_mut().query::<&EntityInstance>();
     let face = faces.single(app.world()).expect("one face");
     assert_eq!(face.bindings.by_id.len(), 4, "every animatable binds");
     for id in [&x, &y, &yaw, &color] {
@@ -367,7 +376,7 @@ fn an_ellipse_draws_as_its_unit_circle() {
     .add_plugins(ViewPlugin);
     let image = capture(&mut app, WIDTH, HEIGHT, 60, view::all_faces_ready).expect("a frame");
 
-    let mut faces = app.world_mut().query::<&Face>();
+    let mut faces = app.world_mut().query::<&EntityInstance>();
     let face = faces.single(app.world()).expect("one face");
     let targets = *face.bindings.elements.values().next().expect("the eye");
     let scale = app
@@ -464,8 +473,8 @@ fn two_faces_share_one_target_each_in_its_own_viewport() {
     .add_plugins(ViewPlugin);
 
     let image = capture(&mut app, 2 * half, HEIGHT, 60, view::all_faces_ready).expect("a frame");
-    let mut faces = app.world_mut().query::<&Face>();
-    let slots: Vec<usize> = faces.iter(app.world()).map(|face| face.slot).collect();
+    let mut faces = app.world_mut().query::<(&EntityInstance, &Face)>();
+    let slots: Vec<usize> = faces.iter(app.world()).map(|(_, face)| face.slot).collect();
     assert_eq!(slots.len(), 2);
     assert_ne!(slots[0], slots[1], "two faces, two slots");
 
@@ -495,7 +504,7 @@ fn two_faces_share_one_target_each_in_its_own_viewport() {
     }
     let remaining: Vec<String> = faces
         .iter(app.world())
-        .map(|face| face.id.clone())
+        .map(|(instance, _)| instance.id.clone())
         .collect();
     assert_eq!(remaining, vec!["left".to_string()]);
 }
@@ -693,7 +702,7 @@ fn a_face_draws_on_its_target_only_once_ready() {
     }
     fn drawn(app: &mut App) -> Vec<Drawn> {
         let world = app.world_mut();
-        let mut faces = world.query::<(&Face, Has<Superseded>, &InheritedVisibility)>();
+        let mut faces = world.query::<(&EntityInstance, Has<Superseded>, &InheritedVisibility)>();
         let mut cameras = world.query::<&Camera>();
         faces
             .iter(world)
@@ -856,4 +865,525 @@ fn a_caption_shows_over_the_face() {
         "the face's own caption is not blue ({blue} pixels)"
     );
     assert_eq!(in_band(&own, WHITE), 0, "the first caption is gone");
+}
+
+/// A selected element of Quori is outlined in the selection red around it
+/// and nowhere else, and a face with nothing selected — before any selection
+/// and once it is cleared — draws no outline at all. The same holds for the
+/// face placed on a rectangle reaching past the target's corner, where its
+/// camera draws into a viewport through a sub-view: the outline's mask is
+/// drawn through the same lens, so the line stays on the element.
+#[test]
+#[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job with VIZIJ_FIXTURES set"]
+fn a_selected_element_is_outlined_around_it_alone() {
+    use vizij::view::ViewEvent;
+
+    let Some(fixtures) = std::env::var_os("VIZIJ_FIXTURES").map(PathBuf::from) else {
+        eprintln!("VIZIJ_FIXTURES unset — skipping the outline test");
+        return;
+    };
+    let glb = std::fs::read(fixtures.join("Quori_Current_Extended.glb")).expect("read Quori");
+    let meta = vizij::view::meta::FaceMeta::from_glb_bytes(&glb).expect("reads");
+    let (events_tx, events_rx) = std::sync::mpsc::channel();
+    events_tx
+        .send(ViewEvent::LoadFace {
+            face_id: "quori".into(),
+            meta: Box::new(meta),
+            glb,
+            rig: vizij_arora_hal::RigHal::new(),
+        })
+        .unwrap();
+    let mut app = App::new();
+    FaceAssets::register(&mut app);
+    app.add_plugins(SnapshotPlugin {
+        width: OUTLINED_W,
+        height: OUTLINED_H,
+    })
+    .insert_resource(ViewEvents(std::sync::Mutex::new(events_rx)))
+    .insert_resource(ViewOptions {
+        background: Color::BLACK,
+        fit: view::Fit::Contain,
+        zoom: Vec2::ONE,
+        ambient: std::f32::consts::FRAC_PI_2,
+        unlit: false,
+    })
+    .add_plugins(ViewPlugin);
+    let select = |elements: Vec<String>| {
+        events_tx
+            .send(ViewEvent::SetSelection {
+                face_id: "quori".into(),
+                elements,
+            })
+            .unwrap();
+    };
+
+    // Over the whole target.
+    let bare = outlined_capture(&mut app);
+    let (element, rect) = mid_sized_element(&mut app);
+    select(vec![element.clone()]);
+    let selected = outlined_capture(&mut app);
+    if let Some(out) = std::env::var_os("VIZIJ_OUTLINE_PNG") {
+        vizij::view::snapshot::save_png(&selected, std::path::Path::new(&out)).expect("saved");
+    }
+    assert_outlined_alone(&bare, &selected, &element, rect);
+    select(Vec::new());
+    let cleared = outlined_capture(&mut app);
+    assert_eq!(
+        changed_pixels(&bare, &cleared, Rect::EMPTY).1.len(),
+        0,
+        "a cleared selection leaves the frame changed"
+    );
+
+    // Placed past the target's top and right edges: a viewport and a
+    // sub-view of the whole rectangle's framing.
+    events_tx
+        .send(ViewEvent::PlaceFace {
+            face_id: "quori".into(),
+            rect: Some(IRect::new(140, -70, 140 + 420, -70 + 260)),
+        })
+        .unwrap();
+    let bare = outlined_capture(&mut app);
+    let (element, rect) = mid_sized_element(&mut app);
+    select(vec![element.clone()]);
+    let selected = outlined_capture(&mut app);
+    if let Some(out) = std::env::var_os("VIZIJ_OUTLINE_PLACED_PNG") {
+        vizij::view::snapshot::save_png(&selected, std::path::Path::new(&out)).expect("saved");
+    }
+    assert_outlined_alone(&bare, &selected, &element, rect);
+}
+
+/// A transform control added on a face draws its handles over it, through
+/// the face's own camera, and a remove takes them away again.
+#[test]
+#[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job with VIZIJ_FIXTURES set"]
+fn a_transform_control_on_a_face_draws_until_removed() {
+    use vizij::view::ViewEvent;
+
+    let Some(fixtures) = std::env::var_os("VIZIJ_FIXTURES").map(PathBuf::from) else {
+        eprintln!("VIZIJ_FIXTURES unset — skipping the control test");
+        return;
+    };
+    let glb = std::fs::read(fixtures.join("Quori_Current_Extended.glb")).expect("read Quori");
+    let meta = vizij::view::meta::FaceMeta::from_glb_bytes(&glb).expect("reads");
+    let (events_tx, events_rx) = std::sync::mpsc::channel();
+    events_tx
+        .send(ViewEvent::LoadFace {
+            face_id: "quori".into(),
+            meta: Box::new(meta),
+            glb,
+            rig: vizij_arora_hal::RigHal::new(),
+        })
+        .unwrap();
+    let mut app = App::new();
+    FaceAssets::register(&mut app);
+    app.add_plugins(SnapshotPlugin {
+        width: OUTLINED_W,
+        height: OUTLINED_H,
+    })
+    .insert_resource(ViewEvents(std::sync::Mutex::new(events_rx)))
+    .insert_resource(ViewOptions {
+        background: Color::BLACK,
+        fit: view::Fit::Contain,
+        zoom: Vec2::ONE,
+        ambient: std::f32::consts::FRAC_PI_2,
+        unlit: false,
+    })
+    .add_plugins(ViewPlugin);
+    let control = |command: serde_json::Value| {
+        events_tx
+            .send(ViewEvent::Control(
+                serde_json::from_value(command).expect("a control command"),
+            ))
+            .unwrap();
+    };
+
+    let bare = outlined_capture(&mut app);
+    control(serde_json::json!({
+        "op": "add",
+        "key": "move-face",
+        "control": {
+            "kind": "transform",
+            "target": { "kind": "instance", "instance": "quori" },
+            "modes": ["translate"],
+        },
+    }));
+    let with = outlined_capture(&mut app);
+    if let Some(out) = std::env::var_os("VIZIJ_CONTROL_PNG") {
+        vizij::view::snapshot::save_png(&with, std::path::Path::new(&out)).expect("saved");
+    }
+    assert!(
+        app.world()
+            .resource::<arora_visuals::control::Controls>()
+            .gizmo("move-face")
+            .is_some(),
+        "the control is placed"
+    );
+    // The X handle is red and the Y handle green, over a face with neither.
+    let tinted = |image: &image::RgbaImage, channel: usize| {
+        image
+            .pixels()
+            .filter(|p| {
+                let (main, others) = (p.0[channel], (0..3).filter(|c| *c != channel));
+                main > 150 && others.map(|c| p.0[c]).all(|other| other < 110)
+            })
+            .count()
+    };
+    for (channel, axis) in [(0, "X"), (1, "Y")] {
+        let added = tinted(&with, channel).saturating_sub(tinted(&bare, channel));
+        assert!(added > 30, "the {axis} handle draws ({added} pixels)");
+    }
+
+    control(serde_json::json!({ "op": "remove", "key": "move-face" }));
+    let removed = outlined_capture(&mut app);
+    assert_eq!(
+        changed_pixels(&bare, &removed, Rect::EMPTY).1.len(),
+        0,
+        "a removed control leaves the frame changed"
+    );
+}
+
+/// A load whose scene spawns without a node its RobotData names is answered
+/// as failed rather than left waiting, and the face it was to replace, which
+/// was loaded and not yet drawn when it was superseded, is made ready
+/// promptly once it is the instance's face again, rather than at the
+/// readiness give-up.
+#[test]
+#[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job with VIZIJ_FIXTURES set"]
+fn an_unindexable_load_fails_and_the_face_it_replaced_is_made_ready() {
+    use bevy::ecs::message::{MessageCursor, Messages};
+    use vizij::view::{FaceEvent, ViewEvent};
+
+    let Some(fixtures) = std::env::var_os("VIZIJ_FIXTURES").map(PathBuf::from) else {
+        eprintln!("VIZIJ_FIXTURES unset — skipping the lifecycle test");
+        return;
+    };
+    let glb = std::fs::read(fixtures.join("Quori_Current_Extended.glb")).expect("read Quori");
+    let meta = vizij::view::meta::FaceMeta::from_glb_bytes(&glb).expect("reads");
+    let (events_tx, events_rx) = std::sync::mpsc::channel();
+    let mut app = App::new();
+    FaceAssets::register(&mut app);
+    app.add_plugins(SnapshotPlugin {
+        width: 320,
+        height: 200,
+    })
+    .insert_resource(ViewEvents(std::sync::Mutex::new(events_rx)))
+    .insert_resource(ViewOptions {
+        background: Color::BLACK,
+        fit: view::Fit::Contain,
+        zoom: Vec2::ONE,
+        ambient: std::f32::consts::FRAC_PI_2,
+        unlit: false,
+    })
+    .add_plugins(ViewPlugin);
+    vizij::view::snapshot::ensure_ready(&mut app);
+    let mut cursor: MessageCursor<FaceEvent> =
+        app.world().resource::<Messages<FaceEvent>>().get_cursor();
+    let load = |meta: vizij::view::meta::FaceMeta| ViewEvent::LoadFace {
+        face_id: "q".into(),
+        meta: Box::new(meta),
+        glb: glb.clone(),
+        rig: vizij_arora_hal::RigHal::new(),
+    };
+    // Frames until `wanted` is told, and what was told on the way.
+    let mut until = |app: &mut App, wanted: &dyn Fn(&FaceEvent) -> bool, most: u32| {
+        let mut told = Vec::new();
+        for frame in 0..most {
+            app.update();
+            let messages = app.world().resource::<Messages<FaceEvent>>();
+            told.extend(cursor.read(messages).cloned());
+            if told.iter().any(wanted) {
+                return (frame, told);
+            }
+        }
+        panic!("not told within {most} frames: {told:?}");
+    };
+
+    events_tx.send(load(meta.clone())).unwrap();
+    until(&mut app, &|e| matches!(e, FaceEvent::Ready { .. }), 2000);
+    // A second face, loaded and then at once superseded by a load whose
+    // scene lacks a node its RobotData names.
+    events_tx.send(load(meta.clone())).unwrap();
+    until(&mut app, &|e| matches!(e, FaceEvent::Loaded { .. }), 2000);
+    let mut lacking = meta.clone();
+    lacking.asset.elements[0].node_name = "no-such-node".into();
+    events_tx.send(load(lacking)).unwrap();
+    let (_, told) = until(
+        &mut app,
+        &|e| matches!(e, FaceEvent::LoadFailed { .. }),
+        300,
+    );
+    assert!(
+        told.iter().any(|e| matches!(
+            e,
+            FaceEvent::LoadFailed { error, .. } if error.contains("no-such-node")
+        )),
+        "the failure names the missing node: {told:?}"
+    );
+    // Well inside the 600-frame give-up. It may have been drawn before the
+    // failure was told, in which case it is ready already.
+    let ready = |e: &FaceEvent| matches!(e, FaceEvent::Ready { .. });
+    let (frames, told) = if told.iter().any(ready) {
+        (0, told)
+    } else {
+        until(&mut app, &ready, 120)
+    };
+    assert!(
+        told.contains(&FaceEvent::Ready {
+            face_id: "q".into(),
+            drawn: true
+        }),
+        "the second face is ready, seen drawn, {frames} frames on: {told:?}"
+    );
+}
+
+/// A click on a face picks the element under it, over the face's own
+/// bindings, and a click on the face's empty space is its miss.
+///
+/// The pick takes only cameras drawing to the window the pointer is in, so
+/// once the face is ready its camera is pointed at a window entity of the
+/// image's size — one with no surface, which draws nothing — and the press
+/// and release are delivered to that window as Bevy's picking delivers them.
+#[test]
+#[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job with VIZIJ_FIXTURES set"]
+fn a_click_on_a_face_picks_the_element_under_it() {
+    use bevy::camera::{NormalizedRenderTarget, RenderTarget};
+    use bevy::picking::backend::HitData;
+    use bevy::picking::events::{Pointer, PointerPress, PointerRelease};
+    use bevy::picking::pointer::{Location, PointerButton, PointerId};
+    use bevy::window::{WindowRef, WindowResolution};
+    use vizij::view::{Picked, ViewEvent};
+
+    let Some(fixtures) = std::env::var_os("VIZIJ_FIXTURES").map(PathBuf::from) else {
+        eprintln!("VIZIJ_FIXTURES unset — skipping the pick test");
+        return;
+    };
+    let glb = std::fs::read(fixtures.join("Quori_Current_Extended.glb")).expect("read Quori");
+    let meta = vizij::view::meta::FaceMeta::from_glb_bytes(&glb).expect("reads");
+    let (events_tx, events_rx) = std::sync::mpsc::channel();
+    events_tx
+        .send(ViewEvent::LoadFace {
+            face_id: "quori".into(),
+            meta: Box::new(meta),
+            glb,
+            rig: vizij_arora_hal::RigHal::new(),
+        })
+        .unwrap();
+    let mut app = App::new();
+    FaceAssets::register(&mut app);
+    app.add_plugins(SnapshotPlugin {
+        width: OUTLINED_W,
+        height: OUTLINED_H,
+    })
+    .insert_resource(ViewEvents(std::sync::Mutex::new(events_rx)))
+    .insert_resource(ViewOptions {
+        background: Color::BLACK,
+        fit: view::Fit::Contain,
+        zoom: Vec2::ONE,
+        ambient: std::f32::consts::FRAC_PI_2,
+        unlit: false,
+    })
+    .add_plugins(ViewPlugin);
+    outlined_capture(&mut app);
+    let (element, rect) = mid_sized_element(&mut app);
+    // The point nearest the element's middle that is clear of every smaller
+    // element drawn over it — an eye's highlight in front of the eye.
+    let others = drawn_elements(&mut app);
+    let mut points: Vec<Vec2> = (1..10)
+        .flat_map(|i| (1..10).map(move |j| Vec2::new(i as f32, j as f32) / 10.0))
+        .map(|at| rect.min + at * rect.size())
+        .collect();
+    points.sort_by(|a, b| {
+        let centre = rect.center();
+        a.distance(centre).total_cmp(&b.distance(centre))
+    });
+    let on_element = points
+        .into_iter()
+        .find(|point| {
+            others.iter().all(|(id, other)| {
+                *id == element
+                    || other.size().length() >= rect.size().length()
+                    || !other.inflate(2.0).contains(*point)
+            })
+        })
+        .expect("a point on the element alone");
+
+    let window = app
+        .world_mut()
+        .spawn(Window {
+            resolution: WindowResolution::new(OUTLINED_W, OUTLINED_H)
+                .with_scale_factor_override(1.0),
+            ..default()
+        })
+        .id();
+    let mut faces = app.world_mut().query::<&EntityInstance>();
+    let camera = faces.single(app.world()).expect("one face").camera;
+    app.world_mut()
+        .entity_mut(camera)
+        .insert(RenderTarget::Window(WindowRef::Entity(window)));
+    app.update();
+    app.update();
+
+    let target = NormalizedRenderTarget::Window(
+        WindowRef::Entity(window).normalize(None).expect("a window"),
+    );
+    let at = |position: Vec2| {
+        Pointer::new(
+            PointerId::Mouse,
+            Location {
+                target: target.clone(),
+                position,
+            },
+        )
+    };
+    let click = |app: &mut App, position: Vec2| -> Vec<Picked> {
+        let world = app.world_mut();
+        world.trigger(PointerPress {
+            entity: window,
+            pointer: at(position),
+            button: PointerButton::Primary,
+            hit: HitData::new(window, 0.0, None, None),
+            count: 1,
+        });
+        world.trigger(PointerRelease {
+            entity: window,
+            pointer: at(position),
+            button: PointerButton::Primary,
+            hit: HitData::new(window, 0.0, None, None),
+        });
+        world.flush();
+        world.resource_mut::<Messages<Picked>>().drain().collect()
+    };
+
+    let picked = click(&mut app, on_element);
+    assert_eq!(picked.len(), 1, "one click, one pick: {picked:?}");
+    assert_eq!(picked[0].instance_id, "quori");
+    assert_eq!(picked[0].element_id.as_deref(), Some(element.as_str()));
+
+    let missed = click(&mut app, Vec2::new(4.0, 4.0));
+    assert_eq!(missed.len(), 1, "one click, one miss: {missed:?}");
+    assert_eq!(missed[0].instance_id, "quori");
+    assert_eq!(missed[0].element_id, None, "a click on no element");
+}
+
+const OUTLINED_W: u32 = 480;
+const OUTLINED_H: u32 = 300;
+
+fn outlined_capture(app: &mut App) -> image::RgbaImage {
+    capture(app, OUTLINED_W, OUTLINED_H, 5, view::all_faces_ready).expect("a frame")
+}
+
+/// The first element, by id, whose mesh is drawn mid-sized and well inside
+/// the image, so an outline has room on every side and the rest of the image
+/// is plainly elsewhere; with where it is drawn, in image pixels.
+fn mid_sized_element(app: &mut App) -> (String, Rect) {
+    let image = Vec2::new(OUTLINED_W as f32, OUTLINED_H as f32);
+    let mut candidates: Vec<(String, Rect)> = drawn_elements(app)
+        .into_iter()
+        .filter(|(_, rect)| {
+            let size = rect.size();
+            size.cmpgt(Vec2::splat(20.0)).all()
+                && size.cmplt(image / 3.0).all()
+                && rect.min.cmpgt(Vec2::splat(12.0)).all()
+                && rect.max.cmplt(image - 12.0).all()
+        })
+        .collect();
+    candidates.sort_by(|a, b| a.0.cmp(&b.0));
+    candidates.into_iter().next().expect("a mid-sized element")
+}
+
+/// Every element with a mesh of its own, with where its mesh's bounding box
+/// is drawn, in image pixels.
+fn drawn_elements(app: &mut App) -> Vec<(String, Rect)> {
+    use bevy::camera::primitives::Aabb;
+
+    let mut faces = app.world_mut().query::<&EntityInstance>();
+    let (face_camera, elements) = {
+        let face = faces.single(app.world()).expect("one face");
+        (face.camera, face.bindings.elements.clone())
+    };
+    let mut cameras = app.world_mut().query::<(&Camera, &GlobalTransform)>();
+    let (camera, at) = cameras.get(app.world(), face_camera).expect("a camera");
+    // The mesh's bounding box carried through the face's camera.
+    let on_image = |mesh: Entity| -> Option<Rect> {
+        let aabb = app.world().get::<Aabb>(mesh)?;
+        let world = app.world().get::<GlobalTransform>(mesh)?.affine();
+        let (centre, half) = (Vec3::from(aabb.center), Vec3::from(aabb.half_extents));
+        let mut rect: Option<Rect> = None;
+        for corner in 0..8 {
+            let sign = Vec3::new(
+                if corner & 1 == 0 { -1.0 } else { 1.0 },
+                if corner & 2 == 0 { -1.0 } else { 1.0 },
+                if corner & 4 == 0 { -1.0 } else { 1.0 },
+            );
+            let point = world.transform_point3(centre + half * sign);
+            let seen = camera.world_to_viewport(at, point).ok()?;
+            rect = Some(match rect {
+                Some(rect) => rect.union_point(seen),
+                None => Rect::from_corners(seen, seen),
+            });
+        }
+        rect
+    };
+    elements
+        .iter()
+        .filter_map(|(id, targets)| Some((id.clone(), on_image(targets.mesh?)?)))
+        .collect()
+}
+
+/// The pixels `after` changed from `before`: how many of those within
+/// `reach` are the selection red (sRGB 255, 16, 16 at 0.9, over whatever is
+/// under it), and where every other changed pixel is that the outline does
+/// not account for — anywhere outside `reach`, and inside it any change that
+/// is not a blend toward the red, such as a selected element whose own
+/// pixels changed.
+fn changed_pixels(
+    before: &image::RgbaImage,
+    after: &image::RgbaImage,
+    reach: Rect,
+) -> (usize, Vec<(u32, u32)>) {
+    let red = |p: &image::Rgba<u8>| p.0[0] > 150 && p.0[1] < 90 && p.0[2] < 90;
+    // The outline is drawn over what was there, so where it is partly
+    // covering, red rises and green and blue fall.
+    let toward_red = |was: &image::Rgba<u8>, now: &image::Rgba<u8>| {
+        now.0[0].saturating_add(8) >= was.0[0]
+            && now.0[1] <= was.0[1].saturating_add(8)
+            && now.0[2] <= was.0[2].saturating_add(8)
+    };
+    let mut around = 0;
+    let mut elsewhere = Vec::new();
+    for (x, y, now) in after.enumerate_pixels() {
+        let was = before.get_pixel(x, y);
+        if (0..3).all(|channel| was.0[channel].abs_diff(now.0[channel]) <= 8) {
+            continue;
+        }
+        if reach.contains(Vec2::new(x as f32 + 0.5, y as f32 + 0.5)) && toward_red(was, now) {
+            around += usize::from(red(now));
+        } else {
+            elsewhere.push((x, y));
+        }
+    }
+    (around, elsewhere)
+}
+
+/// `selected` differs from `bare` by an outline in the selection red around
+/// `rect`, where `element` is drawn, and by nothing anywhere else.
+fn assert_outlined_alone(
+    bare: &image::RgbaImage,
+    selected: &image::RgbaImage,
+    element: &str,
+    rect: Rect,
+) {
+    // The line is 3 logical pixels wide at a scale factor of 1; its soft
+    // outer edge and the box's rounding take a pixel or two more.
+    let (around, elsewhere) = changed_pixels(bare, selected, rect.inflate(6.0));
+    assert!(
+        around > 40,
+        "{element} is not outlined ({around} red pixels around {rect:?})"
+    );
+    assert!(
+        elsewhere.is_empty(),
+        "the outline of {element} reaches beyond it: {} pixels, first {:?}",
+        elsewhere.len(),
+        elsewhere.first()
+    );
 }

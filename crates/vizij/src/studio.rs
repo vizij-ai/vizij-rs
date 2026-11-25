@@ -549,7 +549,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::view::meta::{Binding, FeatureKind};
+    use crate::view::meta::{AssetMeta, Binding, FeatureKind};
 
     /// A Studio-exported face's bindings: `translation.x` on an animatable
     /// of its own, resting at 0.5, and `color.r/g/b` on the components of
@@ -563,16 +563,19 @@ mod tests {
             rest,
         };
         let meta = FaceMeta {
-            animatables: HashMap::from([
-                (
-                    x.to_string(),
-                    binding(FeatureKind::Translation, Some(0), Rest::Scalar(0.5)),
-                ),
-                (
-                    color.to_string(),
-                    binding(FeatureKind::Color, None, Rest::Components([0.1, 0.2, 0.3])),
-                ),
-            ]),
+            asset: AssetMeta {
+                animatables: HashMap::from([
+                    (
+                        x.to_string(),
+                        binding(FeatureKind::Translation, Some(0), Rest::Scalar(0.5)),
+                    ),
+                    (
+                        color.to_string(),
+                        binding(FeatureKind::Color, None, Rest::Components([0.1, 0.2, 0.3])),
+                    ),
+                ]),
+                ..AssetMeta::default()
+            },
             ..FaceMeta::default()
         };
         (meta, x, color)

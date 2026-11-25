@@ -128,8 +128,8 @@ try {
     picks = await press(CANVAS.width / 2, CANVAS.height / 2);
   }
   assert.equal(picks.length, 1, JSON.stringify(picks));
-  assert.ok(ids.includes(picks[0].elementId), `the centre picked ${JSON.stringify(picks)}`);
-  console.log(`a press at the centre picked ${picks[0].elementId}`);
+  assert.ok(ids.includes(picks[0].element), `the centre picked ${JSON.stringify(picks)}`);
+  console.log(`a press at the centre picked ${picks[0].element}`);
 
   const state = await harness("state");
   assert.deepEqual(state.stepErrors, []);

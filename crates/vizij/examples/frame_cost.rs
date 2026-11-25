@@ -14,7 +14,7 @@
 //! Options:
 //! - `--frames N`: frames measured (default 600), after `--warmup N` (120);
 //! - `--faces N`: faces side by side (1);
-//! - `--graphs rig,pose-driver,…`: the bundle graphs composed (`loadVizij`'s);
+//! - `--graphs rig,pose-driver,…`: the bundle graphs composed (`load`'s);
 //! - `--program auto|none|<id>`: the program run (`auto`);
 //! - `--no-animations`: leave the bundle's animations out;
 //! - `--speaking`: a `say` run over a provider streaming a viseme every 6

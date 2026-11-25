@@ -15,7 +15,16 @@
 //! ([`FaceAssets`]), so the view never touches a file system — the same path
 //! on desktop, in the browser and on Android. A face comes into view once
 //! indexed, and is ready once the GPU has drawn every mesh visible to its
-//! camera ([`Face::ready`]).
+//! camera ([`EntityInstance::ready`], [`drawn`]). A mesh shown later, and
+//! what is drawn over the meshes (captions, the selection outline), may
+//! still compile when it first draws. The view answers each load, and tells
+//! when each face is ready, as [`FaceEvent`] messages a front end reads.
+//!
+//! A face's entity carries the shared [`EntityInstance`] — its id, metadata,
+//! GLB, joins to the scene, camera and readiness — so the shared layer's
+//! systems see it as they see any instance, and beside it a [`Face`] with
+//! what is vizij's: the bundle, the device's rig, the slot and the pose
+//! state.
 //! [`snapshot`] renders offscreen and reads the pixels back; [`frames`]
 //! publishes what is rendered into the device's store, and [`diagnostics`]
 //! the device's health.
@@ -23,24 +32,43 @@
 //! With the `captions` feature, each face shows the face standard's caption
 //! over it ([`captions`]).
 //!
-//! What an authoring front end asks of the view beyond the device's pose:
-//! a press resolved to the element under it or to a miss ([`pick`]), a glow
-//! on the elements it has selected ([`glow`]), rig outputs held against the
-//! device ([`hold`]), and a static feature set in place
-//! ([`ViewEvent::SetStaticFeature`]).
+//! What an authoring front end asks of the view beyond the device's pose
+//! is the shared layer's, so a face picks and outlines exactly as a robot
+//! does in a scene that embeds the same layer: a click resolved to the
+//! element under it or to a miss, as a [`Picked`] message
+//! ([`arora_visuals::pick`]); the outline of the elements it has selected
+//! ([`ViewEvent::SetSelection`] into [`Selections`], drawn by
+//! [`arora_visuals::outline`] through every face camera's [`OutlineView`]);
+//! rig outputs held against the device ([`hold`]); a static feature set
+//! in place ([`ViewEvent::SetStaticFeature`]); and controls a driver adds by
+//! keys of its own ([`ViewEvent::Control`], [`arora_visuals::control`]), with
+//! where they stand on screen in the shared [`Overlay`].
+//!
+//! **The host that embeds the view hears the picks and the controls**, as
+//! the shared layer has it: the picks it reads from the [`Picked`] messages,
+//! keeping those whose instance is one of its faces, and the drags and
+//! presses it drains from [`ControlEvents`] and [`ControlPresses`]. The view
+//! drains neither, since a host embedding it beside another consumer of the
+//! shared layer — a robot scene, say — drains them once for both.
+//!
+//! The face's world is already the drivers' frame, Z up, so its controls
+//! speak in it unturned. A transform control on a face is used through the
+//! face's own camera; a goal names the face it is used through by its id,
+//! the [`ControlView`] of the camera of the face showing under it, and one
+//! sent while a load into the id is unanswered waits for the face showing
+//! after it ([`name_control_views`]). A face is authored in units of its
+//! own, tens of them across, so its controls are sized on screen
+//! ([`FACE_CONTROL_SIZE`]) rather than in the world, unless a driver sizes
+//! one itself.
 
 #[cfg(feature = "captions")]
 pub mod captions;
 pub mod diagnostics;
-mod drawn;
 pub mod frames;
-mod glow;
-pub mod hold;
+pub use arora_visuals::hold;
 pub mod meta;
-mod pick;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod snapshot;
-pub mod tone;
 
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 use std::path::Path;
@@ -66,9 +94,25 @@ use bevy::render::render_resource::BlendState;
 use vizij_api_core::value::{as_bool, as_float, as_vec3, as_vector};
 use vizij_api_core::Value;
 
+pub use arora_visuals::binding::{ElementTargets, SceneBinding, SceneBindings};
+use arora_visuals::control::{
+    ControlCommand, ControlCommands, ControlSize, ControlView, Controls, ControlsPlugin,
+};
+pub use arora_visuals::control::{ControlEvents, ControlPresses};
+use arora_visuals::drawn;
+use arora_visuals::instance::{ClearCamera, InstanceIndex, InstanceSystems};
+pub use arora_visuals::instance::{EntityInstance, Superseded, ViewOf, CLEAR_ORDER};
+use arora_visuals::outline::{OutlinePlugin, OutlineView};
+pub use arora_visuals::overlay::Overlay;
+use arora_visuals::overlay::OverlayPlugin;
+use arora_visuals::pick::PickPlugin;
+pub use arora_visuals::pick::Picked;
+use arora_visuals::select::{Selection, Selections};
+pub use arora_visuals::tone::ToneMapping;
+use arora_visuals::transform_gizmo::{GizmoSize, TransformGizmoPlugin};
+use arora_visuals::value::Decoded;
 use hold::{HoldTarget, Holds};
-use meta::{Binding, FaceMeta, FeatureKind, PrimitiveShape};
-pub use tone::ToneMapping;
+use meta::{AssetMeta, Binding, FaceMeta, FeatureKind, PrimitiveShape};
 
 /// The in-memory asset source the faces' GLBs are served from: a loaded
 /// face's bytes live here under a path of their own until the face is
@@ -123,64 +167,89 @@ impl FaceAssets {
     }
 }
 
-/// A face shown by the view: an entity carrying the metadata, the GLB served
-/// from memory, the device's rig feed, its slot and the joins to the spawned
-/// scene once indexed. Its scene is a child; its camera is its own
-/// entity ([`FaceCamera`]).
+/// What the view tells its front end about each load, as [`FaceEvent`]s.
+///
+/// **Every load is answered once, and an instance's loads in the order they
+/// were asked for**: [`FaceEvent::Loaded`] once its scene is indexed, or
+/// [`FaceEvent::LoadFailed`] when its scene fails to load, a later load under
+/// the same id replaces it first, or the id is unloaded. A front end that
+/// queues its loads per id settles the oldest with each answer. Then, for a
+/// loaded face still current, [`FaceEvent::Ready`] once it is drawn.
+#[derive(Message, Clone, Debug, PartialEq)]
+pub enum FaceEvent {
+    /// The face's scene spawned and is indexed: its elements are joined to
+    /// their nodes, by `(id, name)` as its RobotData declares them. It draws
+    /// in its place once ready; a face it replaces draws until then.
+    Loaded {
+        face_id: String,
+        elements: Vec<(String, String)>,
+    },
+    /// The load did not finish, and why. Whatever the id showed still shows.
+    LoadFailed { face_id: String, error: String },
+    /// The face draws in its place from this frame. `drawn` is false when
+    /// readiness gave up waiting to see every visible mesh drawn
+    /// ([`drawn`]), and the face was made ready as it draws.
+    Ready { face_id: String, drawn: bool },
+}
+
+/// How big a control on a face is, unless its driver says: on screen, since a
+/// face's units are its author's and a size in them would be a guess.
+pub const FACE_CONTROL_SIZE: GizmoSize = GizmoSize::Pixels(80.0);
+
+/// Why a load was answered with [`FaceEvent::LoadFailed`] without its scene
+/// failing: a later load into the same id came first. Worded as the robot
+/// scene's host words the same answer, so a page driving both reads one
+/// vocabulary.
+pub const REPLACED: &str = "replaced by a later load before it finished loading";
+/// Why a load was answered with [`FaceEvent::LoadFailed`] when its id was
+/// unloaded first. A front end that settles a load at the unload, before the
+/// view's answer arrives, says the same.
+pub const UNLOADED: &str = "its instance was unloaded before it finished loading";
+
+/// Where one load stands in what the view has told its front end
+/// ([`FaceEvent`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Answer {
+    Pending,
+    Loaded,
+}
+
+/// On a face spawned by [`ViewEvent::LoadFace`]: what its load has been
+/// answered, so each answer is sent once.
+#[derive(Component)]
+pub struct LoadReport {
+    /// The order loads were asked in, across ids: which of two faces under
+    /// one id is the newer.
+    serial: u64,
+    answer: Answer,
+}
+
+/// What of a face shown by the view is vizij's own, beside the shared
+/// [`EntityInstance`] on the same entity: the bundle the device runs, the
+/// device's rig feed, the slot the face stands in and its pose state. The
+/// instance carries the id, the metadata, the GLB, the joins to the scene,
+/// the camera ([`ViewOf`]) and whether it is ready.
 #[derive(Component)]
 pub struct Face {
-    /// The slot name the face was loaded under — what a front end names it
-    /// by, and what a pick reports.
-    pub id: String,
-    pub meta: FaceMeta,
-    /// Where its GLB is served from ([`FaceAssets::push`]).
-    pub asset_path: String,
+    /// The face's `VIZIJ_bundle` ([`FaceMeta::bundle`]): its graphs, programs
+    /// and neutral pose, and the rig prefix its keys sit under.
+    pub bundle: vizij_arora_host::Bundle,
     /// The device driving it; the view reads its pose each frame.
     pub rig: vizij_arora_hal::RigHal,
     /// The slot the face occupies in the world: faces stand [`SLOT_STRIDE`]
     /// apart along X, each with its camera over it, so a camera sees only
     /// its own face and a pointer ray from it meets no other.
     pub slot: usize,
-    /// The joins to the spawned scene, once every element's node exists.
-    pub bindings: Bindings,
-    /// Its camera.
-    pub camera: Entity,
-    /// Whether it is drawn: every mesh visible to its camera has its
-    /// pipeline compiled and the GPU has finished a frame drawing them —
-    /// or, should something keep that from happening, ten seconds of frames
-    /// at 60 Hz have gone by, and a warning says what held it back. From
-    /// then on it draws in its place on the target; until then its camera
-    /// draws it under the camera that clears the target, so the target never
-    /// shows a face whose mesh pipelines are still compiling. A mesh shown
-    /// later, and what is drawn over the meshes (captions, the selection
-    /// glow), may still compile when it first draws.
-    pub ready: bool,
+    /// What applying the device's pose keeps between frames.
+    pub pose: PoseState,
 }
 
-/// Where one animatable lands in a face's spawned scene.
-#[derive(Debug, Clone)]
-pub struct Bound {
-    /// The entity it moves: the element's node for a transform feature, its
-    /// mesh for a material feature, the bearer of its morph weights for a
-    /// morph.
-    pub entity: Entity,
-    pub feature: FeatureKind,
-    /// The component of the feature it drives alone ([`Binding::axis`]).
-    pub axis: Option<usize>,
-    /// The morph target's index among the mesh's weights, for a morph.
-    pub morph_index: Option<usize>,
-}
-
-/// The joins from a face's animatables to its spawned scene: built once the
-/// GLB scene has spawned, empty until then.
+/// What applying a face's pose keeps between frames: what each animatable
+/// last landed, which ones contend for a target, the triples per-axis writes
+/// assemble, and the materials the face's tone mapping goes over. Reset when
+/// the face is indexed.
 #[derive(Default)]
-pub struct Bindings {
-    /// animatable id → where it lands: one place per element it drives,
-    /// each taking the same value.
-    pub by_id: HashMap<String, Vec<Bound>>,
-    /// element id → the entities its features land on: what a pick tests,
-    /// what the glow outlines, what a static feature is set on.
-    pub elements: HashMap<String, ElementTargets>,
+pub struct PoseState {
     /// animatable id → the value last applied to the scene, what a held
     /// component keeps ([`hold`]), and what a pose that has not changed
     /// since leaves alone.
@@ -194,43 +263,17 @@ pub struct Bindings {
     /// last frame (a static feature): the next frame lands the whole pose
     /// again, over it.
     reland: bool,
-    /// The triples per-axis animatables assemble, by the entity and feature
-    /// they land on: each write replaces one component and the whole triple
-    /// is applied. Kept rather than read back from the scene, because a
-    /// rotation read back is a quaternion, whose euler angles are not the
-    /// ones it was set from once the pitch leaves ±π/2.
+    /// The rotations per-axis animatables assemble, by the entity they land
+    /// on: each write replaces one euler angle and the whole rotation is
+    /// applied. Kept rather than read back from the scene, because a rotation
+    /// read back is a quaternion, whose euler angles are not the ones it was
+    /// set from once the pitch leaves ±π/2. Every other triple reads back
+    /// exactly, so a per-axis write to one starts from what the scene shows.
     assembled: HashMap<(Entity, FeatureKind), [f32; 3]>,
     /// The meshes whose materials the view composes ([`Surface`]): what the
     /// face's tone mapping goes over.
     surfaces: Vec<Entity>,
-    /// Whether the joins are built: from then on the face is posed, shaded
-    /// and in view.
-    pub indexed: bool,
 }
-
-/// The entities one element's features land on.
-#[derive(Debug, Clone, Copy)]
-pub struct ElementTargets {
-    /// Its glTF node: the transform features.
-    pub node: Entity,
-    /// Its own mesh — the node's, or its first primitive's: the static
-    /// material features, the pick, the glow. `None` for a group.
-    pub mesh: Option<Entity>,
-    /// The descendant carrying its morph weights, if it has morph targets.
-    pub morph: Option<Entity>,
-}
-
-/// A face being replaced by a reload under the same id: it keeps drawing
-/// until its successor is ready, then goes ([`retire_superseded`]), so a
-/// reload never shows an empty rectangle. It is not reported ready and
-/// reports no picks.
-#[derive(Component)]
-pub struct Superseded;
-
-/// A face's camera: orthographic over the face's authored bounds, over the
-/// face's slot.
-#[derive(Component)]
-pub struct FaceCamera(pub Entity);
 
 /// A change the view applies, sent by whatever fronts the device.
 pub enum ViewEvent {
@@ -261,9 +304,9 @@ pub enum ViewEvent {
     /// Frame and tone-map the face by `view`, in place of the face's previous
     /// view. Kept across the face's reloads, like its placement.
     SetFaceView { face_id: String, view: FaceView },
-    /// Outline these elements of the face (RobotData element ids) with the
-    /// selection glow; an empty list clears it. Kept across the face's
-    /// reloads.
+    /// Outline these elements of the face (RobotData element ids); an empty
+    /// list clears the selection. A selected group outlines every element
+    /// mesh under it. Kept across the face's reloads.
     SetSelection {
         face_id: String,
         elements: Vec<String>,
@@ -299,6 +342,15 @@ pub enum ViewEvent {
         feature: String,
         value: Value,
     },
+    /// Add, remove, show, move or change a control, by the driver's key for
+    /// it ([`arora_visuals::control`]). A control on a face names it by its
+    /// id, and a goal names the face it is used through as its view; either
+    /// sent while a load into the id is unanswered waits for the load, and
+    /// lands on the face showing after it. The controls on a face, and the
+    /// goals used through it, go when it does, unloaded or replaced by a
+    /// reload, as a robot's do on a swap: a driver adds them again to the
+    /// face that replaced it.
+    Control(ControlCommand),
 }
 
 /// How one face is framed and tone-mapped, over the page's [`ViewOptions`]:
@@ -309,7 +361,7 @@ pub enum ViewEvent {
 pub struct FaceView {
     /// The world rectangle the camera frames instead of the authored
     /// rootBounds: `(center x, center y, width, height)`, as
-    /// [`FaceMeta::root_bounds`]. Positive sizes.
+    /// [`AssetMeta::root_bounds`]. Positive sizes.
     pub bounds: Option<(f32, f32, f32, f32)>,
     /// How the bounds fit the face's rectangle.
     pub fit: Option<Fit>,
@@ -343,7 +395,7 @@ struct Framing {
 }
 
 impl Framing {
-    fn of(meta: &FaceMeta, options: &ViewOptions, view: Option<&FaceView>) -> Self {
+    fn of(meta: &AssetMeta, options: &ViewOptions, view: Option<&FaceView>) -> Self {
         let (cx, cy, width, height) = view
             .and_then(|view| view.bounds)
             .or(meta.root_bounds)
@@ -366,18 +418,6 @@ pub struct Compositions(pub HashMap<String, Vec<vizij_arora_host::Contention>>);
 #[derive(Resource)]
 pub struct ViewEvents(pub Mutex<Receiver<ViewEvent>>);
 
-/// A pointer press on a face: the element under it, by the ids its face's
-/// RobotData declares, or `None` for a press that hit no element.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Picked {
-    pub face_id: String,
-    pub element_id: Option<String>,
-}
-
-/// The picks (pointer presses on faces) since a consumer last drained them.
-#[derive(Resource, Default)]
-pub struct Picks(pub Vec<Picked>);
-
 /// Where each face draws, by face id ([`ViewEvent::PlaceFace`]); a face
 /// without an entry, or with `None`, draws over the whole target — the
 /// single face of a window, a snapshot or a page that never places it. Kept
@@ -390,10 +430,10 @@ struct Placements(HashMap<String, Option<IRect>>);
 #[derive(Resource, Default)]
 struct PendingStatics(HashMap<String, Vec<(String, String, Value)>>);
 
-/// Whether every requested face is ready ([`Face::ready`]) — and at least
-/// one is. What a snapshot waits for before it captures.
+/// Whether every requested face is ready ([`EntityInstance::ready`]) — and
+/// at least one is. What a snapshot waits for before it captures.
 pub fn all_faces_ready(app: &mut App) -> bool {
-    let mut faces = app.world_mut().query::<&Face>();
+    let mut faces = app.world_mut().query::<&EntityInstance>();
     let mut any = false;
     for face in faces.iter(app.world()) {
         if !face.ready {
@@ -578,13 +618,15 @@ pub struct OffscreenTarget(pub Handle<Image>);
 
 /// The distance between two faces' slots along X. A face spans a few units
 /// (its authored bounds), so slots this far apart never share a camera's
-/// frustum or a pointer ray.
+/// frustum.
 ///
-/// Slots, not render layers: a mesh carrying `RenderLayers` renders its
-/// morph targets at zero weight on Bevy 0.19.1's storage-buffer morph path
-/// (every desktop GPU; WebGL2 takes the uniform path and does not show it),
-/// which closes Toasty's eyes. Spacing the faces apart needs nothing of the
-/// renderer.
+/// Every face is drawn on the default render layer and every face camera
+/// draws it, so distance alone keeps one face out of another's camera. The
+/// selection outline relies on that too: a selected mesh joins the mask of
+/// every outlined view whose layers it shares — every face camera — and only
+/// the other cameras' frustums keep it out of their masks. The render layers
+/// above the default are the shared layer's, given per view for the outline's
+/// mask and quad.
 pub const SLOT_STRIDE: f32 = 1000.0;
 
 /// The slots in use, so an unloaded face's slot goes back to the pool.
@@ -639,50 +681,143 @@ impl Plugin for ViewPlugin {
             .register_type::<bevy::gltf::GltfExtras>()
             .register_type::<bevy::gltf::GltfMeshExtras>()
             .register_type::<bevy::gltf::GltfMaterialExtras>();
-        // Picking runs its own ray cast over the morphed meshes on a press
-        // ([`pick`]); Bevy's picking only delivers the press, through the
-        // window backend every press reaches when no other backend reports
-        // a hit.
+        // Picking casts its own ray over the morphed meshes on a click
+        // ([`arora_visuals::pick`]); Bevy's picking only delivers the press
+        // and release, through the window backend every press reaches when
+        // no other backend reports a hit, so no mesh picking backend is
+        // added.
         app.init_resource::<Slots>()
             .init_resource::<Placements>()
             .init_resource::<FaceViews>()
             .init_resource::<SafeAreas>()
-            .init_resource::<Picks>()
             .init_resource::<PendingStatics>()
             .init_resource::<Holds>()
             .init_resource::<Compositions>()
-            .add_plugins(glow::GlowPlugin)
-            .add_plugins(drawn::DrawnPlugin)
-            .add_observer(pick::on_press)
+            .add_message::<FaceEvent>()
+            .add_plugins((
+                drawn::DrawnPlugin,
+                PickPlugin,
+                OutlinePlugin,
+                ControlsPlugin,
+                TransformGizmoPlugin,
+                OverlayPlugin,
+            ))
+            .add_observer(mark_spawned)
             .add_systems(
                 Update,
                 (
-                    apply_view_events,
-                    // Before the cameras are placed, so a face made ready
-                    // draws in its place from the frame it is ready.
-                    drawn::ready_drawn_faces,
-                    clear_target,
-                    place_cameras,
-                    frame_cameras,
-                    index_faces,
-                    retire_superseded,
-                    apply_statics,
-                    tone_faces,
-                    apply_poses,
-                    measure_safe_areas,
+                    answering_systems(),
+                    (
+                        // Before the cameras are placed, so a face made ready
+                        // draws in its place from the frame it is ready.
+                        (drawn::ready_drawn_instances, report_ready).chain(),
+                        clear_target,
+                        place_cameras,
+                        frame_cameras,
+                        index_faces,
+                        retire_superseded,
+                        name_control_views,
+                    )
+                        .chain()
+                        .in_set(InstanceSystems::Index),
+                    (apply_statics, tone_faces, apply_poses)
+                        .chain()
+                        .in_set(InstanceSystems::Apply),
+                    measure_safe_areas.in_set(InstanceSystems::Derive),
                 )
-                    .chain(),
+                    .chain()
+                    .in_set(ViewSystems),
             );
         #[cfg(feature = "captions")]
         app.add_plugins(captions::CaptionsPlugin);
     }
 }
 
+/// Refuses a control add a face can never place, where it is asked for, with
+/// an error the driver hears, rather than accepting it to wait for good:
+///
+/// - **A joint control.** A face has no scene-style joints for one to drive.
+///   A face's rig, when it has one, is more likely a skeleton of bones than
+///   joints, and its control will take another form.
+/// - **A goal that names no `view`.** A goal on a face is used through the
+///   face's camera, named by its id, and the view marks no camera as the one
+///   a goal naming none is used through: every face has a camera of its own,
+///   so taking one would be a guess. Accepted, such a goal would wait for a
+///   camera that never comes, and hold every later command under its key.
+pub fn refuse_controls(command: &ControlCommand) -> Result<(), String> {
+    use arora_visuals::control::{Control, Target};
+    match command {
+        ControlCommand::Add {
+            key,
+            control: Control::Joint { instance, .. },
+        } => Err(format!(
+            "joint control {key:?} on {instance:?} refused: a Vizij has no joints"
+        )),
+        ControlCommand::Add {
+            key,
+            control:
+                Control::Transform {
+                    target: Target::Goal { view: None, .. },
+                    ..
+                },
+        } => Err(format!(
+            "goal {key:?} refused: it names no view, and a goal on a Vizij names \
+             the instance it is used through as its view"
+        )),
+        _ => Ok(()),
+    }
+}
+
+/// The view's systems in `Update`, for a host sharing the app to order its
+/// own against. Each stage of the view's chain sits in the shared
+/// [`InstanceSystems`] stage it belongs to: the front ends' requests in
+/// `Intake`; readiness, camera placement and the faces' indexing in `Index`;
+/// static features, tone and poses in `Apply`; safe areas in `Derive`.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ViewSystems;
+
+/// The systems that take the front ends' requests and answer loads. In
+/// `Intake`, which the shared layer orders before the controls' commands, so
+/// a control sent with its face's load finds the face.
+fn answering_systems() -> bevy::ecs::schedule::ScheduleConfigs<bevy::ecs::system::ScheduleSystem> {
+    (apply_view_events, fail_unloadable_scenes)
+        .chain()
+        .in_set(InstanceSystems::Intake)
+}
+
+/// What the front ends set on a face that is kept across its reloads, for
+/// [`apply_view_events`], and taken away when the face is unloaded.
+#[derive(SystemParam)]
+struct KeptByFace<'w> {
+    selections: ResMut<'w, Selections>,
+    holds: ResMut<'w, Holds>,
+    statics: ResMut<'w, PendingStatics>,
+    compositions: ResMut<'w, Compositions>,
+}
+
+/// The controls' queue, for [`apply_view_events`]: commands go on it, and an
+/// unload takes off what was waiting for its face.
+#[derive(SystemParam)]
+struct ControlQueue<'w> {
+    commands: ResMut<'w, ControlCommands>,
+    placed: Res<'w, Controls>,
+}
+
+/// Where [`apply_view_events`] answers loads, and the count that orders them
+/// ([`LoadReport::serial`]).
+#[derive(SystemParam)]
+struct Answers<'w, 's> {
+    events: MessageWriter<'w, FaceEvent>,
+    serial: Local<'s, u64>,
+}
+
 /// Apply the front ends' requests: load, reload or unload a face, place it
 /// or set its view, recolor the background, and the authoring requests —
 /// selection, holds, static features. A load under an id already shown
 /// supersedes the face there rather than unloading it: the old scene draws
-/// until the new one is ready ([`retire_superseded`]).
+/// until the new one is ready ([`retire_superseded`]). A face whose load is
+/// still unanswered never drew, so a load or an unload under its id takes
+/// it down at once and answers it ([`FaceEvent::LoadFailed`]).
 #[allow(clippy::too_many_arguments)]
 fn apply_view_events(
     events: Option<Res<ViewEvents>>,
@@ -693,14 +828,20 @@ fn apply_view_events(
     mut slots: ResMut<Slots>,
     mut placements: ResMut<Placements>,
     mut views: ResMut<FaceViews>,
-    mut selections: ResMut<glow::Selections>,
-    mut holds: ResMut<Holds>,
-    mut statics: ResMut<PendingStatics>,
-    mut compositions: ResMut<Compositions>,
+    kept: KeptByFace,
     mut commands: Commands,
-    faces: Query<(Entity, &Face)>,
+    faces: Query<(Entity, &EntityInstance, &Face, Option<&LoadReport>)>,
+    index: Res<InstanceIndex>,
     asset_server: Res<AssetServer>,
+    mut told: Answers,
+    mut controls: ControlQueue,
 ) {
+    let KeptByFace {
+        mut selections,
+        mut holds,
+        mut statics,
+        mut compositions,
+    } = kept;
     let Some(events) = events else { return };
     let Ok(receiver) = events.0.lock() else {
         return;
@@ -720,15 +861,30 @@ fn apply_view_events(
                 glb,
                 rig,
             } => {
-                for (entity, face) in &faces {
-                    if face.id == face_id && !gone.contains(&entity) {
+                for (entity, instance, face, report) in
+                    faces.iter_many(index.all(&face_id)).flatten()
+                {
+                    if gone.contains(&entity) {
+                        continue;
+                    }
+                    if report.is_some_and(|report| report.answer == Answer::Pending) {
+                        gone.insert(entity);
+                        despawn_face(entity, instance, face, &assets, &mut slots, &mut commands);
+                        told.events.write(FaceEvent::LoadFailed {
+                            face_id: face_id.clone(),
+                            error: REPLACED.into(),
+                        });
+                    } else {
                         commands.entity(entity).insert(Superseded);
                     }
                 }
-                for (id, entity, ..) in &spawned {
-                    if *id == face_id {
-                        commands.entity(*entity).insert(Superseded);
-                    }
+                for _ in
+                    take_down_spawned(&mut spawned, &face_id, &assets, &mut slots, &mut commands)
+                {
+                    told.events.write(FaceEvent::LoadFailed {
+                        face_id: face_id.clone(),
+                        error: REPLACED.into(),
+                    });
                 }
                 let slot = slots.take();
                 let asset_path = assets.push(&face_id, glb);
@@ -749,17 +905,27 @@ fn apply_view_events(
                         offscreen.as_deref(),
                     ))
                     .id();
+                let FaceMeta { asset, bundle } = *meta;
                 let face = commands
                     .spawn((
-                        Face {
+                        EntityInstance {
                             id: face_id.clone(),
-                            meta: *meta,
                             asset_path: asset_path.clone(),
+                            meta: asset,
+                            bindings: SceneBindings::default(),
+                            camera,
+                            draw_order: drawing_order(slot),
+                            ready: false,
+                        },
+                        Face {
+                            bundle,
                             rig,
                             slot,
-                            bindings: Bindings::default(),
-                            camera,
-                            ready: false,
+                            pose: PoseState::default(),
+                        },
+                        LoadReport {
+                            serial: *told.serial,
+                            answer: Answer::Pending,
                         },
                         Transform::from_translation(slot_origin(slot)),
                         // In view once indexed ([`index_faces`]).
@@ -769,31 +935,56 @@ fn apply_view_events(
                         )],
                     ))
                     .id();
-                commands.entity(camera).insert(FaceCamera(face));
+                *told.serial += 1;
+                commands.entity(camera).insert((
+                    ViewOf(face),
+                    // Named for goals once its load is answered `Loaded`
+                    // ([`name_control_views`]).
+                    ControlSize {
+                        transform: Some(FACE_CONTROL_SIZE),
+                        joint: Some(FACE_CONTROL_SIZE),
+                    },
+                ));
                 spawned.push((face_id, face, camera, asset_path, slot));
             }
             ViewEvent::UnloadFace { face_id } => {
-                for (entity, face) in &faces {
-                    if face.id == face_id && gone.insert(entity) {
-                        despawn_face(entity, face, &assets, &mut slots, &mut commands);
+                for (entity, instance, face, report) in
+                    faces.iter_many(index.all(&face_id)).flatten()
+                {
+                    if gone.insert(entity) {
+                        despawn_face(entity, instance, face, &assets, &mut slots, &mut commands);
+                        if report.is_some_and(|report| report.answer == Answer::Pending) {
+                            told.events.write(FaceEvent::LoadFailed {
+                                face_id: face_id.clone(),
+                                error: UNLOADED.into(),
+                            });
+                        }
                         log::info!("face {face_id}: unloaded");
                     }
                 }
-                spawned.retain(|(id, entity, camera, asset_path, slot)| {
-                    if *id != face_id {
-                        return true;
-                    }
-                    commands.entity(*camera).despawn();
-                    commands.entity(*entity).despawn();
-                    assets.remove(asset_path);
-                    slots.release(*slot);
-                    false
-                });
+                for _ in
+                    take_down_spawned(&mut spawned, &face_id, &assets, &mut slots, &mut commands)
+                {
+                    told.events.write(FaceEvent::LoadFailed {
+                        face_id: face_id.clone(),
+                        error: UNLOADED.into(),
+                    });
+                }
+                // Controls on the face, and goals used through its camera,
+                // which is named by its id.
+                controls
+                    .commands
+                    .forget_instance(&face_id, &controls.placed);
+                controls.commands.forget_view(&face_id, &controls.placed);
                 selections.0.remove(&face_id);
                 holds.clear(&face_id);
                 statics.0.remove(&face_id);
                 compositions.0.remove(&face_id);
             }
+            ViewEvent::Control(command) => match refuse_controls(&command) {
+                Ok(()) => controls.commands.0.push(command),
+                Err(error) => log::warn!("{error}"),
+            },
             ViewEvent::PlaceFace { face_id, rect } => {
                 placements.0.insert(face_id, rect);
             }
@@ -804,7 +995,9 @@ fn apply_view_events(
                 if elements.is_empty() {
                     selections.0.remove(&face_id);
                 } else {
-                    selections.0.insert(face_id, elements);
+                    selections
+                        .0
+                        .insert(face_id, elements.into_iter().map(Selection::of).collect());
                 }
             }
             ViewEvent::Composed { face_id, contended } => {
@@ -826,20 +1019,133 @@ fn apply_view_events(
     }
 }
 
-/// The camera that clears the target with the background, below every
-/// ready face's: a face's camera only draws its face over it, so the target
-/// shows the background wherever no face draws — all of it when no face is placed
-/// on it — whichever faces come, go or leave the target. Its write to the
-/// target replaces what is there, so what a camera ordered below it draws —
-/// a face that is not ready yet ([`drawn`]) — never shows.
+/// Take down the faces under `face_id` that this drain of
+/// [`apply_view_events`] spawned: none has drawn, and none has had its load
+/// answered. How many it took down.
+fn take_down_spawned(
+    spawned: &mut Vec<(String, Entity, Entity, String, usize)>,
+    face_id: &str,
+    assets: &FaceAssets,
+    slots: &mut Slots,
+    commands: &mut Commands,
+) -> std::ops::Range<usize> {
+    let before = spawned.len();
+    spawned.retain(|(id, entity, camera, asset_path, slot)| {
+        if id != face_id {
+            return true;
+        }
+        commands.entity(*camera).despawn();
+        commands.entity(*entity).despawn();
+        assets.remove(asset_path);
+        slots.release(*slot);
+        false
+    });
+    0..before - spawned.len()
+}
+
+/// On a face's scene root once its scene has spawned whole: an element whose
+/// node is not there by then never will be.
 #[derive(Component)]
-struct ClearCamera;
+struct SceneSpawned;
 
-/// The order among the target's cameras of the camera that clears it: a
-/// face's camera ordered below it draws nothing the target shows.
-pub const CLEAR_ORDER: isize = -1;
+/// Marks the scene root a world instance spawned under ([`SceneSpawned`]).
+fn mark_spawned(ready: On<bevy::world_serialization::WorldInstanceReady>, mut commands: Commands) {
+    if let Ok(mut root) = commands.get_entity(ready.entity) {
+        root.insert(SceneSpawned);
+    }
+}
 
-/// The order of a ready face's camera: above the clear, by slot.
+/// Why a face's scene cannot be indexed: the RobotData elements whose nodes
+/// its spawned scene does not have.
+#[derive(Component)]
+struct Unindexable(String);
+
+/// Answer and take down each face whose scene failed to load, or spawned
+/// without a node one of its elements names ([`Unindexable`]). It never
+/// drew, and the face it was to replace — the newest one under its id whose
+/// load was answered `Loaded` — is no longer superseded, so it draws on as
+/// the id's face. With no face to replace, the id shows nothing, and the
+/// goals waiting to be used through it go, as they do when it is unloaded:
+/// no face will answer to it ([`name_control_views`]).
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+fn fail_unloadable_scenes(
+    faces: Query<(
+        Entity,
+        &EntityInstance,
+        &Face,
+        &LoadReport,
+        Option<&Children>,
+        Has<Superseded>,
+        Option<&Unindexable>,
+    )>,
+    roots: Query<&WorldAssetRoot>,
+    asset_server: Res<AssetServer>,
+    assets: Res<FaceAssets>,
+    mut slots: ResMut<Slots>,
+    mut told: MessageWriter<FaceEvent>,
+    mut commands: Commands,
+    index: Res<InstanceIndex>,
+    mut controls: ControlQueue,
+) {
+    for (entity, instance, face, report, children, _, unindexable) in &faces {
+        if report.answer != Answer::Pending {
+            continue;
+        }
+        let failed = unindexable.map(|why| why.0.clone()).or_else(|| {
+            children.into_iter().flatten().find_map(|child| {
+                let root = roots.get(*child).ok()?;
+                match asset_server.load_state(&root.0) {
+                    bevy::asset::LoadState::Failed(error) => Some(error.to_string()),
+                    _ => None,
+                }
+            })
+        });
+        let Some(error) = failed else {
+            continue;
+        };
+        log::warn!("face {}: its scene failed to load: {error}", instance.id);
+        despawn_face(entity, instance, face, &assets, &mut slots, &mut commands);
+        told.write(FaceEvent::LoadFailed {
+            face_id: instance.id.clone(),
+            error,
+        });
+        let previous = faces
+            .iter_many(index.all(&instance.id))
+            .flatten()
+            // Only a face answered `Loaded` is ever superseded.
+            .filter(|(_, _, _, _, _, superseded, _)| *superseded)
+            .max_by_key(|(_, _, _, other_report, ..)| other_report.serial);
+        match previous {
+            Some((previous, ..)) => {
+                commands.entity(previous).remove::<Superseded>();
+            }
+            None => controls
+                .commands
+                .forget_view(&instance.id, &controls.placed),
+        }
+    }
+}
+
+/// Tell [`FaceEvent::Ready`] for each face the shared layer makes ready, with
+/// its word on whether the face was seen drawn. The shared layer makes each
+/// instance ready once, and never one superseded meanwhile.
+fn report_ready(
+    mut ready: MessageReader<drawn::InstanceReady>,
+    faces: Query<(), (With<LoadReport>, Without<Superseded>)>,
+    mut told: MessageWriter<FaceEvent>,
+) {
+    for ready in ready.read() {
+        if faces.contains(ready.instance) {
+            told.write(FaceEvent::Ready {
+                face_id: ready.id.clone(),
+                drawn: ready.drawn,
+            });
+        }
+    }
+}
+
+/// The order of a ready face's camera ([`EntityInstance::draw_order`]):
+/// above the clear, by slot.
 fn drawing_order(slot: usize) -> isize {
     slot as isize
 }
@@ -850,7 +1156,12 @@ fn warming_order(slot: usize) -> isize {
     CLEAR_ORDER - 1 - slot as isize
 }
 
-/// Keep the target's [`ClearCamera`], on the page's background.
+/// Keep the target's [`ClearCamera`], on the page's background: below every
+/// ready face's camera, so a face's camera only draws its face over it and
+/// the target shows the background wherever no face draws — all of it when
+/// no face is placed on it — whichever faces come, go or leave the target.
+/// Its write to the target replaces what is there, so what a camera ordered
+/// below it draws — a face that is not ready yet ([`drawn`]) — never shows.
 fn clear_target(
     options: Res<ViewOptions>,
     offscreen: Option<Res<OffscreenTarget>>,
@@ -897,8 +1208,8 @@ fn clear_target(
 /// instead, as it becomes ready by drawing ([`drawn`]).
 fn place_cameras(
     placements: Res<Placements>,
-    faces: Query<&Face>,
-    mut cameras: Query<(&mut Camera, Has<drawn::Warming>), With<FaceCamera>>,
+    faces: Query<&EntityInstance>,
+    mut cameras: Query<(&mut Camera, Has<drawn::Warming>), With<ViewOf>>,
 ) {
     for face in &faces {
         let Ok((mut camera, warming)) = cameras.get_mut(face.camera) else {
@@ -970,14 +1281,14 @@ fn placement(rect: IRect, target: UVec2) -> Option<(URect, Option<SubCameraView>
 fn frame_cameras(
     views: Res<FaceViews>,
     options: Res<ViewOptions>,
-    faces: Query<&Face>,
-    mut cameras: Query<(&Camera, &mut Projection, &mut Transform), With<FaceCamera>>,
+    faces: Query<(&EntityInstance, &Face)>,
+    mut cameras: Query<(&Camera, &mut Projection, &mut Transform), With<ViewOf>>,
 ) {
-    for face in &faces {
-        let Ok((camera, mut projection, mut transform)) = cameras.get_mut(face.camera) else {
+    for (instance, face) in &faces {
+        let Ok((camera, mut projection, mut transform)) = cameras.get_mut(instance.camera) else {
             continue;
         };
-        let framing = Framing::of(&face.meta, &options, views.0.get(&face.id));
+        let framing = Framing::of(&instance.meta, &options, views.0.get(&instance.id));
         let slot = camera
             .sub_camera_view
             .map(|sub_view| sub_view.full_size.as_vec2());
@@ -1001,17 +1312,17 @@ fn frame_cameras(
 /// changes.
 fn tone_faces(
     views: Res<FaceViews>,
-    faces: Query<&Face>,
+    faces: Query<(&EntityInstance, &Face)>,
     mut surfaces: Query<(&MeshMaterial3d<StandardMaterial>, &mut Surface)>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    for face in &faces {
+    for (instance, face) in &faces {
         let tone = views
             .0
-            .get(&face.id)
+            .get(&instance.id)
             .map(|view| view.tone_mapping)
             .unwrap_or_default();
-        for mesh in &face.bindings.surfaces {
+        for mesh in &face.pose.surfaces {
             let Ok((handle, mut surface)) = surfaces.get_mut(*mesh) else {
                 continue;
             };
@@ -1031,8 +1342,8 @@ fn measure_safe_areas(
     views: Res<FaceViews>,
     options: Res<ViewOptions>,
     placements: Res<Placements>,
-    faces: Query<&Face, Without<Superseded>>,
-    cameras: Query<&Camera, With<FaceCamera>>,
+    faces: Query<&EntityInstance, Without<Superseded>>,
+    cameras: Query<&Camera, With<ViewOf>>,
     mut areas: ResMut<SafeAreas>,
 ) {
     areas.0.clear();
@@ -1068,40 +1379,103 @@ fn safe_area(framing: &Framing, rect: Rect) -> Rect {
 /// Take a face down: its scene, its camera, its GLB, its slot.
 fn despawn_face(
     entity: Entity,
+    instance: &EntityInstance,
     face: &Face,
     assets: &FaceAssets,
     slots: &mut Slots,
     commands: &mut Commands,
 ) {
-    commands.entity(face.camera).despawn();
+    commands.entity(instance.camera).despawn();
     commands.entity(entity).despawn();
-    assets.remove(&face.asset_path);
+    assets.remove(&instance.asset_path);
     slots.release(face.slot);
 }
 
 /// Once a reloaded face is ready, the faces it supersedes go: the swap lands
 /// in one frame, the new scene posed, shaded and drawn once already.
 fn retire_superseded(
-    faces: Query<(Entity, &Face, Has<Superseded>)>,
+    faces: Query<(Entity, &EntityInstance, &Face, Has<Superseded>)>,
+    index: Res<InstanceIndex>,
     assets: Res<FaceAssets>,
     mut slots: ResMut<Slots>,
     mut commands: Commands,
 ) {
-    for (_, face, superseded) in &faces {
-        if superseded || !face.ready {
+    for (_, instance, _, superseded) in &faces {
+        if superseded || !instance.ready {
             continue;
         }
-        for (old, old_face, old_superseded) in &faces {
-            if old_superseded && old_face.id == face.id {
-                despawn_face(old, old_face, &assets, &mut slots, &mut commands);
-                log::info!("face {}: reloaded, slot {} retired", face.id, old_face.slot);
+        for (old, old_instance, old_face, old_superseded) in
+            faces.iter_many(index.all(&instance.id)).flatten()
+        {
+            if old_superseded {
+                despawn_face(
+                    old,
+                    old_instance,
+                    old_face,
+                    &assets,
+                    &mut slots,
+                    &mut commands,
+                );
+                log::info!(
+                    "face {}: reloaded, slot {} retired",
+                    instance.id,
+                    old_face.slot
+                );
             }
         }
     }
 }
 
+/// Name each face's camera for the goals used through the face
+/// ([`ControlView`], by the face's id): the camera of the face its id
+/// addresses — the one not [`Superseded`] — once that face's load is answered
+/// `Loaded`, and no other camera.
+///
+/// The shared layer places a goal through the first camera answering to its
+/// view, and forgets the goal when that camera goes. While a load into an id
+/// is unanswered, it is not known which face the id will show after it: the
+/// new one, or, if the load fails, the one before. So no camera answers to
+/// the id meanwhile, and a goal sent then waits, as a control on a face
+/// still loading does, and is used through the face showing once the load
+/// is answered — never through the camera of a face about to be retired, or
+/// of a load about to fail. A goal already placed through the face a reload
+/// replaces goes with that face, as the controls on it do.
+fn name_control_views(
+    faces: Query<(&EntityInstance, &LoadReport, Has<Superseded>)>,
+    cameras: Query<Option<&ControlView>>,
+    mut commands: Commands,
+) {
+    for (instance, report, superseded) in &faces {
+        let wanted = (!superseded && report.answer == Answer::Loaded).then_some(&instance.id);
+        let Ok(named) = cameras.get(instance.camera) else {
+            continue;
+        };
+        match (named, wanted) {
+            (Some(named), Some(id)) if named.0 == *id => {}
+            (None, None) => {}
+            (_, Some(id)) => {
+                commands
+                    .entity(instance.camera)
+                    .try_insert(ControlView(id.clone()));
+            }
+            (Some(_), None) => {
+                commands.entity(instance.camera).try_remove::<ControlView>();
+            }
+        }
+    }
+}
+
+/// The selection outline's look on a face: the authoring app's selection
+/// red, nearly opaque, as a line with no fill.
+const OUTLINE: OutlineView = OutlineView {
+    colour: Color::srgba(1.0, 16.0 / 255.0, 16.0 / 255.0, 0.9),
+    width: 3.0,
+    fill: 0.0,
+};
+
 /// A face's camera: the fit over its framing, over its slot, drawing over
-/// what the target holds ([`ClearCamera`] clears it).
+/// what the target holds ([`ClearCamera`] clears it), with the selection
+/// outlined through it.
 fn camera_for(framing: Framing, slot: usize, offscreen: Option<&OffscreenTarget>) -> impl Bundle {
     // Lighting is baked into the materials (see `ViewOptions::albedo_factor`);
     // no scene light is spawned.
@@ -1138,6 +1512,7 @@ fn camera_for(framing: Framing, slot: usize, offscreen: Option<&OffscreenTarget>
         // The faces are lit by the ambient term alone: no light to cluster,
         // so one cluster spares the per-frame cluster grid.
         bevy::light::cluster::ClusterConfig::Single,
+        OUTLINE,
     )
 }
 
@@ -1202,7 +1577,7 @@ impl CameraProjection for FitProjection {
         let left = area.min.x + sub_view.offset.x * scale.x;
         let top = area.max.y - sub_view.offset.y * scale.y;
         let size = sub_view.size.as_vec2() * scale;
-        Mat4::orthographic_rh(
+        bevy::math::proj::orthographic(
             left,
             left + size.x,
             top - size.y,
@@ -1280,7 +1655,12 @@ fn visible_extent(bounds: Vec2, fit: Fit, zoom: Vec2, width: f32, height: f32) -
 /// ready ([`drawn`]).
 #[allow(clippy::too_many_arguments)]
 fn index_faces(
-    mut faces: Query<(Entity, &mut Face)>,
+    mut faces: Query<(
+        Entity,
+        &mut EntityInstance,
+        &mut Face,
+        Option<&mut LoadReport>,
+    )>,
     options: Res<ViewOptions>,
     views: Res<FaceViews>,
     names: Query<&Name>,
@@ -1290,10 +1670,12 @@ fn index_faces(
     mut transforms: Query<&mut Transform>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut mesh_assets: ResMut<Assets<Mesh>>,
+    mut told: MessageWriter<FaceEvent>,
     mut commands: Commands,
+    spawned_whole: Query<(), With<SceneSpawned>>,
 ) {
-    for (root, mut face) in &mut faces {
-        if face.bindings.indexed {
+    for (root, mut instance, mut face, report) in &mut faces {
+        if instance.bindings.indexed {
             continue;
         }
         // Wait until the scene has spawned under the face's scene root.
@@ -1323,18 +1705,29 @@ fn index_faces(
                 stack.extend(kids.iter().map(|kid| (kid, depth + 1)));
             }
         }
-        if !face
+        let missing: Vec<&str> = instance
             .meta
             .elements
             .iter()
-            .all(|e| by_name.contains_key(e.node_name.as_str()))
-        {
+            .map(|e| e.node_name.as_str())
+            .filter(|name| !by_name.contains_key(*name))
+            .collect();
+        if !missing.is_empty() {
+            let whole = children
+                .get(root)
+                .is_ok_and(|kids| kids.iter().any(|kid| spawned_whole.contains(kid)));
+            if whole {
+                commands.entity(root).insert(Unindexable(format!(
+                    "its scene has no node {} that its RobotData names",
+                    missing.join(", ")
+                )));
+            }
             continue;
         }
 
         let tone = views
             .0
-            .get(&face.id)
+            .get(&instance.id)
             .map(|view| view.tone_mapping)
             .unwrap_or_default();
         // Give `mesh` a material of its own: `loaded` under the web's
@@ -1365,7 +1758,7 @@ fn index_faces(
         let mut shaded: HashSet<Entity> = HashSet::new();
         let mut morph_of: HashMap<String, Entity> = HashMap::new();
         let mut elements = HashMap::new();
-        for element in &face.meta.elements {
+        for element in &instance.meta.elements {
             let node = by_name[element.node_name.as_str()].0;
             let shading = Shading::of(element.material.as_deref());
             // The element's own mesh is the node's or its primitives (the
@@ -1466,13 +1859,13 @@ fn index_faces(
                 axis,
                 ..
             },
-        ) in &face.meta.animatables
+        ) in &instance.meta.animatables
         {
-            let bounds: Vec<Bound> = node_names
+            let bounds: Vec<SceneBinding> = node_names
                 .iter()
                 .filter_map(|node_name| {
                     let &(node, _) = by_name.get(node_name.as_str())?;
-                    let element = face
+                    let element = instance
                         .meta
                         .elements
                         .iter()
@@ -1490,7 +1883,7 @@ fn index_faces(
                             ),
                             _ => (*mesh_of.get(node_name)?, None),
                         };
-                    Some(Bound {
+                    Some(SceneBinding {
                         entity,
                         feature: feature.clone(),
                         axis: *axis,
@@ -1505,23 +1898,34 @@ fn index_faces(
 
         log::info!(
             "face {}: scene indexed, {} bindings over {} elements",
-            face.id,
+            instance.id,
             by_id.len(),
-            face.meta.elements.len(),
+            instance.meta.elements.len(),
         );
-        let contended = contended(&by_id);
-        face.bindings = Bindings {
+        face.pose = PoseState {
+            contended: contended(&by_id),
+            surfaces: shaded.into_iter().collect(),
+            ..PoseState::default()
+        };
+        instance.bindings = SceneBindings {
             by_id,
             elements,
-            shown: HashMap::new(),
-            contended,
-            reland: false,
-            assembled: HashMap::new(),
-            surfaces: shaded.into_iter().collect(),
             indexed: true,
         };
         commands.entity(root).insert(Visibility::Inherited);
-        commands.entity(face.camera).insert(drawn::Warming);
+        commands.entity(instance.camera).insert(drawn::Warming);
+        if let Some(mut report) = report.filter(|report| report.answer == Answer::Pending) {
+            report.answer = Answer::Loaded;
+            told.write(FaceEvent::Loaded {
+                face_id: instance.id.clone(),
+                elements: instance
+                    .meta
+                    .elements
+                    .iter()
+                    .map(|element| (element.id.clone(), element.name.clone()))
+                    .collect(),
+            });
+        }
     }
 }
 
@@ -1556,33 +1960,35 @@ fn primitive_mesh(shape: PrimitiveShape) -> Mesh {
 /// Set the static features waiting for their face, once it is indexed.
 fn apply_statics(
     mut pending: ResMut<PendingStatics>,
-    mut faces: Query<&mut Face, Without<Superseded>>,
+    mut faces: Query<(&EntityInstance, &mut Face), Without<Superseded>>,
     mut scene: SceneFeatures,
 ) {
     if pending.0.is_empty() {
         return;
     }
-    for mut face in &mut faces {
-        if !face.bindings.indexed {
+    for (instance, mut face) in &mut faces {
+        if !instance.bindings.indexed {
             continue;
         }
-        let face = &mut *face;
-        let Some(edits) = pending.0.remove(&face.id) else {
+        let Some(edits) = pending.0.remove(&instance.id) else {
             continue;
         };
         for (element_id, feature, value) in edits {
-            let target = face
+            let target = instance
                 .meta
                 .elements
                 .iter()
                 .find(|element| element.id == element_id)
-                .zip(face.bindings.elements.get(&element_id));
+                .zip(instance.bindings.elements.get(&element_id));
             let Some((element, targets)) = target else {
-                log::warn!("face {}: no element {element_id}", face.id);
+                log::warn!("face {}: no element {element_id}", instance.id);
                 continue;
             };
             let Some((kind, axis)) = FeatureKind::parse(&feature, &element.morph_targets) else {
-                log::warn!("face {}: {element_id} has no feature {feature:?}", face.id);
+                log::warn!(
+                    "face {}: {element_id} has no feature {feature:?}",
+                    instance.id
+                );
                 continue;
             };
             let (entity, morph_index) = match &kind {
@@ -1598,18 +2004,18 @@ fn apply_statics(
             let (Some(entity), Some(decoded)) = (entity, decode(&kind, axis, &value)) else {
                 log::warn!(
                     "face {}: {feature} of {element_id} does not take {value:?}",
-                    face.id
+                    instance.id
                 );
                 continue;
             };
-            let bound = Bound {
+            let bound = SceneBinding {
                 entity,
                 feature: kind,
                 axis,
                 morph_index,
             };
-            scene.land(&mut face.bindings.assembled, &bound, decoded);
-            face.bindings.reland = true;
+            scene.land(&mut face.pose.assembled, &bound, decoded);
+            face.pose.reland = true;
         }
     }
 }
@@ -1617,8 +2023,8 @@ fn apply_statics(
 /// The animatables of `by_id` whose target — entity, feature, morph
 /// target — another one lands on too, one of them binding it whole: per-axis
 /// animatables alone each set their own component, so they do not contend.
-fn contended(by_id: &HashMap<String, Vec<Bound>>) -> HashSet<String> {
-    let target = |bound: &Bound| (bound.entity, bound.feature.clone(), bound.morph_index);
+fn contended(by_id: &HashMap<String, Vec<SceneBinding>>) -> HashSet<String> {
+    let target = |bound: &SceneBinding| (bound.entity, bound.feature.clone(), bound.morph_index);
     // Per target: how many land on it, and whether one binds it whole.
     let mut sharing = HashMap::new();
     for bound in by_id.values().flatten() {
@@ -1643,15 +2049,20 @@ fn contended(by_id: &HashMap<String, Vec<Bound>>) -> HashSet<String> {
 /// shows is left alone, so an unchanged transform, morph weight or surface
 /// is not marked changed and what follows from it (transform propagation,
 /// the morph weights' upload) is not done again.
-fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneFeatures) {
-    for mut face in &mut faces {
-        if !face.bindings.indexed {
+fn apply_poses(
+    mut faces: Query<(&EntityInstance, &mut Face)>,
+    holds: Res<Holds>,
+    mut scene: SceneFeatures,
+) {
+    for (instance, mut face) in &mut faces {
+        if !instance.bindings.indexed {
             continue;
         }
         let face = &mut *face;
-        let held = holds.of(&face.id);
-        let bindings = &mut face.bindings;
-        let reland = std::mem::take(&mut bindings.reland);
+        let held = holds.of(&instance.id);
+        let bindings = &instance.bindings;
+        let pose = &mut face.pose;
+        let reland = std::mem::take(&mut pose.reland);
         face.rig.visit_pose(|id, value| {
             // The rig keys its pose by bare animatable id.
             // Every place it lands takes the same feature and component:
@@ -1667,8 +2078,7 @@ fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneF
             };
             if let Some(held) = held {
                 let shown = || {
-                    bindings
-                        .shown
+                    pose.shown
                         .get(id)
                         .copied()
                         .or_else(|| scene.read(bound.entity, &bound.feature, bound.morph_index))
@@ -1678,31 +2088,20 @@ fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneF
                     None => return,
                 }
             }
-            if !reland
-                && bindings.shown.get(id) == Some(&decoded)
-                && !bindings.contended.contains(id)
-            {
+            if !reland && pose.shown.get(id) == Some(&decoded) && !pose.contended.contains(id) {
                 return;
             }
             for bound in bounds {
-                scene.land(&mut bindings.assembled, bound, decoded);
+                scene.land(&mut pose.assembled, bound, decoded);
             }
-            match bindings.shown.get_mut(id) {
+            match pose.shown.get_mut(id) {
                 Some(shown) => *shown = decoded,
                 None => {
-                    bindings.shown.insert(id.to_string(), decoded);
+                    pose.shown.insert(id.to_string(), decoded);
                 }
             }
         });
     }
-}
-
-/// A feature value in the form the scene takes it: a triple (a vector, an
-/// euler, a linear RGB colour) or a scalar.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum Decoded {
-    Triple([f32; 3]),
-    Scalar(f32),
 }
 
 /// `value` read as what `feature` takes — or, for a per-axis binding, its
@@ -1749,17 +2148,30 @@ struct SceneFeatures<'w, 's> {
 
 impl SceneFeatures<'_, '_> {
     /// Land `value` where `bound` says. A per-axis value replaces its
-    /// component of the triple in `assembled` — seeded from what the scene
-    /// shows on the component's first write — and the triple is applied; a
+    /// component of the triple the scene shows now — a translation, a scale,
+    /// a colour — and the triple is applied, so the other components stay
+    /// wherever the last writer of any kind left them (a drag, an
+    /// animation, another rig output). A rotation's angles do not read back,
+    /// so a per-axis rotation replaces its angle of the triple in
+    /// `assembled`, seeded from what the scene shows on the first write; a
     /// whole value is applied as is, and the next per-axis write seeds anew.
     fn land(
         &mut self,
         assembled: &mut HashMap<(Entity, FeatureKind), [f32; 3]>,
-        bound: &Bound,
+        bound: &SceneBinding,
         value: Decoded,
     ) {
         let key = || (bound.entity, bound.feature.clone());
         match (bound.axis, value) {
+            (Some(axis), Decoded::Scalar(component)) if bound.feature != FeatureKind::Rotation => {
+                let Some(Decoded::Triple(mut triple)) =
+                    self.read(bound.entity, &bound.feature, None)
+                else {
+                    return;
+                };
+                triple[axis] = component;
+                self.apply(bound.entity, &bound.feature, None, Decoded::Triple(triple));
+            }
             (Some(axis), Decoded::Scalar(component)) => {
                 let triple = match assembled.entry(key()) {
                     Entry::Occupied(entry) => entry.into_mut(),
@@ -1778,7 +2190,7 @@ impl SceneFeatures<'_, '_> {
             }
             (Some(_), Decoded::Triple(_)) => {}
             (None, value) => {
-                if bound.feature.axes().is_some() && !assembled.is_empty() {
+                if bound.feature == FeatureKind::Rotation && !assembled.is_empty() {
                     assembled.remove(&key());
                 }
                 self.apply(bound.entity, &bound.feature, bound.morph_index, value);
@@ -1918,6 +2330,7 @@ fn as_rgb(value: &Value) -> Option<[f32; 3]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arora_visuals::control::ControlSystems;
 
     const BOUNDS: Vec2 = Vec2::new(4.0, 2.0);
     const NO_ZOOM: Vec2 = Vec2::ONE;
@@ -2066,7 +2479,10 @@ mod tests {
             unlit: false,
         };
         let meta = FaceMeta {
-            root_bounds: Some((1.0, 2.0, 3.0, 4.0)),
+            asset: meta::AssetMeta {
+                root_bounds: Some((1.0, 2.0, 3.0, 4.0)),
+                ..Default::default()
+            },
             ..FaceMeta::default()
         };
         let page = Framing::of(&meta, &options, None);
@@ -2142,7 +2558,7 @@ mod tests {
         let mut world = World::new();
         world.init_resource::<Assets<StandardMaterial>>();
         let node = world.spawn(Transform::from_xyz(1.0, 2.0, 3.0)).id();
-        let axis = |feature: FeatureKind, axis: usize| Bound {
+        let axis = |feature: FeatureKind, axis: usize| SceneBinding {
             entity: node,
             feature,
             axis: Some(axis),
@@ -2168,6 +2584,105 @@ mod tests {
             .abs_diff_eq(euler_zyx([0.1, 2.0, 0.0]), 1e-6));
     }
 
+    /// A per-axis write to a translation or a scale starts from what the
+    /// scene shows: after another writer moved the node — a drag, an
+    /// animation — the other axes stay where that writer left them, rather
+    /// than going back to what an earlier per-axis write saw.
+    #[test]
+    fn a_per_axis_write_keeps_what_another_writer_left() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let mut world = World::new();
+        world.init_resource::<Assets<StandardMaterial>>();
+        let node = world.spawn(Transform::from_xyz(1.0, 2.0, 3.0)).id();
+        let axis = |feature: FeatureKind, axis: usize| SceneBinding {
+            entity: node,
+            feature,
+            axis: Some(axis),
+            morph_index: None,
+        };
+        let land = |world: &mut World,
+                    assembled: HashMap<(Entity, FeatureKind), [f32; 3]>,
+                    writes: Vec<(SceneBinding, f32)>| {
+            world
+                .run_system_once(move |mut scene: SceneFeatures| {
+                    let mut assembled = assembled.clone();
+                    for (bound, value) in &writes {
+                        scene.land(&mut assembled, bound, Decoded::Scalar(*value));
+                    }
+                    assembled
+                })
+                .expect("runs")
+        };
+        let assembled = land(
+            &mut world,
+            HashMap::new(),
+            vec![
+                (axis(FeatureKind::Translation, 0), 5.0),
+                (axis(FeatureKind::Scale, 0), 2.0),
+            ],
+        );
+        {
+            let mut transform = world.get_mut::<Transform>(node).expect("a transform");
+            transform.translation = Vec3::new(10.0, 20.0, 30.0);
+            transform.scale = Vec3::new(4.0, 5.0, 6.0);
+        }
+        land(
+            &mut world,
+            assembled,
+            vec![
+                (axis(FeatureKind::Translation, 0), 7.0),
+                (axis(FeatureKind::Scale, 0), 3.0),
+            ],
+        );
+        let transform = world.get::<Transform>(node).expect("a transform");
+        assert_eq!(transform.translation, Vec3::new(7.0, 20.0, 30.0));
+        assert_eq!(transform.scale, Vec3::new(3.0, 5.0, 6.0));
+    }
+
+    /// Once a reloaded face is ready, the face it supersedes under the same
+    /// id goes, and a superseded face under another id stays.
+    #[test]
+    fn a_ready_reload_retires_the_face_it_supersedes() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let mut app = App::new();
+        let assets = FaceAssets::register(&mut app);
+        app.init_resource::<Slots>();
+        let world = app.world_mut();
+        let face = |world: &mut World, id: &str, ready: bool, superseded: bool| {
+            let camera = world.spawn_empty().id();
+            let mut spawned = world.spawn((
+                EntityInstance {
+                    id: id.into(),
+                    asset_path: assets.push(id, Vec::new()),
+                    meta: AssetMeta::default(),
+                    bindings: SceneBindings::default(),
+                    camera,
+                    draw_order: drawing_order(0),
+                    ready,
+                },
+                Face {
+                    bundle: Default::default(),
+                    rig: vizij_arora_hal::RigHal::new(),
+                    slot: 0,
+                    pose: PoseState::default(),
+                },
+            ));
+            if superseded {
+                spawned.insert(Superseded);
+            }
+            spawned.id()
+        };
+        let old = face(world, "a", true, true);
+        let new = face(world, "a", true, false);
+        let other = face(world, "b", true, true);
+        world.run_system_once(retire_superseded).expect("runs");
+        assert!(world.get_entity(old).is_err(), "the superseded face went");
+        assert!(world.get_entity(new).is_ok());
+        assert!(world.get_entity(other).is_ok(), "another id's face stays");
+    }
+
     /// A pose value the scene already shows is not landed again: the
     /// transform it drives is not marked changed. A changed value lands, and
     /// so does the whole pose on the frame after a static feature landed.
@@ -2188,27 +2703,34 @@ mod tests {
                 &arora_types::data::StateChange::set(id.as_str(), vec3(value)),
             )
         };
-        let bound = Bound {
+        let bound = SceneBinding {
             entity: node,
             feature: FeatureKind::Translation,
             axis: None,
             morph_index: None,
         };
         let face = world
-            .spawn(Face {
-                id: "face".into(),
-                meta: FaceMeta::default(),
-                asset_path: String::new(),
-                rig: rig.clone(),
-                slot: 0,
-                bindings: Bindings {
-                    by_id: HashMap::from([(id.clone(), vec![bound])]),
-                    indexed: true,
-                    ..Default::default()
+            .spawn((
+                EntityInstance {
+                    id: "face".into(),
+                    asset_path: String::new(),
+                    meta: AssetMeta::default(),
+                    bindings: SceneBindings {
+                        by_id: HashMap::from([(id.clone(), vec![bound])]),
+                        indexed: true,
+                        ..Default::default()
+                    },
+                    camera: Entity::PLACEHOLDER,
+                    draw_order: drawing_order(0),
+                    ready: true,
                 },
-                camera: Entity::PLACEHOLDER,
-                ready: true,
-            })
+                Face {
+                    bundle: Default::default(),
+                    rig: rig.clone(),
+                    slot: 0,
+                    pose: PoseState::default(),
+                },
+            ))
             .id();
         let frame = |world: &mut World| {
             world.increment_change_tick();
@@ -2235,7 +2757,7 @@ mod tests {
         // A static feature lands over the pose: the next frame lands the
         // pose again, unchanged as it is.
         world.get_mut::<Transform>(node).unwrap().translation = Vec3::ZERO;
-        world.get_mut::<Face>(face).unwrap().bindings.reland = true;
+        world.get_mut::<Face>(face).unwrap().pose.reland = true;
         let (shown, _) = frame(&mut world);
         assert_eq!(shown, Vec3::new(4.0, 5.0, 6.0));
     }
@@ -2256,26 +2778,33 @@ mod tests {
         ];
         let id = "lids".to_string();
         let rig = vizij_arora_hal::RigHal::new();
-        let bound = |entity| Bound {
+        let bound = |entity| SceneBinding {
             entity,
             feature: FeatureKind::Translation,
             axis: None,
             morph_index: None,
         };
-        world.spawn(Face {
-            id: "face".into(),
-            meta: FaceMeta::default(),
-            asset_path: String::new(),
-            rig: rig.clone(),
-            slot: 0,
-            bindings: Bindings {
-                by_id: HashMap::from([(id.clone(), nodes.map(bound).to_vec())]),
-                indexed: true,
-                ..Default::default()
+        world.spawn((
+            EntityInstance {
+                id: "face".into(),
+                asset_path: String::new(),
+                meta: AssetMeta::default(),
+                bindings: SceneBindings {
+                    by_id: HashMap::from([(id.clone(), nodes.map(bound).to_vec())]),
+                    indexed: true,
+                    ..Default::default()
+                },
+                camera: Entity::PLACEHOLDER,
+                draw_order: drawing_order(0),
+                ready: true,
             },
-            camera: Entity::PLACEHOLDER,
-            ready: true,
-        });
+            Face {
+                bundle: Default::default(),
+                rig: rig.clone(),
+                slot: 0,
+                pose: PoseState::default(),
+            },
+        ));
 
         let drive = |value: [f32; 3]| {
             arora_hal::Hal::try_send(
@@ -2299,7 +2828,7 @@ mod tests {
     fn a_whole_binding_contends_with_whatever_shares_its_target() {
         let mut world = World::new();
         let (a, b) = (world.spawn_empty().id(), world.spawn_empty().id());
-        let bound = |entity, axis| Bound {
+        let bound = |entity, axis| SceneBinding {
             entity,
             feature: FeatureKind::Translation,
             axis,
@@ -2516,5 +3045,633 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// An app running only what answers loads: the requests drained, a
+    /// failed scene answered. No GLB loader is registered, so every scene
+    /// fails to load.
+    fn answering_app() -> (App, std::sync::mpsc::Sender<ViewEvent>) {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let mut app = App::new();
+        FaceAssets::register(&mut app);
+        app.add_plugins((MinimalPlugins, bevy::asset::AssetPlugin::default()))
+            .init_asset::<WorldAsset>()
+            .init_resource::<Slots>()
+            .init_resource::<Placements>()
+            .init_resource::<FaceViews>()
+            .init_resource::<PendingStatics>()
+            .init_resource::<Selections>()
+            .init_resource::<Holds>()
+            .init_resource::<Compositions>()
+            .init_resource::<ControlCommands>()
+            .init_resource::<Controls>()
+            .insert_resource(ViewOptions {
+                background: Color::BLACK,
+                fit: Fit::Contain,
+                zoom: Vec2::ONE,
+                ambient: std::f32::consts::FRAC_PI_2,
+                unlit: false,
+            })
+            .insert_resource(ViewEvents(Mutex::new(receiver)))
+            .add_message::<FaceEvent>()
+            .add_plugins(ControlsPlugin)
+            .add_systems(
+                Update,
+                (
+                    answering_systems(),
+                    name_control_views.in_set(InstanceSystems::Index),
+                ),
+            );
+        (app, sender)
+    }
+
+    fn load(face_id: &str) -> ViewEvent {
+        ViewEvent::LoadFace {
+            face_id: face_id.into(),
+            meta: Box::new(FaceMeta {
+                asset: AssetMeta::default(),
+                bundle: Default::default(),
+            }),
+            glb: b"not a GLB".to_vec(),
+            rig: vizij_arora_hal::RigHal::new(),
+        }
+    }
+
+    /// Run frames until `count` answers have come, or give up.
+    fn answers(
+        app: &mut App,
+        cursor: &mut bevy::ecs::message::MessageCursor<FaceEvent>,
+        count: usize,
+    ) -> Vec<FaceEvent> {
+        let mut seen = Vec::new();
+        for _ in 0..200 {
+            app.update();
+            let messages = app.world().resource::<Messages<FaceEvent>>();
+            seen.extend(cursor.read(messages).cloned());
+            if seen.len() >= count {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        seen
+    }
+
+    fn transform_on(key: &str, face_id: &str) -> ViewEvent {
+        ViewEvent::Control(
+            serde_json::from_value(serde_json::json!({
+                "op": "add",
+                "key": key,
+                "control": {
+                    "kind": "transform",
+                    "target": { "kind": "instance", "instance": face_id },
+                },
+            }))
+            .expect("a control command"),
+        )
+    }
+
+    /// A joint control, and a goal naming no view, are refused where they
+    /// are asked for, and never reach the controls' queue; a transform
+    /// control on a face, and a goal naming the face it is used through, are
+    /// taken.
+    #[test]
+    fn controls_a_face_cannot_place_are_refused() {
+        let command = |value: serde_json::Value| {
+            serde_json::from_value::<ControlCommand>(value).expect("a control command")
+        };
+        let joint = command(serde_json::json!({
+            "op": "add",
+            "key": "neck",
+            "control": { "kind": "joint", "instance": "face", "joint": "neck" },
+        }));
+        let goal = |key: &str, view: Option<&str>| {
+            let mut target = serde_json::json!({
+                "kind": "goal",
+                "pose": { "position": [0, 0, 0] },
+            });
+            if let Some(view) = view {
+                target["view"] = view.into();
+            }
+            command(serde_json::json!({
+                "op": "add",
+                "key": key,
+                "control": { "kind": "transform", "target": target },
+            }))
+        };
+        assert!(refuse_controls(&joint).unwrap_err().contains("no joints"));
+        assert!(refuse_controls(&goal("aim", None))
+            .unwrap_err()
+            .contains("names no view"));
+        assert_eq!(refuse_controls(&goal("aim", Some("face"))), Ok(()));
+
+        // What the intake queued, read before the controls carry it out.
+        #[derive(Resource, Default)]
+        struct Queued(Vec<String>);
+        let (mut app, sender) = answering_app();
+        app.init_resource::<Queued>().add_systems(
+            Update,
+            (|commands: Res<ControlCommands>, mut queued: ResMut<Queued>| {
+                queued
+                    .0
+                    .extend(commands.0.iter().filter_map(|command| match command {
+                        ControlCommand::Add { key, .. } => Some(key.clone()),
+                        _ => None,
+                    }));
+            })
+            .after(InstanceSystems::Intake)
+            .before(ControlSystems::Commands),
+        );
+        sender.send(ViewEvent::Control(joint)).unwrap();
+        sender
+            .send(ViewEvent::Control(goal("anywhere", None)))
+            .unwrap();
+        sender.send(transform_on("move", "face")).unwrap();
+        sender
+            .send(ViewEvent::Control(goal("aim", Some("face"))))
+            .unwrap();
+        app.update();
+        assert_eq!(app.world().resource::<Queued>().0, ["move", "aim"]);
+    }
+
+    /// A control sent for a face that is unloaded before it is placed goes
+    /// with the face, and does not land on a face loaded under the same id
+    /// after it: neither a control on the face nor a goal used through its
+    /// camera. Another face's control is placed.
+    #[test]
+    fn an_unload_forgets_the_controls_sent_for_its_face() {
+        let (mut app, sender) = answering_app();
+        for event in [
+            load("a"),
+            load("b"),
+            transform_on("on-a", "a"),
+            goal_through("through-a", "a"),
+            transform_on("on-b", "b"),
+            ViewEvent::UnloadFace {
+                face_id: "a".into(),
+            },
+            load("a"),
+        ] {
+            sender.send(event).unwrap();
+        }
+        // One frame: a face's scene here soon fails (nothing loads its GLB),
+        // taking the controls on it; until then a control on it waits.
+        app.update();
+        let controls = app.world().resource::<Controls>();
+        let waiting: Vec<&str> = app
+            .world()
+            .resource::<ControlCommands>()
+            .0
+            .iter()
+            .map(ControlCommand::key)
+            .collect();
+        assert!(
+            controls.gizmo("on-b").is_some() || waiting == ["on-b"],
+            "another face's is kept: waiting {waiting:?}"
+        );
+        for key in ["on-a", "through-a"] {
+            assert!(controls.gizmo(key).is_none(), "{key} went with its face");
+            assert!(!waiting.contains(&key), "{key} is not waiting");
+        }
+    }
+
+    /// An unload takes the face's selection with it, so a face loaded under
+    /// the same id later starts with nothing outlined; another face's
+    /// selection stays.
+    #[test]
+    fn an_unload_clears_the_faces_selection() {
+        let (mut app, sender) = answering_app();
+        for face_id in ["a", "b"] {
+            sender
+                .send(ViewEvent::SetSelection {
+                    face_id: face_id.into(),
+                    elements: vec!["eye".into()],
+                })
+                .unwrap();
+        }
+        app.update();
+        let selected =
+            |app: &App, face_id: &str| app.world().resource::<Selections>().0.contains_key(face_id);
+        assert!(selected(&app, "a") && selected(&app, "b"));
+        sender
+            .send(ViewEvent::UnloadFace {
+                face_id: "a".into(),
+            })
+            .unwrap();
+        app.update();
+        assert!(!selected(&app, "a"), "the unloaded face's selection went");
+        assert!(selected(&app, "b"), "another face's stays");
+    }
+
+    fn failed(face_id: &str, error: &str) -> FaceEvent {
+        FaceEvent::LoadFailed {
+            face_id: face_id.into(),
+            error: error.into(),
+        }
+    }
+
+    /// A load replaced before its scene is indexed, and one whose instance
+    /// is unloaded, are each answered once, in the order they were asked
+    /// for, and take their face down.
+    #[test]
+    fn an_unanswered_load_replaced_or_unloaded_fails_saying_why() {
+        let (mut app, sender) = answering_app();
+        let mut cursor = app.world().resource::<Messages<FaceEvent>>().get_cursor();
+        sender.send(load("a")).unwrap();
+        sender.send(load("a")).unwrap();
+        sender
+            .send(ViewEvent::UnloadFace {
+                face_id: "a".into(),
+            })
+            .unwrap();
+        assert_eq!(
+            answers(&mut app, &mut cursor, 2),
+            [failed("a", REPLACED), failed("a", UNLOADED)]
+        );
+        let mut faces = app.world_mut().query::<&EntityInstance>();
+        assert_eq!(faces.iter(app.world()).count(), 0);
+        assert_eq!(answers(&mut app, &mut cursor, 1), [], "nothing more");
+    }
+
+    /// A load whose scene fails to load is answered with the loader's
+    /// error, and the face it was to replace is the instance's face again.
+    #[test]
+    fn a_scene_that_fails_to_load_answers_its_load_and_keeps_the_face_before() {
+        let (mut app, sender) = answering_app();
+        let mut cursor = app.world().resource::<Messages<FaceEvent>>().get_cursor();
+        let shown = app
+            .world_mut()
+            .spawn((
+                EntityInstance {
+                    id: "a".into(),
+                    asset_path: String::new(),
+                    meta: AssetMeta::default(),
+                    bindings: SceneBindings::default(),
+                    camera: Entity::PLACEHOLDER,
+                    draw_order: drawing_order(0),
+                    ready: true,
+                },
+                Face {
+                    bundle: Default::default(),
+                    rig: vizij_arora_hal::RigHal::new(),
+                    slot: 0,
+                    pose: PoseState::default(),
+                },
+                LoadReport {
+                    serial: 0,
+                    answer: Answer::Loaded,
+                },
+            ))
+            .id();
+        app.world_mut().resource_mut::<Slots>().take();
+        // An older face under the id, superseded by the one shown.
+        let older = app
+            .world_mut()
+            .spawn((
+                EntityInstance {
+                    id: "a".into(),
+                    asset_path: String::new(),
+                    meta: AssetMeta::default(),
+                    bindings: SceneBindings::default(),
+                    camera: Entity::PLACEHOLDER,
+                    draw_order: drawing_order(1),
+                    ready: false,
+                },
+                Face {
+                    bundle: Default::default(),
+                    rig: vizij_arora_hal::RigHal::new(),
+                    slot: 1,
+                    pose: PoseState::default(),
+                },
+                LoadReport {
+                    serial: 0,
+                    answer: Answer::Loaded,
+                },
+                Superseded,
+            ))
+            .id();
+        app.world_mut().get_mut::<LoadReport>(shown).unwrap().serial = 1;
+        app.world_mut().resource_mut::<Slots>().take();
+        sender.send(load("a")).unwrap();
+        let told = answers(&mut app, &mut cursor, 1);
+        let [FaceEvent::LoadFailed { face_id, error }] = told.as_slice() else {
+            panic!("one failure, got {told:?}");
+        };
+        assert_eq!(face_id, "a");
+        assert!(
+            error != REPLACED && error != UNLOADED,
+            "the loader's: {error}"
+        );
+        app.update();
+        assert!(!app.world().entity(shown).contains::<Superseded>());
+        assert!(
+            app.world().entity(older).contains::<Superseded>(),
+            "only the newest face before is current again"
+        );
+        let mut faces = app.world_mut().query::<&EntityInstance>();
+        assert_eq!(
+            faces.iter(app.world()).count(),
+            2,
+            "the failed face is gone"
+        );
+    }
+
+    /// A load or an unload in a later frame than the load it cancels, while
+    /// that load is still unanswered, answers it as replaced or unloaded.
+    #[test]
+    fn a_later_reload_or_unload_answers_the_load_it_cancels() {
+        let (mut app, sender) = answering_app();
+        let mut cursor = app.world().resource::<Messages<FaceEvent>>().get_cursor();
+        sender.send(load("a")).unwrap();
+        app.update();
+        sender.send(load("a")).unwrap();
+        app.update();
+        sender
+            .send(ViewEvent::UnloadFace {
+                face_id: "a".into(),
+            })
+            .unwrap();
+        assert_eq!(
+            answers(&mut app, &mut cursor, 2),
+            [failed("a", REPLACED), failed("a", UNLOADED)]
+        );
+    }
+
+    /// A control sent in the same batch as its face's load finds the face:
+    /// neither a goal used through the face, by its id, nor a control on the
+    /// face is refused; each waits for the load's answer. When the load fails
+    /// with no face before it, neither is left waiting.
+    #[test]
+    fn a_control_sent_with_its_faces_load_finds_the_face() {
+        let (mut app, sender) = answering_app();
+        let mut cursor = app.world().resource::<Messages<FaceEvent>>().get_cursor();
+        sender.send(load("a")).unwrap();
+        sender.send(goal_through("goal", "a")).unwrap();
+        sender.send(transform_on("on-a", "a")).unwrap();
+        app.update();
+        assert_eq!(
+            waiting_keys(&app),
+            ["goal", "on-a"],
+            "both wait for the face"
+        );
+        let told = answers(&mut app, &mut cursor, 1);
+        assert!(
+            matches!(told.as_slice(), [FaceEvent::LoadFailed { .. }]),
+            "{told:?}"
+        );
+        app.update();
+        assert_eq!(
+            waiting_keys(&app),
+            Vec::<String>::new(),
+            "nothing waits for good"
+        );
+        assert!(app.world().resource::<Controls>().gizmo("goal").is_none());
+    }
+
+    fn goal_through(key: &str, view: &str) -> ViewEvent {
+        ViewEvent::Control(
+            serde_json::from_value(serde_json::json!({
+                "op": "add",
+                "key": key,
+                "control": {
+                    "kind": "transform",
+                    "target": {
+                        "kind": "goal",
+                        "pose": { "position": [0, 0, 0] },
+                        "view": view,
+                    },
+                },
+            }))
+            .expect("a control command"),
+        )
+    }
+
+    /// The keys of the control commands still waiting.
+    fn waiting_keys(app: &App) -> Vec<String> {
+        app.world()
+            .resource::<ControlCommands>()
+            .0
+            .iter()
+            .map(|command| command.key().to_string())
+            .collect()
+    }
+
+    /// A face shown under `id`, drawn and answered `Loaded`, with a camera
+    /// carrying what [`ViewEvent::LoadFace`] gives one and the view name a
+    /// shown face's camera carries: what a reload replaces.
+    fn shown_face(app: &mut App, id: &str) -> (Entity, Entity) {
+        let slot = app.world_mut().resource_mut::<Slots>().take();
+        let options = app.world().resource::<ViewOptions>().clone();
+        let asset_path = app.world().resource::<FaceAssets>().push(id, Vec::new());
+        let camera = app
+            .world_mut()
+            .spawn(camera_for(
+                Framing::of(&AssetMeta::default(), &options, None),
+                slot,
+                None,
+            ))
+            .id();
+        let face = app
+            .world_mut()
+            .spawn((
+                EntityInstance {
+                    id: id.into(),
+                    asset_path,
+                    meta: AssetMeta::default(),
+                    bindings: SceneBindings {
+                        indexed: true,
+                        ..SceneBindings::default()
+                    },
+                    camera,
+                    draw_order: drawing_order(slot),
+                    ready: true,
+                },
+                Face {
+                    bundle: Default::default(),
+                    rig: vizij_arora_hal::RigHal::new(),
+                    slot,
+                    pose: PoseState::default(),
+                },
+                LoadReport {
+                    serial: 0,
+                    answer: Answer::Loaded,
+                },
+                Transform::from_translation(slot_origin(slot)),
+            ))
+            .id();
+        app.world_mut().entity_mut(camera).insert((
+            ViewOf(face),
+            ControlView(id.into()),
+            ControlSize {
+                transform: Some(FACE_CONTROL_SIZE),
+                joint: Some(FACE_CONTROL_SIZE),
+            },
+        ));
+        (face, camera)
+    }
+
+    /// The cameras answering to the view `name`.
+    fn answering(app: &mut App, name: &str) -> Vec<Entity> {
+        let mut named = app.world_mut().query::<(Entity, &ControlView)>();
+        named
+            .iter(app.world())
+            .filter(|(_, view)| view.0 == name)
+            .map(|(camera, _)| camera)
+            .collect()
+    }
+
+    /// The camera the control under `key` is used through, once placed.
+    fn used_through(app: &App, key: &str) -> Option<Entity> {
+        let gizmo = app.world().resource::<Controls>().gizmo(key)?;
+        app.world()
+            .get::<arora_visuals::transform_gizmo::TransformGizmo>(gizmo)
+            .map(|gizmo| gizmo.camera)
+    }
+
+    /// A goal sent with a reload of the face it names waits for the reload's
+    /// answer, rather than taking the camera of the face being replaced, and
+    /// once the new face has loaded it is used through the new face's
+    /// camera, so it stays when the replaced face is retired.
+    #[test]
+    fn a_goal_sent_during_a_reload_lands_on_the_new_face() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let (mut app, sender) = answering_app();
+        let (old, old_camera) = shown_face(&mut app, "a");
+        app.update();
+        assert_eq!(answering(&mut app, "a"), [old_camera]);
+
+        sender.send(load("a")).unwrap();
+        sender.send(goal_through("aim", "a")).unwrap();
+        app.update();
+        assert_eq!(
+            answering(&mut app, "a"),
+            [],
+            "no camera answers to the face while its reload is unanswered"
+        );
+        assert_eq!(used_through(&app, "aim"), None, "the goal waits");
+        assert_eq!(waiting_keys(&app), ["aim"]);
+
+        // The reload's scene indexed, as `index_faces` leaves it.
+        let mut faces = app
+            .world_mut()
+            .query::<(Entity, &mut EntityInstance, &mut LoadReport)>();
+        let mut new_camera = None;
+        for (entity, mut instance, mut report) in faces.iter_mut(app.world_mut()) {
+            if entity != old {
+                instance.bindings.indexed = true;
+                report.answer = Answer::Loaded;
+                new_camera = Some(instance.camera);
+            }
+        }
+        let new_camera = new_camera.expect("the reload's face");
+        app.update();
+        assert_eq!(answering(&mut app, "a"), [new_camera]);
+        assert_eq!(used_through(&app, "aim"), Some(new_camera));
+
+        // The new face drawn: the replaced face goes, the goal stays.
+        let mut faces = app.world_mut().query::<(Entity, &mut EntityInstance)>();
+        for (entity, mut instance) in faces.iter_mut(app.world_mut()) {
+            if entity != old {
+                instance.ready = true;
+            }
+        }
+        app.world_mut()
+            .run_system_once(retire_superseded)
+            .expect("runs");
+        app.update();
+        assert!(app.world().get_entity(old_camera).is_err(), "retired");
+        assert_eq!(
+            used_through(&app, "aim"),
+            Some(new_camera),
+            "the goal stays"
+        );
+    }
+
+    /// A goal sent with a reload whose scene fails waits for the answer,
+    /// rather than taking the camera of the failing load, and is then used
+    /// through the face that still shows.
+    #[test]
+    fn a_goal_sent_during_a_failed_reload_lands_on_the_face_kept() {
+        let (mut app, sender) = answering_app();
+        let mut cursor = app.world().resource::<Messages<FaceEvent>>().get_cursor();
+        let (_, kept_camera) = shown_face(&mut app, "a");
+        app.update();
+
+        sender.send(load("a")).unwrap();
+        sender.send(goal_through("aim", "a")).unwrap();
+        app.update();
+        assert_eq!(answering(&mut app, "a"), []);
+        assert_eq!(used_through(&app, "aim"), None, "the goal waits");
+
+        let told = answers(&mut app, &mut cursor, 1);
+        assert!(
+            matches!(told.as_slice(), [FaceEvent::LoadFailed { .. }]),
+            "{told:?}"
+        );
+        app.update();
+        assert_eq!(answering(&mut app, "a"), [kept_camera]);
+        assert_eq!(used_through(&app, "aim"), Some(kept_camera));
+    }
+
+    /// A face is told ready as the shared layer reports it, saying whether
+    /// it was seen drawn; a report for anything but a current face says
+    /// nothing.
+    #[test]
+    fn ready_says_what_the_shared_layer_saw() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let mut world = World::new();
+        world.init_resource::<Messages<FaceEvent>>();
+        world.init_resource::<Messages<drawn::InstanceReady>>();
+        let quick = world
+            .spawn(LoadReport {
+                serial: 0,
+                answer: Answer::Loaded,
+            })
+            .id();
+        let slow = world
+            .spawn(LoadReport {
+                serial: 1,
+                answer: Answer::Loaded,
+            })
+            .id();
+        let replaced = world
+            .spawn((
+                LoadReport {
+                    serial: 2,
+                    answer: Answer::Loaded,
+                },
+                Superseded,
+            ))
+            .id();
+        let not_a_face = world.spawn_empty().id();
+        for (instance, id, drawn) in [
+            (quick, "quick", true),
+            (slow, "slow", false),
+            (replaced, "replaced", true),
+            (not_a_face, "other", true),
+        ] {
+            world.write_message(drawn::InstanceReady {
+                instance,
+                id: id.into(),
+                drawn,
+            });
+        }
+        world.run_system_once(report_ready).expect("runs");
+        let messages = world.resource::<Messages<FaceEvent>>();
+        let told: Vec<_> = messages.get_cursor().read(messages).cloned().collect();
+        assert_eq!(
+            told,
+            [
+                FaceEvent::Ready {
+                    face_id: "quick".into(),
+                    drawn: true
+                },
+                FaceEvent::Ready {
+                    face_id: "slow".into(),
+                    drawn: false
+                },
+            ]
+        );
     }
 }

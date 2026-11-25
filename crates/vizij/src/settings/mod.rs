@@ -51,7 +51,6 @@ use bevy_egui::{
 };
 
 use crate::native::RuntimeHandle;
-use crate::view::meta::FaceMeta;
 use crate::view::{Face, Superseded, ViewOptions};
 
 /// The pane, over the face a platform's app shows.
@@ -232,8 +231,8 @@ fn spawn_camera(mut commands: Commands) {
 }
 
 /// The id a face's background is kept under.
-fn face_key(meta: &FaceMeta) -> String {
-    meta.bundle
+fn face_key(bundle: &vizij_arora_host::Bundle) -> String {
+    bundle
         .face_id
         .as_deref()
         .filter(|id| !id.is_empty())
@@ -249,7 +248,7 @@ fn follow_face(
 ) {
     let app_background = *pane.app_background.get_or_insert(options.background);
     for face in &faces {
-        let key = face_key(&face.meta);
+        let key = face_key(&face.bundle);
         options.background = pane
             .kept
             .background(&key)

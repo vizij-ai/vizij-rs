@@ -1,5 +1,5 @@
 // Arora wasm modules load into a device as guests: `startRuntime(graph,
-// init, modules)` and `loadVizij`'s `options.modules` take `{ headerJson,
+// init, modules)` and `load`'s `options.modules` take `{ headerJson,
 // wasmBytes }` pairs, instantiated by the device's engine at build. The guest
 // is Arora's animation module, built from arora-animation-module on
 // crates.io (`animation-guest.mjs`): a component of Arora's `arora:module`

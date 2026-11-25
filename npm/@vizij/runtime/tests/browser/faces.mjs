@@ -1,5 +1,6 @@
 // Two faces on one canvas, each in its own rectangle, and a click on each
-// reported as a pick naming the face and the element the GLB declares.
+// reported as a pick naming the face and the element the GLB declares; a
+// handler set late hears the overlay and the safe areas as they stand.
 // Needs `VIZIJ_FIXTURES`; skips without.
 import assert from "node:assert/strict";
 import { FIXTURES, loadVizij, open, settled } from "./common.mjs";
@@ -26,7 +27,10 @@ try {
       const bytes = new Uint8Array(await (await fetch(`/fixtures/${file}`)).arrayBuffer());
       return (await vizij.describe(bytes)).elements.map((e) => e.id);
     };
-    return { left: await ids("Quori_Current_Extended.glb"), right: await ids("Toasty_Current.glb") };
+    return {
+      left: await ids("Quori_Current_Extended.glb"),
+      right: await ids("Toasty_Current.glb"),
+    };
   });
   assert.ok(elements.left.length > 0 && elements.right.length > 0);
 
@@ -45,16 +49,33 @@ try {
       await page.mouse.up();
       await frames(3);
       const picks = await page.evaluate(() => window.vizijHarness.picks());
-      if (picks.some((p) => p.vizijId === face)) return picks;
+      if (picks.some((p) => p.instance === face)) return picks;
     }
     return [];
   };
   const picks = [...(await press("left", 190, 243)), ...(await press("right", 572, 243))];
-  const byFace = (id) => picks.filter((p) => p.vizijId === id);
+  const byFace = (id) => picks.filter((p) => p.instance === id);
   assert.ok(byFace("left").length >= 1, `no pick on the left face: ${JSON.stringify(picks)}`);
   assert.ok(byFace("right").length >= 1, `no pick on the right face: ${JSON.stringify(picks)}`);
-  for (const pick of byFace("left")) assert.ok(elements.left.includes(pick.elementId), pick.elementId);
-  for (const pick of byFace("right")) assert.ok(elements.right.includes(pick.elementId), pick.elementId);
+  for (const pick of byFace("left")) assert.ok(elements.left.includes(pick.element), pick.element);
+  for (const pick of byFace("right"))
+    assert.ok(elements.right.includes(pick.element), pick.element);
+
+  // A handler set late starts with the overlay and every face's safe area
+  // as they stand, though neither face has moved since they were last sent.
+  const from = await page.evaluate(() => window.vizijHarness.listenAgain());
+  await frames(3);
+  const heard = (await page.evaluate(() => window.vizijHarness.events())).slice(from);
+  assert.ok(
+    heard.some((e) => e.type === "overlay"),
+    `no overlay for a new handler: ${JSON.stringify(heard.map((e) => e.type))}`,
+  );
+  for (const face of ["left", "right"]) {
+    assert.ok(
+      heard.some((e) => e.type === "safeArea" && e.instance === face && e.area),
+      `no safe area of ${face} for a new handler`,
+    );
+  }
 
   const state = await page.evaluate(() => window.vizijHarness.state());
   assert.deepEqual(state.stepErrors, []);

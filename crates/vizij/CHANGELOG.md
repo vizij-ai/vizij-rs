@@ -20,7 +20,7 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   alike. The browser device describes its face the same way.
 - The settings pane (`vizij::settings`, feature `settings`, which `desktop`
   enables and the Android app is built with): the Vizij standalone's
-  Settings page over the face, drawn with egui (bevy_egui 0.42). A tap or
+  Settings page over the face, drawn with egui (bevy_egui 0.43). A tap or
   click on the face shows its Settings button; the pane holds the face shown
   and Open a face… (the file dialog on desktop, the document picker on
   Android), the background (swatches and a colour picker), kept per face in
@@ -117,6 +117,10 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   carries the Studio bridge unless the run passes `--no-studio`
   (`arora::studio::StudioArgs`), as the device the environment configures
   (`ARORA_DEVICE`, `ARORA_DEVICE_DIR`), and serves Studio's keys with it.
+- **Breaking:** requires Bevy 0.20 and bevy_egui 0.43. A host that adds
+  the view, the face or the settings pane to its own Bevy app moves to 0.20
+  with it. Every face renders as it did on Bevy 0.19, on desktop GPUs and on
+  lavapipe alike.
 - The desktop app's file dialog runs on rfd 0.17 and its data directory is
   found with dirs 7, in the same place.
 - Speech plays through rodio 0.23 on cpal 0.18, the cloud provider's
