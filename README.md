@@ -98,7 +98,7 @@ your own AWS-backed deployment, and where text enters — is in
 | ROS4HRI: typed face topics **and** the `/skill/look_at` gaze action | [ROS4HRI support](docs/ros4hri.md) |
 | Skills: goal-driven behaviors shipped as editable graph fragments, overridable per face — gaze, and the two viseme players | [Skills](docs/skills.md) |
 | Speech: the `say` skill, lips driven live — local Piper or the AWS-backed cloud provider | [Speech (TTS)](crates/vizij/README.md#speech-tts) |
-| Animation clips + node-graph programs from the face's `VIZIJ_bundle` | [the app README](crates/vizij/README.md) |
+| Animations + node-graph programs from the face's `VIZIJ_bundle` | [playing a face's animations](docs/animations.md), [the app README](crates/vizij/README.md) |
 | Bridges: local WebSocket (always on), ROS 2 (`--ros2`), Semio Studio (the `studio` build, unless `--no-studio`) | [the app README](crates/vizij/README.md) |
 | Headless rendering: one-shot snapshots or frames-to-store | [the app README](crates/vizij/README.md) |
 | Face assets as GLB bundles: inspect, pack, validate coverage (L0–L3) | [`vizij-bundle`](crates/tools/vizij-bundle/README.md) |
@@ -115,6 +115,7 @@ your own AWS-backed deployment, and where text enters — is in
 | Pilot faces from [Semio Studio](https://studio.semio.ai) | the `studio` build of the app, enrolled from its settings pane ([app README](crates/vizij/README.md)), or the standalone's studio-bridge build |
 | Pack, validate, or embed profiles and mappings into face assets | [`vizij-bundle`](crates/tools/vizij-bundle/README.md) — the model: [profiles and mappings](docs/profiles-and-mappings.md) |
 | Use the node-graph engine on its own | [vizij-graph-core](crates/node-graph/vizij-graph-core/README.md), or its [npm wrapper](#domain-stacks) |
+| Play the animations authored into a face | [playing a face's animations](docs/animations.md) — the module's transport, from Rust, a bridge, a page, or the face's own graphs |
 | Play keyframe animations on their own | Arora's [`arora-animation`](https://crates.io/crates/arora-animation) (the engine) and [`arora-animation-module`](https://crates.io/crates/arora-animation-module) (`@arora/animation`, the module a Vizij device links) |
 
 The rest of this README covers developing in the workspace itself.
@@ -463,6 +464,7 @@ These packages build quickly (`pnpm run build:shared`) and should be rebuilt whe
 
 - [vizij/README](crates/vizij/README.md) — the native app (the `vizij` binary)
 - [Face standard](docs/face-standard.md) & [ROS4HRI support](docs/ros4hri.md)
+- [Playing a face's animations](docs/animations.md) & [Skills](docs/skills.md)
 - [vizij-bundle/README](crates/tools/vizij-bundle/README.md) — the face-GLB bundle tool
 - [vizij-graph-core/README](crates/node-graph/vizij-graph-core/README.md)
 - [vizij-api-core/README](crates/api/vizij-api-core/README.md)
