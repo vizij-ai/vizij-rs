@@ -1,8 +1,8 @@
 /**
  * What the page's handle knows of each instance, kept from the module's
- * pushed events: which face each shows, which have a load under way, where
- * each face's safe area lies, and the promise of every load until its answer
- * arrives. Free of the wasm module, so it runs anywhere the module's events
+ * pushed events: which face each shows, which have a load under way, which
+ * faces are drawn, where each face's safe area lies, and the promise of every
+ * load until its answer arrives. Free of the wasm module, so it runs anywhere the module's events
  * can be fed to it.
  */
 
@@ -107,8 +107,11 @@ interface Pending<D> {
 
 /** What the handle knows of one instance. */
 interface Instance<D> {
-  /** The face showing, and the device its load resolved to, once one is. */
-  shown?: { face: ShownFace; device: D };
+  /**
+   * The face showing, and the device its load resolved to, once one is; with
+   * what its `ready` event said, once it is drawn.
+   */
+  shown?: { face: ShownFace; device: D; drawn?: boolean };
   /** Loads asked for and not yet answered, oldest first. */
   pending: Pending<D>[];
   /** The load asked for last and not yet answered, so a repeat joins it. */
@@ -125,6 +128,7 @@ export interface Faces<D> {
   unload(instance: string): void;
   readonly faces: ReadonlyMap<string, ShownFace>;
   readonly loading: ReadonlySet<string>;
+  readonly ready: ReadonlyMap<string, boolean>;
   readonly safeAreas: ReadonlyMap<string, Rect>;
 }
 
@@ -135,6 +139,11 @@ export interface Faces<D> {
 export function trackFaces<D>(module: FaceModule<D>): Faces<D> {
   const instances = new Map<string, Instance<D>>();
   const faces = new Map<string, ShownFace>();
+  // Reset exactly where the module stops reading a face ready: when a load
+  // into its instance starts, and when it is unloaded. A reloaded face is
+  // not ready until the new face is drawn, as its device's time does not
+  // start until then either.
+  const ready = new Map<string, boolean>();
   const safeAreas = new Map<string, Rect>();
   const instance = (id: string): Instance<D> => {
     let held = instances.get(id);
@@ -146,6 +155,7 @@ export function trackFaces<D>(module: FaceModule<D>): Faces<D> {
   };
   return {
     faces,
+    ready,
     safeAreas,
     get loading() {
       const ids = new Set<string>();
@@ -172,7 +182,19 @@ export function trackFaces<D>(module: FaceModule<D>): Faces<D> {
         }
         // With nothing it asked for left unanswered, the instance is no
         // longer loading — said before the handler hears of it.
-        if (!held.pending.some((waiting) => !waiting.unloaded)) held.loading = undefined;
+        if (!held.pending.some((waiting) => !waiting.unloaded)) {
+          held.loading = undefined;
+          // A failed load leaves the face it was to replace showing, which
+          // the module reads ready again if it was drawn: no `ready` comes
+          // for it a second time.
+          if (held.shown?.drawn !== undefined) ready.set(event.instance, held.shown.drawn);
+        }
+      } else if (event.type === "ready") {
+        // Always about the face whose `loaded` came last: the module makes
+        // only a face showing ready.
+        const shown = instances.get(event.instance)?.shown;
+        if (shown) shown.drawn = event.drawn;
+        ready.set(event.instance, event.drawn);
       } else if (event.type === "safeArea") {
         if (event.area) safeAreas.set(event.instance, event.area);
         else safeAreas.delete(event.instance);
@@ -197,6 +219,9 @@ export function trackFaces<D>(module: FaceModule<D>): Faces<D> {
       } catch (error) {
         return Promise.reject(error);
       }
+      // The module has stopped reading the instance ready; its face showing
+      // is ready again only when this load fails.
+      ready.delete(id);
       const answered = new Promise<D>((resolve, reject) =>
         held.pending.push({ key, device, resolve, reject }),
       );
@@ -211,6 +236,7 @@ export function trackFaces<D>(module: FaceModule<D>): Faces<D> {
     },
     unload(id) {
       faces.delete(id);
+      ready.delete(id);
       module.stop(id);
       const held = instances.get(id);
       if (!held) return;

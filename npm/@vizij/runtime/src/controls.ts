@@ -35,11 +35,7 @@ export interface GizmoAnchor {
 
 /** A transform control's handle, by axis (0, 1, 2 for X, Y, Z), or a joint's. */
 export type GizmoHandle =
-  | { Arrow: number }
-  | { Plane: number }
-  | { Ring: number }
-  | { Ball: number }
-  | "Joint";
+  { Arrow: number } | { Plane: number } | { Ring: number } | { Ball: number } | "Joint";
 
 /** One amount a control reads, along or about one axis. */
 export interface Reading {

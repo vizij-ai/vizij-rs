@@ -27,7 +27,10 @@ try {
       const bytes = new Uint8Array(await (await fetch(`/fixtures/${file}`)).arrayBuffer());
       return (await vizij.describe(bytes)).elements.map((e) => e.id);
     };
-    return { left: await ids("Quori_Current_Extended.glb"), right: await ids("Toasty_Current.glb") };
+    return {
+      left: await ids("Quori_Current_Extended.glb"),
+      right: await ids("Toasty_Current.glb"),
+    };
   });
   assert.ok(elements.left.length > 0 && elements.right.length > 0);
 
@@ -55,7 +58,8 @@ try {
   assert.ok(byFace("left").length >= 1, `no pick on the left face: ${JSON.stringify(picks)}`);
   assert.ok(byFace("right").length >= 1, `no pick on the right face: ${JSON.stringify(picks)}`);
   for (const pick of byFace("left")) assert.ok(elements.left.includes(pick.element), pick.element);
-  for (const pick of byFace("right")) assert.ok(elements.right.includes(pick.element), pick.element);
+  for (const pick of byFace("right"))
+    assert.ok(elements.right.includes(pick.element), pick.element);
 
   // A handler set late starts with the overlay and every face's safe area
   // as they stand, though neither face has moved since they were last sent.

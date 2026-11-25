@@ -995,7 +995,6 @@ export class Runtime {
   }
 }
 
-
 function bindings(): WasmBindings {
   const current = bindingCache.current;
   if (!current) {
@@ -1121,6 +1120,17 @@ export interface VizijHandle {
   readonly faces: ReadonlyMap<string, ShownFace>;
   /** The instances with a load under way, showing a face yet or not. */
   readonly loading: ReadonlySet<string>;
+  /**
+   * The faces drawn in their place, by instance, each with what its `ready`
+   * event said: whether it was seen drawn (`false` when readiness gave up
+   * waiting). Read this rather than rely on hearing the event. **A load into
+   * an instance takes it out** from when the load starts until the new face
+   * is drawn — the face it replaces still draws meanwhile, and the new
+   * device's time starts only once the new face does — and an unload takes
+   * it out. A load that fails puts back the face it was to replace, if that
+   * face was drawn.
+   */
+  readonly ready: ReadonlyMap<string, boolean>;
   /** Where each face's safe area lies on the canvas, by instance, as its
    * last `safeArea` event said: what a DOM overlay outlining it is
    * positioned by. A zoom that crops the bounds reaches past the face's
@@ -1183,6 +1193,7 @@ export async function mount(
   return {
     canvas: element,
     faces: tracked.faces,
+    ready: tracked.ready,
     safeAreas: tracked.safeAreas,
     get loading() {
       return tracked.loading;
@@ -1463,7 +1474,8 @@ export async function runEdits(
   input?: InitInput,
 ): Promise<object> {
   await init(input);
-  const json = (graph: GraphSpecInput) => (typeof graph === "string" ? graph : JSON.stringify(graph));
+  const json = (graph: GraphSpecInput) =>
+    typeof graph === "string" ? graph : JSON.stringify(graph);
   return bindings().runEdits(run, json(from), json(to));
 }
 

@@ -61,9 +61,13 @@ face and every event from it carries.
 - `unload(instance)` takes the face down, and anything loading into it,
   whose promise rejects.
 - `faces` (the faces showing, as their `loaded` events described them),
-  `loading` (the instances with a load under way) and `safeAreas` are current
-  before a handler hears the event that changed them, and hold what came
-  before a handler was set.
+  `loading` (the instances with a load under way), `ready` (the faces drawn,
+  each with its `ready` event's `drawn`) and `safeAreas` are current before a
+  handler hears the event that changed them, and hold what came before a
+  handler was set. A load into an instance takes it out of `ready` from when
+  the load starts until the new face is drawn, and an unload takes it out; a
+  load that fails puts back the face it was to replace, if that face was
+  drawn.
 - `onEvent(handler)` sets where the App's events go, replacing any earlier
   handler. Nothing is polled:
 

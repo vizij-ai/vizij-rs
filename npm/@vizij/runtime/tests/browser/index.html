@@ -1,11 +1,23 @@
 <!doctype html>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <title>@vizij/runtime browser harness</title>
 <style>
-  body { margin: 0; background: #202020; }
+  body {
+    margin: 0;
+    background: #202020;
+  }
   /* The canvas is exactly the reference render's size at device pixel ratio 1. */
-  #stage { position: relative; width: 763px; height: 486px; }
-  #faces { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+  #stage {
+    position: relative;
+    width: 763px;
+    height: 486px;
+  }
+  #faces {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+  }
 </style>
 <div id="stage"><canvas id="faces"></canvas></div>
 <!-- The package's dist imports its workspace siblings by name; the page maps
@@ -40,18 +52,14 @@
   await vizij.init(params.get("wasm") ?? undefined);
   const vizijs = await vizij.mount("#faces", { background });
 
-  // What the App has said: each instance's readiness from its last `ready`
-  // (whether it was seen drawn), forgotten when the instance loads again or
-  // is unloaded; the picks a test has not drained yet; every event, in
-  // order.
-  const readiness = new Map();
+  // What the App has said: the picks a test has not drained yet, and every
+  // event, in order. Which faces are ready is the handle's (`vizijs.ready`).
   const readyWaiters = new Map();
   const picked = [];
   const events = [];
   const listen = (event) => {
     events.push(event);
     if (event.type === "ready") {
-      readiness.set(event.instance, event.drawn);
       for (const resolve of readyWaiters.get(event.instance) ?? []) resolve();
       readyWaiters.delete(event.instance);
     } else if (event.type === "pick") {
@@ -59,14 +67,11 @@
     }
   };
   vizijs.onEvent(listen);
-  const forget = (id) => readiness.delete(id);
   // Resolves on the instance's next `ready`, or at once if it is ready.
   const nextReady = (id) =>
-    readiness.has(id)
+    vizijs.ready.has(id)
       ? Promise.resolve()
-      : new Promise((resolve) =>
-          readyWaiters.set(id, [...(readyWaiters.get(id) ?? []), resolve]),
-        );
+      : new Promise((resolve) => readyWaiters.set(id, [...(readyWaiters.get(id) ?? []), resolve]));
 
   // The page owns every device and steps it on the device clock: by default
   // on the page's frames, each by the frame's wall time; once a test takes
@@ -147,7 +152,6 @@
   // once loaded the new device takes over from the previous one, which is
   // disposed. Resolves to the device.
   async function loadInto(id, bytes, options) {
-    forget(id);
     const device = await vizijs.load(id, bytes, options);
     const previous = devices.get(id);
     if (previous !== device) previous?.dispose();
@@ -190,14 +194,15 @@
     // A reload from GLB bytes, timed: `loadMs` until the load is under way
     // (the GLB read, the graphs composed, the device built), `readyMs`
     // until the new face is ready — the frame the swap lands. `readyAt`
-    // is whether the instance read ready once the new face had loaded.
+    // is whether the handle read the instance ready once the new face had
+    // loaded, before it was drawn.
     async reload(id, url, options) {
       const bytes = await glb(url);
       const start = performance.now();
       const loaded = loadInto(id, bytes, { audio: false, ...options });
       const loadMs = performance.now() - start;
       await loaded;
-      const readyAt = readiness.has(id);
+      const readyAt = vizijs.ready.has(id);
       await nextReady(id);
       return { loadMs, readyMs: performance.now() - start, readyAt };
     },
@@ -211,8 +216,7 @@
     rigPrefix: (id) => ({ rigPrefix: devices.get(id).rigPrefix }),
     select: (id, elementIds) => vizijs.setSelection(id, elementIds),
     // A feature of an element, written in place: one number or three.
-    setFeature: (id, elementId, feature, value) =>
-      vizijs.setValue(id, elementId, value, feature),
+    setFeature: (id, elementId, feature, value) => vizijs.setValue(id, elementId, value, feature),
     hold: (id, paths) => devices.get(id).hold(paths),
     release: (id, paths) => devices.get(id).release(paths),
     spawn: (id, call) => devices.get(id).spawn(call),
@@ -268,10 +272,10 @@
     place: (id, rect) => vizijs.place(id, rect),
     setView: (id, view) => vizijs.setView(id, view),
     safeArea: (id) => vizijs.safeAreas.get(id) ?? null,
-    // Whether the instance's face is ready, from its `ready` event.
-    ready: (id) => readiness.has(id),
+    // Whether the instance's face is ready, as the handle has it.
+    ready: (id) => vizijs.ready.has(id),
     // Whether its `ready` said it was seen drawn; `undefined` before it.
-    drawn: (id) => readiness.get(id),
+    drawn: (id) => vizijs.ready.get(id),
     // The faces showing, as their `loaded` events described them.
     shown: (id) => vizijs.faces.get(id) ?? null,
     events: () => events.slice(),
@@ -286,7 +290,6 @@
       const device = devices.get(id);
       if (!device) return false;
       vizijs.unload(id);
-      forget(id);
       device.dispose();
       devices.delete(id);
       return true;
