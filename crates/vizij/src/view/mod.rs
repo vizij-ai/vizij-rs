@@ -56,8 +56,8 @@
 //! face's own camera; a goal names the face it is used through by its id,
 //! the [`ControlView`] of the camera of the face showing under it, and one
 //! sent while a load into the id is unanswered waits for the face showing
-//! after it ([`name_control_views`]). A face is authored in units
-//! of its own, tens of them across, so its controls are sized on screen
+//! after it ([`name_control_views`]). A face is authored in units of its
+//! own, tens of them across, so its controls are sized on screen
 //! ([`FACE_CONTROL_SIZE`]) rather than in the world, unless a driver sizes
 //! one itself.
 
