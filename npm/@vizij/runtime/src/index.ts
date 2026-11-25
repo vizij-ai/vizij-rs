@@ -525,6 +525,7 @@ interface WasmBindings {
     modules?: AroraModule[],
   ): WasmVizijRuntime;
   unload(instance: string): void;
+  unloadedError(): string;
   place(instance: string, rect: Float64Array): void;
   setView(instance: string, view_json?: string): void;
   setSelection(instance: string, elements: string[]): void;
@@ -1166,6 +1167,7 @@ export async function mount(
   const tracked = trackFaces<WasmVizijRuntime>({
     stop: (instance) => wasm.unload(instance),
     dispose: (device) => device.free(),
+    unloaded: wasm.unloadedError(),
   });
   wasm.setEventHandler(tracked.dispatch());
   const place = (instance: string, rect: Rect | "fill") =>

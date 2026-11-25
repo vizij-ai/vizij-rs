@@ -86,6 +86,9 @@ export interface FaceModule<D> {
   stop(instance: string): void;
   /** Frees a device no page will be handed. */
   dispose(device: D): void;
+  /** The error the module answers a load with when its instance is
+   * unloaded first: what an unload rejects the loads it settles with. */
+  readonly unloaded: string;
 }
 
 /**
@@ -217,7 +220,7 @@ export function trackFaces<D>(module: FaceModule<D>): Faces<D> {
       for (const waiting of held.pending) {
         if (waiting.unloaded) continue;
         module.dispose(waiting.device);
-        waiting.reject(new Error("its instance was unloaded"));
+        waiting.reject(new Error(module.unloaded));
         waiting.unloaded = true;
       }
     },

@@ -528,6 +528,15 @@ pub fn unload(instance: String) -> Result<(), JsValue> {
     Ok(())
 }
 
+/// The error a load into an instance is answered with (`loadFailed`) when
+/// the instance is unloaded first: what a page that settles such a load at
+/// the unload, before the answer arrives, rejects it with, so the two never
+/// disagree.
+#[wasm_bindgen(js_name = unloadedError)]
+pub fn unloaded_error() -> String {
+    view::UNLOADED.into()
+}
+
 /// Read the Vizij as not ready from now on, rather than from the App's next
 /// report: a device's time would otherwise start from the face the request
 /// replaces or takes down.

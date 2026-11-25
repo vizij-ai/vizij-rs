@@ -196,9 +196,14 @@ pub enum FaceEvent {
 pub const FACE_CONTROL_SIZE: GizmoSize = GizmoSize::Pixels(80.0);
 
 /// Why a load was answered with [`FaceEvent::LoadFailed`] without its scene
-/// failing.
-const REPLACED: &str = "a later load into the same instance replaced it";
-const UNLOADED: &str = "its instance was unloaded";
+/// failing: a later load into the same id came first. Worded as the robot
+/// scene's host words the same answer, so a page driving both reads one
+/// vocabulary.
+pub const REPLACED: &str = "replaced by a later load before it finished loading";
+/// Why a load was answered with [`FaceEvent::LoadFailed`] when its id was
+/// unloaded first. A front end that settles a load at the unload, before the
+/// view's answer arrives, says the same.
+pub const UNLOADED: &str = "its instance was unloaded before it finished loading";
 
 /// Where one load stands in what the view has told its front end
 /// ([`FaceEvent`]).

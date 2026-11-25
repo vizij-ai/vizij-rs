@@ -10,9 +10,12 @@ import { trackFaces } from "../dist/runtime/src/faces.js";
 
 const stopped = [];
 const disposed = [];
+// What the module answers a load with when its instance is unloaded first.
+const UNLOADED = "its instance was unloaded before it finished loading";
 const tracked = trackFaces({
   stop: (instance) => stopped.push(instance),
   dispose: (device) => disposed.push(device),
+  unloaded: UNLOADED,
 });
 const heard = [];
 const seenShowing = [];
@@ -44,7 +47,7 @@ const elements = [{ id: "e1", name: "eye" }];
 const first = outcome(tracked.load("a", "k1", begin("dev-a1")));
 const second = outcome(tracked.load("a", "k2", begin("dev-a2")));
 assert.deepEqual([...tracked.loading], ["a"]);
-send({ type: "loadFailed", instance: "a", key: "k1", error: "a later load into the same instance replaced it" });
+send({ type: "loadFailed", instance: "a", key: "k1", error: "replaced by a later load before it finished loading" });
 await tick();
 assert.equal(first.state, "rejected");
 assert.match(first.error, /replaced/);
@@ -74,7 +77,7 @@ assert.equal(started, before + 1);
 const back = outcome(tracked.load("a", "k2", begin("dev-a4")));
 assert.equal(started, before + 2, "the key showing, asked for while another loads, loads again");
 const loadingOutcome = outcome(loading);
-send({ type: "loadFailed", instance: "a", key: "k3", error: "a later load into the same instance replaced it" });
+send({ type: "loadFailed", instance: "a", key: "k3", error: "replaced by a later load before it finished loading" });
 send({ type: "loaded", instance: "a", key: "k2", elements });
 await tick();
 assert.equal(loadingOutcome.state, "rejected");
@@ -87,11 +90,11 @@ tracked.unload("b");
 await tick();
 assert.deepEqual(stopped, ["b"]);
 assert.equal(unloaded.state, "rejected");
-assert.match(unloaded.error, /unloaded/);
+assert.equal(unloaded.error, UNLOADED, "rejected with the module's own answer");
 assert.ok(disposed.includes("dev-b1"));
 assert.equal(tracked.loading.has("b"), false);
 const after = outcome(tracked.load("b", undefined, begin("dev-b2")));
-send({ type: "loadFailed", instance: "b", error: "its instance was unloaded" });
+send({ type: "loadFailed", instance: "b", error: UNLOADED });
 await tick();
 assert.equal(after.state, "pending", "the placeholder took the unload's answer");
 assert.ok(tracked.loading.has("b"));
@@ -105,7 +108,7 @@ assert.equal(disposed.includes("dev-b2"), false, "a device handed to the page is
 const twice = outcome(tracked.load("d", undefined, begin("dev-d1")));
 tracked.unload("d");
 tracked.unload("d");
-send({ type: "loadFailed", instance: "d", error: "its instance was unloaded" });
+send({ type: "loadFailed", instance: "d", error: UNLOADED });
 await tick();
 assert.equal(twice.state, "rejected");
 assert.equal(disposed.filter((device) => device === "dev-d1").length, 1, "freed once");
@@ -116,7 +119,7 @@ const startedBefore = started;
 const plain1 = outcome(tracked.load("e", undefined, begin("dev-e1")));
 const plain2 = outcome(tracked.load("e", undefined, begin("dev-e2")));
 assert.equal(started, startedBefore + 2, "both unkeyed loads start");
-send({ type: "loadFailed", instance: "e", error: "a later load into the same instance replaced it" });
+send({ type: "loadFailed", instance: "e", error: "replaced by a later load before it finished loading" });
 send({ type: "loaded", instance: "e", elements: [] });
 await tick();
 assert.equal(plain1.state, "rejected");
@@ -160,7 +163,7 @@ send(gone);
 assert.equal(tracked.safeAreas.has("a"), false);
 
 // A handler set later replaces the first; loads settle whether or not one is set.
-const quiet = trackFaces({ stop() {}, dispose() {} });
+const quiet = trackFaces({ stop() {}, dispose() {}, unloaded: UNLOADED });
 const silent = outcome(quiet.load("q", undefined, () => "dev-q"));
 quiet.dispatch()({ type: "loaded", instance: "q", elements: [] });
 await tick();
