@@ -636,8 +636,9 @@ pub fn set_selection(instance: String, elements: Vec<String>) -> Result<(), JsVa
 /// Add, remove, show, move or change a control, by a command as JSON in the
 /// shape `@semio/scene` takes (`{ op: "add", key, control }`, …). A control on
 /// a Vizij names it by its instance; a goal names the Vizij it is used through
-/// as its `view`. Takes effect in the next frame, or, for a control on a Vizij
-/// still loading, in the frame it is indexed. A joint control, and a goal
+/// as its `view`. Takes effect in the next frame, or, for a control or a goal
+/// on a Vizij with a load under way, once that load is answered, on the Vizij
+/// showing after it. A joint control, and a goal
 /// naming no `view`, are refused with an error ([`view::refuse_controls`]).
 #[wasm_bindgen]
 pub fn control(command: String) -> Result<(), JsValue> {

@@ -49,7 +49,9 @@
 //! The face's world is already the drivers' frame, Z up, so its controls
 //! speak in it unturned. A transform control on a face is used through the
 //! face's own camera; a goal names the face it is used through by its id,
-//! the [`ControlView`] each face camera carries. A face is authored in units
+//! the [`ControlView`] of the camera of the face showing under it, and one
+//! sent while a load into the id is unanswered waits for the face showing
+//! after it ([`name_control_views`]). A face is authored in units
 //! of its own, tens of them across, so its controls are sized on screen
 //! ([`FACE_CONTROL_SIZE`]) rather than in the world, unless a driver sizes
 //! one itself.
@@ -342,9 +344,12 @@ pub enum ViewEvent {
     },
     /// Add, remove, show, move or change a control, by the driver's key for
     /// it ([`arora_visuals::control`]). A control on a face names it by its
-    /// id; one on a face still loading waits for it. The controls on a face
-    /// go when it does, unloaded or replaced by a reload, as a robot's do on
-    /// a swap: a driver adds them again to the face that replaced it.
+    /// id, and a goal names the face it is used through as its view; either
+    /// sent while a load into the id is unanswered waits for the load, and
+    /// lands on the face showing after it. The controls on a face, and the
+    /// goals used through it, go when it does, unloaded or replaced by a
+    /// reload, as a robot's do on a swap: a driver adds them again to the
+    /// face that replaced it.
     Control(ControlCommand),
 }
 
@@ -712,6 +717,7 @@ impl Plugin for ViewPlugin {
                         frame_cameras,
                         index_faces,
                         retire_superseded,
+                        name_control_views,
                     )
                         .chain()
                         .in_set(InstanceSystems::Index),
@@ -944,7 +950,8 @@ fn apply_view_events(
                 *told.serial += 1;
                 commands.entity(camera).insert((
                     ViewOf(face),
-                    ControlView(face_id.clone()),
+                    // Named for goals once its load is answered `Loaded`
+                    // ([`name_control_views`]).
                     ControlSize {
                         transform: Some(FACE_CONTROL_SIZE),
                         joint: Some(FACE_CONTROL_SIZE),
@@ -1069,7 +1076,9 @@ struct Unindexable(String);
 /// without a node one of its elements names ([`Unindexable`]). It never
 /// drew, and the face it was to replace — the newest one under its id whose
 /// load was answered `Loaded` — is no longer superseded, so it draws on as
-/// the id's face.
+/// the id's face. With no face to replace, the id shows nothing, and the
+/// goals waiting to be used through it go, as they do when it is unloaded:
+/// no face will answer to it ([`name_control_views`]).
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn fail_unloadable_scenes(
     faces: Query<(
@@ -1088,6 +1097,7 @@ fn fail_unloadable_scenes(
     mut told: MessageWriter<FaceEvent>,
     mut commands: Commands,
     index: Res<InstanceIndex>,
+    mut controls: ControlQueue,
 ) {
     for (entity, instance, face, report, children, _, unindexable) in &faces {
         if report.answer != Answer::Pending {
@@ -1117,8 +1127,13 @@ fn fail_unloadable_scenes(
             // Only a face answered `Loaded` is ever superseded.
             .filter(|(_, _, _, _, _, superseded, _)| *superseded)
             .max_by_key(|(_, _, _, other_report, ..)| other_report.serial);
-        if let Some((previous, ..)) = previous {
-            commands.entity(previous).remove::<Superseded>();
+        match previous {
+            Some((previous, ..)) => {
+                commands.entity(previous).remove::<Superseded>();
+            }
+            None => controls
+                .commands
+                .forget_view(&instance.id, &controls.placed),
         }
     }
 }
@@ -1418,6 +1433,45 @@ fn retire_superseded(
                     instance.id,
                     old_face.slot
                 );
+            }
+        }
+    }
+}
+
+/// Name each face's camera for the goals used through the face
+/// ([`ControlView`], by the face's id): the camera of the face its id
+/// addresses — the one not [`Superseded`] — once that face's load is answered
+/// `Loaded`, and no other camera.
+///
+/// The shared layer places a goal through the first camera answering to its
+/// view, and forgets the goal when that camera goes. While a load into an id
+/// is unanswered, it is not known which face the id will show after it: the
+/// new one, or, if the load fails, the one before. So no camera answers to
+/// the id meanwhile, and a goal sent then waits, as a control on a face
+/// still loading does, and is used through the face showing once the load
+/// is answered — never through the camera of a face about to be retired, or
+/// of a load about to fail. A goal already placed through the face a reload
+/// replaces goes with that face, as the controls on it do.
+fn name_control_views(
+    faces: Query<(&EntityInstance, &LoadReport, Has<Superseded>)>,
+    cameras: Query<Option<&ControlView>>,
+    mut commands: Commands,
+) {
+    for (instance, report, superseded) in &faces {
+        let wanted = (!superseded && report.answer == Answer::Loaded).then_some(&instance.id);
+        let Ok(named) = cameras.get(instance.camera) else {
+            continue;
+        };
+        match (named, wanted) {
+            (Some(named), Some(id)) if named.0 == *id => {}
+            (None, None) => {}
+            (_, Some(id)) => {
+                commands
+                    .entity(instance.camera)
+                    .try_insert(ControlView(id.clone()));
+            }
+            (Some(_), None) => {
+                commands.entity(instance.camera).try_remove::<ControlView>();
             }
         }
     }
@@ -2964,7 +3018,13 @@ mod tests {
             .insert_resource(ViewEvents(Mutex::new(receiver)))
             .add_message::<FaceEvent>()
             .add_plugins(ControlsPlugin)
-            .add_systems(Update, answering_systems());
+            .add_systems(
+                Update,
+                (
+                    answering_systems(),
+                    name_control_views.in_set(InstanceSystems::Index),
+                ),
+            );
         (app, sender)
     }
 
@@ -3083,23 +3143,6 @@ mod tests {
     #[test]
     fn an_unload_forgets_the_controls_sent_for_its_face() {
         let (mut app, sender) = answering_app();
-        let goal_through = |key: &str, view: &str| {
-            ViewEvent::Control(
-                serde_json::from_value(serde_json::json!({
-                    "op": "add",
-                    "key": key,
-                    "control": {
-                        "kind": "transform",
-                        "target": {
-                            "kind": "goal",
-                            "pose": { "position": [0, 0, 0] },
-                            "view": view,
-                        },
-                    },
-                }))
-                .unwrap(),
-            )
-        };
         for event in [
             load("a"),
             load("b"),
@@ -3303,44 +3346,221 @@ mod tests {
         );
     }
 
-    /// A control sent in the same batch as its face's load finds the face: a
-    /// goal used through the face's camera, by the face's id, is placed, and
-    /// a control on the face waits for it rather than being refused.
+    /// A control sent in the same batch as its face's load finds the face:
+    /// neither a goal used through the face, by its id, nor a control on the
+    /// face is refused; each waits for the load's answer. When the load fails
+    /// with no face before it, neither is left waiting.
     #[test]
     fn a_control_sent_with_its_faces_load_finds_the_face() {
         let (mut app, sender) = answering_app();
+        let mut cursor = app.world().resource::<Messages<FaceEvent>>().get_cursor();
         sender.send(load("a")).unwrap();
-        sender
-            .send(ViewEvent::Control(
-                serde_json::from_value(serde_json::json!({
-                    "op": "add",
-                    "key": "goal",
-                    "control": {
-                        "kind": "transform",
-                        "target": {
-                            "kind": "goal",
-                            "pose": { "position": [0, 0, 0] },
-                            "view": "a",
-                        },
-                    },
-                }))
-                .unwrap(),
-            ))
-            .unwrap();
+        sender.send(goal_through("goal", "a")).unwrap();
         sender.send(transform_on("on-a", "a")).unwrap();
         app.update();
-        assert!(
-            app.world().resource::<Controls>().gizmo("goal").is_some(),
-            "the goal is placed through the face's camera"
+        assert_eq!(
+            waiting_keys(&app),
+            ["goal", "on-a"],
+            "both wait for the face"
         );
-        let waiting: Vec<String> = app
-            .world()
+        let told = answers(&mut app, &mut cursor, 1);
+        assert!(
+            matches!(told.as_slice(), [FaceEvent::LoadFailed { .. }]),
+            "{told:?}"
+        );
+        app.update();
+        assert_eq!(
+            waiting_keys(&app),
+            Vec::<String>::new(),
+            "nothing waits for good"
+        );
+        assert!(app.world().resource::<Controls>().gizmo("goal").is_none());
+    }
+
+    fn goal_through(key: &str, view: &str) -> ViewEvent {
+        ViewEvent::Control(
+            serde_json::from_value(serde_json::json!({
+                "op": "add",
+                "key": key,
+                "control": {
+                    "kind": "transform",
+                    "target": {
+                        "kind": "goal",
+                        "pose": { "position": [0, 0, 0] },
+                        "view": view,
+                    },
+                },
+            }))
+            .expect("a control command"),
+        )
+    }
+
+    /// The keys of the control commands still waiting.
+    fn waiting_keys(app: &App) -> Vec<String> {
+        app.world()
             .resource::<ControlCommands>()
             .0
             .iter()
             .map(|command| command.key().to_string())
-            .collect();
-        assert_eq!(waiting, ["on-a"], "the control on the face waits for it");
+            .collect()
+    }
+
+    /// A face shown under `id`, drawn and answered `Loaded`, with a camera
+    /// carrying what [`ViewEvent::LoadFace`] gives one and the view name a
+    /// shown face's camera carries: what a reload replaces.
+    fn shown_face(app: &mut App, id: &str) -> (Entity, Entity) {
+        let slot = app.world_mut().resource_mut::<Slots>().take();
+        let options = app.world().resource::<ViewOptions>().clone();
+        let asset_path = app.world().resource::<FaceAssets>().push(id, Vec::new());
+        let camera = app
+            .world_mut()
+            .spawn(camera_for(
+                Framing::of(&AssetMeta::default(), &options, None),
+                slot,
+                None,
+            ))
+            .id();
+        let face = app
+            .world_mut()
+            .spawn((
+                EntityInstance {
+                    id: id.into(),
+                    asset_path,
+                    meta: AssetMeta::default(),
+                    bindings: SceneBindings {
+                        indexed: true,
+                        ..SceneBindings::default()
+                    },
+                    camera,
+                    draw_order: drawing_order(slot),
+                    ready: true,
+                },
+                Face {
+                    bundle: Default::default(),
+                    rig: vizij_arora_hal::RigHal::new(),
+                    slot,
+                    pose: PoseState::default(),
+                },
+                LoadReport {
+                    serial: 0,
+                    answer: Answer::Loaded,
+                },
+                Transform::from_translation(slot_origin(slot)),
+            ))
+            .id();
+        app.world_mut().entity_mut(camera).insert((
+            ViewOf(face),
+            ControlView(id.into()),
+            ControlSize {
+                transform: Some(FACE_CONTROL_SIZE),
+                joint: Some(FACE_CONTROL_SIZE),
+            },
+        ));
+        (face, camera)
+    }
+
+    /// The cameras answering to the view `name`.
+    fn answering(app: &mut App, name: &str) -> Vec<Entity> {
+        let mut named = app.world_mut().query::<(Entity, &ControlView)>();
+        named
+            .iter(app.world())
+            .filter(|(_, view)| view.0 == name)
+            .map(|(camera, _)| camera)
+            .collect()
+    }
+
+    /// The camera the control under `key` is used through, once placed.
+    fn used_through(app: &App, key: &str) -> Option<Entity> {
+        let gizmo = app.world().resource::<Controls>().gizmo(key)?;
+        app.world()
+            .get::<arora_visuals::transform_gizmo::TransformGizmo>(gizmo)
+            .map(|gizmo| gizmo.camera)
+    }
+
+    /// A goal sent with a reload of the face it names waits for the reload's
+    /// answer, rather than taking the camera of the face being replaced, and
+    /// once the new face has loaded it is used through the new face's
+    /// camera, so it stays when the replaced face is retired.
+    #[test]
+    fn a_goal_sent_during_a_reload_lands_on_the_new_face() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let (mut app, sender) = answering_app();
+        let (old, old_camera) = shown_face(&mut app, "a");
+        app.update();
+        assert_eq!(answering(&mut app, "a"), [old_camera]);
+
+        sender.send(load("a")).unwrap();
+        sender.send(goal_through("aim", "a")).unwrap();
+        app.update();
+        assert_eq!(
+            answering(&mut app, "a"),
+            [],
+            "no camera answers to the face while its reload is unanswered"
+        );
+        assert_eq!(used_through(&app, "aim"), None, "the goal waits");
+        assert_eq!(waiting_keys(&app), ["aim"]);
+
+        // The reload's scene indexed, as `index_faces` leaves it.
+        let mut faces = app
+            .world_mut()
+            .query::<(Entity, &mut EntityInstance, &mut LoadReport)>();
+        let mut new_camera = None;
+        for (entity, mut instance, mut report) in faces.iter_mut(app.world_mut()) {
+            if entity != old {
+                instance.bindings.indexed = true;
+                report.answer = Answer::Loaded;
+                new_camera = Some(instance.camera);
+            }
+        }
+        let new_camera = new_camera.expect("the reload's face");
+        app.update();
+        assert_eq!(answering(&mut app, "a"), [new_camera]);
+        assert_eq!(used_through(&app, "aim"), Some(new_camera));
+
+        // The new face drawn: the replaced face goes, the goal stays.
+        let mut faces = app.world_mut().query::<(Entity, &mut EntityInstance)>();
+        for (entity, mut instance) in faces.iter_mut(app.world_mut()) {
+            if entity != old {
+                instance.ready = true;
+            }
+        }
+        app.world_mut()
+            .run_system_once(retire_superseded)
+            .expect("runs");
+        app.update();
+        assert!(app.world().get_entity(old_camera).is_err(), "retired");
+        assert_eq!(
+            used_through(&app, "aim"),
+            Some(new_camera),
+            "the goal stays"
+        );
+    }
+
+    /// A goal sent with a reload whose scene fails waits for the answer,
+    /// rather than taking the camera of the failing load, and is then used
+    /// through the face that still shows.
+    #[test]
+    fn a_goal_sent_during_a_failed_reload_lands_on_the_face_kept() {
+        let (mut app, sender) = answering_app();
+        let mut cursor = app.world().resource::<Messages<FaceEvent>>().get_cursor();
+        let (_, kept_camera) = shown_face(&mut app, "a");
+        app.update();
+
+        sender.send(load("a")).unwrap();
+        sender.send(goal_through("aim", "a")).unwrap();
+        app.update();
+        assert_eq!(answering(&mut app, "a"), []);
+        assert_eq!(used_through(&app, "aim"), None, "the goal waits");
+
+        let told = answers(&mut app, &mut cursor, 1);
+        assert!(
+            matches!(told.as_slice(), [FaceEvent::LoadFailed { .. }]),
+            "{told:?}"
+        );
+        app.update();
+        assert_eq!(answering(&mut app, "a"), [kept_camera]);
+        assert_eq!(used_through(&app, "aim"), Some(kept_camera));
     }
 
     /// A face is told ready as the shared layer reports it, saying whether

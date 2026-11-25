@@ -275,8 +275,11 @@ quori.dispose(); // the previous face draws until the new one is ready
   nothing: it is heard as a `control` event, and the driver sends `setPose` if
   it wants the change. A control is 80 px on screen unless its add or a
   `configure` gives it a `size` (`{ pixels }` or `{ metres }`). An unload
-  takes the controls on the face away, and so does a reload, as a robot swap
-  does in `@semio/scene`: add them again once the new face is `loaded`.
+  takes the controls on the face away, and the goals used through it, and so
+  does a reload, as a robot swap does in `@semio/scene`: add them again once
+  the new face is `loaded`. A control or a goal sent while a load into its
+  face is under way waits for the load's answer, and lands on the face
+  showing after it — the new one, or the one kept when the load fails.
 
 - A pick is a click of the primary button or a touch, decided on release:
   found over each element's mesh as drawn, its morph targets applied, the

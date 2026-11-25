@@ -1103,8 +1103,11 @@ export interface VizijHandle {
   /**
    * Adds, removes, shows, moves or changes a control, by the driver's key
    * for it, in the shape `@semio/scene` takes for robots. A control on a
-   * face names it by its instance, and one on a face still loading waits
-   * for it; a goal names the face it is used through as its `view`. A drag
+   * face names it by its instance, and a goal names the face it is used
+   * through as its `view`; either, sent while a load into that instance is
+   * under way, waits for the load's answer and lands on the face showing
+   * after it. The controls on a face, and the goals used through it, go
+   * when it is unloaded or reloaded. A drag
    * moves nothing: it is heard as a `control` event, and the driver sends
    * `setPose` if it wants the change. A joint control throws, as a face has
    * no joints, and so does a goal naming no `view`.
