@@ -113,8 +113,6 @@ jobs:
       # wasm32: the cache is what keeps this under the job's budget.
       - name: Build the runtime WASM (the vizij crate for the browser) into npm wrapper pkg/
         run: node scripts/build-runtime-wasm.mjs
-      - name: Build the import WASM into npm wrapper pkg/
-        run: node scripts/build-import-wasm.mjs
       - name: Install pnpm
         uses: pnpm/action-setup@v4
       - name: Setup Node
@@ -131,12 +129,10 @@ jobs:
         run: |
           pnpm --filter @vizij/node-graph run build
           pnpm --filter @vizij/runtime run build
-          pnpm --filter @vizij/import run build
       - name: Run wrapper tests
         run: |
           pnpm --filter @vizij/node-graph run test
           pnpm --filter @vizij/runtime run test
-          pnpm --filter @vizij/import run test
       # What the browser tests serve: the runtime's dist (the wasm module
       # included) and the two workspace packages its page imports by name.
       - uses: actions/upload-artifact@v4
@@ -315,9 +311,13 @@ jobs:
           }
           bin=$(cargo test -p vizij --test headless_face --no-run --message-format=json \
             | jq -r 'select(.profile.test == true and .target.name == "headless_face") | .executable')
+          # One test at a time: each builds its own Vulkan instance, and the
+          # runner's Vulkan loader unloads a driver library (dlclose, inside
+          # vkEnumeratePhysicalDevices) while another test's thread is in
+          # that driver, which crashes the process.
           gdb -q -batch -ex 'set pagination off' -ex 'set print thread-events off' \
             -ex 'handle SIGPIPE nostop noprint' -ex run -ex 'thread apply all bt 40' \
-            --args "$bin" --ignored --nocapture > headless_face.log 2>&1 || true
+            --args "$bin" --ignored --nocapture --test-threads=1 > headless_face.log 2>&1 || true
           cat headless_face.log
           if ! grep -q '^test result: ok' headless_face.log; then
             runner

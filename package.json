@@ -22,7 +22,6 @@
     "link:wasm:graph": "pnpm --filter @vizij/node-graph run build && (cd npm/@vizij/node-graph && pnpm link --global)",
     "clean:wasm:graph": "rm -rf npm/@vizij/node-graph/pkg npm/@vizij/node-graph/dist",
     "build:wasm:runtime": "node scripts/build-runtime-wasm.mjs",
-    "build:wasm:import": "node scripts/build-import-wasm.mjs",
     "link:wasm:runtime": "pnpm --filter @vizij/runtime run build && (cd npm/@vizij/runtime && pnpm link --global)",
     "clean:wasm:runtime": "rm -rf npm/@vizij/runtime/pkg npm/@vizij/runtime/dist",
     "build:wasm": "node scripts/build-wasm.mjs",
