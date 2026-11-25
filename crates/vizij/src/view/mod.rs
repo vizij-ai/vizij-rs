@@ -728,18 +728,36 @@ impl Plugin for ViewPlugin {
     }
 }
 
-/// Refuses a joint control: a face has no scene-style joints for one to
-/// drive, so the add is turned away where it is asked for, with an error the
-/// driver hears, rather than accepted and dropped unresolved. A face's rig,
-/// when it has one, is more likely a skeleton of bones than joints, and its
-/// control will take another form.
-pub fn refuse_joint_controls(command: &ControlCommand) -> Result<(), String> {
+/// Refuses a control add a face can never place, where it is asked for, with
+/// an error the driver hears, rather than accepting it to wait for good:
+///
+/// - **A joint control.** A face has no scene-style joints for one to drive.
+///   A face's rig, when it has one, is more likely a skeleton of bones than
+///   joints, and its control will take another form.
+/// - **A goal that names no `view`.** A goal on a face is used through the
+///   face's camera, named by its id, and the view marks no camera as the one
+///   a goal naming none is used through: every face has a camera of its own,
+///   so taking one would be a guess. Accepted, such a goal would wait for a
+///   camera that never comes, and hold every later command under its key.
+pub fn refuse_controls(command: &ControlCommand) -> Result<(), String> {
+    use arora_visuals::control::{Control, Target};
     match command {
         ControlCommand::Add {
             key,
-            control: arora_visuals::control::Control::Joint { instance, .. },
+            control: Control::Joint { instance, .. },
         } => Err(format!(
             "joint control {key:?} on {instance:?} refused: a Vizij has no joints"
+        )),
+        ControlCommand::Add {
+            key,
+            control:
+                Control::Transform {
+                    target: Target::Goal { view: None, .. },
+                    ..
+                },
+        } => Err(format!(
+            "goal {key:?} refused: it names no view, and a goal on a Vizij names \
+             the instance it is used through as its view"
         )),
         _ => Ok(()),
     }
@@ -968,7 +986,7 @@ fn apply_view_events(
                 statics.0.remove(&face_id);
                 compositions.0.remove(&face_id);
             }
-            ViewEvent::Control(command) => match refuse_joint_controls(&command) {
+            ViewEvent::Control(command) => match refuse_controls(&command) {
                 Ok(()) => controls.commands.0.push(command),
                 Err(error) => log::warn!("{error}"),
             },
@@ -2995,20 +3013,39 @@ mod tests {
         )
     }
 
-    /// A joint control on a face is refused where it is asked for, and never
-    /// reaches the controls' queue; a transform control on the same face is
+    /// A joint control, and a goal naming no view, are refused where they
+    /// are asked for, and never reach the controls' queue; a transform
+    /// control on a face, and a goal naming the face it is used through, are
     /// taken.
     #[test]
-    fn a_joint_control_on_a_face_is_refused() {
-        let joint = serde_json::from_value::<ControlCommand>(serde_json::json!({
+    fn controls_a_face_cannot_place_are_refused() {
+        let command = |value: serde_json::Value| {
+            serde_json::from_value::<ControlCommand>(value).expect("a control command")
+        };
+        let joint = command(serde_json::json!({
             "op": "add",
             "key": "neck",
             "control": { "kind": "joint", "instance": "face", "joint": "neck" },
-        }))
-        .unwrap();
-        assert!(refuse_joint_controls(&joint)
+        }));
+        let goal = |key: &str, view: Option<&str>| {
+            let mut target = serde_json::json!({
+                "kind": "goal",
+                "pose": { "position": [0, 0, 0] },
+            });
+            if let Some(view) = view {
+                target["view"] = view.into();
+            }
+            command(serde_json::json!({
+                "op": "add",
+                "key": key,
+                "control": { "kind": "transform", "target": target },
+            }))
+        };
+        assert!(refuse_controls(&joint).unwrap_err().contains("no joints"));
+        assert!(refuse_controls(&goal("aim", None))
             .unwrap_err()
-            .contains("no joints"));
+            .contains("names no view"));
+        assert_eq!(refuse_controls(&goal("aim", Some("face"))), Ok(()));
 
         // What the intake queued, read before the controls carry it out.
         #[derive(Resource, Default)]
@@ -3028,9 +3065,15 @@ mod tests {
             .before(ControlSystems::Commands),
         );
         sender.send(ViewEvent::Control(joint)).unwrap();
+        sender
+            .send(ViewEvent::Control(goal("anywhere", None)))
+            .unwrap();
         sender.send(transform_on("move", "face")).unwrap();
+        sender
+            .send(ViewEvent::Control(goal("aim", Some("face"))))
+            .unwrap();
         app.update();
-        assert_eq!(app.world().resource::<Queued>().0, ["move"]);
+        assert_eq!(app.world().resource::<Queued>().0, ["move", "aim"]);
     }
 
     /// A control sent for a face that is unloaded before it is placed goes

@@ -84,9 +84,11 @@ export type ControlTarget =
   | { kind: "element"; instance: string; id: string }
   /**
    * A goal at `pose`, with nothing drawn but the control. `view` names the
-   * face it is used through, by its instance.
+   * face it is used through, by its instance: every face has a camera of its
+   * own, so a goal naming none would have no view to be used through, and
+   * `control` throws for it.
    */
-  | { kind: "goal"; pose: Pose; view?: string };
+  | { kind: "goal"; pose: Pose; view: string };
 
 /**
  * How big a control is: the same on screen however the face is framed, in
@@ -96,8 +98,8 @@ export type ControlTarget =
 export type ControlSize = { pixels: number } | { metres: number };
 
 /**
- * A control a driver adds. A face has no joints, so a joint control on one is
- * refused, and said in the log.
+ * A control a driver adds. A face has no joints, so `control` throws for a
+ * joint control on one.
  */
 export type Control =
   | {

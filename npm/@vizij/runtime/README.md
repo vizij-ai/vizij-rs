@@ -269,7 +269,9 @@ quori.dispose(); // the previous face draws until the new one is ready
   `show`, `setPose`, `configure`, `highlight`. A control on a face names its
   instance (`{ kind: "instance", instance }`, or `{ kind: "element", instance,
   id }`); a goal (`{ kind: "goal", pose, view }`) names the face it is used
-  through as its `view`. Poses are Z up, as a face's world is. A drag moves
+  through as its `view`, which it must: every face has a camera of its own,
+  so `control` throws for a goal naming none, as it does for a joint
+  control. Poses are Z up, as a face's world is. A drag moves
   nothing: it is heard as a `control` event, and the driver sends `setPose` if
   it wants the change. A control is 80 px on screen unless its add or a
   `configure` gives it a `size` (`{ pixels }` or `{ metres }`). An unload

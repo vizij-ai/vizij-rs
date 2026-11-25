@@ -1106,8 +1106,8 @@ export interface VizijHandle {
    * face names it by its instance, and one on a face still loading waits
    * for it; a goal names the face it is used through as its `view`. A drag
    * moves nothing: it is heard as a `control` event, and the driver sends
-   * `setPose` if it wants the change. A joint control throws: a face has no
-   * joints.
+   * `setPose` if it wants the change. A joint control throws, as a face has
+   * no joints, and so does a goal naming no `view`.
    */
   control(command: ControlCommand): void;
   /**
