@@ -172,27 +172,31 @@ input() {
   adb shell input "$@"
 }
 # A frame of the app: whole, and with no system dialog over it. A dialog
-# that comes up as the frame is taken is cleared and the frame taken again;
-# a frame a dialog still covers is marked (<name>.covered, the dialog's
-# title), which `measure` refuses, and `frame` fails.
+# seen as the frame is taken is cleared and the frame taken again. The last
+# capture, when a dialog was seen with it, is marked (<name>.covered, the
+# dialog's title) even if the dialog has gone since, as its pixels may be in
+# the frame; `measure` refuses a marked frame, and `frame` fails.
 frame() {
+  local title
   rm -f "$OUT/$1.covered"
   for _ in 1 2 3; do
     clear_dialogs
     adb exec-out screencap > "$OUT/$1.raw"
+    title=""
     if ! measure whole "$OUT/$1.raw"; then
       echo "$1: a partial screenshot, taken again"
     elif [ -n "$covered" ]; then
+      title=$covered
       break
-    elif [ -n "$(system_dialog)" ]; then
-      echo "$1: a system dialog came up as it was taken, taken again"
     else
-      return 0
+      title=$(system_dialog)
+      [ -n "$title" ] || return 0
+      echo "$1: a system dialog came up as it was taken, taken again"
     fi
     sleep 2
   done
-  [ -n "$covered" ] || covered=$(system_dialog)
-  [ -z "$covered" ] && return 0
+  [ -n "$title" ] || return 0
+  covered=$title
   echo "$covered" > "$OUT/$1.covered"
   echo "$1: taken with a system dialog over the app"
   return 1
@@ -378,7 +382,12 @@ if [ -n "$shown" ]; then
           in_front || fail "the pane's Device section left the app"
           # The pane stays over the face, which the background picked does
           # not fill.
-          if measure background "$OUT/device.raw" "$SWATCH"; then
+          # A frame a dialog covered shows nothing of the pane, so it
+          # cannot stand as the background not filling the screen.
+          if [ -f "$OUT/device.covered" ]; then
+            covered=$(cat "$OUT/device.covered")
+            fail "the pane does not stay open on its Device section"
+          elif measure background "$OUT/device.raw" "$SWATCH"; then
             fail "the pane does not stay open on its Device section"
           fi
           input keyevent KEYCODE_BACK
