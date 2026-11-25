@@ -1,0 +1,38 @@
+name: Copilot code review setup
+
+# Copilot code review runs these steps before it reads a pull request. It
+# checks out the arora-visuals commit Cargo.lock pins next to the repository,
+# so a review can read the shared code this crate is built on rather than
+# reporting it as missing. Only the job named copilot-setup-steps is used.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/copilot-code-review.yml
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      # The commit is read from the lock, which names it in full whether the
+      # manifest pins a rev or follows a branch.
+      - name: Find the pinned arora-visuals commit
+        id: pin
+        run: |
+          sha=$(grep -oE 'semio-ai/arora-visuals\?[^"#]*#[0-9a-f]{40}' Cargo.lock | head -n1 | sed 's/.*#//')
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "arora-visuals at ${sha:-<not in Cargo.lock>}"
+
+      - name: Check out arora-visuals at that commit
+        if: steps.pin.outputs.sha != ''
+        uses: actions/checkout@v5
+        with:
+          repository: semio-ai/arora-visuals
+          ref: ${{ steps.pin.outputs.sha }}
+          path: .copilot-deps/arora-visuals
