@@ -263,11 +263,12 @@ pub struct PoseState {
     /// last frame (a static feature): the next frame lands the whole pose
     /// again, over it.
     reland: bool,
-    /// The triples per-axis animatables assemble, by the entity and feature
-    /// they land on: each write replaces one component and the whole triple
-    /// is applied. Kept rather than read back from the scene, because a
-    /// rotation read back is a quaternion, whose euler angles are not the
-    /// ones it was set from once the pitch leaves ±π/2.
+    /// The rotations per-axis animatables assemble, by the entity they land
+    /// on: each write replaces one euler angle and the whole rotation is
+    /// applied. Kept rather than read back from the scene, because a rotation
+    /// read back is a quaternion, whose euler angles are not the ones it was
+    /// set from once the pitch leaves ±π/2. Every other triple reads back
+    /// exactly, so a per-axis write to one starts from what the scene shows.
     assembled: HashMap<(Entity, FeatureKind), [f32; 3]>,
     /// The meshes whose materials the view composes ([`Surface`]): what the
     /// face's tone mapping goes over.
@@ -2147,8 +2148,12 @@ struct SceneFeatures<'w, 's> {
 
 impl SceneFeatures<'_, '_> {
     /// Land `value` where `bound` says. A per-axis value replaces its
-    /// component of the triple in `assembled` — seeded from what the scene
-    /// shows on the component's first write — and the triple is applied; a
+    /// component of the triple the scene shows now — a translation, a scale,
+    /// a colour — and the triple is applied, so the other components stay
+    /// wherever the last writer of any kind left them (a drag, an
+    /// animation, another rig output). A rotation's angles do not read back,
+    /// so a per-axis rotation replaces its angle of the triple in
+    /// `assembled`, seeded from what the scene shows on the first write; a
     /// whole value is applied as is, and the next per-axis write seeds anew.
     fn land(
         &mut self,
@@ -2158,6 +2163,15 @@ impl SceneFeatures<'_, '_> {
     ) {
         let key = || (bound.entity, bound.feature.clone());
         match (bound.axis, value) {
+            (Some(axis), Decoded::Scalar(component)) if bound.feature != FeatureKind::Rotation => {
+                let Some(Decoded::Triple(mut triple)) =
+                    self.read(bound.entity, &bound.feature, None)
+                else {
+                    return;
+                };
+                triple[axis] = component;
+                self.apply(bound.entity, &bound.feature, None, Decoded::Triple(triple));
+            }
             (Some(axis), Decoded::Scalar(component)) => {
                 let triple = match assembled.entry(key()) {
                     Entry::Occupied(entry) => entry.into_mut(),
@@ -2176,7 +2190,7 @@ impl SceneFeatures<'_, '_> {
             }
             (Some(_), Decoded::Triple(_)) => {}
             (None, value) => {
-                if bound.feature.axes().is_some() && !assembled.is_empty() {
+                if bound.feature == FeatureKind::Rotation && !assembled.is_empty() {
                     assembled.remove(&key());
                 }
                 self.apply(bound.entity, &bound.feature, bound.morph_index, value);
@@ -2568,6 +2582,62 @@ mod tests {
         assert!(transform
             .rotation
             .abs_diff_eq(euler_zyx([0.1, 2.0, 0.0]), 1e-6));
+    }
+
+    /// A per-axis write to a translation or a scale starts from what the
+    /// scene shows: after another writer moved the node — a drag, an
+    /// animation — the other axes stay where that writer left them, rather
+    /// than going back to what an earlier per-axis write saw.
+    #[test]
+    fn a_per_axis_write_keeps_what_another_writer_left() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let mut world = World::new();
+        world.init_resource::<Assets<StandardMaterial>>();
+        let node = world.spawn(Transform::from_xyz(1.0, 2.0, 3.0)).id();
+        let axis = |feature: FeatureKind, axis: usize| SceneBinding {
+            entity: node,
+            feature,
+            axis: Some(axis),
+            morph_index: None,
+        };
+        let land = |world: &mut World,
+                    assembled: HashMap<(Entity, FeatureKind), [f32; 3]>,
+                    writes: Vec<(SceneBinding, f32)>| {
+            world
+                .run_system_once(move |mut scene: SceneFeatures| {
+                    let mut assembled = assembled.clone();
+                    for (bound, value) in &writes {
+                        scene.land(&mut assembled, bound, Decoded::Scalar(*value));
+                    }
+                    assembled
+                })
+                .expect("runs")
+        };
+        let assembled = land(
+            &mut world,
+            HashMap::new(),
+            vec![
+                (axis(FeatureKind::Translation, 0), 5.0),
+                (axis(FeatureKind::Scale, 0), 2.0),
+            ],
+        );
+        {
+            let mut transform = world.get_mut::<Transform>(node).expect("a transform");
+            transform.translation = Vec3::new(10.0, 20.0, 30.0);
+            transform.scale = Vec3::new(4.0, 5.0, 6.0);
+        }
+        land(
+            &mut world,
+            assembled,
+            vec![
+                (axis(FeatureKind::Translation, 0), 7.0),
+                (axis(FeatureKind::Scale, 0), 3.0),
+            ],
+        );
+        let transform = world.get::<Transform>(node).expect("a transform");
+        assert_eq!(transform.translation, Vec3::new(7.0, 20.0, 30.0));
+        assert_eq!(transform.scale, Vec3::new(3.0, 5.0, 6.0));
     }
 
     /// Once a reloaded face is ready, the face it supersedes under the same
