@@ -48,7 +48,7 @@
   const readyWaiters = new Map();
   const picked = [];
   const events = [];
-  vizijs.onEvent((event) => {
+  const listen = (event) => {
     events.push(event);
     if (event.type === "ready") {
       readiness.set(event.instance, event.drawn);
@@ -57,7 +57,8 @@
     } else if (event.type === "pick") {
       picked.push({ instance: event.instance, element: event.element });
     }
-  });
+  };
+  vizijs.onEvent(listen);
   const forget = (id) => readiness.delete(id);
   // Resolves on the instance's next `ready`, or at once if it is ready.
   const nextReady = (id) =>
@@ -274,6 +275,13 @@
     // The faces showing, as their `loaded` events described them.
     shown: (id) => vizijs.faces.get(id) ?? null,
     events: () => events.slice(),
+    // Sets the page's handler again, as a page that sets its own late does;
+    // what it hears from then on is `events().slice(<the returned count>)`.
+    listenAgain: () => {
+      const from = events.length;
+      vizijs.onEvent(listen);
+      return from;
+    },
     unload(id) {
       const device = devices.get(id);
       if (!device) return false;

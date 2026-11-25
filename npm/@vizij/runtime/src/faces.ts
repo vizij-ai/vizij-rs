@@ -68,12 +68,14 @@ export type VizijEvent =
   /**
    * Where a face's safe area — the bounds its camera frames — lies on the
    * canvas now, in CSS pixels from its top-left corner, or `null` once it
-   * has none (placed on an empty rectangle, or gone). Sent when it moves.
+   * has none (placed on an empty rectangle, or gone). Sent when it moves,
+   * and to a handler newly set.
    */
   | { type: "safeArea"; instance: string; area: Rect | null }
   /**
    * Where the faces' elements and controls stand on the canvas, and the
-   * control the pointer has. Sent each frame it changed.
+   * control the pointer has. Sent each frame it changed, and to a handler
+   * newly set.
    */
   | ({ type: "overlay" } & OverlayFrame)
   /** A drag on a control the driver added. Nothing has moved. */

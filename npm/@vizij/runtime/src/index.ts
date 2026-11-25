@@ -1127,7 +1127,9 @@ export interface VizijHandle {
    * rectangle, and a rectangle past the canvas's edge takes its safe area
    * with it. */
   readonly safeAreas: ReadonlyMap<string, Rect>;
-  /** Sets where the App's events go, replacing any earlier handler. */
+  /** Sets where the App's events go, replacing any earlier handler. Events
+   * from before it are not replayed, but the next frame sends it the
+   * `overlay` and every face's `safeArea` as they stand. */
   onEvent(handler: (event: VizijEvent) => void): void;
 }
 

@@ -96,6 +96,11 @@ thread_local! {
     /// Each instance's safe area as last sent, so a `safeArea` event goes
     /// out only when one moves, appears or goes.
     static AREAS: RefCell<HashMap<String, [f32; 4]>> = RefCell::new(HashMap::new());
+    /// Whether the next report sends the state the page hears only as
+    /// events — the overlay and every safe area — as it stands, changed or
+    /// not: set by a new handler ([`set_event_handler`]), which would
+    /// otherwise not hear it until something moved.
+    static SNAPSHOT: Cell<bool> = const { Cell::new(false) };
 }
 
 /// The Vizijs that are ready, each with the moment of the frame that first
@@ -281,10 +286,11 @@ fn report(
     for press in std::mem::take(&mut presses.0) {
         emit(&VizijEvent::ControlPress(&press));
     }
-    if overlay.is_changed() {
+    let snapshot = SNAPSHOT.with(|snapshot| snapshot.replace(false));
+    if snapshot || overlay.is_changed() {
         emit(&VizijEvent::Overlay(&overlay.0));
     }
-    report_safe_areas(&areas);
+    report_safe_areas(&areas, snapshot);
     // Read either way, so a page that sets its handler late does not get a
     // backlog. A pick on an instance that is not a Vizij is another
     // consumer's sharing the App.
@@ -302,8 +308,9 @@ fn report(
 }
 
 /// Send a `safeArea` event for each Vizij whose safe area moved, appeared or
-/// went since the last one sent.
-fn report_safe_areas(areas: &SafeAreas) {
+/// went since the last one sent, and, for a `snapshot`, for every Vizij that
+/// has one.
+fn report_safe_areas(areas: &SafeAreas, snapshot: bool) {
     let now: HashMap<&str, [f32; 4]> = areas
         .0
         .iter()
@@ -318,7 +325,7 @@ fn report_safe_areas(areas: &SafeAreas) {
         let mut sent = sent.borrow_mut();
         let mut changes: Vec<(String, Option<[f32; 4]>)> = now
             .iter()
-            .filter(|(id, area)| sent.get(**id) != Some(*area))
+            .filter(|(id, area)| snapshot || sent.get(**id) != Some(*area))
             .map(|(id, area)| (id.to_string(), Some(*area)))
             .collect();
         changes.extend(
@@ -404,10 +411,13 @@ pub fn mount(canvas: String, options_json: Option<String>) -> Result<(), JsValue
 /// Set the function the App's events go to, replacing any earlier one. Each
 /// call gets one event object; its `type` says which ([`VizijEvent`]; the
 /// package's `VizijEvent` type). Events from before a handler is set are
-/// not kept.
+/// not kept, but a new handler starts with the state it would otherwise
+/// hear of only once it changes: the next frame sends the overlay and every
+/// Vizij's safe area as they stand.
 #[wasm_bindgen(js_name = setEventHandler)]
 pub fn set_event_handler(handler: js_sys::Function) {
     HANDLER.with(|h| *h.borrow_mut() = Some(handler));
+    SNAPSHOT.with(|snapshot| snapshot.set(true));
 }
 
 /// Send a request to the mounted App.
