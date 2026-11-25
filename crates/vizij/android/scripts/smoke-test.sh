@@ -44,7 +44,8 @@
 # (face-a.png, face-b.png), with a second face opened.png and
 # relaunched.png, logcat.txt (the app's own lines in logcat-app.txt),
 # meminfo.txt, say.txt and checks.txt; the pane's controls.png, pane.png,
-# background.png, background-relaunched.png and device.png.
+# background.png, background-relaunched.png and device.png; and, when a
+# system dialog came up over the app, the first ones seen (dialog-1.png...).
 #
 # The emulator-runner action runs its `script` line by line, so the whole
 # smoke lives here.
@@ -57,12 +58,24 @@ PKG=${VIZIJ_SMOKE_PACKAGE:-ai.vizij.app}
 DEADLINE=${VIZIJ_SMOKE_DEADLINE:-120}
 HERE=$(cd "$(dirname "$0")" && pwd)
 mkdir -p "$OUT"
-rm -f "$OUT"/*.png "$OUT"/*.raw "$OUT"/checks.txt
+rm -f "$OUT"/*.png "$OUT"/*.raw "$OUT"/*.covered "$OUT"/checks.txt
 
 failures=()
 fail() {
   echo "::error::$1"
   failures+=("$1")
+}
+# A check made on the screen (a screenshot, or what an input did) that fails
+# while a system dialog still covers the app has seen the dialog, not the
+# app: it is reported as the dialog, naming the check. A check on the log,
+# the install or the bridge is not, and keeps its own report.
+fail_on_screen() {
+  local dialog=${covered:-$(system_dialog)}
+  if [ -n "$dialog" ]; then
+    fail "a system dialog covered the app (${dialog}); unchecked: $1"
+  else
+    fail "$1"
+  fi
 }
 # Waits up to a minute for the device; a command it still cannot reach
 # fails as before.
@@ -70,14 +83,133 @@ adb() {
   timeout 60 adb wait-for-device
   command adb "$@"
 }
-measure() { python3 "$HERE/frames.py" "$@"; }
-frame() {
-  for _ in 1 2 3; do
-    adb exec-out screencap > "$OUT/$1.raw"
-    measure whole "$OUT/$1.raw" && return
-    echo "$1: a partial screenshot, taken again"
+# A check on a frame taken with a system dialog over the app would measure
+# the dialog (a light dialog over black passes `face`, and against a frame of
+# the app passes `moved` and `replaced`), so it is not made: the check fails,
+# and `covered` names the dialog for its report.
+measure() {
+  local arg
+  case $1 in
+    face | moved | replaced | find | background)
+      for arg in "${@:2}"; do
+        if [ -f "${arg%.raw}.covered" ]; then
+          covered=$(cat "${arg%.raw}.covered")
+          echo "${arg}: taken with a system dialog over the app, not measured"
+          return 1
+        fi
+      done
+      ;;
+  esac
+  python3 "$HERE/frames.py" "$@"
+}
+
+# A system dialog ("<app> isn't responding", "<app> keeps stopping") can
+# come up over the app at any moment: on the runner's two cores the
+# emulator's own launcher is slow enough to be reported as not responding.
+# A screenshot then shows the dialog and a tap lands on it, so every
+# screenshot and every input first clears it, pressing its Wait button
+# (Close app on a crash dialog) or, with no button found, the back key,
+# until no such window is left. One still there after DIALOG_DEADLINE
+# seconds is left, and `covered` names it until a later clear succeeds; an
+# input is then not sent, since it would land on the dialog (the centre of
+# the screen is its Close app row), and the frame is marked as covered.
+DIALOG_DEADLINE=${VIZIJ_SMOKE_DIALOG_DEADLINE:-60}
+covered=""
+dialogs=0
+# The dialog's window title, as the window manager lists it
+# ("Application Not Responding: <process>"), or nothing.
+system_dialog() {
+  adb shell dumpsys window windows | tr -d '\r' \
+    | sed -nE 's/.*Window\{[0-9a-f]+ u[0-9]+ ((Application Not Responding|Application Error): [^}]*)\}.*/\1/p' \
+    | head -1
+}
+DIALOG_BUTTON=$(cat <<'PY'
+import re, sys
+xml = sys.stdin.read()
+for name in ("aerr_wait", "aerr_close"):
+    m = re.search(r'resource-id="android:id/' + name + r'"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)
+    if m:
+        x1, y1, x2, y2 = map(int, m.groups())
+        print((x1 + x2) // 2, (y1 + y2) // 2)
+        break
+PY
+)
+# The centre of the dialog's Wait (or Close app) button, from the window
+# hierarchy; nothing when the dump fails, as it can while the system is busy.
+dialog_button() {
+  timeout 30 adb shell uiautomator dump /sdcard/window.xml > /dev/null 2>&1 || return 0
+  adb exec-out cat /sdcard/window.xml | python3 -I -c "$DIALOG_BUTTON"
+}
+clear_dialogs() {
+  local title at deadline=$(( $(date +%s) + DIALOG_DEADLINE ))
+  while title=$(system_dialog); [ -n "$title" ]; do
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      echo "a system dialog still covers the app after ${DIALOG_DEADLINE} s: ${title}"
+      covered=$title
+      return 1
+    fi
+    dialogs=$((dialogs + 1))
+    echo "a system dialog covers the app: ${title}"
+    # The first few are kept, the evidence of what covered the app.
+    if [ "$dialogs" -le 3 ]; then
+      adb exec-out screencap > "$OUT/dialog-$dialogs.raw"
+      measure png "$OUT/dialog-$dialogs.raw" "$OUT/dialog-$dialogs.png" 2> /dev/null || true
+    fi
+    at=$(dialog_button)
+    # Looked for again just before pressing: a dialog gone in the meantime
+    # leaves the app under the tap or the back key.
+    [ -n "$(system_dialog)" ] || break
+    if [ -n "$at" ]; then
+      echo "pressing its button at ${at}"
+      # shellcheck disable=SC2086 # "x y", two arguments
+      adb shell input tap $at
+    else
+      echo "no button found; pressing back"
+      adb shell input keyevent KEYCODE_BACK
+    fi
     sleep 2
   done
+  covered=""
+}
+# An input not sent fails the run itself: the dialog may close before the
+# next frame, which would then show the app as it was before the input and
+# could pass a check the input was meant to set up.
+input() {
+  if ! clear_dialogs; then
+    fail_on_screen "the input \"$*\" was not sent"
+    return 1
+  fi
+  adb shell input "$@"
+}
+# A frame of the app: whole, and with no system dialog over it. A dialog
+# seen as the frame is taken is cleared and the frame taken again. The last
+# capture, when a dialog was seen with it, is marked (<name>.covered, the
+# dialog's title) even if the dialog has gone since, as its pixels may be in
+# the frame; `measure` refuses a marked frame, and `frame` fails.
+frame() {
+  local title
+  rm -f "$OUT/$1.covered"
+  for _ in 1 2 3; do
+    clear_dialogs
+    adb exec-out screencap > "$OUT/$1.raw"
+    title=""
+    if ! measure whole "$OUT/$1.raw"; then
+      echo "$1: a partial screenshot, taken again"
+    elif [ -n "$covered" ]; then
+      title=$covered
+      break
+    else
+      title=$(system_dialog)
+      [ -n "$title" ] || return 0
+      echo "$1: a system dialog came up as it was taken, taken again"
+    fi
+    sleep 2
+  done
+  [ -n "$title" ] || return 0
+  covered=$title
+  echo "$covered" > "$OUT/$1.covered"
+  echo "$1: taken with a system dialog over the app"
+  return 1
 }
 resumed() { adb shell dumpsys activity activities | grep -m1 -E 'topResumedActivity|mResumedActivity' | tr -d '\r'; }
 in_front() { case "$(resumed)" in *"$PKG/"*) return 0 ;; *) return 1 ;; esac; }
@@ -112,7 +244,7 @@ while :; do
 done
 
 if [ -z "$shown" ]; then
-  fail "no face on screen ${DEADLINE} s after launch"
+  fail_on_screen "no face on screen ${DEADLINE} s after launch"
   measure png "$OUT/first.raw" "$OUT/face-a.png"
 else
   echo "face on screen ${shown} s after launch"
@@ -131,7 +263,7 @@ else
     prev="$OUT/next$i.raw"
   done
   if [ -z "$moved" ]; then
-    fail "the face did not move between screenshots 5 s apart"
+    fail_on_screen "the face did not move between screenshots 5 s apart"
     measure png "$OUT/first.raw" "$OUT/face-a.png"
     measure png "$prev" "$OUT/face-b.png"
   fi
@@ -181,7 +313,7 @@ if [ -n "$SECOND" ] && [ -n "$shown" ]; then
     frame opened
     measure png "$OUT/opened.raw" "$OUT/opened.png"
     if ! { in_front && measure face "$OUT/opened.raw" && measure replaced "$OUT/before.raw" "$OUT/opened.raw"; }; then
-      fail "the face opened through a VIEW intent is not shown"
+      fail_on_screen "the face opened through a VIEW intent is not shown"
     fi
     adb shell am force-stop "$PKG"
     adb shell am start -W -n "$launcher" > /dev/null
@@ -189,7 +321,7 @@ if [ -n "$SECOND" ] && [ -n "$shown" ]; then
     frame relaunched
     measure png "$OUT/relaunched.raw" "$OUT/relaunched.png"
     if ! { in_front && measure face "$OUT/relaunched.raw"; }; then
-      fail "no face on screen after the relaunch"
+      fail_on_screen "no face on screen after the relaunch"
     fi
     if ! adb logcat -d | grep -q "vizij: the face last opened"; then
       fail "the relaunch did not open the face last opened"
@@ -201,76 +333,81 @@ BUTTON=2563eb
 SWATCH=0f766e
 if [ -n "$shown" ]; then
   read -r width height < <(adb shell wm size | tr -d '\r' | sed -nE 's/.*: ([0-9]+)x([0-9]+).*/\1 \2/p' | tail -1)
-  adb shell input tap $((width / 2)) $((height / 2))
+  input tap $((width / 2)) $((height / 2))
   sleep 2
   frame controls
   measure png "$OUT/controls.raw" "$OUT/controls.png"
   if ! at=$(measure find "$OUT/controls.raw" "$BUTTON"); then
-    fail "a tap on the face does not show the Settings button"
+    fail_on_screen "a tap on the face does not show the Settings button"
   else
     # shellcheck disable=SC2086 # "x y", two arguments
-    adb shell input tap $at
+    input tap $at
     sleep 2
     frame pane
     measure png "$OUT/pane.raw" "$OUT/pane.png"
     if ! at=$(measure find "$OUT/pane.raw" "$SWATCH"); then
-      fail "the Settings button does not open the pane"
+      fail_on_screen "the Settings button does not open the pane"
     else
       # shellcheck disable=SC2086
-      adb shell input tap $at
+      input tap $at
       sleep 1
-      adb shell input keyevent KEYCODE_BACK
+      input keyevent KEYCODE_BACK
       sleep 2
       frame closed
       measure png "$OUT/closed.raw" "$OUT/background.png"
-      in_front || fail "the back gesture with the pane open left the app"
+      in_front || fail_on_screen "the back gesture with the pane open left the app"
       # The pane covers the screen: the background shows once it is closed.
       measure background "$OUT/closed.raw" "$SWATCH" \
-        || fail "the background picked in the pane does not show once the pane is closed"
+        || fail_on_screen "the background picked in the pane does not show once the pane is closed"
       adb shell am force-stop "$PKG"
       adb shell am start -W -n "$launcher" > /dev/null
       sleep 25
       frame kept
       measure png "$OUT/kept.raw" "$OUT/background-relaunched.png"
       { in_front && measure background "$OUT/kept.raw" "$SWATCH"; } \
-        || fail "the background picked in the pane does not come back after a relaunch"
+        || fail_on_screen "the background picked in the pane does not come back after a relaunch"
       # The Device section, at the end of the pane. The drag starts on the
       # swatch picked, a button, where no text takes it, and is slow enough
       # not to fling. Nothing is pressed in the section.
-      adb shell input tap $((width / 2)) $((height / 2))
+      input tap $((width / 2)) $((height / 2))
       sleep 2
       frame controls-again
       if ! at=$(measure find "$OUT/controls-again.raw" "$BUTTON"); then
-        fail "a tap on the relaunched face does not show the Settings button"
+        fail_on_screen "a tap on the relaunched face does not show the Settings button"
       else
         # shellcheck disable=SC2086
-        adb shell input tap $at
+        input tap $at
         sleep 2
         frame pane-again
         if ! swatch=$(measure find "$OUT/pane-again.raw" "$SWATCH"); then
-          fail "the Settings button does not open the pane again"
+          fail_on_screen "the Settings button does not open the pane again"
         else
           read -r x y <<< "$swatch"
           to=$(( y - height * 45 / 100 ))
           [ "$to" -ge 5 ] || to=5
-          adb shell input swipe "$x" "$y" "$x" "$to" 1000
+          input swipe "$x" "$y" "$x" "$to" 1000
           sleep 2
           frame device
           measure png "$OUT/device.raw" "$OUT/device.png"
-          in_front || fail "the pane's Device section left the app"
+          in_front || fail_on_screen "the pane's Device section left the app"
           # The pane stays over the face, which the background picked does
           # not fill.
-          if measure background "$OUT/device.raw" "$SWATCH"; then
-            fail "the pane does not stay open on its Device section"
+          # A frame a dialog covered shows nothing of the pane, so it
+          # cannot stand as the background not filling the screen.
+          if [ -f "$OUT/device.covered" ]; then
+            covered=$(cat "$OUT/device.covered")
+            fail_on_screen "the pane does not stay open on its Device section"
+          elif measure background "$OUT/device.raw" "$SWATCH"; then
+            fail_on_screen "the pane does not stay open on its Device section"
           fi
-          adb shell input keyevent KEYCODE_BACK
+          input keyevent KEYCODE_BACK
           sleep 2
         fi
       fi
     fi
   fi
 fi
-rm -f "$OUT"/*.raw
+rm -f "$OUT"/*.raw "$OUT"/*.covered
 
 pid=$(adb shell pidof "$PKG" | tr -d '\r')
 front=$(resumed)
@@ -285,6 +422,8 @@ adb logcat -d -v threadtime > "$OUT/logcat.txt"
 uid=$(adb shell pm list packages -U "$PKG" | tr -d '\r' | sed -nE "s/^package:$PKG uid:([0-9]+).*/\1/p")
 adb logcat -d -v threadtime --uid "$uid" > "$OUT/logcat-app.txt"
 sed -n '/App Summary/,/TOTAL SWAP/p' "$OUT/meminfo.txt"
+echo "--- applications the system found not responding"
+grep -E "ActivityManager: (ANR in|Killing .*user request after error)" "$OUT/logcat.txt" | cut -c1-240 | head -10
 echo "--- adapter and errors in the app's log"
 grep -E "AdapterInfo|Caught|panicked|Encountered a panic|Quitting the application|Fatal signal|FATAL EXCEPTION|UnsatisfiedLinkError|vizij:|tts:" "$OUT/logcat-app.txt" | cut -c1-240 | head -40
 if [ ! -s "$OUT/logcat-app.txt" ]; then fail "no log from the app (uid ${uid:-unknown})"; fi
