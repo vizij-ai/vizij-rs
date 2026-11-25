@@ -90,7 +90,7 @@ use vizij_api_core::Value;
 pub use arora_visuals::binding::{ElementTargets, SceneBinding, SceneBindings};
 use arora_visuals::control::{
     ControlCommand, ControlCommands, ControlEvent, ControlEvents, ControlPress, ControlPresses,
-    ControlSize, ControlSystems, ControlView, Controls, ControlsPlugin,
+    ControlSize, ControlView, Controls, ControlsPlugin,
 };
 use arora_visuals::drawn;
 use arora_visuals::instance::{ClearCamera, InstanceIndex, InstanceSystems};
@@ -753,14 +753,13 @@ pub fn refuse_joint_controls(command: &ControlCommand) -> Result<(), String> {
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ViewSystems;
 
-/// The systems that take the front ends' requests and answer loads,
-/// before the controls' commands are carried out, so a control sent with its
-/// face's load finds the face.
+/// The systems that take the front ends' requests and answer loads. In
+/// `Intake`, which the shared layer orders before the controls' commands, so
+/// a control sent with its face's load finds the face.
 fn answering_systems() -> bevy::ecs::schedule::ScheduleConfigs<bevy::ecs::system::ScheduleSystem> {
     (apply_view_events, fail_unloadable_scenes)
         .chain()
         .in_set(InstanceSystems::Intake)
-        .before(ControlSystems::Commands)
 }
 
 /// Hand the controls' drags and presses on as [`FaceEvent`]s, so a front end
@@ -2258,6 +2257,7 @@ fn as_rgb(value: &Value) -> Option<[f32; 3]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arora_visuals::control::ControlSystems;
 
     const BOUNDS: Vec2 = Vec2::new(4.0, 2.0);
     const NO_ZOOM: Vec2 = Vec2::ONE;
