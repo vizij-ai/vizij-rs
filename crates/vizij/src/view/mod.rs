@@ -3177,6 +3177,34 @@ mod tests {
         }
     }
 
+    /// An unload takes the face's selection with it, so a face loaded under
+    /// the same id later starts with nothing outlined; another face's
+    /// selection stays.
+    #[test]
+    fn an_unload_clears_the_faces_selection() {
+        let (mut app, sender) = answering_app();
+        for face_id in ["a", "b"] {
+            sender
+                .send(ViewEvent::SetSelection {
+                    face_id: face_id.into(),
+                    elements: vec!["eye".into()],
+                })
+                .unwrap();
+        }
+        app.update();
+        let selected =
+            |app: &App, face_id: &str| app.world().resource::<Selections>().0.contains_key(face_id);
+        assert!(selected(&app, "a") && selected(&app, "b"));
+        sender
+            .send(ViewEvent::UnloadFace {
+                face_id: "a".into(),
+            })
+            .unwrap();
+        app.update();
+        assert!(!selected(&app, "a"), "the unloaded face's selection went");
+        assert!(selected(&app, "b"), "another face's stays");
+    }
+
     /// The controls' drags and presses go out as face events, once, and do
     /// not pile up where no front end drains them.
     #[test]
