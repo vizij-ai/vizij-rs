@@ -190,11 +190,17 @@ export function trackFaces<D>(module: FaceModule<D>): Faces<D> {
           if (held.shown?.drawn !== undefined) ready.set(event.instance, held.shown.drawn);
         }
       } else if (event.type === "ready") {
-        // Always about the face whose `loaded` came last: the module makes
-        // only a face showing ready.
-        const shown = instances.get(event.instance)?.shown;
-        if (shown) shown.drawn = event.drawn;
-        ready.set(event.instance, event.drawn);
+        // The module makes only a face showing ready, but events are handed
+        // over a frame at a time, so a handler hearing an earlier one may
+        // already have unloaded the instance or started a load into it. A
+        // face no longer showing has no readiness to keep; one being
+        // replaced keeps it for a failed load to put back, and publishes
+        // nothing while the load is under way.
+        const held = instances.get(event.instance);
+        if (held?.shown) {
+          held.shown.drawn = event.drawn;
+          if (!held.loading) ready.set(event.instance, event.drawn);
+        }
       } else if (event.type === "safeArea") {
         if (event.area) safeAreas.set(event.instance, event.area);
         else safeAreas.delete(event.instance);

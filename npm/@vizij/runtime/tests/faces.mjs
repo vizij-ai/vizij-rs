@@ -233,6 +233,17 @@ assert.equal(tracked.safeAreas.has("a"), false);
 
   r.unload("x");
   assert.equal(r.ready.has("x"), false, "an unload takes it out");
+
+  // A `ready` handed over after a handler acted on an earlier event of the
+  // same frame: after an unload it says nothing; during a reload it is kept
+  // for the face showing, published only if that load fails.
+  sendR({ type: "ready", instance: "x", drawn: true });
+  assert.equal(r.ready.has("x"), false, "an unloaded face is not made ready");
+  r.load("y", undefined, () => "dev-y3").catch(() => {});
+  sendR({ type: "ready", instance: "y", drawn: false });
+  assert.equal(r.ready.has("y"), false, "a face being replaced publishes nothing");
+  sendR({ type: "loadFailed", instance: "y", error: "its scene failed to load" });
+  assert.equal(r.ready.get("y"), false, "the face kept is ready as its last `ready` said");
   await tick();
 }
 
