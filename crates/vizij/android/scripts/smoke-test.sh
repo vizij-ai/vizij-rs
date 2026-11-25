@@ -61,14 +61,21 @@ mkdir -p "$OUT"
 rm -f "$OUT"/*.png "$OUT"/*.raw "$OUT"/*.covered "$OUT"/checks.txt
 
 failures=()
-# A check that fails while a system dialog still covers the app has seen
-# the dialog, not the app: it is reported as the dialog, naming the check.
 fail() {
+  echo "::error::$1"
+  failures+=("$1")
+}
+# A check made on the screen (a screenshot, or what an input did) that fails
+# while a system dialog still covers the app has seen the dialog, not the
+# app: it is reported as the dialog, naming the check. A check on the log,
+# the install or the bridge is not, and keeps its own report.
+fail_on_screen() {
   local dialog=${covered:-$(system_dialog)}
-  local message=$1
-  [ -z "$dialog" ] || message="a system dialog covered the app (${dialog}); unchecked: $1"
-  echo "::error::$message"
-  failures+=("$message")
+  if [ -n "$dialog" ]; then
+    fail "a system dialog covered the app (${dialog}); unchecked: $1"
+  else
+    fail "$1"
+  fi
 }
 # Waits up to a minute for the device; a command it still cannot reach
 # fails as before.
@@ -164,9 +171,12 @@ clear_dialogs() {
   done
   covered=""
 }
+# An input not sent fails the run itself: the dialog may close before the
+# next frame, which would then show the app as it was before the input and
+# could pass a check the input was meant to set up.
 input() {
   if ! clear_dialogs; then
-    echo "not sent, a system dialog covers the app: input $*"
+    fail_on_screen "the input \"$*\" was not sent"
     return 1
   fi
   adb shell input "$@"
@@ -234,7 +244,7 @@ while :; do
 done
 
 if [ -z "$shown" ]; then
-  fail "no face on screen ${DEADLINE} s after launch"
+  fail_on_screen "no face on screen ${DEADLINE} s after launch"
   measure png "$OUT/first.raw" "$OUT/face-a.png"
 else
   echo "face on screen ${shown} s after launch"
@@ -253,7 +263,7 @@ else
     prev="$OUT/next$i.raw"
   done
   if [ -z "$moved" ]; then
-    fail "the face did not move between screenshots 5 s apart"
+    fail_on_screen "the face did not move between screenshots 5 s apart"
     measure png "$OUT/first.raw" "$OUT/face-a.png"
     measure png "$prev" "$OUT/face-b.png"
   fi
@@ -303,7 +313,7 @@ if [ -n "$SECOND" ] && [ -n "$shown" ]; then
     frame opened
     measure png "$OUT/opened.raw" "$OUT/opened.png"
     if ! { in_front && measure face "$OUT/opened.raw" && measure replaced "$OUT/before.raw" "$OUT/opened.raw"; }; then
-      fail "the face opened through a VIEW intent is not shown"
+      fail_on_screen "the face opened through a VIEW intent is not shown"
     fi
     adb shell am force-stop "$PKG"
     adb shell am start -W -n "$launcher" > /dev/null
@@ -311,7 +321,7 @@ if [ -n "$SECOND" ] && [ -n "$shown" ]; then
     frame relaunched
     measure png "$OUT/relaunched.raw" "$OUT/relaunched.png"
     if ! { in_front && measure face "$OUT/relaunched.raw"; }; then
-      fail "no face on screen after the relaunch"
+      fail_on_screen "no face on screen after the relaunch"
     fi
     if ! adb logcat -d | grep -q "vizij: the face last opened"; then
       fail "the relaunch did not open the face last opened"
@@ -328,7 +338,7 @@ if [ -n "$shown" ]; then
   frame controls
   measure png "$OUT/controls.raw" "$OUT/controls.png"
   if ! at=$(measure find "$OUT/controls.raw" "$BUTTON"); then
-    fail "a tap on the face does not show the Settings button"
+    fail_on_screen "a tap on the face does not show the Settings button"
   else
     # shellcheck disable=SC2086 # "x y", two arguments
     input tap $at
@@ -336,7 +346,7 @@ if [ -n "$shown" ]; then
     frame pane
     measure png "$OUT/pane.raw" "$OUT/pane.png"
     if ! at=$(measure find "$OUT/pane.raw" "$SWATCH"); then
-      fail "the Settings button does not open the pane"
+      fail_on_screen "the Settings button does not open the pane"
     else
       # shellcheck disable=SC2086
       input tap $at
@@ -345,17 +355,17 @@ if [ -n "$shown" ]; then
       sleep 2
       frame closed
       measure png "$OUT/closed.raw" "$OUT/background.png"
-      in_front || fail "the back gesture with the pane open left the app"
+      in_front || fail_on_screen "the back gesture with the pane open left the app"
       # The pane covers the screen: the background shows once it is closed.
       measure background "$OUT/closed.raw" "$SWATCH" \
-        || fail "the background picked in the pane does not show once the pane is closed"
+        || fail_on_screen "the background picked in the pane does not show once the pane is closed"
       adb shell am force-stop "$PKG"
       adb shell am start -W -n "$launcher" > /dev/null
       sleep 25
       frame kept
       measure png "$OUT/kept.raw" "$OUT/background-relaunched.png"
       { in_front && measure background "$OUT/kept.raw" "$SWATCH"; } \
-        || fail "the background picked in the pane does not come back after a relaunch"
+        || fail_on_screen "the background picked in the pane does not come back after a relaunch"
       # The Device section, at the end of the pane. The drag starts on the
       # swatch picked, a button, where no text takes it, and is slow enough
       # not to fling. Nothing is pressed in the section.
@@ -363,14 +373,14 @@ if [ -n "$shown" ]; then
       sleep 2
       frame controls-again
       if ! at=$(measure find "$OUT/controls-again.raw" "$BUTTON"); then
-        fail "a tap on the relaunched face does not show the Settings button"
+        fail_on_screen "a tap on the relaunched face does not show the Settings button"
       else
         # shellcheck disable=SC2086
         input tap $at
         sleep 2
         frame pane-again
         if ! swatch=$(measure find "$OUT/pane-again.raw" "$SWATCH"); then
-          fail "the Settings button does not open the pane again"
+          fail_on_screen "the Settings button does not open the pane again"
         else
           read -r x y <<< "$swatch"
           to=$(( y - height * 45 / 100 ))
@@ -379,16 +389,16 @@ if [ -n "$shown" ]; then
           sleep 2
           frame device
           measure png "$OUT/device.raw" "$OUT/device.png"
-          in_front || fail "the pane's Device section left the app"
+          in_front || fail_on_screen "the pane's Device section left the app"
           # The pane stays over the face, which the background picked does
           # not fill.
           # A frame a dialog covered shows nothing of the pane, so it
           # cannot stand as the background not filling the screen.
           if [ -f "$OUT/device.covered" ]; then
             covered=$(cat "$OUT/device.covered")
-            fail "the pane does not stay open on its Device section"
+            fail_on_screen "the pane does not stay open on its Device section"
           elif measure background "$OUT/device.raw" "$SWATCH"; then
-            fail "the pane does not stay open on its Device section"
+            fail_on_screen "the pane does not stay open on its Device section"
           fi
           input keyevent KEYCODE_BACK
           sleep 2
