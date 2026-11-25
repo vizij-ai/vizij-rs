@@ -58,7 +58,7 @@ PKG=${VIZIJ_SMOKE_PACKAGE:-ai.vizij.app}
 DEADLINE=${VIZIJ_SMOKE_DEADLINE:-120}
 HERE=$(cd "$(dirname "$0")" && pwd)
 mkdir -p "$OUT"
-rm -f "$OUT"/*.png "$OUT"/*.raw "$OUT"/checks.txt
+rm -f "$OUT"/*.png "$OUT"/*.raw "$OUT"/*.covered "$OUT"/checks.txt
 
 failures=()
 # A check that fails while a system dialog still covers the app has seen
@@ -76,7 +76,25 @@ adb() {
   timeout 60 adb wait-for-device
   command adb "$@"
 }
-measure() { python3 "$HERE/frames.py" "$@"; }
+# A check on a frame taken with a system dialog over the app would measure
+# the dialog (a light dialog over black passes `face`, and against a frame of
+# the app passes `moved` and `replaced`), so it is not made: the check fails,
+# and `covered` names the dialog for its report.
+measure() {
+  local arg
+  case $1 in
+    face | moved | replaced | find | background)
+      for arg in "${@:2}"; do
+        if [ -f "${arg%.raw}.covered" ]; then
+          covered=$(cat "${arg%.raw}.covered")
+          echo "${arg}: taken with a system dialog over the app, not measured"
+          return 1
+        fi
+      done
+      ;;
+  esac
+  python3 "$HERE/frames.py" "$@"
+}
 
 # A system dialog ("<app> isn't responding", "<app> keeps stopping") can
 # come up over the app at any moment: on the runner's two cores the
@@ -85,7 +103,9 @@ measure() { python3 "$HERE/frames.py" "$@"; }
 # screenshot and every input first clears it, pressing its Wait button
 # (Close app on a crash dialog) or, with no button found, the back key,
 # until no such window is left. One still there after DIALOG_DEADLINE
-# seconds is left, and `covered` names it until a later clear succeeds.
+# seconds is left, and `covered` names it until a later clear succeeds; an
+# input is then not sent, since it would land on the dialog (the centre of
+# the screen is its Close app row), and the frame is marked as covered.
 DIALOG_DEADLINE=${VIZIJ_SMOKE_DIALOG_DEADLINE:-60}
 covered=""
 dialogs=0
@@ -145,26 +165,37 @@ clear_dialogs() {
   covered=""
 }
 input() {
-  clear_dialogs
+  if ! clear_dialogs; then
+    echo "not sent, a system dialog covers the app: input $*"
+    return 1
+  fi
   adb shell input "$@"
 }
-# A frame of the app: whole, and with no system dialog over it unless one
-# could not be cleared. A dialog that comes up as the frame is taken is
-# cleared and the frame taken again.
+# A frame of the app: whole, and with no system dialog over it. A dialog
+# that comes up as the frame is taken is cleared and the frame taken again;
+# a frame a dialog still covers is marked (<name>.covered, the dialog's
+# title), which `measure` refuses, and `frame` fails.
 frame() {
+  rm -f "$OUT/$1.covered"
   for _ in 1 2 3; do
     clear_dialogs
     adb exec-out screencap > "$OUT/$1.raw"
     if ! measure whole "$OUT/$1.raw"; then
       echo "$1: a partial screenshot, taken again"
-    elif [ -z "$covered" ] && [ -n "$(system_dialog)" ]; then
+    elif [ -n "$covered" ]; then
+      break
+    elif [ -n "$(system_dialog)" ]; then
       echo "$1: a system dialog came up as it was taken, taken again"
     else
-      return
+      return 0
     fi
     sleep 2
   done
   [ -n "$covered" ] || covered=$(system_dialog)
+  [ -z "$covered" ] && return 0
+  echo "$covered" > "$OUT/$1.covered"
+  echo "$1: taken with a system dialog over the app"
+  return 1
 }
 resumed() { adb shell dumpsys activity activities | grep -m1 -E 'topResumedActivity|mResumedActivity' | tr -d '\r'; }
 in_front() { case "$(resumed)" in *"$PKG/"*) return 0 ;; *) return 1 ;; esac; }
@@ -357,7 +388,7 @@ if [ -n "$shown" ]; then
     fi
   fi
 fi
-rm -f "$OUT"/*.raw
+rm -f "$OUT"/*.raw "$OUT"/*.covered
 
 pid=$(adb shell pidof "$PKG" | tr -d '\r')
 front=$(resumed)
