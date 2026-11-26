@@ -1016,6 +1016,37 @@ mod tests {
         );
     }
 
+    /// A name two rig inputs answer to, as `pose_control_` and `direct_`
+    /// aliases, names the `direct_` input: staging writes its path, and a
+    /// `face-default` neutral takes its default.
+    #[test]
+    fn a_direct_input_wins_a_name_a_pose_control_input_shares() {
+        let bundle = |mode: &str| {
+            Bundle::from_bundle_json(&json!({
+                "graphs": [{ "id": "the_rig", "kind": "rig", "spec": graph(
+                    json!([
+                        { "id": "input_pose_control_mouth_open", "type": "input",
+                          "params": { "path": "rig/pose/mouth_open", "value": { "float": 1.0 } } },
+                        { "id": "input_direct_mouth_open", "type": "input",
+                          "params": { "path": "rig/mouth/open", "value": { "float": 2.0 } } }
+                    ]),
+                    json!([]),
+                ) }],
+                "poses": { "config": {
+                    "neutralMode": mode, "neutralInputs": { "mouth_open": 0.5 }
+                } }
+            }))
+        };
+        assert_eq!(
+            bundle("face-default").neutral_stage_writes(),
+            vec![("rig/mouth/open".to_string(), 2.0)]
+        );
+        assert_eq!(
+            bundle("explicit").neutral_stage_writes(),
+            vec![("rig/mouth/open".to_string(), 0.5)]
+        );
+    }
+
     /// An `explicit` neutral, or one with no mode, is the authored pose and
     /// overrides the rig's defaults as recorded.
     #[test]
