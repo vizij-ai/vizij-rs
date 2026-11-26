@@ -91,7 +91,6 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   `--headless`) and the Android app publish frames at that rate
   (`FaceConfig::frame_rate`); a device under `--ros2 --no-ros4hri` publishes
   none and has no such key.
-
 ### Changed
 
 - **Breaking:** frames are off at startup. `--frame-rate N` is the rate
@@ -137,6 +136,14 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Fixed
 
+- A per-axis rotation write (`rotation.r`, a per-axis rotation animatable)
+  keeps the angles last written to its node, a pitch past ±90° included,
+  for as long as the node holds the rotation they made, whether they were
+  written per axis or whole: after a whole rotation it used to start from
+  the angles read back off the quaternion, which flip such a pitch. Once
+  anything else has turned the node, the write starts from where it was
+  left rather than snapping back to angles written earlier. The rotation
+  writes share arora-visuals' `EulerWrites`.
 - The browser module's `invoke` and `setValue` (and `writeValues`) read a
   value's text straight into an Arora `Value`, through
   `vizij_api_core::json::parse_value_str`. A large record no longer goes
