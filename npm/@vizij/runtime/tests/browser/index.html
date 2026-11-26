@@ -271,6 +271,9 @@
     snapshot: (id) => devices.get(id).snapshot(),
     place: (id, rect) => vizijs.place(id, rect),
     setView: (id, view) => vizijs.setView(id, view),
+    control: (command) => vizijs.control(command),
+    cancelDrag: () => vizijs.cancelDrag(),
+    setModifiers: (modifiers) => vizijs.setModifiers(modifiers),
     safeArea: (id) => vizijs.safeAreas.get(id) ?? null,
     // Whether the instance's face is ready, as the handle has it.
     ready: (id) => vizijs.ready.has(id),

@@ -42,7 +42,9 @@
 //! rig outputs held against the device ([`hold`]); a static feature set
 //! in place ([`ViewEvent::SetStaticFeature`]); and controls a driver adds by
 //! keys of its own ([`ViewEvent::Control`], [`arora_visuals::control`]), with
-//! where they stand on screen in the shared [`Overlay`].
+//! where they stand on screen in the shared [`Overlay`]. What the view cannot
+//! see of a drag for itself comes from the front end too: a cancel
+//! ([`ViewEvent::CancelDrag`]) and the modifier keys held ([`HeldModifiers`]).
 //!
 //! **The host that embeds the view hears the picks and the controls**, as
 //! the shared layer has it: the picks it reads from the [`Picked`] messages,
@@ -70,7 +72,7 @@ pub mod meta;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod snapshot;
 
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::Receiver;
@@ -96,10 +98,11 @@ use vizij_api_core::Value;
 
 pub use arora_visuals::binding::{ElementTargets, SceneBinding, SceneBindings};
 use arora_visuals::control::{
-    ControlCommand, ControlCommands, ControlSize, ControlView, Controls, ControlsPlugin,
+    ControlCommand, ControlCommands, ControlSize, ControlView, Controls, ControlsPlugin, Modifiers,
 };
 pub use arora_visuals::control::{ControlEvents, ControlPresses};
 use arora_visuals::drawn;
+use arora_visuals::euler::EulerWrites;
 use arora_visuals::instance::{ClearCamera, InstanceIndex, InstanceSystems};
 pub use arora_visuals::instance::{EntityInstance, Superseded, ViewOf, CLEAR_ORDER};
 use arora_visuals::outline::{OutlinePlugin, OutlineView};
@@ -109,7 +112,7 @@ use arora_visuals::pick::PickPlugin;
 pub use arora_visuals::pick::Picked;
 use arora_visuals::select::{Selection, Selections};
 pub use arora_visuals::tone::ToneMapping;
-use arora_visuals::transform_gizmo::{GizmoSize, TransformGizmoPlugin};
+use arora_visuals::transform_gizmo::{GizmoDrags, GizmoSize, TransformGizmoPlugin};
 use arora_visuals::value::Decoded;
 use hold::{HoldTarget, Holds};
 use meta::{AssetMeta, Binding, FaceMeta, FeatureKind, PrimitiveShape};
@@ -263,13 +266,15 @@ pub struct PoseState {
     /// last frame (a static feature): the next frame lands the whole pose
     /// again, over it.
     reland: bool,
-    /// The rotations per-axis animatables assemble, by the entity they land
-    /// on: each write replaces one euler angle and the whole rotation is
-    /// applied. Kept rather than read back from the scene, because a rotation
-    /// read back is a quaternion, whose euler angles are not the ones it was
-    /// set from once the pitch leaves ±π/2. Every other triple reads back
-    /// exactly, so a per-axis write to one starts from what the scene shows.
-    assembled: HashMap<(Entity, FeatureKind), [f32; 3]>,
+    /// The euler angles each rotation was last written from, by the node it
+    /// landed on: a per-axis rotation write replaces one of them and keeps
+    /// the other two, which a quaternion read back would not return once the
+    /// pitch leaves ±π/2. Every other triple reads back exactly, so a
+    /// per-axis write to one starts from what the scene shows. Its nodes are
+    /// the face's own, which live as long as the face's scene does, and this
+    /// state is replaced whole when the face is indexed, so nothing of a
+    /// scene that went is kept.
+    eulers: EulerWrites,
     /// The meshes whose materials the view composes ([`Surface`]): what the
     /// face's tone mapping goes over.
     surfaces: Vec<Entity>,
@@ -351,6 +356,39 @@ pub enum ViewEvent {
     /// reload, as a robot's do on a swap: a driver adds them again to the
     /// face that replaced it.
     Control(ControlCommand),
+    /// Abandon the drag in hand on a control, if there is one: it closes
+    /// with a `cancel` event, and nothing more is sent for it, the button
+    /// coming up included ([`GizmoDrags::cancel_drag`]). For what the view
+    /// cannot see itself — Escape, the window losing focus, a cancelled
+    /// pointer, the page hidden. Taken in the frame's intake, before the
+    /// gizmos handle the pointer in it.
+    CancelDrag,
+}
+
+/// The modifier keys a front end last said were held, waiting for the next
+/// frame to stamp them on each control event from then on ([`Modifiers`]).
+/// The front end reads them from its own pointer and key events, since the
+/// view's keyboard state is stale whenever its window lacks focus.
+///
+/// One state rather than a request on the [`ViewEvents`] queue: a page may
+/// set it on every pointer event while no frame runs, and only the last can
+/// reach an event, so a later set replaces one still waiting rather than
+/// queueing behind it. Taking it out of order with the queued requests is
+/// harmless, since none of them reads what is held.
+#[derive(Resource, Clone, Default)]
+pub struct HeldModifiers(Arc<Mutex<Option<Modifiers>>>);
+
+impl HeldModifiers {
+    /// Say which keys are held, replacing any state still waiting.
+    pub fn set(&self, held: Modifiers) {
+        if let Ok(mut waiting) = self.0.lock() {
+            *waiting = Some(held);
+        }
+    }
+
+    fn take(&self) -> Option<Modifiers> {
+        self.0.lock().ok().and_then(|mut waiting| waiting.take())
+    }
 }
 
 /// How one face is framed and tone-mapped, over the page's [`ViewOptions`]:
@@ -693,6 +731,7 @@ impl Plugin for ViewPlugin {
             .init_resource::<PendingStatics>()
             .init_resource::<Holds>()
             .init_resource::<Compositions>()
+            .init_resource::<HeldModifiers>()
             .add_message::<FaceEvent>()
             .add_plugins((
                 drawn::DrawnPlugin,
@@ -795,12 +834,16 @@ struct KeptByFace<'w> {
     compositions: ResMut<'w, Compositions>,
 }
 
-/// The controls' queue, for [`apply_view_events`]: commands go on it, and an
-/// unload takes off what was waiting for its face.
+/// What [`apply_view_events`] hands the controls: commands go on their
+/// queue, an unload takes off what was waiting for its face, and a front
+/// end's cancel and modifier keys reach the drags.
 #[derive(SystemParam)]
 struct ControlQueue<'w> {
     commands: ResMut<'w, ControlCommands>,
     placed: Res<'w, Controls>,
+    drags: ResMut<'w, GizmoDrags>,
+    modifiers: ResMut<'w, Modifiers>,
+    held: Res<'w, HeldModifiers>,
 }
 
 /// Where [`apply_view_events`] answers loads, and the count that orders them
@@ -842,6 +885,9 @@ fn apply_view_events(
         mut statics,
         mut compositions,
     } = kept;
+    if let Some(held) = controls.held.take() {
+        controls.modifiers.set_if_neq(held);
+    }
     let Some(events) = events else { return };
     let Ok(receiver) = events.0.lock() else {
         return;
@@ -985,6 +1031,7 @@ fn apply_view_events(
                 Ok(()) => controls.commands.0.push(command),
                 Err(error) => log::warn!("{error}"),
             },
+            ViewEvent::CancelDrag => controls.drags.cancel_drag(),
             ViewEvent::PlaceFace { face_id, rect } => {
                 placements.0.insert(face_id, rect);
             }
@@ -2014,7 +2061,7 @@ fn apply_statics(
                 axis,
                 morph_index,
             };
-            scene.land(&mut face.pose.assembled, &bound, decoded);
+            scene.land(&mut face.pose.eulers, &bound, decoded);
             face.pose.reland = true;
         }
     }
@@ -2078,10 +2125,14 @@ fn apply_poses(
             };
             if let Some(held) = held {
                 let shown = || {
-                    pose.shown
-                        .get(id)
-                        .copied()
-                        .or_else(|| scene.read(bound.entity, &bound.feature, bound.morph_index))
+                    pose.shown.get(id).copied().or_else(|| {
+                        scene.read(
+                            &pose.eulers,
+                            bound.entity,
+                            &bound.feature,
+                            bound.morph_index,
+                        )
+                    })
                 };
                 match hold::resolve(held, id, decoded, shown) {
                     Some(kept) => decoded = kept,
@@ -2092,7 +2143,7 @@ fn apply_poses(
                 return;
             }
             for bound in bounds {
-                scene.land(&mut pose.assembled, bound, decoded);
+                scene.land(&mut pose.eulers, bound, decoded);
             }
             match pose.shown.get_mut(id) {
                 Some(shown) => *shown = decoded,
@@ -2151,57 +2202,45 @@ impl SceneFeatures<'_, '_> {
     /// component of the triple the scene shows now — a translation, a scale,
     /// a colour — and the triple is applied, so the other components stay
     /// wherever the last writer of any kind left them (a drag, an
-    /// animation, another rig output). A rotation's angles do not read back,
-    /// so a per-axis rotation replaces its angle of the triple in
-    /// `assembled`, seeded from what the scene shows on the first write; a
-    /// whole value is applied as is, and the next per-axis write seeds anew.
-    fn land(
-        &mut self,
-        assembled: &mut HashMap<(Entity, FeatureKind), [f32; 3]>,
-        bound: &SceneBinding,
-        value: Decoded,
-    ) {
-        let key = || (bound.entity, bound.feature.clone());
+    /// animation, another rig output). A rotation goes through `eulers`,
+    /// whole or per axis, so a per-axis rotation write keeps the angles last
+    /// written while the node still holds what they produced, and otherwise
+    /// starts from the rotation another writer left ([`EulerWrites`]).
+    fn land(&mut self, eulers: &mut EulerWrites, bound: &SceneBinding, value: Decoded) {
         match (bound.axis, value) {
-            (Some(axis), Decoded::Scalar(component)) if bound.feature != FeatureKind::Rotation => {
+            (Some(axis), Decoded::Scalar(component)) if bound.feature == FeatureKind::Rotation => {
+                if let Ok(mut transform) = self.transforms.get_mut(bound.entity) {
+                    eulers.write_axis(bound.entity, &mut transform.rotation, axis, component);
+                }
+            }
+            (Some(axis), Decoded::Scalar(component)) => {
                 let Some(Decoded::Triple(mut triple)) =
-                    self.read(bound.entity, &bound.feature, None)
+                    self.read(eulers, bound.entity, &bound.feature, None)
                 else {
                     return;
                 };
                 triple[axis] = component;
-                self.apply(bound.entity, &bound.feature, None, Decoded::Triple(triple));
-            }
-            (Some(axis), Decoded::Scalar(component)) => {
-                let triple = match assembled.entry(key()) {
-                    Entry::Occupied(entry) => entry.into_mut(),
-                    Entry::Vacant(entry) => {
-                        let Some(Decoded::Triple(shown)) =
-                            self.read(bound.entity, &bound.feature, None)
-                        else {
-                            return;
-                        };
-                        entry.insert(shown)
-                    }
-                };
-                triple[axis] = component;
-                let triple = Decoded::Triple(*triple);
-                self.apply(bound.entity, &bound.feature, None, triple);
+                let triple = Decoded::Triple(triple);
+                self.apply(eulers, bound.entity, &bound.feature, None, triple);
             }
             (Some(_), Decoded::Triple(_)) => {}
             (None, value) => {
-                if bound.feature == FeatureKind::Rotation && !assembled.is_empty() {
-                    assembled.remove(&key());
-                }
-                self.apply(bound.entity, &bound.feature, bound.morph_index, value);
+                self.apply(
+                    eulers,
+                    bound.entity,
+                    &bound.feature,
+                    bound.morph_index,
+                    value,
+                );
             }
         }
     }
 
     /// Set `feature` of `entity` to `value`; a value of the wrong shape for
-    /// the feature changes nothing.
+    /// the feature changes nothing. A rotation is written through `eulers`.
     fn apply(
         &mut self,
+        eulers: &mut EulerWrites,
         entity: Entity,
         feature: &FeatureKind,
         morph_index: Option<usize>,
@@ -2216,7 +2255,7 @@ impl SceneFeatures<'_, '_> {
             }
             (FeatureKind::Rotation, Triple(v)) => {
                 if let Ok(mut transform) = self.transforms.get_mut(entity) {
-                    transform.rotation = euler_zyx(v);
+                    eulers.write(entity, &mut transform.rotation, v);
                 }
             }
             (FeatureKind::Scale, Triple(v)) => {
@@ -2270,9 +2309,11 @@ impl SceneFeatures<'_, '_> {
         }
     }
 
-    /// What `feature` of `entity` currently shows.
+    /// What `feature` of `entity` currently shows: for a rotation, the euler
+    /// angles `eulers` says the node shows ([`EulerWrites::angles`]).
     fn read(
         &self,
+        eulers: &EulerWrites,
         entity: Entity,
         feature: &FeatureKind,
         morph_index: Option<usize>,
@@ -2281,10 +2322,7 @@ impl SceneFeatures<'_, '_> {
         let surface = || self.surfaces.get(entity).ok().map(|(_, surface)| surface);
         Some(match feature {
             FeatureKind::Translation => Decoded::Triple(transform()?.translation.to_array()),
-            FeatureKind::Rotation => {
-                let (z, y, x) = transform()?.rotation.to_euler(EulerRot::ZYX);
-                Decoded::Triple([x, y, z])
-            }
+            FeatureKind::Rotation => Decoded::Triple(eulers.angles(entity, transform()?.rotation)),
             FeatureKind::Scale => Decoded::Triple(transform()?.scale.to_array()),
             FeatureKind::Color => Decoded::Triple(surface()?.base),
             FeatureKind::Emissive => Decoded::Triple(surface()?.emissive),
@@ -2302,14 +2340,6 @@ impl SceneFeatures<'_, '_> {
             ),
         })
     }
-}
-
-/// An euler triple as a rotation, in three.js's default order: R = Rz·Ry·Rx,
-/// composed explicitly — EulerRot naming conventions moved between glam
-/// versions, this cannot. Validated pixel-wise against the web renderer on
-/// Toasty, whose tilts are order-sensitive.
-fn euler_zyx([x, y, z]: [f32; 3]) -> Quat {
-    Quat::from_rotation_z(z) * Quat::from_rotation_y(y) * Quat::from_rotation_x(x)
 }
 
 fn as_f32(value: &Value) -> Option<f32> {
@@ -2331,6 +2361,7 @@ fn as_rgb(value: &Value) -> Option<[f32; 3]> {
 mod tests {
     use super::*;
     use arora_visuals::control::ControlSystems;
+    use arora_visuals::euler::{angles_zyx, rotation_zyx};
 
     const BOUNDS: Vec2 = Vec2::new(4.0, 2.0);
     const NO_ZOOM: Vec2 = Vec2::ONE;
@@ -2500,22 +2531,6 @@ mod tests {
         assert_eq!((own.fit, own.zoom), (Fit::Cover, Vec2::ONE));
     }
 
-    /// What a held rotation component keeps is read back off the scene's
-    /// quaternion in the order the rig writes it: the triple round-trips.
-    #[test]
-    fn a_rotation_reads_back_the_euler_it_was_set_from() {
-        for v in [[0.3, -0.2, 1.1], [0.0, 0.0, 0.0], [-1.2, 0.4, -2.5]] {
-            let (z, y, x) = euler_zyx(v).to_euler(EulerRot::ZYX);
-            for (got, want) in [x, y, z].iter().zip(v) {
-                assert!(
-                    (got - want).abs() < 1e-5,
-                    "{v:?} read back as {:?}",
-                    [x, y, z]
-                );
-            }
-        }
-    }
-
     /// A feature takes the value shapes it can show, and nothing else.
     #[test]
     fn a_value_decodes_to_what_its_feature_takes() {
@@ -2546,98 +2561,147 @@ mod tests {
         assert_eq!(decode(&FeatureKind::Translation, Some(0), &vec3), None);
     }
 
+    /// A node standing at `(1, 2, 3)` unturned, and the per-axis binding of
+    /// one component of one of its features.
+    fn node_with_axes() -> (World, impl Fn(FeatureKind, usize) -> SceneBinding) {
+        let mut world = World::new();
+        world.init_resource::<Assets<StandardMaterial>>();
+        let node = world.spawn(Transform::from_xyz(1.0, 2.0, 3.0)).id();
+        let axis = move |feature: FeatureKind, axis: usize| SceneBinding {
+            entity: node,
+            feature,
+            axis: Some(axis),
+            morph_index: None,
+        };
+        (world, axis)
+    }
+
+    /// Land `writes` on `world`'s scene through `eulers`, and hand back what
+    /// `eulers` remembers after them.
+    fn land(
+        world: &mut World,
+        eulers: EulerWrites,
+        writes: Vec<(SceneBinding, Decoded)>,
+    ) -> EulerWrites {
+        use bevy::ecs::system::RunSystemOnce;
+
+        world
+            .run_system_once(move |mut scene: SceneFeatures| {
+                let mut eulers = eulers.clone();
+                for (bound, value) in &writes {
+                    scene.land(&mut eulers, bound, *value);
+                }
+                eulers
+            })
+            .expect("runs")
+    }
+
+    /// What `bound`'s feature shows, read as a held component reads it.
+    fn shown(world: &mut World, eulers: EulerWrites, bound: SceneBinding) -> Option<Decoded> {
+        use bevy::ecs::system::RunSystemOnce;
+
+        world
+            .run_system_once(move |scene: SceneFeatures| {
+                scene.read(&eulers, bound.entity, &bound.feature, None)
+            })
+            .expect("runs")
+    }
+
     /// Per-axis writes assemble the feature's triple, each replacing its
     /// own component of what the scene showed: a node's translation moves
     /// one axis at a time, and its rotation keeps the euler angles it was
     /// given — a pitch past ±π/2 included, which a rotation read back off
-    /// the quaternion would not return.
+    /// the quaternion would not return. Read back, as a held component is,
+    /// the rotation shows the angles written.
     #[test]
     fn per_axis_writes_assemble_the_feature() {
-        use bevy::ecs::system::RunSystemOnce;
-
-        let mut world = World::new();
-        world.init_resource::<Assets<StandardMaterial>>();
-        let node = world.spawn(Transform::from_xyz(1.0, 2.0, 3.0)).id();
-        let axis = |feature: FeatureKind, axis: usize| SceneBinding {
-            entity: node,
-            feature,
-            axis: Some(axis),
-            morph_index: None,
-        };
-        let writes = vec![
-            (axis(FeatureKind::Translation, 1), 5.0),
-            (axis(FeatureKind::Rotation, 1), 2.0),
-            (axis(FeatureKind::Rotation, 0), 0.1),
-        ];
-        world
-            .run_system_once(move |mut scene: SceneFeatures| {
-                let mut assembled = HashMap::new();
-                for (bound, value) in &writes {
-                    scene.land(&mut assembled, bound, Decoded::Scalar(*value));
-                }
-            })
-            .expect("runs");
-        let transform = world.get::<Transform>(node).expect("a transform");
-        assert_eq!(transform.translation, Vec3::new(1.0, 5.0, 3.0));
-        assert!(transform
-            .rotation
-            .abs_diff_eq(euler_zyx([0.1, 2.0, 0.0]), 1e-6));
-    }
-
-    /// A per-axis write to a translation or a scale starts from what the
-    /// scene shows: after another writer moved the node — a drag, an
-    /// animation — the other axes stay where that writer left them, rather
-    /// than going back to what an earlier per-axis write saw.
-    #[test]
-    fn a_per_axis_write_keeps_what_another_writer_left() {
-        use bevy::ecs::system::RunSystemOnce;
-
-        let mut world = World::new();
-        world.init_resource::<Assets<StandardMaterial>>();
-        let node = world.spawn(Transform::from_xyz(1.0, 2.0, 3.0)).id();
-        let axis = |feature: FeatureKind, axis: usize| SceneBinding {
-            entity: node,
-            feature,
-            axis: Some(axis),
-            morph_index: None,
-        };
-        let land = |world: &mut World,
-                    assembled: HashMap<(Entity, FeatureKind), [f32; 3]>,
-                    writes: Vec<(SceneBinding, f32)>| {
-            world
-                .run_system_once(move |mut scene: SceneFeatures| {
-                    let mut assembled = assembled.clone();
-                    for (bound, value) in &writes {
-                        scene.land(&mut assembled, bound, Decoded::Scalar(*value));
-                    }
-                    assembled
-                })
-                .expect("runs")
-        };
-        let assembled = land(
+        let (mut world, axis) = node_with_axes();
+        let eulers = land(
             &mut world,
-            HashMap::new(),
+            EulerWrites::default(),
             vec![
-                (axis(FeatureKind::Translation, 0), 5.0),
-                (axis(FeatureKind::Scale, 0), 2.0),
+                (axis(FeatureKind::Translation, 1), Decoded::Scalar(5.0)),
+                (axis(FeatureKind::Rotation, 1), Decoded::Scalar(2.0)),
+                (axis(FeatureKind::Rotation, 0), Decoded::Scalar(0.1)),
             ],
         );
-        {
+        let node = axis(FeatureKind::Rotation, 0).entity;
+        let transform = world.get::<Transform>(node).expect("a transform");
+        assert_eq!(transform.translation, Vec3::new(1.0, 5.0, 3.0));
+        assert_eq!(transform.rotation, rotation_zyx([0.1, 2.0, 0.0]));
+        assert_eq!(
+            shown(&mut world, eulers, axis(FeatureKind::Rotation, 0)),
+            Some(Decoded::Triple([0.1, 2.0, 0.0])),
+            "a held component keeps the angle written"
+        );
+    }
+
+    /// A whole rotation is remembered as the angles it was given, so a
+    /// per-axis write after it keeps a pitch past ±π/2.
+    #[test]
+    fn a_per_axis_write_after_a_whole_rotation_keeps_its_angles() {
+        let (mut world, axis) = node_with_axes();
+        let whole = SceneBinding {
+            axis: None,
+            ..axis(FeatureKind::Rotation, 0)
+        };
+        let node = whole.entity;
+        land(
+            &mut world,
+            EulerWrites::default(),
+            vec![
+                (whole, Decoded::Triple([0.2, 2.0, -0.4])),
+                (axis(FeatureKind::Rotation, 2), Decoded::Scalar(0.6)),
+            ],
+        );
+        let transform = world.get::<Transform>(node).expect("a transform");
+        assert_eq!(transform.rotation, rotation_zyx([0.2, 2.0, 0.6]));
+    }
+
+    /// A per-axis write starts from what the scene shows: after another
+    /// writer moved the node — a drag, an animation — the other components
+    /// stay where that writer left them, rather than going back to what an
+    /// earlier per-axis write saw. A rotation included: the angles last
+    /// written stand only while the node holds the rotation they made.
+    #[test]
+    fn a_per_axis_write_keeps_what_another_writer_left() {
+        let (mut world, axis) = node_with_axes();
+        let eulers = land(
+            &mut world,
+            EulerWrites::default(),
+            vec![
+                (axis(FeatureKind::Translation, 0), Decoded::Scalar(5.0)),
+                (axis(FeatureKind::Scale, 0), Decoded::Scalar(2.0)),
+                (axis(FeatureKind::Rotation, 1), Decoded::Scalar(2.0)),
+            ],
+        );
+        let node = axis(FeatureKind::Translation, 0).entity;
+        let turned = {
             let mut transform = world.get_mut::<Transform>(node).expect("a transform");
             transform.translation = Vec3::new(10.0, 20.0, 30.0);
             transform.scale = Vec3::new(4.0, 5.0, 6.0);
-        }
+            transform.rotation = Quat::from_rotation_z(0.7) * transform.rotation;
+            transform.rotation
+        };
         land(
             &mut world,
-            assembled,
+            eulers,
             vec![
-                (axis(FeatureKind::Translation, 0), 7.0),
-                (axis(FeatureKind::Scale, 0), 3.0),
+                (axis(FeatureKind::Translation, 0), Decoded::Scalar(7.0)),
+                (axis(FeatureKind::Scale, 0), Decoded::Scalar(3.0)),
+                (axis(FeatureKind::Rotation, 0), Decoded::Scalar(0.1)),
             ],
         );
         let transform = world.get::<Transform>(node).expect("a transform");
         assert_eq!(transform.translation, Vec3::new(7.0, 20.0, 30.0));
         assert_eq!(transform.scale, Vec3::new(3.0, 5.0, 6.0));
+        let mut expected = angles_zyx(turned);
+        expected[0] = 0.1;
+        assert_eq!(
+            transform.rotation,
+            rotation_zyx(expected),
+            "the turn another writer made is kept"
+        );
     }
 
     /// Once a reloaded face is ready, the face it supersedes under the same
@@ -3065,6 +3129,7 @@ mod tests {
             .init_resource::<Compositions>()
             .init_resource::<ControlCommands>()
             .init_resource::<Controls>()
+            .init_resource::<HeldModifiers>()
             .insert_resource(ViewOptions {
                 background: Color::BLACK,
                 fit: Fit::Contain,
@@ -3525,6 +3590,100 @@ mod tests {
         app.world()
             .get::<arora_visuals::transform_gizmo::TransformGizmo>(gizmo)
             .map(|gizmo| gizmo.camera)
+    }
+
+    /// The modifier keys a front end says are held reach the drags in the
+    /// next frame, the last set winning however many were set between
+    /// frames, and every event of a drag carries them and its gesture, as the
+    /// page hears it: a `cancel` with no pose or scale.
+    #[test]
+    fn a_front_ends_modifiers_are_stamped_on_each_drag_event() {
+        use arora_visuals::transform_gizmo::{DragPhase, GizmoDrag, GizmoHandle, TransformGizmo};
+
+        let (mut app, sender) = answering_app();
+        shown_face(&mut app, "a");
+        sender.send(goal_through("goal", "a")).unwrap();
+        app.update();
+        let gizmo = app
+            .world()
+            .resource::<Controls>()
+            .gizmo("goal")
+            .expect("the goal placed");
+
+        let held = app.world().resource::<HeldModifiers>().clone();
+        for shift in [false, true, false, true] {
+            held.set(Modifiers {
+                shift,
+                meta: true,
+                ..default()
+            });
+        }
+        app.update();
+        assert_eq!(
+            *app.world().resource::<Modifiers>(),
+            Modifiers {
+                shift: true,
+                meta: true,
+                ..default()
+            },
+            "the last set"
+        );
+
+        let target = app
+            .world()
+            .get::<TransformGizmo>(gizmo)
+            .expect("a transform gizmo")
+            .target;
+        for phase in [DragPhase::Start, DragPhase::Cancel] {
+            app.world_mut().trigger(GizmoDrag {
+                entity: gizmo,
+                target,
+                handle: GizmoHandle::Arrow(0),
+                phase,
+                gesture: 4,
+                transform: Transform::default(),
+            });
+        }
+        let sent: Vec<serde_json::Value> =
+            std::mem::take(&mut app.world_mut().resource_mut::<ControlEvents>().0)
+                .iter()
+                .map(|event| serde_json::to_value(event).expect("serialises"))
+                .collect();
+        let phases: Vec<_> = sent.iter().map(|event| event["phase"].clone()).collect();
+        assert_eq!(phases, ["start", "cancel"]);
+        let held = serde_json::json!({ "alt": false, "shift": true, "meta": true, "ctrl": false });
+        for event in &sent {
+            assert_eq!(event["key"], "goal");
+            assert_eq!(event["gesture"], 4, "{event}");
+            assert_eq!(event["modifiers"], held, "{event}");
+            assert!(
+                event.get("value").is_none(),
+                "a face's controls have no value"
+            );
+        }
+        assert!(sent[0].get("pose").is_some());
+        assert!(
+            sent[1].get("pose").is_none() && sent[1].get("scale").is_none(),
+            "a cancel carries nothing to keep: {}",
+            sent[1]
+        );
+    }
+
+    /// A front end's cancel reaches the drags in the frame's intake, before
+    /// the gizmos handle the pointer in it.
+    #[test]
+    fn a_front_ends_cancel_reaches_the_drags() {
+        // Whether a cancel is waiting is the drags' own: their `Debug` is the
+        // one reading of it they give.
+        let waiting = |app: &App| {
+            format!("{:?}", app.world().resource::<GizmoDrags>()).contains("cancel: true")
+        };
+        let (mut app, sender) = answering_app();
+        app.update();
+        assert!(!waiting(&app));
+        sender.send(ViewEvent::CancelDrag).unwrap();
+        app.update();
+        assert!(waiting(&app), "{:?}", app.world().resource::<GizmoDrags>());
     }
 
     /// A goal sent with a reload of the face it names waits for the reload's
