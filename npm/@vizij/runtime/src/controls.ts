@@ -156,15 +156,50 @@ export type ControlCommand =
   | { op: "highlight"; key: string; handle?: GizmoHandle; on: boolean };
 
 /**
+ * The modifier keys held, as the page has them. The faces cannot read them
+ * themselves: the canvas sees keys only while it has focus. So the page
+ * passes them in (`setModifiers` on the handle), from its own pointer and
+ * keyboard events. They are given no meaning here: they are stamped on each
+ * `control` event for the driver to act on.
+ */
+export interface Modifiers {
+  alt: boolean;
+  shift: boolean;
+  meta: boolean;
+  ctrl: boolean;
+}
+
+/**
  * A drag on a control: what it asks its target to become. **Nothing has
  * moved**: the driver sets the pose if it wants the change.
+ *
+ * Each drag sends one `start`, a `move` for each frame its pose or scale
+ * changes, and exactly one closing event, after which nothing more is sent
+ * for it:
+ *
+ * - `end` when the pointer lets go: the drag is finished, at its last pose;
+ * - `cancel` when it is abandoned instead: by the page (`cancelDrag` on the
+ *   handle), or by its control being removed, replaced, hidden or made not
+ *   `interactive` while the button is down — its face unloaded or reloaded
+ *   included. A `cancel` carries no pose or scale: the driver drops whatever
+ *   the drag previewed.
  */
 export interface ControlEvent {
   key: string;
-  phase: "start" | "move" | "end";
-  /** A transform control's target's pose, in the world. */
+  phase: "start" | "move" | "end" | "cancel";
+  /**
+   * The drag this belongs to: the same on every event of one drag, and
+   * different from every other drag's on the page.
+   */
+  gesture: number;
+  /** The modifier keys the page said were held when it was sent. */
+  modifiers: Modifiers;
+  /** A transform control's target's pose, in the world; absent on a `cancel`. */
   pose?: Required<Pose>;
-  /** A transform control's target's scale, along its own axes. */
+  /**
+   * A transform control's target's scale, along its own axes; absent on a
+   * `cancel`.
+   */
   scale?: [number, number, number];
 }
 

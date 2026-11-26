@@ -42,7 +42,9 @@
 //! rig outputs held against the device ([`hold`]); a static feature set
 //! in place ([`ViewEvent::SetStaticFeature`]); and controls a driver adds by
 //! keys of its own ([`ViewEvent::Control`], [`arora_visuals::control`]), with
-//! where they stand on screen in the shared [`Overlay`].
+//! where they stand on screen in the shared [`Overlay`]. What the view cannot
+//! see of a drag for itself comes from the front end too: a cancel
+//! ([`ViewEvent::CancelDrag`]) and the modifier keys held ([`HeldModifiers`]).
 //!
 //! **The host that embeds the view hears the picks and the controls**, as
 //! the shared layer has it: the picks it reads from the [`Picked`] messages,
@@ -96,7 +98,7 @@ use vizij_api_core::Value;
 
 pub use arora_visuals::binding::{ElementTargets, SceneBinding, SceneBindings};
 use arora_visuals::control::{
-    ControlCommand, ControlCommands, ControlSize, ControlView, Controls, ControlsPlugin,
+    ControlCommand, ControlCommands, ControlSize, ControlView, Controls, ControlsPlugin, Modifiers,
 };
 pub use arora_visuals::control::{ControlEvents, ControlPresses};
 use arora_visuals::drawn;
@@ -110,7 +112,7 @@ use arora_visuals::pick::PickPlugin;
 pub use arora_visuals::pick::Picked;
 use arora_visuals::select::{Selection, Selections};
 pub use arora_visuals::tone::ToneMapping;
-use arora_visuals::transform_gizmo::{GizmoSize, TransformGizmoPlugin};
+use arora_visuals::transform_gizmo::{GizmoDrags, GizmoSize, TransformGizmoPlugin};
 use arora_visuals::value::Decoded;
 use hold::{HoldTarget, Holds};
 use meta::{AssetMeta, Binding, FaceMeta, FeatureKind, PrimitiveShape};
@@ -354,6 +356,39 @@ pub enum ViewEvent {
     /// reload, as a robot's do on a swap: a driver adds them again to the
     /// face that replaced it.
     Control(ControlCommand),
+    /// Abandon the drag in hand on a control, if there is one: it closes
+    /// with a `cancel` event, and nothing more is sent for it, the button
+    /// coming up included ([`GizmoDrags::cancel_drag`]). For what the view
+    /// cannot see itself — Escape, the window losing focus, a cancelled
+    /// pointer, the page hidden. Taken in the frame's intake, before the
+    /// gizmos handle the pointer in it.
+    CancelDrag,
+}
+
+/// The modifier keys a front end last said were held, waiting for the next
+/// frame to stamp them on each control event from then on ([`Modifiers`]).
+/// The front end reads them from its own pointer and key events, since the
+/// view's keyboard state is stale whenever its window lacks focus.
+///
+/// One state rather than a request on the [`ViewEvents`] queue: a page may
+/// set it on every pointer event while no frame runs, and only the last can
+/// reach an event, so a later set replaces one still waiting rather than
+/// queueing behind it. Taking it out of order with the queued requests is
+/// harmless, since none of them reads what is held.
+#[derive(Resource, Clone, Default)]
+pub struct HeldModifiers(Arc<Mutex<Option<Modifiers>>>);
+
+impl HeldModifiers {
+    /// Say which keys are held, replacing any state still waiting.
+    pub fn set(&self, held: Modifiers) {
+        if let Ok(mut waiting) = self.0.lock() {
+            *waiting = Some(held);
+        }
+    }
+
+    fn take(&self) -> Option<Modifiers> {
+        self.0.lock().ok().and_then(|mut waiting| waiting.take())
+    }
 }
 
 /// How one face is framed and tone-mapped, over the page's [`ViewOptions`]:
@@ -696,6 +731,7 @@ impl Plugin for ViewPlugin {
             .init_resource::<PendingStatics>()
             .init_resource::<Holds>()
             .init_resource::<Compositions>()
+            .init_resource::<HeldModifiers>()
             .add_message::<FaceEvent>()
             .add_plugins((
                 drawn::DrawnPlugin,
@@ -798,12 +834,16 @@ struct KeptByFace<'w> {
     compositions: ResMut<'w, Compositions>,
 }
 
-/// The controls' queue, for [`apply_view_events`]: commands go on it, and an
-/// unload takes off what was waiting for its face.
+/// What [`apply_view_events`] hands the controls: commands go on their
+/// queue, an unload takes off what was waiting for its face, and a front
+/// end's cancel and modifier keys reach the drags.
 #[derive(SystemParam)]
 struct ControlQueue<'w> {
     commands: ResMut<'w, ControlCommands>,
     placed: Res<'w, Controls>,
+    drags: ResMut<'w, GizmoDrags>,
+    modifiers: ResMut<'w, Modifiers>,
+    held: Res<'w, HeldModifiers>,
 }
 
 /// Where [`apply_view_events`] answers loads, and the count that orders them
@@ -845,6 +885,9 @@ fn apply_view_events(
         mut statics,
         mut compositions,
     } = kept;
+    if let Some(held) = controls.held.take() {
+        controls.modifiers.set_if_neq(held);
+    }
     let Some(events) = events else { return };
     let Ok(receiver) = events.0.lock() else {
         return;
@@ -988,6 +1031,7 @@ fn apply_view_events(
                 Ok(()) => controls.commands.0.push(command),
                 Err(error) => log::warn!("{error}"),
             },
+            ViewEvent::CancelDrag => controls.drags.cancel_drag(),
             ViewEvent::PlaceFace { face_id, rect } => {
                 placements.0.insert(face_id, rect);
             }
@@ -3085,6 +3129,7 @@ mod tests {
             .init_resource::<Compositions>()
             .init_resource::<ControlCommands>()
             .init_resource::<Controls>()
+            .init_resource::<HeldModifiers>()
             .insert_resource(ViewOptions {
                 background: Color::BLACK,
                 fit: Fit::Contain,
@@ -3545,6 +3590,100 @@ mod tests {
         app.world()
             .get::<arora_visuals::transform_gizmo::TransformGizmo>(gizmo)
             .map(|gizmo| gizmo.camera)
+    }
+
+    /// The modifier keys a front end says are held reach the drags in the
+    /// next frame, the last set winning however many were set between
+    /// frames, and every event of a drag carries them and its gesture, as the
+    /// page hears it: a `cancel` with no pose or scale.
+    #[test]
+    fn a_front_ends_modifiers_are_stamped_on_each_drag_event() {
+        use arora_visuals::transform_gizmo::{DragPhase, GizmoDrag, GizmoHandle, TransformGizmo};
+
+        let (mut app, sender) = answering_app();
+        shown_face(&mut app, "a");
+        sender.send(goal_through("goal", "a")).unwrap();
+        app.update();
+        let gizmo = app
+            .world()
+            .resource::<Controls>()
+            .gizmo("goal")
+            .expect("the goal placed");
+
+        let held = app.world().resource::<HeldModifiers>().clone();
+        for shift in [false, true, false, true] {
+            held.set(Modifiers {
+                shift,
+                meta: true,
+                ..default()
+            });
+        }
+        app.update();
+        assert_eq!(
+            *app.world().resource::<Modifiers>(),
+            Modifiers {
+                shift: true,
+                meta: true,
+                ..default()
+            },
+            "the last set"
+        );
+
+        let target = app
+            .world()
+            .get::<TransformGizmo>(gizmo)
+            .expect("a transform gizmo")
+            .target;
+        for phase in [DragPhase::Start, DragPhase::Cancel] {
+            app.world_mut().trigger(GizmoDrag {
+                entity: gizmo,
+                target,
+                handle: GizmoHandle::Arrow(0),
+                phase,
+                gesture: 4,
+                transform: Transform::default(),
+            });
+        }
+        let sent: Vec<serde_json::Value> =
+            std::mem::take(&mut app.world_mut().resource_mut::<ControlEvents>().0)
+                .iter()
+                .map(|event| serde_json::to_value(event).expect("serialises"))
+                .collect();
+        let phases: Vec<_> = sent.iter().map(|event| event["phase"].clone()).collect();
+        assert_eq!(phases, ["start", "cancel"]);
+        let held = serde_json::json!({ "alt": false, "shift": true, "meta": true, "ctrl": false });
+        for event in &sent {
+            assert_eq!(event["key"], "goal");
+            assert_eq!(event["gesture"], 4, "{event}");
+            assert_eq!(event["modifiers"], held, "{event}");
+            assert!(
+                event.get("value").is_none(),
+                "a face's controls have no value"
+            );
+        }
+        assert!(sent[0].get("pose").is_some());
+        assert!(
+            sent[1].get("pose").is_none() && sent[1].get("scale").is_none(),
+            "a cancel carries nothing to keep: {}",
+            sent[1]
+        );
+    }
+
+    /// A front end's cancel reaches the drags in the frame's intake, before
+    /// the gizmos handle the pointer in it.
+    #[test]
+    fn a_front_ends_cancel_reaches_the_drags() {
+        // Whether a cancel is waiting is the drags' own: their `Debug` is the
+        // one reading of it they give.
+        let waiting = |app: &App| {
+            format!("{:?}", app.world().resource::<GizmoDrags>()).contains("cancel: true")
+        };
+        let (mut app, sender) = answering_app();
+        app.update();
+        assert!(!waiting(&app));
+        sender.send(ViewEvent::CancelDrag).unwrap();
+        app.update();
+        assert!(waiting(&app), "{:?}", app.world().resource::<GizmoDrags>());
     }
 
     /// A goal sent with a reload of the face it names waits for the reload's

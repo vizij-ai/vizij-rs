@@ -79,7 +79,7 @@ face and every event from it carries.
 | `pick` | `instance`, `element \| null` | a click on the face: the element under it, or `null` for a miss |
 | `safeArea` | `instance`, `area: { x, y, width, height } \| null` | the face's framed bounds moved on the canvas, in CSS pixels; `null` once it has none |
 | `overlay` | `elements`, `gizmos`, `pointer` | where elements and controls stand on the canvas, and the control the pointer has; sent each frame it changed |
-| `control` | `key`, `phase`, `pose?`, `scale?` | a drag on a control: what it asks for; nothing has moved |
+| `control` | `key`, `phase`, `gesture`, `modifiers`, `pose?`, `scale?` | a drag on a control: what it asks for; nothing has moved |
 | `controlPress` | `key`, `handle`, `button`, `position` | a press with a button other than the primary on a control |
 
 An instance's `loaded` and `loadFailed` arrive in the order its loads were
@@ -286,6 +286,18 @@ quori.dispose(); // the previous face draws until the new one is ready
   the new face is `loaded`. A control or a goal sent while a load into its
   face is under way waits for the load's answer, and lands on the face
   showing after it — the new one, or the one kept when the load fails.
+
+- A drag on a control sends one `start`, a `move` for each frame its pose or
+  scale changes, and exactly one closing event: `end` when the pointer lets
+  go, or `cancel` when the drag is abandoned — by `vizijs.cancelDrag()`, or by
+  its control being removed, replaced, hidden or made not `interactive`, or
+  its face unloaded or reloaded, while the button is down. A `cancel` carries
+  no pose or scale: the driver drops what the drag previewed. Every event of
+  one drag carries the same `gesture`, and the `modifiers` (`alt`, `shift`,
+  `meta`, `ctrl`) the page last passed to `vizijs.setModifiers(modifiers)`,
+  which it reads from its own pointer and key events, as the canvas sees no
+  keys while it lacks focus. Call `cancelDrag` for what the faces cannot see:
+  Escape, the window losing focus, a `pointercancel`, the page hidden.
 
 - A pick is a click of the primary button or a touch, decided on release:
   found over each element's mesh as drawn, its morph targets applied, the

@@ -91,6 +91,18 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   `--headless`) and the Android app publish frames at that rate
   (`FaceConfig::frame_rate`); a device under `--ros2 --no-ros4hri` publishes
   none and has no such key.
+- A drag on a control has a lifecycle a driver can build an edit on
+  (arora-visuals' control drags): one `start`, a `move` for each frame its
+  pose or scale changes, and exactly one closing event — `end` when the
+  pointer lets go, `cancel` when the drag is abandoned, by the front end or
+  by its control being removed, replaced, hidden or made not `interactive`
+  while the button is down. Every event of a drag carries its `gesture` and
+  the modifier keys the front end says are held; a `cancel` carries no pose
+  or scale. A front end cancels the drag in hand with
+  `ViewEvent::CancelDrag` and says what is held through the view's
+  `HeldModifiers`, which keeps only the last state set before a frame takes
+  it. The browser module exposes both as `cancelDrag` and `setModifiers`.
+
 ### Changed
 
 - **Breaking:** frames are off at startup. `--frame-rate N` is the rate

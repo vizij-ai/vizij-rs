@@ -73,13 +73,16 @@ use crate::face::{self, FaceConfig, LoadedFace};
 use crate::view::hold::HoldTarget;
 use crate::view::meta::FaceMeta;
 use crate::view::{
-    self, ControlEvents, ControlPresses, FaceAssets, FaceEvent, FaceView, Fit, Picked, SafeAreas,
-    ToneMapping, ViewEvent, ViewEvents, ViewOptions,
+    self, ControlEvents, ControlPresses, FaceAssets, FaceEvent, FaceView, Fit, HeldModifiers,
+    Picked, SafeAreas, ToneMapping, ViewEvent, ViewEvents, ViewOptions,
 };
 
 /// The mounted page: the way into the App.
 struct Page {
     events: Sender<ViewEvent>,
+    /// The modifier keys the page last said were held, for the App's next
+    /// frame to take.
+    modifiers: HeldModifiers,
 }
 
 thread_local! {
@@ -151,7 +154,9 @@ enum VizijEvent<'a> {
     /// pointer has. Sent each frame it changed.
     Overlay(&'a arora_visuals::overlay::OverlayFrame),
     /// A drag on a control: what it asks for. Nothing has moved; the page
-    /// writes the change if it wants it.
+    /// writes the change if it wants it. Each drag closes exactly once, with
+    /// `end` or `cancel`, and every event of it carries its `gesture` and the
+    /// modifiers the page last said were held ([`set_modifiers`]).
     Control(&'a arora_visuals::control::ControlEvent),
     /// A press with a button other than the primary on a control, which the
     /// page acts on as it likes.
@@ -373,6 +378,7 @@ pub fn mount(canvas: String, options_json: Option<String>) -> Result<(), JsValue
     let _ = console_log::init_with_level(log::Level::Info);
     let options = parse_view_options(options_json.as_deref())?;
     let (events_tx, events_rx) = std::sync::mpsc::channel();
+    let modifiers = HeldModifiers::default();
 
     let mut app = App::new();
     FaceAssets::register(&mut app);
@@ -400,9 +406,15 @@ pub fn mount(canvas: String, options_json: Option<String>) -> Result<(), JsValue
     .insert_resource(ClearColor(Color::NONE))
     .insert_resource(options)
     .insert_resource(ViewEvents(Mutex::new(events_rx)))
+    .insert_resource(modifiers.clone())
     .add_plugins(view::ViewPlugin)
     .add_systems(Last, report);
-    PAGE.with(|page| *page.borrow_mut() = Some(Page { events: events_tx }));
+    PAGE.with(|page| {
+        *page.borrow_mut() = Some(Page {
+            events: events_tx,
+            modifiers,
+        })
+    });
     // On the web the winit runner spawns the loop and returns at once.
     app.run();
     Ok(())
@@ -677,6 +689,37 @@ pub fn control(command: String) -> Result<(), JsValue> {
         .map_err(|e| JsValue::from_str(&format!("not a control command: {e}")))?;
     crate::view::refuse_controls(&command).map_err(|e| JsValue::from_str(&e))?;
     send(ViewEvent::Control(command))
+}
+
+/// Abandon the drag in hand on a control, if there is one: it closes with a
+/// `cancel` event, and nothing more is sent for it, the button coming up
+/// included. For what the App cannot see itself — Escape, the window losing
+/// focus, a `pointercancel`, the page hidden. Takes effect in the next
+/// frame, before the controls handle the pointer in it.
+#[wasm_bindgen(js_name = cancelDrag)]
+pub fn cancel_drag() -> Result<(), JsValue> {
+    send(ViewEvent::CancelDrag)
+}
+
+/// Say which modifier keys are held, for the App to stamp on each `control`
+/// event from the next frame on. The page reads them from its own pointer
+/// and key events, since the canvas sees no keys while it lacks focus. Only
+/// the last state set before a frame reaches it: a set replaces one still
+/// waiting rather than queueing behind it ([`HeldModifiers`]).
+#[wasm_bindgen(js_name = setModifiers)]
+pub fn set_modifiers(alt: bool, shift: bool, meta: bool, ctrl: bool) -> Result<(), JsValue> {
+    PAGE.with(|page| match page.borrow().as_ref() {
+        Some(page) => {
+            page.modifiers.set(arora_visuals::control::Modifiers {
+                alt,
+                shift,
+                meta,
+                ctrl,
+            });
+            Ok(())
+        }
+        None => Err(JsValue::from_str("not mounted: call mount(canvas) first")),
+    })
 }
 
 /// Write one value, one number or three, to `feature` of the element

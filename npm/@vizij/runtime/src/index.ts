@@ -53,7 +53,7 @@ import { countDownload, nextPaint, reportProgress } from "./progress.js";
 export { onInitProgress, type InitProgress } from "./progress.js";
 export type { FaceElement, Rect, ShownFace, VizijEvent } from "./faces.js";
 export type * from "./controls.js";
-import type { ControlCommand } from "./controls.js";
+import type { ControlCommand, Modifiers } from "./controls.js";
 
 /** A Vizij graph spec, as an object or already-serialized JSON. */
 export type GraphSpecInput = object | string;
@@ -531,6 +531,8 @@ interface WasmBindings {
   setSelection(instance: string, elements: string[]): void;
   setValue(instance: string, target: string, feature: string, values: Float32Array): void;
   control(command: string): void;
+  cancelDrag(): void;
+  setModifiers(alt: boolean, shift: boolean, meta: boolean, ctrl: boolean): void;
   describe(glb: Uint8Array): VizijDescription;
   memoryBytes(): number;
   mappings(): Mapping[];
@@ -1113,6 +1115,23 @@ export interface VizijHandle {
    */
   control(command: ControlCommand): void;
   /**
+   * Abandons the drag in hand on a control, if there is one: it closes with a
+   * `cancel` event, and nothing more is sent for it, the button coming up
+   * included. Call it for what the faces cannot see themselves: Escape, the
+   * window losing focus, a `pointercancel`, the page being hidden. Takes
+   * effect in the next frame, before anything else happens to the drag.
+   */
+  cancelDrag(): void;
+  /**
+   * Says which modifier keys are held, for the faces to stamp on each
+   * `control` event from the next frame on, until called again. Pass the
+   * state from the page's own pointer events (`altKey`, `shiftKey`,
+   * `metaKey`, `ctrlKey`), and its key events where a key changes mid-drag:
+   * the canvas sees no keys while it lacks focus. Every key not held is
+   * `false`; none is held until this is first called.
+   */
+  setModifiers(modifiers: Modifiers): void;
+  /**
    * The faces showing, by instance, as their `loaded` events described
    * them. An event can come before a page has set its handler, so read
    * this rather than rely on hearing it.
@@ -1228,6 +1247,12 @@ export async function mount(
     },
     control(command) {
       wasm.control(JSON.stringify(command));
+    },
+    cancelDrag() {
+      wasm.cancelDrag();
+    },
+    setModifiers({ alt, shift, meta, ctrl }) {
+      wasm.setModifiers(alt, shift, meta, ctrl);
     },
     onEvent(handler) {
       wasm.setEventHandler(tracked.dispatch(handler));
