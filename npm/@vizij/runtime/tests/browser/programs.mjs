@@ -32,15 +32,21 @@ const speaksKeys = outputs(speaks.spec);
 const liveKeys = outputs(live.spec);
 
 // Where Speaks' keys rest: the rig input each drives rests at the neutral
-// pose the face stages for it, else at its authored default.
-const neutral = bundle.poses?.config?.neutralInputs ?? {};
+// pose the face stages for it, else at its authored default. Under a
+// `face-default` neutral the neutral is that default, whatever
+// `neutralInputs` recorded.
+const poseConfig = bundle.poses?.config ?? {};
+const neutral = poseConfig.neutralInputs ?? {};
+const faceDefault = poseConfig.neutralMode === "face-default";
 const rig = bundle.graphs.find((graph) => graph.kind === "rig").spec;
 const rest = {};
 for (const node of rig.nodes) {
   if (node.type !== "input" || !speaksKeys.includes(node.params.path)) continue;
   const name = node.id.startsWith("input_") ? node.id.slice(6) : null;
+  const authored = node.params.value?.f32 ?? node.params.value;
+  const numeric = typeof authored === "number";
   rest[node.params.path] =
-    name !== null && name in neutral ? neutral[name] : (node.params.value?.f32 ?? node.params.value);
+    name !== null && name in neutral && !(faceDefault && numeric) ? neutral[name] : authored;
 }
 assert.equal(Object.keys(rest).length, speaksKeys.length, "Speaks writes rig inputs only");
 

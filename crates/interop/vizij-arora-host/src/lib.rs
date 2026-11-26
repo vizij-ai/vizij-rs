@@ -85,7 +85,11 @@ pub struct Bundle {
     pub profiles: Vec<profile::Profile>,
     /// `metadata.activeMotionGraphId` (or the first `activeMotionGraphIds`).
     pub active_program_id: Option<String>,
-    /// `poses.config.neutralInputs` — input name → neutral value.
+    /// The face's neutral pose, input name → value: `poses.config.neutralInputs`
+    /// as authored, except under `neutralMode: "face-default"`, where the
+    /// neutral is the face's defaults, so each named input takes its rig input
+    /// node's default. A `face-default` file can carry a `neutralInputs`
+    /// recorded before its defaults changed, and staging it would revert them.
     pub neutral_inputs: HashMap<String, f64>,
     /// `metadata.faceId` — the rig's namespace (its input paths live under
     /// `rig/<faceId>/`).
@@ -224,6 +228,21 @@ impl Bundle {
             for (name, value) in neutral {
                 if let Some(n) = value.as_f64() {
                     neutral_inputs.insert(name.clone(), n);
+                }
+            }
+        }
+
+        let face_default = bundle
+            .pointer("/poses/config/neutralMode")
+            .and_then(Json::as_str)
+            == Some("face-default");
+        if face_default {
+            if let Some((_, rig)) = graphs.iter().find(|(kind, _)| kind == "rig") {
+                let defaults = collect_input_defaults(rig);
+                for (name, value) in neutral_inputs.iter_mut() {
+                    if let Some(default) = defaults.get(name) {
+                        *value = *default;
+                    }
                 }
             }
         }
@@ -769,11 +788,34 @@ fn output_path(node: &Json) -> Option<String> {
 /// `collectInputPathMap`). First writer wins per key, except a `direct_` alias
 /// overrides.
 pub fn collect_input_path_map(spec: &Json) -> HashMap<String, String> {
-    fn add(map: &mut HashMap<String, String>, key: &str, path: &str, force: bool) {
+    input_nodes_by_name(spec)
+        .into_iter()
+        .filter_map(|(name, node)| Some((name, input_path(node)?.to_string())))
+        .collect()
+}
+
+/// A graph's numeric input defaults (each input node's `value`), keyed as
+/// [`collect_input_path_map`] keys its paths. An input without a numeric
+/// default is left out.
+fn collect_input_defaults(spec: &Json) -> HashMap<String, f64> {
+    input_nodes_by_name(spec)
+        .into_iter()
+        .filter_map(|(name, node)| {
+            let value = node.pointer("/params/value").filter(|v| !v.is_null())?;
+            let value = vizij_api_core::json::parse_value(value.clone()).ok()?;
+            Some((name, vizij_api_core::value::as_float(&value)? as f64))
+        })
+        .collect()
+}
+
+/// A graph's input nodes with a path, keyed the way the bundle's
+/// `neutralInputs` names them (see [`collect_input_path_map`]).
+fn input_nodes_by_name(spec: &Json) -> HashMap<String, &Json> {
+    fn add<'a>(map: &mut HashMap<String, &'a Json>, key: &str, node: &'a Json, force: bool) {
         if key.is_empty() || (!force && map.contains_key(key)) {
             return;
         }
-        map.insert(key.to_string(), path.to_string());
+        map.insert(key.to_string(), node);
     }
     let mut map = HashMap::new();
     for node in nodes_of(spec) {
@@ -784,25 +826,19 @@ pub fn collect_input_path_map(spec: &Json) -> HashMap<String, String> {
         if !is_input {
             continue;
         }
-        let Some(path) = node
-            .get("params")
-            .and_then(|p| p.get("path"))
-            .and_then(Json::as_str)
-            .map(str::trim)
-            .filter(|p| !p.is_empty())
-        else {
+        let Some(path) = input_path(node).filter(|p| !p.is_empty()) else {
             continue;
         };
         let id = node.get("id").and_then(Json::as_str).unwrap_or("");
         let key = id
             .strip_prefix("input_")
             .unwrap_or(if id.is_empty() { path } else { id });
-        add(&mut map, key, path, false);
+        add(&mut map, key, node, false);
         if let Some(rest) = key.strip_prefix("direct_") {
-            add(&mut map, rest, path, true);
+            add(&mut map, rest, node, true);
         }
         if let Some(rest) = key.strip_prefix("pose_control_") {
-            add(&mut map, rest, path, false);
+            add(&mut map, rest, node, false);
         }
     }
     map
@@ -934,6 +970,91 @@ mod tests {
             ],
             "poses": { "config": { "neutralInputs": { "gaze_x": 0.25, "missing": 1.0 } } }
         })
+    }
+
+    /// A face's rig with a scene rotation input defaulting to a quarter turn,
+    /// and a neutral pose recording it as 0 under `mode`.
+    fn rotated_face(mode: Option<&str>) -> Json {
+        let mut bundle = json!({
+            "graphs": [{ "id": "the_rig", "kind": "rig", "spec": graph(
+                json!([
+                    { "id": "input_scene_rotation_x", "type": "input",
+                      "params": { "path": "rig/scene/rotation/x", "value": { "float": 1.5 } } },
+                    { "id": "input_mouth_open", "type": "input",
+                      "params": { "path": "rig/mouth/open" } }
+                ]),
+                json!([]),
+            ) }],
+            "poses": { "config": { "neutralInputs": {
+                "scene_rotation_x": 0.0, "mouth_open": 0.25, "missing": 1.0
+            } } }
+        });
+        if let Some(mode) = mode {
+            bundle["poses"]["config"]["neutralMode"] = json!(mode);
+        }
+        bundle
+    }
+
+    /// Under `face-default` the neutral is the face's defaults: a neutral
+    /// value recorded before a default changed gives way to the rig's
+    /// default, so staging it does not revert the change. An input with no
+    /// numeric default, and a name no rig input has, keep their recorded value.
+    #[test]
+    fn a_face_default_neutral_takes_the_rig_s_defaults() {
+        let bundle = Bundle::from_bundle_json(&rotated_face(Some("face-default")));
+        assert_eq!(bundle.neutral_inputs["scene_rotation_x"], 1.5);
+        assert_eq!(bundle.neutral_inputs["mouth_open"], 0.25);
+        assert_eq!(bundle.neutral_inputs["missing"], 1.0);
+        let mut writes = bundle.neutral_stage_writes();
+        writes.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            writes,
+            vec![
+                ("rig/mouth/open".to_string(), 0.25),
+                ("rig/scene/rotation/x".to_string(), 1.5),
+            ]
+        );
+    }
+
+    /// A name two rig inputs answer to, as `pose_control_` and `direct_`
+    /// aliases, names the `direct_` input: staging writes its path, and a
+    /// `face-default` neutral takes its default.
+    #[test]
+    fn a_direct_input_wins_a_name_a_pose_control_input_shares() {
+        let bundle = |mode: &str| {
+            Bundle::from_bundle_json(&json!({
+                "graphs": [{ "id": "the_rig", "kind": "rig", "spec": graph(
+                    json!([
+                        { "id": "input_pose_control_mouth_open", "type": "input",
+                          "params": { "path": "rig/pose/mouth_open", "value": { "float": 1.0 } } },
+                        { "id": "input_direct_mouth_open", "type": "input",
+                          "params": { "path": "rig/mouth/open", "value": { "float": 2.0 } } }
+                    ]),
+                    json!([]),
+                ) }],
+                "poses": { "config": {
+                    "neutralMode": mode, "neutralInputs": { "mouth_open": 0.5 }
+                } }
+            }))
+        };
+        assert_eq!(
+            bundle("face-default").neutral_stage_writes(),
+            vec![("rig/mouth/open".to_string(), 2.0)]
+        );
+        assert_eq!(
+            bundle("explicit").neutral_stage_writes(),
+            vec![("rig/mouth/open".to_string(), 0.5)]
+        );
+    }
+
+    /// An `explicit` neutral, or one with no mode, is the authored pose and
+    /// overrides the rig's defaults as recorded.
+    #[test]
+    fn an_explicit_neutral_stays_as_authored() {
+        for mode in [Some("explicit"), None] {
+            let bundle = Bundle::from_bundle_json(&rotated_face(mode));
+            assert_eq!(bundle.neutral_inputs["scene_rotation_x"], 0.0, "{mode:?}");
+        }
     }
 
     /// An animation channel resolves through the face's rig: the rig input

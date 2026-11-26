@@ -146,7 +146,9 @@ modules and its interpreter declare: `say`, `look_at` (ROS4HRI's gaze, see
 skills), `run_behavior` (programs), the animation module's functions,
 and the rest module's `reset` — every key back to the value it rests at
 (each free input of the face's graphs and programs to its authored default,
-each input the bundle's neutral pose names to its neutral) — and
+each input the bundle's neutral pose names to its neutral, which under
+`neutralMode: "face-default"` is the input's authored default, whatever
+`neutralInputs` records) — and
 `reset_keys`, for the keys it names.
 
 A Vizij's device keeps no time until the Vizij is drawn. Until its `ready`
