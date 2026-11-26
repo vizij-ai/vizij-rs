@@ -4,6 +4,16 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [8.0.1] - 2026-11-26
+
+### Fixed
+
+- Under `neutralMode: "face-default"`, `Bundle::neutral_inputs` gives each
+  input its rig input node's default instead of the value `neutralInputs`
+  recorded, so staging the neutral pose no longer reverts a default changed
+  after the pose rig was made. An `explicit` neutral, or one with no mode, is
+  unchanged.
+
 ## [8.0.0] - 2026-10-30
 
 ### Changed
